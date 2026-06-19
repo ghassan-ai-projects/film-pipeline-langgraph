@@ -365,7 +365,21 @@ async def approve_coverage_generation(args: dict[str, object]) -> dict[str, obje
 
 
 async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
-    return _stub("assemble_review_cut")
+    """Assemble a review cut using the AssemblyAgent."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    from film_pipeline.post.assembly_agent import AssemblyAgent
+
+    agent = AssemblyAgent()
+    plan = agent.build_plan(
+        project_id=active["project_id"],
+        shot_ids=args.get("shot_ids", []),  # type: ignore[arg-type]
+        clip_paths=args.get("clip_paths", []),  # type: ignore[arg-type]
+    )
+    issues = agent.validate_plan(plan)
+    return _ok(plan_id=plan.plan_id, clip_count=plan.clip_count, issues=issues)
 
 
 async def assemble_final_cut(args: dict[str, object]) -> dict[str, object]:
@@ -373,7 +387,29 @@ async def assemble_final_cut(args: dict[str, object]) -> dict[str, object]:
 
 
 async def export_delivery_package(args: dict[str, object]) -> dict[str, object]:
-    return _stub("export_delivery_package")
+    """Export a delivery package using the DeliveryPackagingAgent."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
+
+    agent = DeliveryPackagingAgent()
+    package = agent.build_package(
+        project_id=active["project_id"],
+        video_path=str(args.get("video_path", "")),
+        subtitle_path=str(args.get("subtitle_path", "")),
+        audio_stems_dir=str(args.get("audio_stems_dir", "")),
+        stills_dir=str(args.get("stills_dir", "")),
+        validation_report_path=str(args.get("validation_report_path", "")),
+        cost_report_path=str(args.get("cost_report_path", "")),
+        credits_path=str(args.get("credits_path", "")),
+    )
+    return _ok(
+        package_id=package.package_id,
+        is_complete=package.is_complete,
+        missing=package.missing_items,
+    )
 
 
 # --- Registration --------------------------------------------------------
