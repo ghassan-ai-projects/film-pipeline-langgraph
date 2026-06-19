@@ -1,0 +1,201 @@
+# KB Manifest — authoritative inventory of all curated KB items.
+# The manifest reader validates each entry against KBItemMetadata schema.
+
+items:
+  # --- Canonical Policies (Level 1) ---
+
+  - id: "kb.policy.prompt.rctco.v1"
+    title: "RCTCO Prompt Framework"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [prompting, agent-contracts]
+    applies_to_phases: [all]
+    applies_to_agents: [all]
+    modalities: [text]
+    risk_tags: []
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Use Role, Core Task, Context, Constraints, and Output for agent prompts."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.policy.generation.no_duplicate_submit.v1"
+    title: "No Duplicate Generation Submissions"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [generation, operations]
+    applies_to_phases: [generation]
+    applies_to_agents: [prompt-composition-agent, generation-agent]
+    modalities: [video, image]
+    risk_tags: [cost, duplication]
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Never submit the same generation job twice. Check the generation ledger first. Idempotent submit."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.policy.checkpoint.resume.v1"
+    title: "Checkpoint and Resume Policy"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [operations, recovery]
+    applies_to_phases: [all]
+    applies_to_agents: [all]
+    modalities: []
+    risk_tags: [data-loss, recovery]
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Every phase transition creates a checkpoint. Resume from last checkpoint; never replay side effects."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.policy.provider.adapter_contract.v1"
+    title: "Provider Adapter Contract"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [providers, operations]
+    applies_to_phases: [generation, post]
+    applies_to_agents: [generation-agent, provider-agent]
+    modalities: [video, image, audio]
+    risk_tags: [provider-failure]
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Every provider must implement build_payload, submit, poll, download, extract_metadata, estimate_cost."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.policy.human.approval_gates.v1"
+    title: "Human Approval Gate Policy"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [governance, operations]
+    applies_to_phases: [all]
+    applies_to_agents: [all]
+    modalities: []
+    risk_tags: []
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Every major phase must pause for human review. No production work proceeds without explicit approval."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.policy.validation.thresholds.v1"
+    title: "Validation Threshold Policy"
+    authority: canonical
+    status: active
+    version: 1
+    domains: [validation, quality]
+    applies_to_phases: [qc, post]
+    applies_to_agents: [all]
+    modalities: [video, image, audio, text]
+    risk_tags: [quality]
+    source_refs: ["film-knowledge-base/prompt-framework.md"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Pass >= 85, Review >= 75, Block < 60. Blocking issues stop the pipeline until resolved."
+    last_reviewed: "2026-06-19"
+
+  # --- Active Playbooks (Level 2) ---
+
+  - id: "kb.playbook.reference_images.video_prompt_package.v1"
+    title: "Reference Image Video Prompt Package"
+    authority: active_playbook
+    status: active
+    version: 1
+    domains: [reference-images, prompting]
+    applies_to_phases: [visual_dev, gen_planning]
+    applies_to_agents: [prompt-composition-agent]
+    modalities: [image, video]
+    risk_tags: []
+    source_refs: ["film-knowledge-base/references/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Package reference images alongside text prompts for video generation. Include character, environment, and camera refs."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.playbook.environment.locked_prompt_block.v1"
+    title: "Environment Locked Prompt Block"
+    authority: active_playbook
+    status: active
+    version: 1
+    domains: [environment, consistency]
+    applies_to_phases: [visual_dev, generation]
+    applies_to_agents: [prompt-composition-agent, generation-agent]
+    modalities: [video, image]
+    risk_tags: [continuity]
+    source_refs: ["film-knowledge-base/references/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Every environment must have a locked prompt block that never changes across shots set in that location."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.playbook.generation.sequential_chain.v1"
+    title: "Sequential Clip Generation Chain"
+    authority: active_playbook
+    status: active
+    version: 1
+    domains: [generation]
+    applies_to_phases: [generation]
+    applies_to_agents: [generation-agent]
+    modalities: [video]
+    risk_tags: [cost, continuity]
+    source_refs: ["film-knowledge-base/references/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Generate clips sequentially within a scene. Feed last frame as start frame. Re-anchor at scene boundaries."
+    last_reviewed: "2026-06-19"
+
+  # --- Case Study Lessons (Level 3) ---
+
+  - id: "kb.lesson.environment_drift.primordial_stroke.v1"
+    title: "Environment Drift — The Primordial Stroke"
+    authority: case_study
+    status: active
+    version: 1
+    domains: [environment, consistency, postmortem]
+    applies_to_phases: [generation, qc]
+    applies_to_agents: [generation-agent, qc-agent]
+    modalities: [video]
+    risk_tags: [continuity, drift]
+    source_refs: ["film-knowledge-base/learnings/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Environment drifted across shots when locked prompt blocks were not enforced. Use locked blocks for every location."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.lesson.cost_overrun.postmortem.v1"
+    title: "Cost Overrun Postmortem"
+    authority: case_study
+    status: active
+    version: 1
+    domains: [budget, operations]
+    applies_to_phases: [gen_planning, generation]
+    applies_to_agents: [generation-agent, orchestrator]
+    modalities: [video]
+    risk_tags: [cost]
+    source_refs: ["film-knowledge-base/learnings/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Previous films exceeded budget when generation was not pre-approved per batch. Require spend approval per batch."
+    last_reviewed: "2026-06-19"
+
+  - id: "kb.lesson.moderation_failure.postmortem.v1"
+    title: "Moderation Failure Postmortem"
+    authority: case_study
+    status: active
+    version: 1
+    domains: [operations, providers]
+    applies_to_phases: [generation]
+    applies_to_agents: [generation-agent, failure-handling-agent]
+    modalities: [video, image]
+    risk_tags: [moderation, provider-failure]
+    source_refs: ["film-knowledge-base/learnings/"]
+    supersedes: []
+    conflicts_with: []
+    summary: "Provider moderation blocked some prompts with ambiguous flags. Pre-screen reference images; have fallback refs ready."
+    last_reviewed: "2026-06-19"
