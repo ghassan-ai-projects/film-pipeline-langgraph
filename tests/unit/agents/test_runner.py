@@ -137,6 +137,43 @@ class TestPromptRunner:
         result = runner.call_model(prompt)
         assert result == {"status": "ok", "agent": "mock", "output": {}}
 
+    def test_call_model_with_adapter_and_no_mock(self) -> None:
+        """When model_adapter is set and no mock matches, call the real adapter."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.return_value = {"real": True, "score": 100}
+        runner = PromptRunner(model_adapter=mock_adapter)
+        prompt = RCTCOPrompt(
+            role="You are a test agent.",
+            core_task="Real LLM task",
+            context="Some context",
+            constraints="Be brief",
+            output_format="JSON",
+        )
+        result = runner.call_model(prompt)
+        assert result == {"real": True, "score": 100}
+        mock_adapter.chat_json.assert_called_once()
+        call_kwargs = mock_adapter.chat_json.call_args.kwargs
+        assert call_kwargs["temperature"] == 0.7
+        assert "You are a test agent." in call_kwargs["system"]
+
+    def test_call_model_mock_wins_over_adapter(self) -> None:
+        """Mock response takes precedence even when adapter is configured."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        runner = PromptRunner(
+            mock_responses={"Test task": {"from_mock": True}},
+            model_adapter=mock_adapter,
+        )
+        prompt = RCTCOPrompt(
+            role="r", core_task="Test task", context="c", constraints="x", output_format="y"
+        )
+        result = runner.call_model(prompt)
+        assert result == {"from_mock": True}
+        mock_adapter.chat_json.assert_not_called()
+
 
 def _make_contract(
     blocked_kb_domains: list[str] | None = None,

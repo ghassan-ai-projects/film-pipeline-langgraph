@@ -1,87 +1,204 @@
-# Acceptance Checklist — film-pipeline-langgraph v0.2.0
+# Acceptance Checklist — film-pipeline-langgraph
 
-Created: 2026-06-19 | Based on comprehensive review findings.
+Updated: 2026-06-20
+Purpose: Current verified acceptance state. This file should reflect checked evidence only, not aspirational status.
 
 ---
 
-## Code Quality Gates (CI)
+## Current Verdict
 
-- [x] `make format-check` passes (ruff format)
-- [x] `make lint` passes (ruff check)
-- [x] `make typecheck` passes (mypy strict)
-- [x] `make test` passes (pytest, 488 tests)
-- [x] Coverage ≥ 90% (current: 92.65%)
-- [x] `make build` succeeds (sdist + wheel)
+Current state: `Partially accepted`
 
-## Architecture Gates
+What this means:
 
-- [x] Sub-package boundaries match architecture blueprint (16 sub-packages)
-- [x] Pydantic v2 schemas for all type contracts (27 schemas)
-- [x] MCP-first surface with tool registry (57 tools defined)
-- [x] LangGraph StateGraph with 11 phase nodes + approval gates
-- [x] Agent registry with 19 MVP agent contracts
-- [x] Validator registry with 15 validator contracts
-- [x] KB manifest with 12 curated items, layered retrieval
-- [x] Mock provider with 13 scenario scripts
-- [x] Git-backed checkpoint system with invalidation engine
-- [x] Post-production agents (assembly, transitions, audio, delivery, subtitles)
+- code quality is strong
+- several core product pieces are real and tested
+- the repository is not yet accepted as a working product
 
-## MCP Wiring (blocking gaps addressed 2026-06-19)
+The main blockers today are:
 
-- [x] Project management tools (create, list, set_active, get_active)
-- [x] Intake tools (submit_idea with graph execution)
-- [x] Review tools (approve_phase, request_revision)
-- [x] Assembly tools (assemble_review_cut, export_delivery_package)
-- [x] State tools (get_current_phase, get_film_state, get_orchestrator_summary, get_next_actions, get_blockers)
-- [x] Audit tools (get_audit_log, explain_last_decision, explain_agent_routing, explain_kb_context)
-- [x] Checkpoint tools (list, create, get, compare_versions, list_artifact_versions, rollback_to_checkpoint, get_invalidation_report)
-- [x] Provider tools (check_provider_health, resolve_provider_block, list_providers)
-- [x] KB tools (kb_search, kb_get_item, kb_get_context_packet, kb_explain_context_choice)
-- [ ] Generation tools (8 stubs pending provider wiring)
-- [ ] Validation tools (2 stubs pending artifact integration)
+- `make test` is not green because one unit test fails and coverage is below the required threshold
+- `make product-gate` is not green because critical MCP tools still return stubs
+- the product still does not satisfy the hard completion standard in `docs/product-completion/`
 
-## Productization Gates (Phase 16)
+---
 
-- [x] `app/runtime.py` — StudioRuntime singleton with checkpoint/audit/health methods
-- [x] `app/smoke.py` — smoke test runner
-- [x] `app/bootstrap.py` — environment validation
-- [x] `app/health.py` — readiness checks
-- [x] `app/version.py` — version metadata
-- [x] `profiles/mock-demo.yaml` — safe demo profile
-- [x] `profiles/local-real-provider.yaml` — real provider profile
-- [x] `make run-mcp` target
-- [x] `make demo-project` target
-- [x] `make release-check` target
+## Verified Now
+
+### Code Quality Gates
+
+- [x] `ruff check .` passes
+- [x] `mypy src tests` passes
+- [ ] `make test` passes
+  Current evidence: one unit test currently fails in `tests/unit/app/test_product_gate.py`, and total coverage is `86.18%`, below the required `90%`.
+- [ ] Coverage ≥ 90%
+  Current evidence: `86.18%`
+- [ ] `make build` re-verified locally
+  Current note: still not re-verified in this restricted environment
+
+### Runtime And Core Infrastructure
+
+- [x] Runtime approval flow advances phases
+- [x] Runtime creates git-backed checkpoints on approval
+- [x] Graph routes from current phase
+- [x] `.env` support exists for provider keys
+- [x] `.env` is git-ignored
+- [x] Product-gate enforcement exists
+
+### Architecture And Structural Foundations
+
+- [x] Sub-package boundaries match the architecture direction
+- [x] Typed schema layer exists and is extensive
+- [x] MCP registry and tool contract surface exist
+- [x] Agent registry exists
+- [x] Validator registry exists
+- [x] KB manifest and retrieval infrastructure exist
+- [x] Mock provider infrastructure exists
+- [x] Checkpoint and invalidation infrastructure exist
+- [x] Post-production planning infrastructure exists
+
+---
+
+## Product Gate
+
+- [ ] `make product-gate` passes
+
+Current failing reason:
+
+Critical MCP tools still stubbed:
+
+- `approve_generation_spend`
+- `cancel_generation_request`
+- `get_generation_status`
+- `list_active_generations`
+- `plan_generation_batch`
+- `resume_generation_polling`
+
+Interpretation:
+
+- the gate is working correctly
+- the repo is not yet allowed to claim working-product status
+
+---
+
+## MCP Acceptance
+
+### Verified Implemented
+
+- [x] Project management core: create, select, active project
+- [x] Idea submission entry path
+- [x] Review actions: approve phase, request revision
+- [x] Orchestrator summary, next actions, blockers
+- [x] KB lookup/context surfaces
+- [x] Checkpoint listing/creation/inspection and invalidation report access
+- [x] Audit inspection surfaces
+- [x] Provider health inspection surfaces
+- [x] Review-cut and delivery-export helper surfaces
+
+### Not Yet Accepted
+
+- [ ] Generation MCP path complete
+- [ ] Validation MCP path complete
+- [ ] Artifact inspection path complete
+- [ ] Critical state inspection path complete
+- [ ] Rollback mutation path fully complete under the hard product standard
+
+---
+
+## Agent And Validation Acceptance
+
+### Verified Implemented
+
+- [x] Core agent framework exists
+- [x] Real agent implementation files now exist for part of the creative path
+- [x] Validation implementation files now exist for part of the critical path
+- [x] Prompt/model adapter layer exists
+
+### Not Yet Accepted
+
+- [ ] All critical-path agents produce real persisted artifacts end to end
+- [ ] All core agents adopt dedicated prompt-framework templates in real execution
+- [ ] Dynamic agent routing is fully proven in the supported workflow
+- [ ] Validation governs all major downstream runtime behavior
+
+---
+
+## E2E Acceptance
+
+### Verified Now
+
+- [x] All 10 E2E scenario files exist
+- [x] E2E suite structure exists in `tests/e2e/`
+- [x] E2E tests execute within the full test run
+- [x] Product-gate critical stub count reduced from 12 to 6
+
+### Not Yet Accepted As Product Proof
+
+- [ ] Happy path accepted as real product proof
+- [ ] Script revision accepted as real product proof
+- [ ] Reference failure accepted as real product proof
+- [ ] Quota exhausted accepted as real product proof
+- [ ] Network error / no duplicate submit accepted as real product proof
+- [ ] Continuity drift accepted as real product proof
+- [ ] Rollback accepted as real product proof
+- [ ] KB conflict accepted as real product proof
+- [ ] Project ambiguity accepted as real product proof
+- [ ] Dynamic flow accepted as real product proof
+
+Reason:
+
+- existence of scenario files is not enough by itself
+- final acceptance still depends on the harder product criteria and a passing product gate
+
+---
+
+## Productization Acceptance
+
+### Verified Implemented
+
+- [x] `app/runtime.py`
+- [x] `app/bootstrap.py`
+- [x] `app/health.py`
+- [x] `app/smoke.py`
+- [x] `app/version.py`
+- [x] `make run-mcp`
+- [x] `make demo-project`
+- [x] `make release-check`
+- [x] `make product-gate`
+- [x] product-completion docs set exists
+- [x] scorecard exists
+
+### Not Yet Accepted
+
 - [ ] `docs/operations-guide.md`
 - [ ] `docs/runbook-first-film.md`
 - [ ] `docs/release-process.md`
 - [ ] `docs/demo-guide.md`
+- [ ] operator workflow proven from docs alone
 
-## E2E Acceptance Gates (Phase 12 — deferred to post-v0.2.1)
+---
 
-- [ ] Scenario 1: Happy path (idea → review cut, mock provider)
-- [ ] Scenario 2: Script revision gate
-- [ ] Scenario 3: Reference validation failure
-- [ ] Scenario 4: Provider quota exhausted (MUST PASS)
-- [ ] Scenario 5: Network error / no duplicate submit (MUST PASS)
-- [ ] Scenario 6: Continuity drift detection (MUST PASS)
-- [ ] Scenario 7: Rollback after bad style change
-- [ ] Scenario 8: KB policy conflict resolution
-- [ ] Scenario 9: Active project ambiguity
-- [ ] Scenario 10: Dynamic flow (blocked + available paths)
+## Not Accepted Yet
 
-## Known Limitations
+These remain hard blockers to calling the project a working product:
 
-- Graph nodes are label-transition stubs (set phase, approval flags) — no agents invoked
-- No LangGraph interrupt mechanism used; GraphRecursionError as control flow
-- 24 MCP tools remain as stubs (generation, validation, coverage groups)
-- No per-agent RCTCO prompt templates (deferred)
-- No real validator logic (validators return canned reports)
-- No ffmpeg integration (post-production agents produce plans only)
-- No continuous KB learning loop
+- critical MCP tools still stubbed
+- current unit suite is not fully green
+- coverage gate below required threshold
+- full product completion criteria in `docs/product-completion/` still unmet
+- core artifact-producing workflow is not yet fully complete across all critical phases
+- full agent/prompt/dynamic-routing adoption is not yet complete
+- validation is not yet complete enough to certify the whole product
 
-## Sign-Off
+---
 
-- [ ] Architecture review approved
-- [ ] CI/CD pipeline green
-- [ ] Release tag created (v0.2.0)
+## Acceptance Rule
+
+This file must stay subordinate to the harder standards in:
+
+- `docs/product-completion/00-product-standard.md`
+- `docs/product-completion/04-validation-and-mcp-product-surface.md`
+- `docs/product-completion/06-e2e-acceptance-and-release.md`
+- `docs/product-completion/acceptance-manifest.yaml`
+
+If this checklist is ever more optimistic than those files or the current validation results, this checklist is wrong and must be corrected.

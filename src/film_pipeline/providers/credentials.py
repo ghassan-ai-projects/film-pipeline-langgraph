@@ -13,19 +13,25 @@ from __future__ import annotations
 
 import os
 import re
+from pathlib import Path
 
 REDACTION_RE = re.compile(r"(sk-|key-|AIza)[a-zA-Z0-9_\-]{8,}")
+ENV_FILE_NAME = ".env"
 
 
 def lookup(provider_id: str) -> str | None:
     """Look up the API key for a provider from environment variables.
 
-    Returns None if the key is not set.
+    Environment variables take precedence. If not present, fall back to a
+    local ``.env`` file in the current working directory.
     """
     env_var = _env_var_for(provider_id)
     if not env_var:
         return None
-    return os.environ.get(env_var)
+    env_value = os.environ.get(env_var)
+    if env_value:
+        return env_value
+    return _read_dotenv(Path.cwd()).get(env_var)
 
 
 def is_configured(provider_id: str) -> bool:
@@ -46,3 +52,22 @@ def _env_var_for(provider_id: str) -> str | None:
         "veo-lite": "GOOGLE_API_KEY",
     }
     return mapping.get(provider_id)
+
+
+def _read_dotenv(path: Path) -> dict[str, str]:
+    """Read simple KEY=VALUE pairs from a local ``.env`` file."""
+    env_path = path / ENV_FILE_NAME
+    if not env_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in env_path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        parsed_key = key.strip()
+        parsed_value = value.strip().strip("\"'")
+        if parsed_key:
+            values[parsed_key] = parsed_value
+    return values

@@ -2,7 +2,9 @@
 
 **Reviewer:** Qwen Code orchestrator
 **Scope:** Full codebase, tests, docs, acceptance criteria, architecture alignment
-**CI Status:** ✅ Green (472 tests, 93.23% coverage, mypy strict, ruff, build)
+**CI Status At Review Time:** ✅ Green (472 tests, 93.23% coverage, mypy strict, ruff, build)
+
+> Update after follow-up fixes: the repo now passes the full local test suite at **488 tests / 90.88% coverage**. The Seedance adapter tests were repaired, MCP approval now advances phases and creates git-backed checkpoints, and some MCP/runtime review findings below are now partially resolved. The remaining gaps in this review still apply to real artifact-producing orchestration, deferred E2E scenarios, and stubbed MCP surfaces.
 
 ---
 

@@ -1,8 +1,12 @@
 # film-pipeline-langgraph
 
-LangGraph-based film creation pipeline — a professional, human-supervised AI film studio operating system built MCP-first.
+LangGraph-based film creation pipeline — a human-supervised, MCP-first studio scaffold with typed contracts, runtime orchestration, and git-backed checkpoints.
 
-An orchestrator agent coordinates 19 expert agents, uses a curated knowledge base (12 items), validates work at multiple levels, and pauses for human review at every major phase.
+The current codebase includes 19 agent contracts, a curated knowledge base (12 items), validation and review infrastructure, git-backed checkpoints, and a runtime that advances projects phase-by-phase through human approval gates.
+
+## Current Status
+
+The project is in a strong scaffold state: the runtime, MCP surface, provider adapters, checkpoints, and tests are working, but the graph phases still do not invoke real creator/reviewer agents or produce a full film end-to-end automatically.
 
 ## Quick Start
 
@@ -47,11 +51,11 @@ Post-Production (post/) ← Assembly, Audio, Delivery, Subtitles
 | 09 | Validation Registry | ✅ |
 | 10 | Mock Provider & Test Harness | ✅ |
 | 11 | Checkpoint/Resume & Rollback | ✅ |
-| 12 | E2E Happy Path | ✅ |
+| 12 | E2E Happy Path | Partial |
 | 13 | Real Provider Adapter | ✅ |
 | 14 | Post-Production Assembly | ✅ |
 | 15 | Production Hardening | ✅ |
-| 16 | Productization | ✅ |
+| 16 | Productization | Partial |
 
 ## Running
 
@@ -70,9 +74,9 @@ pytest -m integration  # integration
 make build
 ```
 
-## MCP Tools (33+ wired, 57 total)
+## MCP Tools (28 wired/partially wired, 29 stubs, 57 total)
 
-The MCP surface drives the entire pipeline. Wired tools connect to the runtime backend; stubs return placeholder responses for tools pending full wiring.
+The MCP surface drives the runtime. Wired tools connect to the in-memory runtime, KB, checkpoint, provider-health, and post-production helpers; remaining tools still return placeholder responses pending deeper orchestration wiring.
 
 - **Project:** `create_film_project`, `list_projects`, `find_project`, `set_active_project`, `get_active_project`, `get_project_summary`
 - **Intake:** `submit_idea`, `get_intake_analysis`, `approve_intake`
@@ -109,4 +113,6 @@ The MCP surface drives the entire pipeline. Wired tools connect to the runtime b
 - Python ≥ 3.12
 - `uv` for package management
 - Git for checkpoint operations
-- Optional: `OPENROUTER_API_KEY` for real provider calls (Seedance 2.0)
+- Optional: provider keys via environment variables or a local `.env` file
+- `OPENROUTER_API_KEY` for real Seedance/OpenRouter calls
+- `GOOGLE_API_KEY` for Veo-family adapters

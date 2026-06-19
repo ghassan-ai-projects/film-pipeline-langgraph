@@ -80,10 +80,12 @@ markers = [
 [tool.coverage.run]
 branch = true
 source = ["film_pipeline"]
+omit = ["*/testing/*"]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+omit = ["*/testing/*"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -23,11 +23,14 @@ from film_pipeline.graph.nodes import (
     shot_bible_node,
     visual_dev_node,
 )
+from film_pipeline.graph.router import PHASE_ORDER
 
 
 def build_graph() -> CompiledStateGraph:
     """Construct the supervisor graph with all phases and approval gates."""
     builder = StateGraph(dict)
+
+    builder.add_node("phase_router", _passthrough)
 
     # Phase nodes
     builder.add_node("intake_node", intake_node)
@@ -50,7 +53,24 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("end", _passthrough)
 
     # Entry
-    builder.set_entry_point("intake_node")
+    builder.set_entry_point("phase_router")
+    builder.add_conditional_edges(
+        "phase_router",
+        _route_current_phase,
+        {
+            "intake_node": "intake_node",
+            "constitution_node": "constitution_node",
+            "development_node": "development_node",
+            "script_node": "script_node",
+            "visual_dev_node": "visual_dev_node",
+            "shot_bible_node": "shot_bible_node",
+            "gen_planning_node": "gen_planning_node",
+            "generation_node": "generation_node",
+            "qc_node": "qc_node",
+            "post_node": "post_node",
+            "delivery_node": "delivery_node",
+        },
+    )
 
     # Phase → await_approval or next phase
     builder.add_conditional_edges("intake_node", after_phase, {"await_approval": "await_approval"})
@@ -111,3 +131,10 @@ def build_graph() -> CompiledStateGraph:
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:
     return state
+
+
+def _route_current_phase(state: dict[str, Any]) -> str:
+    phase = str(state.get("current_phase", ""))
+    if phase in PHASE_ORDER:
+        return f"{phase}_node"
+    return "intake_node"

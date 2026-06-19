@@ -13,7 +13,7 @@ UV_RUN = uv run --python $(PYTHON) --group dev
 
 .PHONY: help setup lock format format-check lint lint-fix typecheck test \
         test-cov test-unit test-integration test-e2e build precommit hooks \
-        ci-check clean
+        ci-check clean product-gate
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -77,6 +77,10 @@ release-check: ## Run release validation (ci-check + smoke + docs)
 	@echo "Checking smoke test..."
 	@$(UV_RUN) python -m film_pipeline.app.smoke
 	@echo "  Release check passed"
+
+product-gate: ## Enforce the working-product acceptance gate
+	@echo "Running working-product gate..."
+	@$(UV_RUN) python -m film_pipeline.app.product_gate
 
 precommit: ## Run all pre-commit hooks
 	$(UV_RUN) pre-commit run --all-files
