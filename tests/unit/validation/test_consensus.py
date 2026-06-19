@@ -1,0 +1,92 @@
+"""Tests for multi-model consensus builder."""
+
+from __future__ import annotations
+
+from film_pipeline.schemas._base import (
+    ValidationModality,
+    ValidationScope,
+    ValidationStatus,
+)
+from film_pipeline.schemas.validation import ValidationIssue, ValidationReport
+from film_pipeline.validation.consensus import ConsensusBuilder
+
+
+def _make_report(
+    validator_id: str,
+    score: float,
+    status: ValidationStatus = ValidationStatus.PASS,
+    blocking_codes: list[str] | None = None,
+) -> ValidationReport:
+    blocking: list[ValidationIssue] = []
+    if blocking_codes:
+        for code in blocking_codes:
+            blocking.append(
+                ValidationIssue(code=code, message=f"Issue: {code}", severity="blocking")
+            )
+    return ValidationReport(
+        validation_id=f"val:{validator_id}:1",
+        validator_id=validator_id,
+        scope=ValidationScope.CLIP,
+        modalities=[ValidationModality.VIDEO],
+        score=score,
+        status=status,
+        blocking_issues=blocking,
+    )
+
+
+class TestConsensusBuilder:
+    def test_empty_reports(self) -> None:
+        builder = ConsensusBuilder()
+        consensus = builder.build([])
+        assert consensus.agreement_level == "low"
+        assert consensus.consensus_status == ValidationStatus.ERROR
+        assert len(consensus.reviewers) == 0
+
+    def test_single_report(self) -> None:
+        builder = ConsensusBuilder()
+        r = _make_report("v1", 90)
+        consensus = builder.build([r])
+        assert consensus.agreement_level == "high"
+        assert consensus.consensus_status == ValidationStatus.PASS
+
+    def test_high_agreement(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 90)
+        r2 = _make_report("v2", 92)
+        consensus = builder.build([r1, r2])
+        assert consensus.agreement_level == "high"
+
+    def test_medium_agreement(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 90)
+        r2 = _make_report("v2", 78)
+        consensus = builder.build([r1, r2])
+        assert consensus.agreement_level == "medium"
+
+    def test_low_agreement(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 95)
+        r2 = _make_report("v2", 70)
+        consensus = builder.build([r1, r2])
+        assert consensus.agreement_level == "low"
+
+    def test_blocking_consensus(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 90, ValidationStatus.PASS)
+        r2 = _make_report("v2", 60, ValidationStatus.BLOCKED)
+        consensus = builder.build([r1, r2])
+        assert consensus.consensus_status == ValidationStatus.BLOCKED
+
+    def test_shared_findings(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 85, blocking_codes=["b1", "b2"])
+        r2 = _make_report("v2", 80, blocking_codes=["b1"])
+        consensus = builder.build([r1, r2])
+        assert len(consensus.reviewers) == 2
+        assert any("b1" in f for f in consensus.shared_findings)
+
+    def test_orchestrator_recommendation(self) -> None:
+        builder = ConsensusBuilder()
+        r = _make_report("v1", 90)
+        consensus = builder.build([r])
+        assert len(consensus.orchestrator_recommendation) > 0
