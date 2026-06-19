@@ -1,4 +1,4 @@
-"""Product smoke tests — validates the studio is operational.
+"""Product smoke tests — validates every subsystem is operational.
 
 Run with: `python -m film_pipeline.app.smoke`
 """
@@ -6,59 +6,91 @@ Run with: `python -m film_pipeline.app.smoke`
 from __future__ import annotations
 
 
-def run_smoke_checks() -> list[tuple[str, bool, str]]:
-    """Run all smoke checks. Returns list of (name, passed, detail)."""
-    results: list[tuple[str, bool, str]] = []
-
-    # 1. Graph compiles
+def check_graph_compiles() -> tuple[bool, str]:
+    """Verify the LangGraph graph compiles."""
     try:
         from film_pipeline.graph.graph import build_graph
 
         build_graph()
-        results.append(("graph_compiles", True, "Graph compiles successfully"))
+        return True, "Graph compiles successfully"
     except Exception as e:
-        results.append(("graph_compiles", False, str(e)))
+        return False, str(e)
 
-    # 2. Agent registry populated
+
+def check_agent_registry() -> tuple[bool, str]:
+    """Verify 19 MVP agents are registered."""
     try:
         from film_pipeline.agents.mvp import MVP_AGENTS
 
-        assert len(MVP_AGENTS) == 19
-        results.append(("agent_registry", True, f"{len(MVP_AGENTS)} agents registered"))
+        count = len(MVP_AGENTS)
+        if count != 19:
+            return False, f"Expected 19 agents, got {count}"
+        return True, f"{count} agents registered"
     except Exception as e:
-        results.append(("agent_registry", False, str(e)))
+        return False, str(e)
 
-    # 3. Validator registry populated
+
+def check_validator_registry() -> tuple[bool, str]:
+    """Verify 15 MVP validators are registered."""
     try:
         from film_pipeline.validation.validators import MVP_VALIDATORS
 
-        assert len(MVP_VALIDATORS) == 15
-        results.append(("validator_registry", True, f"{len(MVP_VALIDATORS)} validators"))
+        count = len(MVP_VALIDATORS)
+        if count != 15:
+            return False, f"Expected 15 validators, got {count}"
+        return True, f"{count} validators registered"
     except Exception as e:
-        results.append(("validator_registry", False, str(e)))
+        return False, str(e)
 
-    # 4. KB manifest loads
+
+def check_kb_manifest() -> tuple[bool, str]:
+    """Verify KB manifest loads with 12 items."""
     try:
         from pathlib import Path
 
         from film_pipeline.kb.manifest import KBManifest
 
-        manifest = KBManifest.from_yaml(Path("film-knowledge-base/index/kb-manifest.yaml"))
-        assert len(manifest) == 12
-        results.append(("kb_manifest", True, f"{len(manifest)} KB items"))
+        path = Path("film-knowledge-base/index/kb-manifest.yaml")
+        if not path.exists():
+            return False, f"Manifest not found at {path}"
+        manifest = KBManifest.from_yaml(path)
+        if len(manifest) != 12:
+            return False, f"Expected 12 KB items, got {len(manifest)}"
+        return True, f"{len(manifest)} KB items loaded"
     except Exception as e:
-        results.append(("kb_manifest", False, str(e)))
+        return False, str(e)
 
-    # 5. Config loads
+
+def check_config_loads() -> tuple[bool, str]:
+    """Verify base.studio profile loads."""
     try:
         from film_pipeline.config.loader import ProfileLoader
 
         loader = ProfileLoader()
         loader.load("base.studio")
-        results.append(("config_loads", True, "base.studio profile loaded"))
+        return True, "base.studio profile loaded"
     except Exception as e:
-        results.append(("config_loads", False, str(e)))
+        return False, str(e)
 
+
+ALL_CHECKS = [
+    ("graph_compiles", check_graph_compiles),
+    ("agent_registry", check_agent_registry),
+    ("validator_registry", check_validator_registry),
+    ("kb_manifest", check_kb_manifest),
+    ("config_loads", check_config_loads),
+]
+
+
+def run_smoke_checks() -> list[tuple[str, bool, str]]:
+    """Run all smoke checks. Returns list of (name, passed, detail)."""
+    results: list[tuple[str, bool, str]] = []
+    for name, fn in ALL_CHECKS:
+        try:
+            ok, detail = fn()
+            results.append((name, ok, detail))
+        except Exception as e:
+            results.append((name, False, str(e)))
     return results
 
 
