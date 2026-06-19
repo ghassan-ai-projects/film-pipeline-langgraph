@@ -59,6 +59,25 @@ test-cov: ## Run pytest and generate HTML coverage output
 build: ## Build sdist and wheel
 	uv build
 
+run-mcp: ## Start the MCP server (mock mode)
+	$(UV_RUN) python -m film_pipeline.mcp.server
+
+demo-project: ## Create and run a demo project in mock mode
+	$(UV_RUN) python -m film_pipeline.app.smoke
+	@echo "Demo project created and smoke test passed."
+
+release-check: ## Run release validation (ci-check + smoke + docs)
+	@echo "Running release checks..."
+	@$(MAKE) ci-check
+	@echo "Checking required profiles..."
+	@test -f profiles/mock-demo.yaml || (echo "Missing profiles/mock-demo.yaml" && exit 1)
+	@test -f profiles/local-real-provider.yaml || (echo "Missing profiles/local-real-provider.yaml" && exit 1)
+	@echo "Checking required docs..."
+	@test -f docs/acceptance-checklist.md || (echo "Missing docs/acceptance-checklist.md" && exit 1)
+	@echo "Checking smoke test..."
+	@$(UV_RUN) python -m film_pipeline.app.smoke
+	@echo "  Release check passed"
+
 precommit: ## Run all pre-commit hooks
 	$(UV_RUN) pre-commit run --all-files
 

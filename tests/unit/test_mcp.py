@@ -330,3 +330,241 @@ def test_resolution_result_dataclass() -> None:
     r = ResolutionResult(candidates=[])
     assert r.count == 0
     assert r.ambiguous is False
+
+
+# --- Wired MCP tool tests (runtime integration) --------------------------
+
+
+def test_wired_get_orchestrator_summary() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-os", title="OS Test", slug="os-test")
+    rt.set_active("test-os")
+
+    from film_pipeline.mcp.tools import get_orchestrator_summary
+
+    result = asyncio.run(get_orchestrator_summary({"project_ref": "test-os"}))
+    assert result["ok"] is True
+    assert result["project_id"] == "test-os"
+    assert "current_phase" in result
+
+
+def test_wired_get_blockers_empty() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-bl", title="Blocker Test", slug="bl-test")
+    rt.set_active("test-bl")
+
+    from film_pipeline.mcp.tools import get_blockers
+
+    result = asyncio.run(get_blockers({}))
+    assert result["ok"] is True
+    assert result["has_blockers"] is False
+    assert result["blockers"] == []
+
+
+def test_wired_get_blockers_with_issues() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-bl2", title="Blocker Test 2", slug="bl-test2")
+    rt.set_active("test-bl2")
+    rt.add_blocker("test-bl2", "script", "Script validation failed")
+
+    from film_pipeline.mcp.tools import get_blockers
+
+    result = asyncio.run(get_blockers({}))
+    assert result["ok"] is True
+    assert result["has_blockers"] is True
+    assert len(cast(list[object], result["blockers"])) == 1
+
+
+def test_wired_create_and_list_checkpoints() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-cp", title="CP Test", slug="cp-test")
+    rt.set_active("test-cp")
+
+    from film_pipeline.mcp.tools import create_checkpoint, list_checkpoints
+
+    cp_result = asyncio.run(create_checkpoint({"reason": "test checkpoint"}))
+    assert cp_result["ok"] is True
+    assert cast(str, cp_result["checkpoint_id"]).startswith("checkpoint:test-cp:")
+
+    list_result = asyncio.run(list_checkpoints({"project_id": "test-cp"}))
+    assert list_result["ok"] is True
+    assert len(cast(list[object], list_result["checkpoints"])) >= 1
+
+
+def test_wired_get_checkpoint() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-gcp", title="GCP Test", slug="gcp-test")
+    rt.set_active("test-gcp")
+
+    from film_pipeline.mcp.tools import create_checkpoint, get_checkpoint
+
+    cp_result = asyncio.run(create_checkpoint({"reason": "get test"}))
+    cid = cp_result["checkpoint_id"]
+
+    result = asyncio.run(get_checkpoint({"checkpoint_id": cid}))
+    assert result["ok"] is True
+    assert result["checkpoint_id"] == cid
+
+    # Missing checkpoint
+    missing = asyncio.run(get_checkpoint({"checkpoint_id": "nonexistent"}))
+    assert missing["ok"] is False
+
+
+def test_wired_compare_versions() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-cv", title="CV Test", slug="cv-test")
+    rt.set_active("test-cv")
+
+    from film_pipeline.mcp.tools import compare_versions, create_checkpoint
+
+    cp_a = asyncio.run(create_checkpoint({"reason": "first"}))
+    cp_b = asyncio.run(create_checkpoint({"reason": "second"}))
+
+    result = asyncio.run(
+        compare_versions(
+            {
+                "checkpoint_id_a": cp_a["checkpoint_id"],
+                "checkpoint_id_b": cp_b["checkpoint_id"],
+            }
+        )
+    )
+    assert result["ok"] is True
+    assert "older_phase" in result
+
+
+def test_wired_rollback_to_checkpoint() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-rb", title="RB Test", slug="rb-test")
+    rt.set_active("test-rb")
+
+    from film_pipeline.mcp.tools import create_checkpoint, rollback_to_checkpoint
+
+    cp = asyncio.run(create_checkpoint({"reason": "rollback target"}))
+    result = asyncio.run(rollback_to_checkpoint({"checkpoint_id": cp["checkpoint_id"]}))
+    assert result["ok"] is True
+    assert result["rollback_target"] == cp["checkpoint_id"]
+
+
+def test_wired_get_invalidation_report() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-ir", title="IR Test", slug="ir-test")
+    rt.set_active("test-ir")
+
+    from film_pipeline.mcp.tools import create_checkpoint, get_invalidation_report
+
+    cp = asyncio.run(create_checkpoint({"reason": "invalidation test"}))
+    result = asyncio.run(get_invalidation_report({"checkpoint_id": cp["checkpoint_id"]}))
+    assert result["ok"] is True
+    assert "will_revert" in result
+    assert "will_invalidate" in result
+
+
+def test_wired_get_audit_log() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-audit", title="Audit Test", slug="audit-test")
+
+    from film_pipeline.mcp.tools import get_audit_log
+
+    result = asyncio.run(get_audit_log({"project_id": "test-audit"}))
+    assert result["ok"] is True
+    assert isinstance(result["events"], list)
+
+
+def test_wired_explain_last_decision() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-eld", title="ELD Test", slug="eld-test")
+
+    from film_pipeline.mcp.tools import explain_last_decision
+
+    result = asyncio.run(explain_last_decision({}))
+    assert result["ok"] is True
+    assert "event_id" in result
+    assert result["action"] == "create_project"
+
+
+def test_wired_provider_health_tools() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.set_provider_health("mock-video-provider", "healthy")
+
+    from film_pipeline.mcp.tools import check_provider_health, list_providers
+
+    health = asyncio.run(check_provider_health({"provider_id": "mock-video-provider"}))
+    assert health["ok"] is True
+    assert health["status"] == "healthy"
+
+    providers = asyncio.run(list_providers({}))
+    assert providers["ok"] is True
+
+
+def test_wired_resolve_provider_block() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.set_provider_health("mock-video-provider", "blocked_quota", "rate limited")
+
+    from film_pipeline.mcp.tools import resolve_provider_block
+
+    result = asyncio.run(resolve_provider_block({"provider_id": "mock-video-provider"}))
+    assert result["ok"] is True
+    assert result["status"] == "healthy"
+
+    health = rt.get_provider_health("mock-video-provider")
+    assert health is not None
+    assert health["status"] == "healthy"
+
+
+def test_wired_get_next_actions() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-na", title="NA Test", slug="na-test")
+    rt.set_active("test-na")
+
+    from film_pipeline.mcp.tools import get_next_actions
+
+    result = asyncio.run(get_next_actions({}))
+    assert result["ok"] is True
+    assert "next_action" in result
+
+
+def test_wired_explain_agent_routing() -> None:
+    from film_pipeline.mcp.tools import explain_agent_routing
+
+    result = asyncio.run(explain_agent_routing({}))
+    assert result["ok"] is True
+
+
+def test_wired_explain_kb_context() -> None:
+    from film_pipeline.mcp.tools import explain_kb_context
+
+    result = asyncio.run(explain_kb_context({}))
+    assert result["ok"] is True
+
+
+def test_wired_kb_explain_context_choice() -> None:
+    from film_pipeline.mcp.tools import kb_explain_context_choice
+
+    result = asyncio.run(kb_explain_context_choice({}))
+    assert result["ok"] is True

@@ -1,0 +1,43 @@
+# Mock Demo Profile — safe profile for testing and demos
+# Uses mock provider (zero cost), mock model, mock human.
+# Suitable for CI, local development, and first-time onboarding.
+
+profile:
+  id: mock-demo
+  name: "Mock Demo"
+  version: "1.0"
+  description: "Safe profile for testing with zero-cost mock provider."
+
+studio:
+  mode: mock
+  require_human_approval: false  # Use mock human for automated tests
+
+providers:
+  default: mock-video-provider
+  video:
+    - provider_id: mock-video-provider
+      models: [mock-fast]
+  image:
+    - provider_id: mock-image-provider
+      models: [mock-fast]
+
+models:
+  default: mock-model
+  available:
+    - model_id: mock-model
+      provider: mock
+
+validators:
+  strictness: lenient  # draft, internal_review, studio, festival
+  multi_review: false
+
+budget:
+  max_total_usd: 0.0
+  auto_approve_up_to: 0.0
+
+checkpoints:
+  backend: in-memory
+
+generation:
+  max_clips: 20
+  max_duration_seconds: 30

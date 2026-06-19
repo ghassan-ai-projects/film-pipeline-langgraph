@@ -103,7 +103,7 @@ class TestGraphExecution:
             delivery_node,
         ]
 
-        for node_fn, phase_name in zip(nodes, PHASE_ORDER, strict=False):
+        for node_fn, phase_name in zip(nodes, PHASE_ORDER, strict=True):
             result = node_fn({})
             assert result["current_phase"] == phase_name
             assert result["human_approval_required"] is True
