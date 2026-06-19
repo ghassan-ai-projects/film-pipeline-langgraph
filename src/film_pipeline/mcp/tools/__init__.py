@@ -1,42 +1,59 @@
 """Tool implementations and the registration entry point.
 
 Every tool function takes a dict of arguments (including ``_envelope``) and
-returns a serializable dict result. This phase ships *stubs* — Phase 05+
-wires them to the orchestrator and artifact store.
+returns a serializable dict result. Key tools are wired to the runtime
+backend; remaining tools return stubs pending full Phase 05+ wiring.
 """
 
 from __future__ import annotations
 
+from film_pipeline.app.runtime import get_runtime
 from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
-    """Build a stub response that callers can detect before Phase 05."""
+    """Build a stub response that callers can detect before full wiring."""
     return {
         "stub": True,
         "handler": handler_name,
-        "message": "Not yet wired to orchestrator (post Phase 05).",
+        "message": "Not yet wired to orchestrator.",
         **extra,
     }
+
+
+def _ok(**extra: object) -> dict[str, object]:
+    """Build a success response."""
+    return {"ok": True, **extra}
+
+
+def _error(message: str, **extra: object) -> dict[str, object]:
+    """Build an error response."""
+    return {"ok": False, "error": message, **extra}
 
 
 # --- Project tools -------------------------------------------------------
 
 
 async def create_film_project(args: dict[str, object]) -> dict[str, object]:
-    """Create a new film project (stub)."""
-    envelope = args.get("_envelope")
-    return _stub(
-        "create_film_project",
-        project_id=args.get("project_id"),
-        slug=args.get("slug"),
-        title=args.get("title"),
-        envelope_request_id=getattr(envelope, "request_id", None),
-    )
+    """Create a new film project — wired to runtime."""
+    rt = get_runtime()
+    project_id = str(args.get("project_id", ""))
+    if not project_id:
+        return _error("project_id is required")
+    try:
+        state = rt.create_project(
+            project_id=project_id,
+            title=str(args.get("title", "")),
+            slug=str(args.get("slug", "")),
+        )
+        return _ok(project_id=project_id, state=state)
+    except ValueError as e:
+        return _error(str(e))
 
 
 async def list_projects(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_projects")
+    rt = get_runtime()
+    return _ok(projects=list(rt.projects.keys()))
 
 
 async def find_project(args: dict[str, object]) -> dict[str, object]:
@@ -44,11 +61,23 @@ async def find_project(args: dict[str, object]) -> dict[str, object]:
 
 
 async def set_active_project(args: dict[str, object]) -> dict[str, object]:
-    return _stub("set_active_project", project_ref=args.get("project_ref"))
+    rt = get_runtime()
+    project_id = str(args.get("project_ref", args.get("project_id", "")))
+    if not project_id:
+        return _error("project_ref is required")
+    try:
+        rt.set_active(project_id)
+        return _ok(active_project_id=project_id)
+    except ValueError as e:
+        return _error(str(e))
 
 
 async def get_active_project(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_active_project")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project set")
+    return _ok(project_id=active["project_id"], current_phase=active.get("current_phase"))
 
 
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
@@ -59,7 +88,23 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
 
 
 async def submit_idea(args: dict[str, object]) -> dict[str, object]:
-    return _stub("submit_idea", project_ref=args.get("project_ref"))
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project. Create one first with create_film_project.")
+    idea = str(args.get("idea", args.get("text", "")))
+    if not idea:
+        return _error("idea is required")
+    # Inject the idea and run the graph through intake_node
+    active["idea"] = idea
+    state = rt.run_graph(active)
+    # Update stored state
+    rt.projects[active["project_id"]] = state
+    return _ok(
+        project_id=state["project_id"],
+        current_phase=state.get("current_phase"),
+        human_approval_required=state.get("human_approval_required"),
+    )
 
 
 async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
@@ -74,11 +119,25 @@ async def approve_intake(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_current_phase")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _stub("get_current_phase")
+    return _ok(phase=active.get("current_phase", ""))
 
 
 async def get_film_state(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_film_state")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _stub("get_film_state")
+    # Return a sanitized copy (no internal keys)
+    safe = {
+        k: v
+        for k, v in active.items()
+        if not k.startswith("_") and k not in ("approved", "human_approval_required")
+    }
+    return _ok(state=safe)
 
 
 async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
@@ -101,11 +160,25 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
 
 
 async def approve_phase(args: dict[str, object]) -> dict[str, object]:
-    return _stub("approve_phase", phase=args.get("phase"))
+    rt = get_runtime()
+    try:
+        state = rt.approve_phase()
+        return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
+    except ValueError as e:
+        return _error(str(e))
 
 
 async def request_revision(args: dict[str, object]) -> dict[str, object]:
-    return _stub("request_revision", phase=args.get("phase"))
+    rt = get_runtime()
+    try:
+        state = rt.request_revision(note=str(args.get("note", "")))
+        return _ok(
+            project_id=state["project_id"],
+            current_phase=state.get("current_phase"),
+            issues=state.get("issues", []),
+        )
+    except ValueError as e:
+        return _error(str(e))
 
 
 # --- Artifact tools ------------------------------------------------------
