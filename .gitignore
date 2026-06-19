@@ -240,6 +240,7 @@ __marimo__/
 /.DS_Store
 
 /film-knowledge-base/
+!/film-knowledge-base/index/
 
 /.qwen
 # Test artifacts (temp dirs used in tests)
