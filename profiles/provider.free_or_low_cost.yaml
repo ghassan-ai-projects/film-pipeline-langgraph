@@ -1,0 +1,9 @@
+providers:
+  order:
+    - mock-video-provider
+    - seedance-openrouter
+  fallback_allowed: false
+  max_duration_seconds: 10
+budget:
+  project_cap_usd: 5
+  human_approval_above_usd: 0.5

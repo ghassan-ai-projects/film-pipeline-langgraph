@@ -1,0 +1,14 @@
+review:
+  strategy: multi_model_panel
+  min_reviewers: 2
+  escalation_on_disagreement: true
+validation:
+  thresholds:
+    pass: 90
+    review: 80
+    block: 75
+generation:
+  re_anchor_every_n_clips: 3
+  re_anchor_on_scene_boundary: true
+  re_anchor_on_drift_warning: true
+  allow_parallel_independent_tests: false

@@ -102,6 +102,10 @@ class ProjectRegistry:
                 or ref_l in (a.lower() for a in p.aliases)
             ):
                 out.append(p)
+        if not out:
+            for p in self._projects:
+                if p.slug.lower().startswith(ref_l) or p.title.lower().startswith(ref_l):
+                    out.append(p)
         return out
 
     def _fuzzy_matches(self, ref: str, threshold: float) -> list[ProjectRecord]:

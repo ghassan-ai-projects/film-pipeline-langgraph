@@ -1,0 +1,14 @@
+quality_profile: draft
+review:
+  strategy: single
+  min_reviewers: 1
+  escalation_on_disagreement: false
+validation:
+  thresholds:
+    pass: 60
+    review: 45
+    block: 30
+generation:
+  default_mode: test
+  duration_seconds: 1
+  resolution: 480p
