@@ -1,4 +1,4 @@
-"""Application bootstrap, health checks, smoke tests, version metadata.
+"""Application bootstrap, health checks, product gates, smoke tests, version metadata.
 
 See docs/implementation-plan/16-productization-release.md
 """

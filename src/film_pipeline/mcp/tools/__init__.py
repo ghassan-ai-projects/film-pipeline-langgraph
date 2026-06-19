@@ -7,6 +7,8 @@ backend; remaining tools return stubs pending full Phase 05+ wiring.
 
 from __future__ import annotations
 
+import contextlib
+
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
 
@@ -122,7 +124,7 @@ async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
     rt = get_runtime()
     active = rt.get_active()
     if active is None:
-        return _stub("get_current_phase")
+        return _error("No active project.")
     return _ok(phase=active.get("current_phase", ""))
 
 
@@ -130,7 +132,7 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
     rt = get_runtime()
     active = rt.get_active()
     if active is None:
-        return _stub("get_film_state")
+        return _error("No active project.")
     # Return a sanitized copy (no internal keys)
     safe = {
         k: v
@@ -182,7 +184,34 @@ async def get_blockers(args: dict[str, object]) -> dict[str, object]:
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
-    return _stub("review_phase_artifacts", phase=args.get("phase"))
+    """List artifacts for the active project's current phase (for human review)."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    phase = str(args.get("phase", active.get("current_phase", "")))
+    if not phase:
+        return _error("No phase specified and no active phase.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        fp = FilmPhase(phase)
+    except ValueError:
+        return _error(f"Unknown phase: {phase}")
+    artifacts = rt.services.artifact_store.list_artifacts(project_id, fp)
+    return _ok(
+        artifacts=[
+            {
+                "artifact_id": a.artifact_id,
+                "artifact_type": a.artifact_type,
+                "phase": str(a.phase.value),
+                "version": a.version,
+                "status": a.status,
+            }
+            for a in artifacts
+        ]
+    )
 
 
 async def approve_phase(args: dict[str, object]) -> dict[str, object]:
@@ -211,69 +240,523 @@ async def request_revision(args: dict[str, object]) -> dict[str, object]:
 
 
 async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_artifacts")
+    """List all artifacts for the active project, optionally filtered by phase."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    phase_str = args.get("phase")
+    from film_pipeline.schemas._base import FilmPhase
+
+    fp = None
+    if phase_str:
+        try:
+            fp = FilmPhase(str(phase_str))
+        except ValueError:
+            return _error(f"Unknown phase: {phase_str}")
+    artifacts = rt.services.artifact_store.list_artifacts(project_id, fp)
+    return _ok(
+        artifacts=[
+            {
+                "artifact_id": a.artifact_id,
+                "artifact_type": a.artifact_type,
+                "phase": str(a.phase.value),
+                "version": a.version,
+                "status": a.status,
+            }
+            for a in artifacts
+        ]
+    )
 
 
 async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
-    return _stub("inspect_artifact", artifact_id=args.get("artifact_id"))
+    """Load and return the content of a specific artifact."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    artifact_id = str(args.get("artifact_id", ""))
+    if not artifact_id:
+        return _error("artifact_id is required.")
+    phase_str = str(args.get("phase", active.get("current_phase", "")))
+    version_raw = args.get("version", 1)
+    version = int(str(version_raw)) if not isinstance(version_raw, int) else version_raw
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        fp = FilmPhase(phase_str)
+    except ValueError:
+        return _error(f"Unknown phase: {phase_str}")
+    try:
+        content = rt.services.artifact_store.load(project_id, fp, artifact_id, version)
+        return _ok(content=content)
+    except FileNotFoundError:
+        return _error(f"Artifact '{artifact_id}' not found in phase '{phase_str}'.")
 
 
 async def list_shots(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_shots")
+    """List shots from the shot bible artifact, if available."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = rt.services.artifact_store.load(project_id, FilmPhase("shot_bible"), "shot_bible", 1)
+        shots = data.get("shots", data.get("scenes", []))
+        return _ok(shots=shots)
+    except (FileNotFoundError, ValueError):
+        return _ok(shots=[], note="Shot bible not yet generated.")
 
 
 async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
-    return _stub("inspect_shot", shot_id=args.get("shot_id"))
+    """Inspect a specific shot by ID from the shot bible."""
+    shot_id = str(args.get("shot_id", ""))
+    if not shot_id:
+        return _error("shot_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = rt.services.artifact_store.load(project_id, FilmPhase("shot_bible"), "shot_bible", 1)
+        shots = data.get("shots", data.get("scenes", []))
+        match = next(
+            (s for s in shots if str(s.get("shot_id", s.get("scene_id", ""))) == shot_id), None
+        )
+        if match is None:
+            return _error(f"Shot '{shot_id}' not found.")
+        return _ok(shot=match)
+    except (FileNotFoundError, ValueError):
+        return _error("Shot bible not yet generated.")
 
 
 async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
-    return _stub("inspect_scene", scene_id=args.get("scene_id"))
+    """Inspect a specific scene from the script artifact."""
+    scene_id = str(args.get("scene_id", ""))
+    if not scene_id:
+        return _error("scene_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = rt.services.artifact_store.load(project_id, FilmPhase("script"), "script", 1)
+        scenes = data.get("scenes", [])
+        match = next((s for s in scenes if str(s.get("scene_id", "")) == scene_id), None)
+        if match is None:
+            return _error(f"Scene '{scene_id}' not found.")
+        return _ok(scene=match)
+    except (FileNotFoundError, ValueError):
+        return _error("Script artifact not yet generated.")
 
 
 async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
-    return _stub("inspect_reference", reference_id=args.get("reference_id"))
+    """Inspect a reference by ID from the visual development phase."""
+    reference_id = str(args.get("reference_id", ""))
+    if not reference_id:
+        return _error("reference_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = rt.services.artifact_store.load(
+            project_id, FilmPhase("visual_dev"), "reference_manifest", 1
+        )
+        refs = data.get("references", data.get("items", []))
+        match = next(
+            (r for r in refs if str(r.get("reference_id", r.get("id", ""))) == reference_id),
+            None,
+        )
+        if match is None:
+            return _error(f"Reference '{reference_id}' not found.")
+        return _ok(reference=match)
+    except (FileNotFoundError, ValueError):
+        return _error("Reference manifest not yet generated.")
 
 
 # --- Validation tools ----------------------------------------------------
 
 
 async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_validation_report")
+    """Run validators against the active project's current phase artifacts."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    phase_str = str(active.get("current_phase", ""))
+    if not phase_str:
+        return _error("No active phase to validate.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        fp = FilmPhase(phase_str)
+    except ValueError:
+        return _error(f"Unknown phase: {phase_str}")
+
+    # Run validators for the script phase
+    reports: list[dict[str, object]] = []
+    if phase_str == "script":
+        art_data = _load_script_artifact(rt, project_id, fp)
+        if art_data is not None:
+            from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+            from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
+
+            for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
+                validator = vcls()
+                report = validator.run(art_data)
+                reports.append(
+                    {
+                        "validator_id": report.validator_id,
+                        "score": report.score,
+                        "status": str(report.status.value),
+                        "blocking_count": len(report.blocking_issues),
+                        "warning_count": len(report.warnings),
+                        "recommended_actions": report.recommended_actions,
+                    }
+                )
+    return _ok(phase=phase_str, reports=reports)
 
 
 async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_validation_issues")
+    """List all validation issues for the active project's current phase."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    phase_str = str(active.get("current_phase", ""))
+    if not phase_str:
+        return _error("No active phase to inspect.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        fp = FilmPhase(phase_str)
+    except ValueError:
+        return _error(f"Unknown phase: {phase_str}")
+
+    issues: list[dict[str, object]] = []
+    if phase_str == "script":
+        art_data = _load_script_artifact(rt, project_id, fp)
+        if art_data is not None:
+            from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+            from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
+
+            for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
+                validator = vcls()
+                report = validator.run(art_data)
+                for issue in report.blocking_issues + report.warnings:
+                    issues.append(
+                        {
+                            "code": issue.code,
+                            "message": issue.message,
+                            "severity": issue.severity,
+                            "validator_id": report.validator_id,
+                        }
+                    )
+    return _ok(phase=phase_str, issues=issues)
+
+
+def _load_script_artifact(rt: object, project_id: str, fp: object) -> dict[str, object] | None:
+    """Try to load the script artifact from the artifact store."""
+    try:
+        store = rt.services.artifact_store  # type: ignore[attr-defined]
+        return store.load(project_id, fp, "script", 1)  # type: ignore[no-any-return]
+    except (FileNotFoundError, AttributeError):
+        return None
 
 
 # --- Generation tools ----------------------------------------------------
 
 
 async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
-    return _stub("plan_generation_batch")
+    """Plan a generation batch: add rows to the ledger for each shot.
+
+    Reads shot IDs from the shot bible artifact if none are provided.
+    """
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+
+    provider = str(args.get("provider", "mock-video-provider"))
+    model = str(args.get("model", "mock-fast"))
+    prompt_ref = str(args.get("prompt_ref", ""))
+    mode_str = str(args.get("mode", "test"))
+    from film_pipeline.schemas._base import GenerationMode
+
+    mode = GenerationMode.TEST
+    with contextlib.suppress(ValueError):
+        mode = GenerationMode(mode_str)
+
+    # Collect shot IDs — from args, or from shot bible artifact
+    raw_shot_ids = args.get("shot_ids", [])
+    shot_ids: list[str] = []
+    if isinstance(raw_shot_ids, list):
+        shot_ids = [str(s) for s in raw_shot_ids]
+    else:
+        # Try the shot bible
+        try:
+            from film_pipeline.schemas._base import FilmPhase
+
+            data = rt.services.artifact_store.load(
+                project_id, FilmPhase("shot_bible"), "shot_bible", 1
+            )
+            shot_ids = [
+                str(s.get("shot_id", s.get("scene_id", "")))
+                for s in data.get("shots", data.get("scenes", []))
+            ]
+        except (FileNotFoundError, ValueError):
+            return _error("No shot_ids provided and no shot bible found.")
+
+    if not shot_ids:
+        return _error("No shot IDs to plan.")
+
+    ledger = mgr.plan_batch(
+        project_id=project_id,
+        shot_ids=shot_ids,
+        provider=provider,
+        model=model,
+        prompt_ref=prompt_ref,
+        mode=mode,
+    )
+    return _ok(
+        planned=len(shot_ids),
+        total_rows=len(ledger.rows),
+        rows=[
+            {
+                "generation_id": r.generation_id,
+                "shot_id": r.shot_id,
+                "status": str(r.status.value),
+            }
+            for r in ledger.rows
+            if r.shot_id in shot_ids
+        ],
+    )
 
 
 async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
-    return _stub("approve_generation_spend")
+    """Approve spend: mark all PREPARED rows as SUBMITTED."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    ledger = mgr.approve_spend(project_id)
+    submitted = [r for r in ledger.rows if r.status.value == "submitted"]
+    return _ok(approved=len(submitted), total_rows=len(ledger.rows))
+
+
+async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
+    """Get status of a generation by id."""
+    generation_id = str(args.get("generation_id", ""))
+    if not generation_id:
+        return _error("generation_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    row = mgr.get_row(project_id, generation_id)
+    if row is None:
+        return _error(f"Generation '{generation_id}' not found.")
+    return _ok(
+        generation_id=row.generation_id,
+        shot_id=row.shot_id,
+        status=str(row.status.value),
+        provider_job_id=row.provider_job_id,
+        submitted_at=str(row.submitted_at) if row.submitted_at else None,
+        poll_count=row.poll_count,
+        estimated_cost_usd=row.estimated_cost_usd,
+        next_action=row.next_action,
+    )
+
+
+async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
+    """List active (non-terminal) generation rows."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas._base import GenerationStatus
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    terminal = {
+        GenerationStatus.COMPLETED,
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+        GenerationStatus.TIMED_OUT,
+    }
+    all_rows = mgr.list_rows(project_id)
+    active_rows = [r for r in all_rows if r.status not in terminal]
+    return _ok(
+        count=len(active_rows),
+        rows=[
+            {
+                "generation_id": r.generation_id,
+                "shot_id": r.shot_id,
+                "status": str(r.status.value),
+                "provider_job_id": r.provider_job_id,
+                "next_action": r.next_action,
+            }
+            for r in active_rows
+        ],
+    )
 
 
 async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     return _stub("start_generation_batch")
 
 
-async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_generation_status")
-
-
 async def resume_generation_polling(args: dict[str, object]) -> dict[str, object]:
-    return _stub("resume_generation_polling")
+    """Poll the provider for a generation's status and update the ledger."""
+    generation_id = str(args.get("generation_id", ""))
+    if not generation_id:
+        return _error("generation_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from datetime import UTC, datetime
 
+    from film_pipeline.generation.ledger import GenerationLedgerManager
 
-async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_active_generations")
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    row = mgr.get_row(project_id, generation_id)
+    if row is None:
+        return _error(f"Generation '{generation_id}' not found.")
+    if not row.provider_job_id:
+        return _error(f"Generation '{generation_id}' has no provider_job_id — not yet submitted.")
+
+    adapter = rt.get_provider(row.provider)
+    if adapter is None:
+        return _error(f"Provider '{row.provider}' not registered.")
+
+    from film_pipeline.providers.base import ProviderJob
+    from film_pipeline.schemas._base import GenerationStatus
+
+    job = ProviderJob(
+        job_id=row.provider_job_id,
+        shot_id=row.shot_id,
+        provider_id=row.provider,
+        model=row.model,
+        status="submitted",
+        polls=row.poll_count,
+    )
+    try:
+        result = adapter.poll(job)
+    except Exception as exc:
+        mgr.update_row(
+            project_id,
+            generation_id,
+            error_code="poll_failed",
+            blocking_reason=str(exc)[:200],
+        )
+        return _error(f"Poll failed: {exc}")
+
+    status_map: dict[str, GenerationStatus] = {
+        "completed": GenerationStatus.COMPLETED,
+        "failed": GenerationStatus.FAILED,
+        "submitted": GenerationStatus.SUBMITTED,
+        "processing": GenerationStatus.RUNNING,
+    }
+    new_status = status_map.get(result.status, GenerationStatus.RUNNING)
+
+    mgr.update_row(
+        project_id,
+        generation_id,
+        status=new_status,
+        poll_count=result.polls,
+        last_polled_at=datetime.now(UTC),
+    )
+    return _ok(
+        generation_id=generation_id,
+        shot_id=row.shot_id,
+        status=str(new_status.value),
+        poll_count=result.polls,
+    )
 
 
 async def cancel_generation_request(args: dict[str, object]) -> dict[str, object]:
-    return _stub("cancel_generation_request")
+    """Cancel a generation and update the ledger."""
+    generation_id = str(args.get("generation_id", ""))
+    if not generation_id:
+        return _error("generation_id is required.")
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas._base import GenerationStatus
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    row = mgr.get_row(project_id, generation_id)
+    if row is None:
+        return _error(f"Generation '{generation_id}' not found.")
+    if not row.provider_job_id:
+        mgr.update_row(
+            project_id,
+            generation_id,
+            status=GenerationStatus.CANCELLED,
+            next_action="stop",
+        )
+        return _ok(generation_id=generation_id, cancelled=True, provider=False)
+
+    adapter = rt.get_provider(row.provider)
+    if adapter is None:
+        return _error(f"Provider '{row.provider}' not registered.")
+
+    from film_pipeline.providers.base import ProviderJob
+
+    job = ProviderJob(
+        job_id=row.provider_job_id,
+        shot_id=row.shot_id,
+        provider_id=row.provider,
+        model=row.model,
+        status="submitted",
+    )
+    cancelled = adapter.cancel(job)
+    if cancelled:
+        mgr.update_row(
+            project_id,
+            generation_id,
+            status=GenerationStatus.CANCELLED,
+            next_action="stop",
+        )
+    return _ok(
+        generation_id=generation_id,
+        cancelled=cancelled,
+        provider=bool(row.provider_job_id),
+    )
 
 
 async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:

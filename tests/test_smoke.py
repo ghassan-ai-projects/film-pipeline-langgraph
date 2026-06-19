@@ -7,7 +7,7 @@ from film_pipeline import __version__, project_name
 
 def test_version_is_string() -> None:
     assert isinstance(__version__, str)
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.2.0"
 
 
 def test_project_name() -> None:

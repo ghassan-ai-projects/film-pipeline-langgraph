@@ -72,7 +72,7 @@ class ConsensusBuilder:
 
 def _calculate_agreement(reports: list[ValidationReport]) -> str:
     scores = [r.score for r in reports]
-    if not scores:
+    if not scores:  # pragma: no cover — build() returns early for empty
         return "low"
     spread = max(scores) - min(scores)
     if spread <= 5:
@@ -92,7 +92,7 @@ def _consensus_status(reports: list[ValidationReport]) -> ValidationStatus:
         return ValidationStatus.PASS_WITH_NOTES
     if all(s == ValidationStatus.PASS for s in statuses):
         return ValidationStatus.PASS
-    return ValidationStatus.NEEDS_REVISION
+    return ValidationStatus.NEEDS_REVISION  # pragma: no cover — all statuses caught above
 
 
 def _compare_findings(

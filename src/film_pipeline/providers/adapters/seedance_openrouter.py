@@ -43,9 +43,10 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
         super().__init__(entry)
         self.polling_config = polling_config or dict(POLLING_CONFIG)
         self._http_opener = http_opener
+        self._configured_api_key = lookup(entry.provider_id)
 
     def _api_key(self) -> str:
-        key = lookup("seedance-openrouter")
+        key = self._configured_api_key or lookup(self.entry.provider_id)
         if not key:
             raise RuntimeError("OPENROUTER_API_KEY is not set. Cannot make real API calls.")
         return key

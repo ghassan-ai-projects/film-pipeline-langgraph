@@ -2,8 +2,9 @@
 
 **Branch:** main (28 commits)
 **Version:** 0.2.0
-**Tests:** 472 passing, 93.23% coverage
-**CI:** All green (format + lint + mypy strict + pytest + build)
+**Tests:** 488 passing, 90.88% coverage
+**Local verification:** `ruff check`, `mypy src tests`, and `pytest` all green
+**Build:** `uv build` not re-verified in this network-restricted environment
 **Files:** 128 source, 48 test (34 actual test modules)
 
 ## Phase Completion — All 17 Phases
@@ -22,11 +23,11 @@
 | 09 | Validation Registry | 15 MVP validators, thresholds, consensus | 28 | 92% | ✅ |
 | 10 | Mock Provider | MockVideoProvider, MockImageProvider, 13 scenarios | 37 | 92% | ✅ |
 | 11 | Checkpoints | Git backend, manager, resume, invalidation, rollback | 20 | 92% | ✅ |
-| 12 | E2E Happy Path | Conftest, fixtures, graph execution, scenario 1 | 4 | 92% | ✅ |
+| 12 | E2E Happy Path | Conftest, fixtures, graph execution, scenario 1 scaffold | 4 | 92% | Partial |
 | 13 | Real Provider | SeedanceOpenRouter, VeoFast, credentials, redaction | 17 | 92% | ✅ |
 | 14 | Post-Production | Assembly, transitions, audio, delivery, subtitles, validators | 20 | 92% | ✅ |
 | 15 | Production Hardening | Audit trail, metrics, blockers, model routing, security | 24 | 92% | ✅ |
-| 16 | Productization | v0.2.0, README, smoke runner, build | 0 | 92% | ✅ |
+| 16 | Productization | v0.2.0, README, smoke runner, operator targets | 0 | 92% | Partial |
 
 ## Acceptance Criteria — Per-Phase Verification
 
@@ -36,6 +37,7 @@
 - ✅ FilmStudioState with 23 domains
 - ✅ interrupt_for_gate, should_interrupt, resolve_after_approval
 - ✅ 11 subgraph files
+- ✅ Runtime approval flow advances phases deterministically
 - ⚠️ Deferred: graph persistence via artifact store, audit logging per node
 
 ### Phase 06 — KB
@@ -80,6 +82,7 @@
 - ✅ InvalidationEngine: dependency graph
 - ✅ RollbackManager: checkpoint + artifact rollback
 - ✅ BranchManager: creative branch creation
+- ✅ Runtime approvals create git-backed checkpoints
 
 ### Phase 12 — E2E
 - ✅ Conftest with shared fixtures (mock human, model, providers, KB, validators)
@@ -91,6 +94,7 @@
 - ✅ SeedanceOpenRouterProvider: full adapter with urllib HTTP
 - ✅ Mock-compatible via _http_opener injection
 - ✅ OSError + HTTPError handling with redaction
+- ✅ Cached credential lookup keeps mocked integration tests stable
 - ✅ VeoFastProvider: stub adapter
 - ✅ Credential management: lookup, redaction
 - ✅ Integration tests with mocked HTTP responses
@@ -126,16 +130,16 @@
 | Per-agent RCTCO prompt templates | 07 | Generic prompts from contracts work | Post-v0.2 |
 | ffmpeg integration | 14 | Post-production agents produce plans | Phase 15+ |
 | VeoFast real HTTP calls | 13 | Needs GOOGLE_API_KEY | Post-v0.2 |
-| 48 remaining MCP tool stubs | 02 | 9 tools fully wired cover critical path | Post-v0.2 |
+| 29 remaining direct MCP tool stubs | 02 | Priority surfaces are wired; generation/validation/coverage remain deferred | Post-v0.2 |
 
-## MCP Tools — 57 Total, 9 Wired
+## MCP Tools — 57 Total, 28 Wired/Partially Wired
 
-**Wired (9):** create_film_project, list_projects, set_active_project, get_active_project,
-submit_idea, approve_phase, request_revision, assemble_review_cut, export_delivery_package
+**Wired/partially wired (28):** project management, active-project state, intake submit, phase approval/revision,
+orchestrator summary, next actions, blockers, KB lookup/context, checkpoint inspection/creation,
+audit inspection, provider health, and review-cut/delivery export helpers
 
-**Partially wired (2):** get_current_phase, get_film_state (return ok when active project exists)
-
-**Stubbed (46):** Remaining tools — generation, validation, checkpoint, audit, etc.
+**Stubbed (29):** Remaining tools — generation, validation, several artifact inspection surfaces,
+coverage planning, `rollback_artifact`, and a few non-critical intake/review helpers
 
 ## Coverage Summary — All Modules ≥ 80%
 
@@ -152,5 +156,5 @@ seedance adapter (89%), credentials (89%), observability/blockers (91%)
 Modules at **80-89%**: kb/packets (82%), rollback (97%), artifacts/paths (86%),
 artifacts/manifest (98%), checkpoints/git_backend (92%), invalidation (96%)
 
-Lowest intentional: **mcp/tools/ (67%)** — 46 stubs, **smoke.py (58%)** — CLI runner,
+Lowest intentional: **mcp/tools/ (67%)** — 29 direct stubs, **smoke.py (58%)** — CLI runner,
 **state.py (0%)** — unused dataclass replaced by dict, **veo_fast (42%)** — stub adapter

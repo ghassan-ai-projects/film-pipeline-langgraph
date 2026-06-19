@@ -101,6 +101,7 @@ class TestMCPFlow:
             # Approve the intaken idea
             result = loop.run_until_complete(approve_phase({}))
             assert result["ok"] is True
+            assert result["current_phase"] == "constitution"
         finally:
             loop.close()
 
@@ -165,10 +166,12 @@ class TestMCPFlow:
             # 5. Approve after revision
             r = loop.run_until_complete(approve_phase({}))
             assert r["ok"] is True
+            assert r["current_phase"] == "constitution"
 
             # 6. Verify project exists and is active
             r = loop.run_until_complete(get_active_project({}))
             assert r["project_id"] == "flow-01"
+            assert r["current_phase"] == "constitution"
         finally:
             loop.close()
 

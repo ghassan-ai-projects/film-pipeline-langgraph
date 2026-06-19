@@ -8,8 +8,11 @@ import pytest
 
 from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
+from film_pipeline.agents.runner import PromptRunner
+from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
+from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.packets import KBContextPacketBuilder
 from film_pipeline.providers.health import ProviderHealthTracker
@@ -110,3 +113,113 @@ def git_backend(tmp_path: Path) -> GitBackend:
 @pytest.fixture
 def checkpoint_manager(git_backend: GitBackend) -> CheckpointManager:
     return CheckpointManager(git_backend)
+
+
+@pytest.fixture
+def graph_services(
+    mock_model: MockModelAdapter,
+    agent_registry: AgentRegistry,
+    kb_builder: KBContextPacketBuilder,
+    tmp_path: Path,
+) -> GraphServices:
+    """GraphServices wired with mock model and in-memory registries."""
+    runner = PromptRunner()
+    # Register mock responses for the 4 spine agents
+    runner.mock_responses["Classify the user's film idea and produce a project profile."] = {
+        "intake": {
+            "project_id": "test-proj",
+            "title": "Test Film",
+            "slug": "test-film",
+            "target_runtime_seconds": 300,
+        }
+    }
+    runner.mock_responses["Create the film's creative constitution from the project idea."] = {
+        "constitution": {
+            "project_id": "test-proj",
+            "theme": "Hope in darkness",
+            "tone": "atmospheric",
+            "emotional_promise": "Catharsis",
+            "visual_language": "wide, painterly",
+            "camera_philosophy": "observational",
+            "quality_bar": "Every frame a painting.",
+            "character_truths": [],
+            "taboo_mistakes": [],
+        }
+    }
+    runner.mock_responses["Write the film treatment and scene breakdown from the constitution."] = {
+        "development": {
+            "treatment": {
+                "text": "A story of redemption in a broken world.",
+                "themes": ["hope"],
+                "act_map": {
+                    "act1_setup": "The fall",
+                    "act2_confrontation": "The climb",
+                    "act3_resolution": "The summit",
+                },
+            },
+            "scenes": [
+                {
+                    "scene_id": "s_001",
+                    "dramatic_function": "Opening image",
+                    "emotional_shift": "despair → hope",
+                    "conflict": "Internal doubt",
+                    "outcome": "Protagonist commits.",
+                }
+            ],
+        }
+    }
+    runner.mock_responses["Write the full screenplay from the treatment and scene intents."] = {
+        "script_output": {
+            "story_bible": {
+                "project_id": "test-proj",
+                "logline": "A broken pilot must fly one last mission.",
+                "hook": "",
+                "premise": "What if your last flight was your first real choice?",
+                "dramatic_question": "Will she choose duty or freedom?",
+                "act_map": {
+                    "act1_setup": "Crash",
+                    "act2_confrontation": "Mission",
+                    "act3_resolution": "Choice",
+                },
+                "treatment_text": "Story here.",
+                "themes": ["redemption"],
+                "scene_list": [
+                    {
+                        "scene_id": "s_001",
+                        "dramatic_function": "Open",
+                        "emotional_shift": "low → high",
+                        "conflict": "self",
+                        "outcome": "committed",
+                    }
+                ],
+                "setup_payoff_map": [],
+                "unresolved_threads": [],
+                "theme_map": [],
+            },
+            "script": {
+                "project_id": "test-proj",
+                "title": "Final Approach",
+                "scenes": [
+                    {
+                        "scene_id": "sc_001",
+                        "scene_heading": "INT. COCKPIT — NIGHT",
+                        "action_lines": ["Rain taps."],
+                        "dialogue": [
+                            {
+                                "character_id": "mara",
+                                "line": "Requesting final approach.",
+                                "direction": "(steady)",
+                            }
+                        ],
+                        "intent_ref": "s_001",
+                    }
+                ],
+            },
+        }
+    }
+    return GraphServices(
+        prompt_runner=runner,
+        artifact_store=ArtifactStore(root=tmp_path / "artifacts"),
+        agent_registry=agent_registry,
+        kb_builder=kb_builder,
+    )

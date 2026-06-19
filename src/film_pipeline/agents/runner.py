@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.schemas.handoff import AgentHandoff, AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 
@@ -36,10 +37,13 @@ class RCTCOPrompt:
 class PromptRunner:
     """Builds RCTCO prompts, injects KB context, runs model, parses output.
 
-    Uses a mock model by default. Swap in a real model adapter for production.
+    Uses mock responses by default. Pass ``model_adapter`` to call a real LLM
+    via OpenRouter. When a mock response is registered for a task it takes
+    precedence over the real adapter.
     """
 
     mock_responses: dict[str, dict[str, Any]] = field(default_factory=dict)
+    model_adapter: ModelAdapter | None = None
 
     def build_rctco(
         self,
@@ -87,10 +91,20 @@ class PromptRunner:
         )
 
     def call_model(self, prompt: RCTCOPrompt) -> dict[str, Any]:
-        """Call the model. Uses mock if a canned response is registered."""
+        """Call the model. Uses mock if a canned response is registered.
+
+        When ``model_adapter`` is set and no mock matches, calls the real LLM
+        and expects a JSON response.
+        """
         if prompt.core_task in self.mock_responses:
             return self.mock_responses[prompt.core_task]
-        # Default mock response
+        if self.model_adapter is not None:
+            return self.model_adapter.chat_json(
+                prompt.rendered,
+                system=prompt.role,
+                temperature=0.7,
+            )
+        # Default mock response when nothing is configured
         return {"status": "ok", "agent": "mock", "output": {}}
 
     def run(
