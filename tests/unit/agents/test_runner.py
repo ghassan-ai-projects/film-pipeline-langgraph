@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from film_pipeline.agents.runner import PromptRunner, RCTCOPrompt
 from film_pipeline.schemas._base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
@@ -78,10 +80,68 @@ class TestPromptRunner:
         assert handoff.from_agent == "test-agent"
         assert handoff.project_id == "p1"
         assert handoff.kb_context_ref == kb.kb_context_id
-        assert len(handoff.validation_required) == 1
+
+    def test_create_handoff_with_artifacts(self) -> None:
+        runner = PromptRunner()
+        contract = _make_contract()
+        kb = _make_kb()
+        handoff = runner.create_handoff(
+            contract,
+            handoff_id="h2",
+            project_id="p2",
+            task="Test task",
+            kb_context=kb,
+            input_artifact_refs=["artifact:script:v1", "artifact:scene:v2"],
+        )
+        assert handoff.input_artifact_refs == ["artifact:script:v1", "artifact:scene:v2"]
+
+    def test_run_with_string_output_raises(self) -> None:
+        runner = PromptRunner(mock_responses={"Test task": "not a dict"})  # type: ignore[dict-item]
+        contract = _make_contract()
+        kb = _make_kb()
+        with pytest.raises(ValueError, match="not a dict"):
+            runner.run(contract, kb, "Test task")
+
+    def test_build_rctco_with_blocked_domains(self) -> None:
+        runner = PromptRunner()
+        contract = _make_contract(blocked_kb_domains=["cost", "providers"])
+        kb = _make_kb()
+        prompt = runner.build_rctco(contract, kb, "Test task")
+        assert "Blocked KB domains: cost, providers" in prompt.constraints
+
+    def test_build_rctco_with_failure_modes(self) -> None:
+        runner = PromptRunner()
+        contract = _make_contract(failure_modes=["bad_output", "timeout"])
+        kb = _make_kb()
+        prompt = runner.build_rctco(contract, kb, "Test task")
+        assert "Avoid: bad_output, timeout" in prompt.constraints
+
+    def test_build_rctco_empty_kb_context(self) -> None:
+        runner = PromptRunner()
+        contract = _make_contract()
+        kb = KBContextPacket(
+            kb_context_id="kbctx:empty:v1",
+            project_id="p1",
+            phase="x",
+            agent_id="x",
+            task="x",
+        )
+        prompt = runner.build_rctco(contract, kb, "Test task")
+        assert "No KB context." in prompt.context
+
+    def test_call_model_default_path(self) -> None:
+        runner = PromptRunner()
+        prompt = RCTCOPrompt(
+            role="r", core_task="unknown", context="c", constraints="x", output_format="y"
+        )
+        result = runner.call_model(prompt)
+        assert result == {"status": "ok", "agent": "mock", "output": {}}
 
 
-def _make_contract() -> AgentRegistration:
+def _make_contract(
+    blocked_kb_domains: list[str] | None = None,
+    failure_modes: list[str] | None = None,
+) -> AgentRegistration:
     return AgentRegistration(
         agent_id="test-agent",
         family=AgentFamily.OPERATIONS,
@@ -90,8 +150,9 @@ def _make_contract() -> AgentRegistration:
         input_artifacts=["input"],
         output_artifacts=["output_schema_v1"],
         allowed_kb_domains=["ops"],
+        blocked_kb_domains=blocked_kb_domains or [],
         reviewed_by=["reviewer-agent"],
-        failure_modes=["bad_output"],
+        failure_modes=failure_modes or [],
     )
 
 

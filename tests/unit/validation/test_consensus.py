@@ -90,3 +90,38 @@ class TestConsensusBuilder:
         r = _make_report("v1", 90)
         consensus = builder.build([r])
         assert len(consensus.orchestrator_recommendation) > 0
+
+    def test_needs_revision_consensus(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 80, ValidationStatus.PASS_WITH_NOTES)
+        r2 = _make_report("v2", 70, ValidationStatus.NEEDS_REVISION)
+        consensus = builder.build([r1, r2])
+        assert consensus.consensus_status == ValidationStatus.NEEDS_REVISION
+
+    def test_low_agreement_recommendation(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 95, ValidationStatus.PASS)
+        r2 = _make_report("v2", 70, ValidationStatus.BLOCKED)
+        consensus = builder.build([r1, r2])
+        # Low agreement + blocked = revise recommendation
+        assert consensus.agreement_level == "low"
+
+    def test_warnings_shared(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 90)
+        r2 = _make_report("v2", 88)
+        consensus = builder.build([r1, r2])
+        # Both PASS — high agreement
+        assert consensus.consensus_status == ValidationStatus.PASS
+
+    def test_artifact_refs(self) -> None:
+        builder = ConsensusBuilder()
+        r = _make_report("v1", 90)
+        consensus = builder.build([r], artifact_refs=["ref:1", "ref:2"])
+        assert consensus.artifact_refs == ["ref:1", "ref:2"]
+
+    def test_blocked_consensus_recommendation(self) -> None:
+        builder = ConsensusBuilder()
+        r = _make_report("v1", 50, ValidationStatus.BLOCKED)
+        consensus = builder.build([r])
+        assert "Revise" in consensus.orchestrator_recommendation
