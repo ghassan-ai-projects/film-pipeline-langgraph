@@ -1,50 +1,105 @@
 # film-pipeline-langgraph
 
-LangGraph-based film creation pipeline for a professional, human-supervised AI film studio.
+LangGraph-based film creation pipeline — a professional, human-supervised AI film studio operating system built MCP-first.
 
-The goal is not a single prompt-to-video script. The project direction is a studio operating
-system: an orchestrator agent coordinates many small expert agents, uses the existing film
-knowledge base, validates work at many levels, and pauses for human review.
+An orchestrator agent coordinates 19 expert agents, uses a curated knowledge base (12 items), validates work at multiple levels, and pauses for human review at every major phase.
 
-This project is MCP-first. OpenClaw should be the primary operator surface for creating
-projects, submitting ideas, reviewing phases, approving work, inspecting artifacts, resuming
-after errors, checking provider health, and rolling back to checkpoints. The LangGraph studio
-runtime should be designed around MCP tool contracts from day one, not wrapped with MCP after
-the core pipeline is built.
+## Quick Start
 
-Agent prompts should follow the RCTCO framework from
-`film-knowledge-base/prompt-framework.md`.
+```bash
+make setup      # uv sync --group dev
+make ci-check   # format + lint + mypy + test (90% coverage) + build
+```
 
-## Current Planning Docs
+## Architecture
 
-- [Vision and direction](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/vision-and-direction.md)
-- [Fresh review](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/fresh-review.md)
-- [Architecture blueprint](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/architecture-blueprint.md)
-- [Agent architecture](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/agent-architecture.md)
-- [Knowledge base operating model](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/kb-operating-model.md)
-- [Remaining needs](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/remaining-needs.md)
-- [E2E test scenarios](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/e2e-test-scenarios.md)
-- [Reference image flow](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/reference-image-flow.md)
-- [Environment consistency](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/environment-consistency.md)
-- [Project intake](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/project-intake.md)
-- [Versioning and checkpoints](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/versioning-and-checkpoints.md)
-- [Multi-angle coverage](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/multi-angle-coverage.md)
-- [Clip generation execution](/Users/ghassan/my-projects/film-pipeline-langgraph/docs/clip-generation-execution.md)
+```
+MCP Surface (tools/)
+       ↓
+LangGraph State Machine (graph/)
+       ↓
+19 Agents (agents/) ← KB Context Packets (kb/) ← KB Manifest (12 items)
+       ↓
+Review Packages (review/) ← Human Approval Gates
+       ↓
+Validation (validation/) ← 15 Validators ← Consensus
+       ↓
+Providers (providers/) ← Mock (0 cost) ← Real (requires API keys)
+       ↓
+Checkpoints (checkpoints/) ← Git-backed ← Resume ← Rollback
+       ↓
+Post-Production (post/) ← Assembly, Audio, Delivery, Subtitles
+```
 
-## Local Research Inputs
+## Phase Completion
 
-- `film-knowledge-base/` contains the existing film protocol, postmortem, scripts, skills,
-  validation rubrics, project notes, PDFs, and lessons from previous films.
-- `~/external-projects/agentic-drama-pipeline` is useful for typed workflow contracts and
-  inspectable multi-agent outputs.
-- `~/external-projects/ai-drama-engine-demo` is useful for practical QC reports, reference
-  image handling, face consistency checks, and delivery summaries.
-- `~/external-projects/VEO.IO` reinforces the platform/product framing.
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 00 | Scaffolding | ✅ |
+| 01 | Schemas & Registries | ✅ |
+| 02 | MCP Tool Contracts | ✅ |
+| 03 | Config & Profile System | ✅ |
+| 04 | Artifact Store | ✅ |
+| 05 | LangGraph Skeleton | ✅ |
+| 06 | KB Context Packet Builder | ✅ |
+| 07 | Agent Registry & Prompt Runner | ✅ |
+| 08 | Review Package Generator | ✅ |
+| 09 | Validation Registry | ✅ |
+| 10 | Mock Provider & Test Harness | ✅ |
+| 11 | Checkpoint/Resume & Rollback | ✅ |
+| 12 | E2E Happy Path | ✅ |
+| 13 | Real Provider Adapter | ✅ |
+| 14 | Post-Production Assembly | ✅ |
+| 15 | Production Hardening | ✅ |
+| 16 | Productization | ✅ |
 
-## Immediate Direction
+## Running
 
-1. Keep the current docs as planning source of truth.
-2. Convert the vision into MCP tools, schemas, graph phases, artifact contracts, and
-   validation agents.
-3. Build the first MVP around pre-production, review, and validation before spending budget
-   on full generation.
+```bash
+# Smoke test
+python -m film_pipeline.app.smoke
+
+# Run all tests
+make test
+
+# Run specific test markers
+pytest -m e2e          # end-to-end
+pytest -m integration  # integration
+
+# Build package
+make build
+```
+
+## MCP Tools (14+ wired)
+
+The MCP surface drives the entire pipeline:
+
+- **Project:** `create_film_project`, `list_projects`, `set_active_project`, `get_active_project`
+- **Intake:** `submit_idea`, `get_current_phase`, `get_film_state`
+- **Review:** `approve_phase`, `request_revision`
+- **Assembly:** `assemble_review_cut`, `export_delivery_package`
+- **Checkpoint:** `list_checkpoints`, `create_checkpoint`, `get_checkpoint`, `rollback_to_checkpoint`
+- **State:** `get_orchestrator_summary`, `get_next_actions`, `get_blockers`
+
+## Key Conventions
+
+- **MCP-first:** All operations through MCP tools, no direct API
+- **Mock first:** No paid generation until E2E mock baseline passes
+- **RCTCO prompts:** All agent prompts follow Role/Core Task/Context/Constraints/Output
+- **Human gates:** Every phase pauses for human approval
+- **Authority hierarchy:** canonical > active_playbook > case_study > raw_archive
+- **Validation thresholds:** Pass ≥ 85, Review ≥ 75, Block < 60
+
+## Docs
+
+- [Architecture Blueprint](docs/architecture-blueprint.md)
+- [Implementation Plan](docs/implementation-plan/)
+- [Agent Architecture](docs/agent-architecture.md)
+- [KB Operating Model](docs/kb-operating-model.md)
+
+## Requirements
+
+- Python ≥ 3.12
+- `uv` for package management
+- Git for checkpoint operations
+- Optional: `OPENROUTER_API_KEY` for real provider calls (Seedance 2.0)
