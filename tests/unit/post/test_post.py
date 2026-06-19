@@ -215,3 +215,59 @@ class TestValidators:
         validator = PostValidator()
         issues = validator.validate_subtitles(cue_count=2, dialogue_count=5)
         assert len(issues) > 0
+
+    def test_validate_assembly_no_clips(self) -> None:
+        """Branch: plan.clips is empty."""
+        validator = PostValidator()
+        from film_pipeline.post.assembly_agent import AssemblyPlan
+
+        plan = AssemblyPlan(plan_id="id", project_id="p", clips=[], clip_count=0)
+        issues = validator.validate_assembly(plan)
+        assert any("No clips" in i for i in issues)
+
+    def test_validate_assembly_missing_assets(self) -> None:
+        """Branch: plan has missing_assets."""
+        validator = PostValidator()
+        from film_pipeline.post.assembly_agent import AssemblyPlan
+
+        plan = AssemblyPlan(
+            plan_id="id",
+            project_id="p",
+            clips=["clip1.mp4"],
+            missing_assets=["S002"],
+            clip_count=1,
+        )
+        issues = validator.validate_assembly(plan)
+        assert any("Missing assets" in i for i in issues)
+
+    def test_validate_transitions_count_mismatch(self) -> None:
+        """Branch: expected != plan.total_count."""
+        validator = PostValidator()
+        from film_pipeline.post.transition_agent import TransitionPlan
+
+        plan = TransitionPlan(plan_id="id", project_id="p", total_count=0)
+        issues = validator.validate_transitions(plan, clip_count=5)
+        assert any("Expected 4" in i for i in issues)
+
+    def test_validate_delivery_no_files(self) -> None:
+        """Branch: package.files is empty."""
+        validator = PostValidator()
+        from film_pipeline.post.delivery_packaging_agent import DeliveryPackage
+
+        package = DeliveryPackage(
+            package_id="id",
+            project_id="p",
+            subtitles_included=True,
+            audio_stems_included=True,
+            validation_report_included=True,
+            cost_report_included=True,
+            credits_included=True,
+        )
+        issues = validator.validate_delivery(package)
+        assert any("No files" in i for i in issues)
+
+    def test_validate_subtitles_zero_cues(self) -> None:
+        """Branch: cue_count == 0."""
+        validator = PostValidator()
+        issues = validator.validate_subtitles(cue_count=0, dialogue_count=5)
+        assert any("No subtitle cues" in i for i in issues)

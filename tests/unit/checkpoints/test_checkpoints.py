@@ -183,6 +183,19 @@ class TestRollbackManager:
             except ValueError:
                 pass
 
+    def test_rollback_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            git = GitBackend.init_temp(Path(d))
+            (Path(d) / "f.txt").write_text("v1")
+            commit1 = git.commit("v1", ["f.txt"])
+            (Path(d) / "f.txt").write_text("v2")
+            git.commit("v2", ["f.txt"])
+            mgr = CheckpointManager(git)
+            rm = RollbackManager(checkpoint_manager=mgr, git=git)
+            # Rollback single artifact to v1
+            rm.rollback_artifact("f.txt", commit1, performed_by="test")
+            assert (Path(d) / "f.txt").read_text() == "v1"
+
 
 class TestBranches:
     def test_create_branch(self) -> None:
