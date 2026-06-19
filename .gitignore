@@ -206,8 +206,27 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# Pre-commit cache
+.pre-commit-cache/
+
+# uv cache
+.uv-cache/
+
 # PyPI configuration file
 .pypirc
+
+# Film pipeline runtime data (transient, regenerated each run)
+*.tmp
+.cache/
+playwright-report/
+test-results/
+
+# Generated media (kept in manifests, not in git)
+projects/**/generated-assets/**/*.mp4
+projects/**/generated-assets/**/*.png
+projects/**/generated-assets/**/*.wav
+projects/**/references/**/*.png
+projects/**/references/**/*.jpg
 
 # Marimo
 marimo/_static/
@@ -221,3 +240,5 @@ __marimo__/
 /.DS_Store
 
 /film-knowledge-base/
+
+/.qwen
