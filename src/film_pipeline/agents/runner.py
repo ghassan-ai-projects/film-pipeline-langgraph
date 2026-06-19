@@ -1,0 +1,132 @@
+"""RCTCO prompt runner — builds prompts, injects KB context, calls model."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from film_pipeline.schemas.handoff import AgentHandoff, AgentRegistration
+from film_pipeline.schemas.kb import KBContextPacket
+
+
+@dataclass
+class RCTCOPrompt:
+    """A rendered RCTCO prompt ready for model execution."""
+
+    role: str
+    core_task: str
+    context: str
+    constraints: str
+    output_format: str
+    rendered: str = ""
+
+    def __post_init__(self) -> None:
+        self.rendered = "\n\n".join(
+            [
+                f"# Role\n{self.role}",
+                f"# Core Task\n{self.core_task}",
+                f"# Context\n{self.context}",
+                f"# Constraints\n{self.constraints}",
+                f"# Output\n{self.output_format}",
+            ]
+        )
+
+
+@dataclass
+class PromptRunner:
+    """Builds RCTCO prompts, injects KB context, runs model, parses output.
+
+    Uses a mock model by default. Swap in a real model adapter for production.
+    """
+
+    mock_responses: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def build_rctco(
+        self,
+        contract: AgentRegistration,
+        kb_context: KBContextPacket,
+        task: str,
+    ) -> RCTCOPrompt:
+        """Build an RCTCO prompt from the agent contract and KB context."""
+        # Role from contract
+        role = f"You are the {contract.agent_id} ({contract.role.value})."
+        if contract.capabilities:
+            role += f"\nCapabilities: {', '.join(contract.capabilities)}"
+
+        # Core task from task parameter
+        core_task = task
+
+        # Context from KB context packet
+        context_parts: list[str] = []
+        if kb_context.authority_policy_refs:
+            context_parts.append(
+                f"Authority policies: {', '.join(kb_context.authority_policy_refs)}"
+            )
+        if kb_context.playbook_refs:
+            context_parts.append(f"Playbooks: {', '.join(kb_context.playbook_refs)}")
+        if kb_context.case_study_refs:
+            context_parts.append(f"Case studies: {', '.join(kb_context.case_study_refs)}")
+        context = "\n".join(context_parts) if context_parts else "No KB context."
+
+        # Constraints from contract
+        constraints = f"Allowed KB domains: {', '.join(contract.allowed_kb_domains) or 'all'}"
+        if contract.blocked_kb_domains:
+            constraints += f"\nBlocked KB domains: {', '.join(contract.blocked_kb_domains)}"
+        if contract.failure_modes:
+            constraints += f"\nAvoid: {', '.join(contract.failure_modes)}"
+
+        # Output format
+        output_format = "Respond with valid JSON matching your output schema."
+
+        return RCTCOPrompt(
+            role=role,
+            core_task=core_task,
+            context=context,
+            constraints=constraints,
+            output_format=output_format,
+        )
+
+    def call_model(self, prompt: RCTCOPrompt) -> dict[str, Any]:
+        """Call the model. Uses mock if a canned response is registered."""
+        if prompt.core_task in self.mock_responses:
+            return self.mock_responses[prompt.core_task]
+        # Default mock response
+        return {"status": "ok", "agent": "mock", "output": {}}
+
+    def run(
+        self,
+        contract: AgentRegistration,
+        kb_context: KBContextPacket,
+        task: str,
+    ) -> dict[str, Any]:
+        """Full run: build RCTCO → call model → parse output."""
+        prompt = self.build_rctco(contract, kb_context, task)
+        raw = self.call_model(prompt)
+        # Validate it's a dict (basic)
+        if not isinstance(raw, dict):
+            raise ValueError(f"Model output is not a dict: {type(raw)}")
+        return raw
+
+    def create_handoff(
+        self,
+        contract: AgentRegistration,
+        handoff_id: str,
+        project_id: str,
+        task: str,
+        kb_context: KBContextPacket,
+        input_artifact_refs: list[str] | None = None,
+    ) -> AgentHandoff:
+        """Create a handoff record for this agent invocation."""
+        return AgentHandoff(
+            handoff_id=handoff_id,
+            from_agent=contract.agent_id,
+            to_agent="orchestrator-agent",
+            project_id=project_id,
+            input_artifact_refs=input_artifact_refs or [],
+            kb_context_ref=kb_context.kb_context_id,
+            task=task,
+            expected_output_schema=(
+                contract.output_artifacts[0] if contract.output_artifacts else "any"
+            ),
+            validation_required=contract.reviewed_by,
+        )
