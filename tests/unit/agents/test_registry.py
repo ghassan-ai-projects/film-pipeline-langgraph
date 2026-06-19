@@ -1,0 +1,120 @@
+"""Tests for agent registry."""
+
+from __future__ import annotations
+
+from film_pipeline.agents.mvp import MVP_AGENTS
+from film_pipeline.agents.registry import AgentRegistry
+from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.handoff import AgentRegistration
+
+
+class TestAgentRegistry:
+    def test_register(self) -> None:
+        registry = AgentRegistry()
+        contract = AgentRegistration(
+            agent_id="test-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            input_artifacts=["input"],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops"],
+        )
+        registry.register(contract)
+        assert len(registry) == 1
+        assert "test-agent" in registry
+
+    def test_register_duplicate_raises(self) -> None:
+        registry = AgentRegistry()
+        contract = AgentRegistration(
+            agent_id="dup-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            input_artifacts=["input"],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops"],
+        )
+        registry.register(contract)
+        try:
+            registry.register(contract)
+            raise AssertionError("Expected ValueError")
+        except ValueError:
+            pass
+
+    def test_register_many(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        assert len(registry) == 19
+
+    def test_lookup_by_id(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agent = registry.lookup_by_id("screenwriter-agent")
+        assert agent is not None
+        assert agent.role == AgentRole.CREATOR
+        assert agent.family == AgentFamily.SCREENWRITING
+
+    def test_lookup_by_id_missing(self) -> None:
+        registry = AgentRegistry()
+        assert registry.lookup_by_id("nonexistent") is None
+
+    def test_lookup_by_capability(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agents = registry.lookup_by_capability("dialogue")
+        assert len(agents) == 1
+        assert agents[0].agent_id == "screenwriter-agent"
+
+    def test_lookup_by_capability_multiple(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agents = registry.lookup_by_capability("error_classification")
+        assert len(agents) == 1
+        assert agents[0].agent_id == "failure-handling-agent"
+
+    def test_lookup_by_family(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agents = registry.lookup_by_family(AgentFamily.QC)
+        assert (
+            len(agents) == 3
+        )  # clip-validator, scene-continuity-validator, full-movie-flow-validator
+
+    def test_lookup_by_role(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agents = registry.lookup_by_role(AgentRole.ORCHESTRATOR)
+        assert len(agents) == 1
+        assert agents[0].agent_id == "orchestrator-agent"
+
+    def test_lookup_by_role_validator(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        agents = registry.lookup_by_role(AgentRole.VALIDATOR)
+        assert len(agents) == 3
+
+    def test_creator_and_validator_separate(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        for agent in registry.agents.values():
+            if agent.role == AgentRole.VALIDATOR:
+                assert agent.family == AgentFamily.QC
+
+    def test_all_agents_have_capabilities(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        for agent in registry.agents.values():
+            assert len(agent.capabilities) >= 1, f"{agent.agent_id} has no capabilities"
+
+    def test_all_agents_have_output_artifacts(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        for agent in registry.agents.values():
+            assert len(agent.output_artifacts) >= 1, f"{agent.agent_id} has no output artifacts"
+
+    def test_all_agents_have_prompt_framework(self) -> None:
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+        for agent in registry.agents.values():
+            assert agent.prompt_framework == "RCTCO"
