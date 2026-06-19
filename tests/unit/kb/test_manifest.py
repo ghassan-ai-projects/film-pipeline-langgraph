@@ -1,4 +1,4 @@
-"""Tests for KB manifest reader."""
+"""Tests for KB manifest reader and curator."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from film_pipeline.kb.curator import __doc__ as curator_doc
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.schemas._base import KbAuthority
 
@@ -81,3 +82,9 @@ class TestManifest:
     def test_iteration(self, manifest: KBManifest) -> None:
         ids = {item.id for item in manifest}
         assert "kb.policy.prompt.rctco.v1" in ids
+
+
+class TestCurator:
+    def test_curator_exists(self) -> None:
+        assert curator_doc is not None
+        assert "ingestion" in curator_doc.lower()
