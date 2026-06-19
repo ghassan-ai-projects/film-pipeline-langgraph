@@ -70,16 +70,23 @@ pytest -m integration  # integration
 make build
 ```
 
-## MCP Tools (14+ wired)
+## MCP Tools (33+ wired, 57 total)
 
-The MCP surface drives the entire pipeline:
+The MCP surface drives the entire pipeline. Wired tools connect to the runtime backend; stubs return placeholder responses for tools pending full wiring.
 
-- **Project:** `create_film_project`, `list_projects`, `set_active_project`, `get_active_project`
-- **Intake:** `submit_idea`, `get_current_phase`, `get_film_state`
-- **Review:** `approve_phase`, `request_revision`
-- **Assembly:** `assemble_review_cut`, `export_delivery_package`
-- **Checkpoint:** `list_checkpoints`, `create_checkpoint`, `get_checkpoint`, `rollback_to_checkpoint`
-- **State:** `get_orchestrator_summary`, `get_next_actions`, `get_blockers`
+- **Project:** `create_film_project`, `list_projects`, `find_project`, `set_active_project`, `get_active_project`, `get_project_summary`
+- **Intake:** `submit_idea`, `get_intake_analysis`, `approve_intake`
+- **State:** `get_current_phase`, `get_film_state`, `get_orchestrator_summary`, `get_next_actions`, `get_blockers`
+- **Review:** `review_phase_artifacts`, `approve_phase`, `request_revision`
+- **Artifact:** `list_artifacts`, `inspect_artifact`, `list_shots`, `inspect_shot`, `inspect_scene`, `inspect_reference`
+- **Validation:** `get_validation_report`, `list_validation_issues`
+- **Generation:** `plan_generation_batch`, `approve_generation_spend`, `start_generation_batch`, `get_generation_status`, `resume_generation_polling`, `list_active_generations`, `cancel_generation_request`, `promote_test_to_production`
+- **KB:** `kb_search`, `kb_get_item`, `kb_get_context_packet`, `kb_explain_context_choice`
+- **Checkpoint:** `list_checkpoints`, `create_checkpoint`, `get_checkpoint`, `compare_versions`, `list_artifact_versions`, `rollback_artifact`, `rollback_to_checkpoint`, `get_invalidation_report`
+- **Audit:** `get_audit_log`, `explain_last_decision`, `explain_agent_routing`, `explain_kb_context`
+- **Provider:** `check_provider_health`, `resolve_provider_block`, `list_providers`
+- **Coverage:** `plan_coverage_group`, `list_coverage_groups`, `inspect_coverage_group`, `approve_coverage_generation`
+- **Assembly:** `assemble_review_cut`, `assemble_final_cut`, `export_delivery_package`
 
 ## Key Conventions
 

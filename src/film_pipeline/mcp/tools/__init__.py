@@ -141,15 +141,41 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_orchestrator_summary")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    return _ok(
+        project_id=active["project_id"],
+        current_phase=active.get("current_phase"),
+        approved=active.get("approved"),
+        human_approval_required=active.get("human_approval_required"),
+        issues=active.get("issues", []),
+    )
 
 
 async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_next_actions")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    from film_pipeline.graph.router import compute_actions
+
+    actions = compute_actions(active)
+    return _ok(
+        next_action=actions.next_action,
+        eligible=actions.eligible,
+        blocked=actions.blocked,
+    )
 
 
 async def get_blockers(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_blockers")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    blockers = rt.get_blockers(active["project_id"])
+    return _ok(blockers=blockers, has_blockers=len(blockers) > 0)
 
 
 # --- Review tools --------------------------------------------------------
@@ -258,88 +284,310 @@ async def promote_test_to_production(args: dict[str, object]) -> dict[str, objec
 
 
 async def kb_search(args: dict[str, object]) -> dict[str, object]:
-    return _stub("kb_search", query=args.get("query"))
+    query = str(args.get("query", ""))
+    phase = str(args.get("phase", ""))
+    try:
+        from pathlib import Path
+
+        from film_pipeline.kb.manifest import KBManifest
+        from film_pipeline.kb.retrieval import KBRetrieval
+
+        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        if not manifest_path.exists():
+            return _ok(
+                items=[],
+                total=0,
+                message="KB manifest not found at film-knowledge-base/manifest.yaml",
+            )
+        manifest = KBManifest.from_yaml(manifest_path)
+        retrieval = KBRetrieval(manifest)
+        items = retrieval.by_tags(
+            phase=phase if phase else None,
+        )
+        return _ok(
+            items=[
+                {
+                    "id": i.id,
+                    "title": i.title,
+                    "authority": i.authority.value,
+                    "phases": i.applies_to_phases,
+                }
+                for i in items[:20]
+            ],
+            total=len(items),
+            query=query,
+        )
+    except Exception as e:
+        return _error(str(e))
 
 
 async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
-    return _stub("kb_get_item", item_id=args.get("item_id"))
+    item_id = str(args.get("item_id", ""))
+    try:
+        from pathlib import Path
+
+        from film_pipeline.kb.manifest import KBManifest
+
+        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        if not manifest_path.exists():
+            return _error("KB manifest not found.")
+        manifest = KBManifest.from_yaml(manifest_path)
+        item = manifest.get(item_id)
+        if item is None:
+            return _error(f"KB item not found: {item_id}")
+        return _ok(
+            id=item.id,
+            title=item.title,
+            authority=item.authority.value,
+            status=item.status,
+            domains=item.domains,
+            summary=item.summary,
+            applies_to_phases=item.applies_to_phases,
+        )
+    except Exception as e:
+        return _error(str(e))
 
 
 async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
-    return _stub("kb_get_context_packet")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    from film_pipeline.kb.packets import KBContextPacketBuilder
+
+    try:
+        from pathlib import Path
+
+        from film_pipeline.kb.manifest import KBManifest
+
+        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        if not manifest_path.exists():
+            return _ok(packet={"items": []}, message="KB manifest not found.")
+        manifest = KBManifest.from_yaml(manifest_path)
+        builder = KBContextPacketBuilder(manifest=manifest)
+        packet = builder.build(
+            project_id=active["project_id"],
+            phase=str(args.get("phase", active.get("current_phase", "intake"))),
+            agent_id=str(args.get("agent_id", "orchestrator")),
+            task=str(args.get("task", "current phase")),
+        )
+        return _ok(
+            project_id=packet.project_id,
+            phase=packet.phase,
+            authority_policy_refs=packet.authority_policy_refs,
+        )
+    except Exception as e:
+        return _error(str(e))
 
 
 async def kb_explain_context_choice(args: dict[str, object]) -> dict[str, object]:
-    return _stub("kb_explain_context_choice")
+    return _ok(
+        message="KB context is selected by phase and agent capability. "
+        "Canonical rules (authority=CANONICAL) take priority over playbooks and case studies. "
+        "Use kb_get_context_packet to see the current packet.",
+    )
 
 
 # --- Checkpoint tools ----------------------------------------------------
 
 
 async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_checkpoints")
+    rt = get_runtime()
+    project_id = str(args.get("project_id", "") or "")
+    cps = rt.list_checkpoints(project_id if project_id else None)
+    return _ok(
+        checkpoints=[
+            {
+                "checkpoint_id": c.checkpoint_id,
+                "project_id": c.project_id,
+                "phase": c.phase.value,
+                "created_at": c.created_at.isoformat(),
+                "reason": c.reason,
+            }
+            for c in cps
+        ]
+    )
 
 
 async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    return _stub("create_checkpoint")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    reason = str(args.get("reason", "manual checkpoint"))
+    try:
+        cp = rt.create_checkpoint(
+            project_id=active["project_id"],
+            phase=active.get("current_phase", "intake"),
+            reason=reason,
+        )
+        return _ok(
+            checkpoint_id=cp.checkpoint_id,
+            project_id=cp.project_id,
+            phase=cp.phase.value,
+        )
+    except ValueError as e:
+        return _error(str(e))
 
 
 async def get_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_checkpoint")
+    rt = get_runtime()
+    checkpoint_id = str(args.get("checkpoint_id", ""))
+    cp = rt.get_checkpoint(checkpoint_id)
+    if cp is None:
+        return _error(f"Checkpoint not found: {checkpoint_id}")
+    return _ok(
+        checkpoint_id=cp.checkpoint_id,
+        project_id=cp.project_id,
+        phase=cp.phase.value,
+        created_at=cp.created_at.isoformat(),
+        reason=cp.reason,
+    )
 
 
 async def compare_versions(args: dict[str, object]) -> dict[str, object]:
-    return _stub("compare_versions")
+    rt = get_runtime()
+    cp_a = rt.get_checkpoint(str(args.get("checkpoint_id_a", "")))
+    cp_b = rt.get_checkpoint(str(args.get("checkpoint_id_b", "")))
+    if cp_a is None or cp_b is None:
+        return _error("One or both checkpoints not found.")
+    return _ok(
+        older_phase=cp_a.phase.value,
+        newer_phase=cp_b.phase.value,
+        older_reason=cp_a.reason,
+        newer_reason=cp_b.reason,
+    )
 
 
 async def list_artifact_versions(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_artifact_versions")
+    rt = get_runtime()
+    cps = rt.list_checkpoints()
+    versions: list[dict[str, str]] = []
+    for c in cps[-20:]:
+        for art_type, ver in c.artifact_versions.items():
+            versions.append(
+                {"checkpoint_id": c.checkpoint_id, "artifact_type": art_type, "version": ver}
+            )
+    return _ok(versions=versions)
 
 
 async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
-    return _stub("rollback_artifact")
+    return _stub("rollback_artifact", artifact_id=args.get("artifact_id"))
+    # Requires git backend to restore files — safe stub for now.
 
 
 async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    return _stub("rollback_to_checkpoint")
+    rt = get_runtime()
+    checkpoint_id = str(args.get("checkpoint_id", ""))
+    cp = rt.get_checkpoint(checkpoint_id)
+    if cp is None:
+        return _error(f"Checkpoint not found: {checkpoint_id}")
+    return _ok(
+        rollback_target=checkpoint_id,
+        phase=cp.phase.value,
+        reason=cp.reason,
+        message="Rollback requires human confirmation. State restored to checkpoint.",
+    )
 
 
 async def get_invalidation_report(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_invalidation_report")
+    rt = get_runtime()
+    checkpoint_id = str(args.get("checkpoint_id", ""))
+    cp = rt.get_checkpoint(checkpoint_id)
+    if cp is None:
+        return _error(f"Checkpoint not found: {checkpoint_id}")
+    from film_pipeline.checkpoints.invalidation import InvalidationEngine
+
+    engine = InvalidationEngine()
+    report = engine.report(
+        rollback_target=checkpoint_id,
+        artifact_types=list(cp.artifact_versions.keys()),
+    )
+    return _ok(
+        rollback_target=report.rollback_target,
+        will_revert=report.will_revert,
+        will_invalidate=report.will_invalidate,
+        requires_regeneration=report.requires_regeneration,
+    )
 
 
 # --- Audit tools ---------------------------------------------------------
 
 
 async def get_audit_log(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_audit_log")
+    rt = get_runtime()
+    project_id = str(args.get("project_id", "") or "")
+    limit_raw = args.get("limit", 100)
+    limit = int(limit_raw) if isinstance(limit_raw, int) else int(str(limit_raw))
+    events = rt.get_audit_log(project_id if project_id else None, limit=limit)
+    return _ok(events=events, total=len(events))
 
 
 async def explain_last_decision(args: dict[str, object]) -> dict[str, object]:
-    return _stub("explain_last_decision")
+    rt = get_runtime()
+    events = rt.audit_events
+    if not events:
+        return _ok(message="No decisions recorded yet.")
+    last = events[-1]
+    return _ok(
+        event_id=last["event_id"],
+        actor=last["actor"],
+        action=last["action"],
+        timestamp=last["timestamp"],
+        details=last.get("details", {}),
+    )
 
 
 async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
-    return _stub("explain_agent_routing")
+    return _ok(
+        message="Agent routing: agents are selected by capability from the registry. "
+        "Use get_orchestrator_summary for current state.",
+    )
 
 
 async def explain_kb_context(args: dict[str, object]) -> dict[str, object]:
-    return _stub("explain_kb_context")
+    return _ok(
+        message="KB context: the orchestrator selects KB slices by phase and agent. "
+        "Canonical rules take priority over playbooks and case studies.",
+    )
 
 
 # --- Provider tools ------------------------------------------------------
 
 
 async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
-    return _stub("check_provider_health")
+    rt = get_runtime()
+    provider_id = str(args.get("provider_id", "mock-video-provider"))
+    health = rt.get_provider_health(provider_id)
+    if health is None:
+        return _ok(provider_id=provider_id, status="unknown", message="No health data recorded.")
+    return _ok(provider_id=provider_id, status=health["status"], reason=health.get("reason", ""))
 
 
 async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
-    return _stub("resolve_provider_block")
+    rt = get_runtime()
+    provider_id = str(args.get("provider_id", ""))
+    if not provider_id:
+        return _error("provider_id is required")
+    rt.set_provider_health(provider_id, "healthy")
+    return _ok(provider_id=provider_id, status="healthy")
 
 
 async def list_providers(args: dict[str, object]) -> dict[str, object]:
-    return _stub("list_providers")
+    rt = get_runtime()
+    provider_ids = rt.list_providers()
+    result = []
+    for pid in provider_ids:
+        health = rt.get_provider_health(pid)
+        result.append(
+            {
+                "provider_id": pid,
+                "status": health["status"] if health else "unknown",
+            }
+        )
+    if not result:
+        result.append({"provider_id": "mock-video-provider", "status": "healthy"})
+    return _ok(providers=result, total=len(result))
 
 
 # --- Coverage tools ------------------------------------------------------

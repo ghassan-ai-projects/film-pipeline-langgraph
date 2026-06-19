@@ -1,0 +1,47 @@
+# Local Real Provider Profile — for development with real providers
+# Requires API keys in environment variables.
+# Uses Seedance via OpenRouter for video generation.
+# Human approval gates are active.
+
+profile:
+  id: local-real-provider
+  name: "Local Real Provider"
+  version: "1.0"
+  description: "Development profile with real providers (Seedance/OpenRouter)."
+
+studio:
+  mode: production
+  require_human_approval: true
+
+providers:
+  default: seedance-openrouter
+  video:
+    - provider_id: seedance-openrouter
+      models: [bytedance/seedance-2.0]
+  image:
+    - provider_id: mock-image-provider
+      models: [mock-fast]
+
+models:
+  default: openrouter-auto
+  available:
+    - model_id: openrouter-auto
+      provider: openrouter
+
+validators:
+  strictness: internal_review
+  multi_review: true
+  review_models: [gemini-flash, gpt-5-mini]
+
+budget:
+  max_total_usd: 100.0
+  auto_approve_up_to: 2.50
+  per_clip_limit: 10.0
+
+checkpoints:
+  backend: git
+
+generation:
+  max_clips: 50
+  max_duration_seconds: 15
+  require_spend_approval: true
