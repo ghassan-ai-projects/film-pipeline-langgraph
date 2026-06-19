@@ -1,11 +1,17 @@
-"""Real provider adapter — Seedance 2.0 via OpenRouter.
+"""Real provider adapters — Seedance (OpenRouter) and Veo (Google).
 
-Implements BaseProviderAdapter using the OpenRouter API.
-Requires: OPENROUTER_API_KEY environment variable.
-Provider chain: Seedance 2.0 → Veo 3.1 Fast → Veo 3.1 Lite.
-
-DO NOT USE until Phase 12 E2E mock baseline passes.
-See docs/implementation-plan/13-real-provider-adapter.md
+All adapters implement BaseProviderAdapter. Mock-compatible via ``_http_opener``
+injection for tests.
 """
 
 from __future__ import annotations
+
+from film_pipeline.providers.adapters.seedance_openrouter import (
+    SeedanceOpenRouterProvider,
+)
+from film_pipeline.providers.adapters.veo_fast import VeoFastProvider
+
+__all__ = [
+    "SeedanceOpenRouterProvider",
+    "VeoFastProvider",
+]
