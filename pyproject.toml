@@ -94,7 +94,7 @@ pretty = true
 mypy_path = ["src"]
 
 [[tool.mypy.overrides]]
-module = ["yaml"]
+module = ["yaml", "langgraph", "langgraph.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
