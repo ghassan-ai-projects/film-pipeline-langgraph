@@ -242,3 +242,5 @@ __marimo__/
 /film-knowledge-base/
 
 /.qwen
+# Test artifacts (temp dirs used in tests)
+projects/
