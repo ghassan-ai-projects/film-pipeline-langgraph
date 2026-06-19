@@ -161,6 +161,16 @@ class TestGraphExecution:
         )
         assert "advance_to" in result or result == "await_approval"
 
+    def test_after_approval_repair_path(self) -> None:
+        """Not approved but has issues → repair."""
+        result = after_approval({"current_phase": "script", "approved": False, "issues": ["bad"]})
+        assert result == "repair"
+
+    def test_after_approval_await(self) -> None:
+        """Not approved, no issues → stay awaiting."""
+        result = after_approval({"current_phase": "script", "approved": False, "issues": []})
+        assert result == "await_approval"
+
     def test_router_blocking_issues(self) -> None:
         """Router detects blocking issues."""
         r = compute_actions(

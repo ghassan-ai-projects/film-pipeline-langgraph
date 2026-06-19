@@ -191,6 +191,42 @@ class TestMockVideoProvider:
             assert not (Path(tmpdir) / "S001-01_last.png").exists()
             assert not (Path(tmpdir) / "S001-01_mid.png").exists()
 
+    def test_poll_with_error_code(self, entry: ProviderRegistryEntry) -> None:
+        """Poll with error_code triggers failure when polls exceed threshold."""
+        provider = MockVideoProvider(
+            entry=entry,
+            scenario_steps=[
+                ScenarioStep(
+                    shot_id="S001-01",
+                    submit="success",
+                    polls_before_complete=0,
+                    error_code="network_error",
+                )
+            ],
+        )
+        payload = provider.build_payload("test")
+        job = provider.submit(payload, "S001-01")
+        # First poll: polls_before_complete=0, error_code set, count=1 > 0 → failure
+        job = provider.poll(job)
+        assert job.status == "failed"
+        assert job.metadata == {"error": "network_error"}
+
+    def test_extract_metadata_no_json_fallback(self, entry: ProviderRegistryEntry) -> None:
+        """Metadata extraction fallback when no companion JSON exists."""
+        provider = MockVideoProvider(entry=entry)
+        payload = provider.build_payload("test")
+        job = provider.submit(payload, "S001-01")
+        provider.poll(job)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = provider.download(job, tmpdir)
+            # Remove the metadata JSON to test fallback
+            meta_json = Path(tmpdir) / "S001-01_metadata.json"
+            if meta_json.exists():
+                meta_json.unlink()
+            meta = provider.extract_metadata(path)
+            assert meta.get("placeholder") is True
+
 
 class TestMockImageProvider:
     @pytest.fixture
