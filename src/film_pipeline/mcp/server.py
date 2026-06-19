@@ -90,7 +90,7 @@ class MCPServer:
                 data: object = await handler(new_args)
             else:
                 data = handler(new_args)
-            return MCPResponse(success=True, request_id=envelope.request_id, data=data)
+            return MCPResponse(success=True, request_id=envelope.request_id, data=data)  # type: ignore[arg-type]
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
         except Exception as exc:  # pragma: no cover — defensive

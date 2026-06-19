@@ -1,0 +1,13 @@
+quality_profile: studio
+review:
+  strategy: multi_model_panel
+  min_reviewers: 2
+  escalation_on_disagreement: true
+validation:
+  thresholds:
+    pass: 85
+    review: 75
+    block: 60
+generation:
+  default_mode: preview
+  resolution: 720p

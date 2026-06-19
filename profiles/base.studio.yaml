@@ -1,0 +1,59 @@
+# Base studio profile — inherited by every film project.
+# Do not override this file for a single project; create a project override instead.
+
+phases:
+  - intake
+  - constitution
+  - development
+  - script
+  - visual_dev
+  - shot_bible
+  - gen_planning
+  - generation
+  - qc
+  - post
+  - delivery
+
+review:
+  strategy: multi_model_panel
+  min_reviewers: 2
+  escalation_on_disagreement: true
+  approval_gates:
+    - config
+    - constitution
+    - treatment
+    - script
+    - visual_bible
+    - shot_bible
+    - generation_spend
+    - generation_batch
+    - assembly
+    - final_delivery
+
+budget:
+  project_cap_usd: 100
+  per_phase_cap_usd: 25
+  max_auto_approved_cost_usd: 1.0
+  human_approval_above_usd: 5.0
+
+generation:
+  default_mode: test
+  duration_seconds: 1
+  resolution: 480p
+  re_anchor_every_n_clips: 5
+  allow_parallel_independent_tests: true
+  require_last_frame_chaining: true
+  re_anchor_on_scene_boundary: true
+  re_anchor_on_drift_warning: true
+
+delivery:
+  modes:
+    - mp4
+  include_subtitles: true
+  include_audio_stems: false
+
+validation:
+  thresholds:
+    pass: 85
+    review: 75
+    block: 60
