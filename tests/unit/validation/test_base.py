@@ -84,3 +84,57 @@ class TestBaseValidator:
         )
         validator = _ConcreteValidator(entry)
         assert validator.entry.validator_id == "test-v"
+
+    def test_run_pass_with_notes(self) -> None:
+        """Score 80 → PASS_WITH_NOTES."""
+        entry = ValidatorRegistryEntry(
+            validator_id="test-v",
+            scope=ValidationScope.ARTIFACT,
+            modalities=[ValidationModality.TEXT],
+        )
+
+        class _NotesValidator(_ConcreteValidator):
+            def validate(
+                self,
+                artifact: dict[str, Any],
+                context: dict[str, Any] | None = None,
+            ) -> dict[str, Any]:
+                _ = artifact
+                _ = context
+                return {"score": 80, "issues": []}
+
+        validator = _NotesValidator(entry)
+        report = validator.run({"score": 80})
+        assert report.score == 80
+        assert len(report.recommended_actions) > 0
+
+    def test_run_needs_revision_without_blocking(self) -> None:
+        """NEEDS_REVISION status with no blocking → fallback recommendation."""
+        entry = ValidatorRegistryEntry(
+            validator_id="test-v",
+            scope=ValidationScope.ARTIFACT,
+            modalities=[ValidationModality.TEXT],
+        )
+
+        class _ReviseValidator(_ConcreteValidator):
+            def validate(
+                self,
+                artifact: dict[str, Any],
+                context: dict[str, Any] | None = None,
+            ) -> dict[str, Any]:
+                _ = artifact
+                _ = context
+                return {
+                    "score": 70,
+                    "issues": [{"code": "w1", "message": "weak", "severity": "warning"}],
+                }
+
+            def extract_issues(self, raw: dict[str, Any]) -> list[ValidationIssue]:
+                return [
+                    ValidationIssue(code=i["code"], message=i["message"], severity=i["severity"])
+                    for i in raw["issues"]
+                ]
+
+        validator = _ReviseValidator(entry)
+        report = validator.run({"score": 70})
+        assert len(report.recommended_actions) > 0
