@@ -190,3 +190,76 @@ class TestMockVideoProvider:
             # Frame files should NOT exist
             assert not (Path(tmpdir) / "S001-01_last.png").exists()
             assert not (Path(tmpdir) / "S001-01_mid.png").exists()
+
+
+class TestMockImageProvider:
+    @pytest.fixture
+    def img_entry(self) -> ProviderRegistryEntry:
+        return ProviderRegistryEntry(
+            provider_id="mock-image-provider",
+            provider_type="image",
+            models=["mock-fast"],
+            capabilities=ProviderCapabilities(text_to_image=True),
+            cost_profile=CostProfile(unit="image", estimated_rate_usd=0.0),
+        )
+
+    def test_build_payload(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        payload = provider.build_payload("a cat", aspect_ratio="1:1", seed=42)
+        assert payload["prompt"] == "a cat"
+        assert payload["aspect_ratio"] == "1:1"
+        assert payload["seed"] == 42
+
+    def test_submit_immediately_complete(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        job = provider.submit({"prompt": "test"}, "REF-01")
+        assert job.status == "completed"
+        assert job.job_id.startswith("mock-img-")
+
+    def test_poll_noop(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        job = provider.submit({"prompt": "test"}, "REF-01")
+        job = provider.poll(job)
+        assert job.status == "completed"
+
+    def test_download_creates_png(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        job = provider.submit({"prompt": "test"}, "REF-01")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = provider.download(job, tmpdir)
+            assert Path(path).suffix == ".png"
+            assert Path(path).exists()
+
+    def test_extract_metadata(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        job = provider.submit({"prompt": "test"}, "REF-01")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = provider.download(job, tmpdir)
+            meta = provider.extract_metadata(path)
+            assert meta["placeholder"] is True
+            assert meta["size_bytes"] > 0
+
+    def test_estimate_cost_zero(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        assert provider.estimate_cost(0.0) == 0.0
+
+    def test_extract_metadata_missing_file(self, img_entry: ProviderRegistryEntry) -> None:
+        from film_pipeline.providers.mock_image_provider import MockImageProvider
+
+        provider = MockImageProvider(entry=img_entry)
+        meta = provider.extract_metadata("/nonexistent/path.png")
+        assert meta["size_bytes"] == 0

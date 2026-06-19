@@ -10,7 +10,8 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     """Intake: classify input, infer config, present for approval."""
     new_state = deepcopy(state)
     new_state["current_phase"] = "intake"
-    if not new_state.get("approved"):
+    new_state["approved"] = False
+    if not state.get("approved"):
         new_state["human_approval_required"] = True
         new_state["human_approval_phase"] = "config"
     return new_state

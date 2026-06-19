@@ -23,12 +23,11 @@ from film_pipeline.graph.nodes import (
     shot_bible_node,
     visual_dev_node,
 )
-from film_pipeline.graph.state import FilmStudioState
 
 
 def build_graph() -> CompiledStateGraph:
     """Construct the supervisor graph with all phases and approval gates."""
-    builder = StateGraph(FilmStudioState)
+    builder = StateGraph(dict)
 
     # Phase nodes
     builder.add_node("intake_node", intake_node)
