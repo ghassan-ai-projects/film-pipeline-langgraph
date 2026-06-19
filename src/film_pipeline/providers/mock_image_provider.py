@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
 _MINIMAL_PNG = (
     b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
@@ -16,11 +16,16 @@ _MINIMAL_PNG = (
 )
 
 
-@dataclass
 class MockImageProvider(BaseProviderAdapter):
     """Mock image provider for zero-cost reference image generation."""
 
-    output_base: Path = field(default_factory=lambda: Path("/tmp/mock-provider"))
+    def __init__(
+        self,
+        entry: ProviderRegistryEntry,
+        output_base: Path | None = None,
+    ) -> None:
+        super().__init__(entry)
+        self.output_base = output_base or Path("/tmp/mock-provider")
 
     def build_payload(
         self,
