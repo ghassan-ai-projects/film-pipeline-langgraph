@@ -16,12 +16,19 @@ def _make_report(
     score: float,
     status: ValidationStatus = ValidationStatus.PASS,
     blocking_codes: list[str] | None = None,
+    warning_codes: list[str] | None = None,
 ) -> ValidationReport:
     blocking: list[ValidationIssue] = []
+    warnings: list[ValidationIssue] = []
     if blocking_codes:
         for code in blocking_codes:
             blocking.append(
                 ValidationIssue(code=code, message=f"Issue: {code}", severity="blocking")
+            )
+    if warning_codes:
+        for code in warning_codes:
+            warnings.append(
+                ValidationIssue(code=code, message=f"Warning: {code}", severity="warning")
             )
     return ValidationReport(
         validation_id=f"val:{validator_id}:1",
@@ -31,6 +38,7 @@ def _make_report(
         score=score,
         status=status,
         blocking_issues=blocking,
+        warnings=warnings,
     )
 
 
@@ -125,3 +133,28 @@ class TestConsensusBuilder:
         r = _make_report("v1", 50, ValidationStatus.BLOCKED)
         consensus = builder.build([r])
         assert "Revise" in consensus.orchestrator_recommendation
+
+    def test_warnings_produce_shared_findings(self) -> None:
+        """Reports with warnings but no blocking issues."""
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 80, ValidationStatus.PASS_WITH_NOTES, warning_codes=["w1", "w2"])
+        r2 = _make_report("v2", 82, ValidationStatus.PASS_WITH_NOTES, warning_codes=["w1"])
+        consensus = builder.build([r1, r2])
+        assert consensus.consensus_status == ValidationStatus.PASS_WITH_NOTES
+        assert any("w1" in f for f in consensus.shared_findings)
+
+    def test_disagreements_when_no_shared_issues(self) -> None:
+        """Reports with no blocking and no warnings produce disagreements."""
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 85, ValidationStatus.PASS)
+        r2 = _make_report("v2", 90, ValidationStatus.PASS)
+        consensus = builder.build([r1, r2])
+        assert consensus.agreement_level == "high"
+        assert consensus.consensus_status == ValidationStatus.PASS
+
+    def test_pass_with_notes_consensus(self) -> None:
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 82, ValidationStatus.PASS_WITH_NOTES)
+        r2 = _make_report("v2", 84, ValidationStatus.PASS_WITH_NOTES)
+        consensus = builder.build([r1, r2])
+        assert consensus.consensus_status == ValidationStatus.PASS_WITH_NOTES
