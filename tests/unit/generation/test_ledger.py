@@ -102,5 +102,49 @@ class TestGenerationLedgerManager:
     def test_plan_batch_respects_mode(self, tmp_path: Path) -> None:
         store = ArtifactStore(root=tmp_path / "artifacts")
         mgr = GenerationLedgerManager(store)
-        ledger = mgr.plan_batch("proj-10", ["S001"], "p", "m", mode=GenerationMode.PRODUCTION)
+        ledger = mgr.plan_batch(
+            "proj-10", ["S001"], "p", "m", mode=GenerationMode.PRODUCTION
+        )
         assert ledger.rows[0].mode == GenerationMode.PRODUCTION
+
+    def test_update_row_found(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        ledger = mgr.plan_batch("proj-11", ["S001"], "p", "m")
+        gen_id = ledger.rows[0].generation_id
+        updated = mgr.update_row(
+            "proj-11",
+            gen_id,
+            status=GenerationStatus.RUNNING,
+            poll_count=5,
+        )
+        assert updated is not None
+        assert updated.status == GenerationStatus.RUNNING
+        assert updated.poll_count == 5
+        # Verify persistence
+        row = mgr.get_row("proj-11", gen_id)
+        assert row is not None
+        assert row.status == GenerationStatus.RUNNING
+
+    def test_update_row_not_found(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        updated = mgr.update_row("proj-12", "nonexistent", status=GenerationStatus.FAILED)
+        assert updated is None
+
+    def test_approve_spend_idempotent(self, tmp_path: Path) -> None:
+        """Already-submitted rows stay submitted."""
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        mgr.plan_batch("proj-13", ["S001"], "p", "m")
+        mgr.approve_spend("proj-13")
+        # Second approve should be a no-op for submitted rows
+        ledger = mgr.approve_spend("proj-13")
+        assert ledger.rows[0].status == GenerationStatus.SUBMITTED
+
+    def test_get_row_empty_ledger(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        mgr.create("proj-14")
+        row = mgr.get_row("proj-14", "any")
+        assert row is None
