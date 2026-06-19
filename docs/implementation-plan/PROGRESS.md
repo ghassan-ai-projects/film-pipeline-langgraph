@@ -1,8 +1,8 @@
 # Implementation Progress
 
 **Last updated:** 2026-06-19
-**Branch:** main (8 commits)
-**Tests:** 226 passing, CI green (92% coverage)
+**Branch:** main (10 commits)
+**Tests:** 256 passing, CI green (92% coverage)
 
 ## Completed Phases
 
@@ -13,9 +13,10 @@
 | 02 | MCP Tool Contracts | `d473712` | 30 | — | ✅ |
 | 03 | Config & Profile System | `527ac6a` | 25 | 95% | ✅ |
 | 04 | Artifact Store | `8613f6f` | 20 | 94% | ✅ |
-| 05 | LangGraph Skeleton | `c22d2af` | 12 → 18 | 92% | ✅ |
-| 06 | KB Context Packet Builder | `a71fa04` | 45 → 46 | 92% | ✅ |
+| 05 | LangGraph Skeleton | `c22d2af` | 18 | 92% | ✅ |
+| 06 | KB Context Packet Builder | `a71fa04` | 46 | 92% | ✅ |
 | 07 | Agent Registry & Prompt Runner | `469403c` | 32 | 92% | ✅ |
+| 08 | Review Package Generator | `6849259` | 30 | 92% | ✅ |
 
 ## Phase 05 — Gaps Identified & Fixed
 
@@ -48,11 +49,9 @@
 | KB index.py (full-text search) | 06 | Tag-based retrieval sufficient for MVP | 12 |
 | Per-agent RCTCO prompt templates | 07 | Generic prompts from contracts work for E2E mock | 12 |
 
-## Pending Phases (08–16)
+## Pending Phases (09–16)
 
-Build order (dependency-driven):
-- **08**: Review Package Generator (depends on 04, 07) ← NEXT
-- **09**: Validation Registry (depends on 01, 07)
+- **09**: Validation Registry (depends on 01, 07) ← NEXT
 - **10**: Mock Provider & Test Harness (depends on 05, 07, 09)
 - **11**: Checkpoint/Resume & Rollback (depends on 04, 05, 10)
 - **12**: E2E Mock Mini-Film (depends on 05–11)
@@ -60,8 +59,6 @@ Build order (dependency-driven):
 - **14**: Post-Production Assembly (depends on 10, 12)
 - **15**: Production Hardening (depends on 12–14)
 - **16**: Productization & Release (depends on 13–15)
-
-Phases 08 and 09 have no blockers and can proceed in parallel or sequentially.
 
 ## Key Conventions
 - All code in `src/film_pipeline/`
