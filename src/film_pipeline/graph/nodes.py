@@ -62,9 +62,9 @@ def _run_agent(
     )
 
     # Build prompt, call model, execute agent
-    model_output = services.prompt_runner.run(contract, kb, task)
+    # Critical-path agents (those in agent_map) require dedicated prompt templates.
+    # Non-critical agents fall through to generic RCTCO assembly.
 
-    # The agent instance parses and validates
     from film_pipeline.agents.base import BaseAgent
     from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
     from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
@@ -88,6 +88,42 @@ def _run_agent(
         "failure-handling-agent": AssemblyAgent,
     }
     agent_cls = agent_map.get(resolved_agent_id)
+
+    template_id = ""
+    model_profile = ""
+
+    if agent_cls is not None:
+        # Critical-path agent: dedicated template required
+        from film_pipeline.agents.prompt_templates.registry import get_registry
+
+        prompt_registry = get_registry()
+        template = prompt_registry.get_required(resolved_agent_id)
+
+        context_vars: dict[str, str] = {
+            "project_id": str(state.get("project_id", "")),
+            "idea": str(state.get("idea", state.get("input", ""))),
+            "kb_refs": kb.kb_context_id,
+        }
+        for key in (
+            "constitution_ref",
+            "treatment_ref",
+            "scene_list_ref",
+            "script_ref",
+            "story_bible_ref",
+            "shot_matrix_ref",
+            "visual_refs",
+        ):
+            val = state.get(key)
+            if val:
+                context_vars[key] = str(val)
+
+        model_output, template_id, model_profile = services.prompt_runner.run_from_template(
+            template, kb, task, context_vars=context_vars
+        )
+    else:
+        # Non-critical agent: generic RCTCO assembly (not in critical path)
+        model_output = services.prompt_runner.run(contract, kb, task)
+
     if agent_cls is None:
         return {"status": "no_impl", "agent": resolved_agent_id, "model_output": model_output}
 
@@ -95,7 +131,16 @@ def _run_agent(
     result = instance.run(state, kb, task, model_output)
 
     # Persist routing decision as a handoff record
-    _record_handoff(state, resolved_agent_id, phase, task, route_result, result)
+    _record_handoff(
+        state,
+        resolved_agent_id,
+        phase,
+        task,
+        route_result,
+        result,
+        template_id=template_id,
+        model_profile=model_profile,
+    )
 
     return result
 
@@ -107,10 +152,14 @@ def _record_handoff(
     task: str,
     route_result: Any,
     agent_output: dict[str, Any],
+    *,
+    template_id: str = "",
+    model_profile: str = "",
 ) -> None:
     """Store a handoff record so routing is explainable and queryable.
 
     Idempotent: duplicates (same phase + task) on replay are skipped.
+    Records prompt template version and resolved model profile for audit.
     """
     routes: list[dict[str, Any]] = state.setdefault("_routing_decisions", [])
 
@@ -130,6 +179,8 @@ def _record_handoff(
         "input_refs": list(state.get("artifact_refs", [])),
         "output_keys": list(agent_output.keys()),
         "project_id": state.get("project_id", ""),
+        "template_id": template_id,
+        "model_profile": model_profile,
     }
     routes.append(handoff)
 
@@ -495,9 +546,25 @@ def _run_validators(state: dict[str, Any]) -> None:
 
     issues: list[dict[str, Any]] = list(state.get("issues", []))
 
-    # Run known validators for script-class artifacts
+    # --- Phase-specific validator dispatch ---
+
     if phase in ("script", "qc") and artifact_data:
         _run_script_validators(artifact_data, issues, state)
+
+    if phase in ("visual_dev", "qc") and artifact_data:
+        _run_reference_validators(artifact_data, issues, state)
+
+    if phase in ("gen_planning", "qc") and artifact_data:
+        _run_prompt_validators(artifact_data, issues, state)
+
+    if phase in ("shot_bible", "qc") and artifact_data:
+        _run_continuity_validators(artifact_data, issues, state)
+
+    if phase in ("post", "assembly", "qc") and artifact_data:
+        _run_assembly_validators(artifact_data, issues, state)
+
+    if phase == "delivery" and artifact_data:
+        _run_delivery_validators(artifact_data, issues, state)
 
     state["issues"] = issues
 
@@ -519,32 +586,131 @@ def _run_script_validators(
             report = instance.run(artifact)
         except Exception:
             continue
+        _append_validator_report(report, issues, state)
 
-        # Store report in state for MCP tools
-        reports = state.setdefault("_validation_reports", [])
-        reports.append(report.model_dump())
 
-        for bi in report.blocking_issues:
-            issues.append(
-                {
-                    "issue_id": f"val:{report.validator_id}:{bi.code}",
-                    "severity": "blocking",
-                    "code": bi.code,
-                    "message": bi.message,
-                    "validator_id": report.validator_id,
-                }
-            )
+def _run_reference_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run reference usability validator against visual_dev artifacts."""
+    from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
-        for w in report.warnings:
-            issues.append(
-                {
-                    "issue_id": f"val:{report.validator_id}:{w.code}",
-                    "severity": "warning",
-                    "code": w.code,
-                    "message": w.message,
-                    "validator_id": report.validator_id,
-                }
-            )
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        instance = ReferenceUsabilityValidator()
+        report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
+def _run_prompt_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run prompt readiness validator against gen_planning artifacts."""
+    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        instance = PromptReadinessValidator()
+        report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
+def _run_continuity_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run scene continuity validator against shot_bible artifacts."""
+    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        instance = SceneContinuityValidator()
+        report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
+def _run_assembly_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run assembly validator against post/assembly artifacts."""
+    from film_pipeline.validation.impl.assembly import AssemblyValidator
+
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        instance = AssemblyValidator()
+        report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
+def _run_delivery_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run delivery completeness validator against delivery artifacts."""
+    from film_pipeline.validation.impl.delivery_completeness import (
+        DeliveryCompletenessValidator,
+    )
+
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    try:
+        instance = DeliveryCompletenessValidator()
+        report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
+def _append_validator_report(
+    report: Any,
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Append a validator report's findings to issues and state."""
+    reports = state.setdefault("_validation_reports", [])
+    reports.append(report.model_dump())
+
+    for bi in report.blocking_issues:
+        issues.append(
+            {
+                "issue_id": f"val:{report.validator_id}:{bi.code}",
+                "severity": "blocking",
+                "code": bi.code,
+                "message": bi.message,
+                "validator_id": report.validator_id,
+            }
+        )
+
+    for w in report.warnings:
+        issues.append(
+            {
+                "issue_id": f"val:{report.validator_id}:{w.code}",
+                "severity": "warning",
+                "code": w.code,
+                "message": w.message,
+                "validator_id": report.validator_id,
+            }
+        )
 
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:

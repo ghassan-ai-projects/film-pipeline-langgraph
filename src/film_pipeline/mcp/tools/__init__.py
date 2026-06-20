@@ -8,6 +8,7 @@ backend; remaining tools return stubs pending full Phase 05+ wiring.
 from __future__ import annotations
 
 import contextlib
+from typing import Any
 
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
@@ -59,7 +60,19 @@ async def list_projects(args: dict[str, object]) -> dict[str, object]:
 
 
 async def find_project(args: dict[str, object]) -> dict[str, object]:
-    return _stub("find_project", ref=args.get("ref"))
+    rt = get_runtime()
+    ref = str(args.get("ref", ""))
+    if not ref:
+        return _error("ref is required (project_id or slug)")
+    # Try direct lookup by project_id
+    project = rt.get_project(ref)
+    if project is not None:
+        return _ok(project_id=project["project_id"], slug=project.get("slug", ""))
+    # Try lookup by slug
+    for pid, pstate in rt.projects.items():
+        if pstate.get("slug") == ref:
+            return _ok(project_id=pid, slug=ref)
+    return _error(f"Project '{ref}' not found.")
 
 
 async def set_active_project(args: dict[str, object]) -> dict[str, object]:
@@ -83,7 +96,49 @@ async def get_active_project(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_project_summary", project_ref=args.get("project_ref"))
+    """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+
+    # Gather all artifacts across phases
+    from film_pipeline.schemas._base import FilmPhase
+
+    store = rt.services.artifact_store
+    artifact_summary: list[dict[str, object]] = []
+    for phase in FilmPhase:
+        try:
+            artifacts = store.list_artifacts(project_id, phase)
+            for a in artifacts:
+                artifact_summary.append(
+                    {
+                        "artifact_id": a.artifact_id,
+                        "artifact_type": str(a.artifact_type.value),
+                        "phase": str(a.phase.value),
+                        "version": a.version,
+                        "status": str(a.status.value),
+                    }
+                )
+        except Exception:
+            continue
+
+    # Collect routing decisions
+    routing = active.get("_routing_decisions", [])
+
+    return _ok(
+        project_id=project_id,
+        title=active.get("title", active.get("idea", ""))[:200],
+        slug=active.get("slug", ""),
+        current_phase=active.get("current_phase", ""),
+        approved=active.get("approved"),
+        artifact_count=len(artifact_summary),
+        artifacts=artifact_summary,
+        issue_count=len(active.get("issues", [])),
+        routing_decisions_count=len(routing),
+        has_blockers=any(i.get("severity") == "blocking" for i in active.get("issues", [])),
+    )
 
 
 # --- Intake tools --------------------------------------------------------
@@ -110,11 +165,39 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
-    return _stub("get_intake_analysis")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = rt.services.artifact_store.load(
+            project_id, FilmPhase("intake"), "intake_analysis", 1
+        )
+        return _ok(analysis=data)
+    except (FileNotFoundError, ValueError):
+        # Fall back to project state idea field
+        idea = active.get("idea", "")
+        if idea:
+            return _ok(analysis={"raw_idea": idea, "note": "Intake not yet fully analyzed."})
+        return _error("No intake analysis found. Submit an idea first.")
 
 
 async def approve_intake(args: dict[str, object]) -> dict[str, object]:
-    return _stub("approve_intake")
+    rt = get_runtime()
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    current_phase = str(active.get("current_phase", ""))
+    if current_phase not in ("intake", ""):
+        return _error(f"Current phase is '{current_phase}', not intake.")
+    try:
+        state = rt.approve_phase()
+        return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
+    except ValueError as e:
+        return _error(str(e))
 
 
 # --- State tools ---------------------------------------------------------
@@ -427,10 +510,13 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     except ValueError:
         return _error(f"Unknown phase: {phase_str}")
 
-    # Run validators for the script phase
     reports: list[dict[str, object]] = []
+    store = rt.services.artifact_store
+
+    # --- Phase-specific validator dispatch ---
+
     if phase_str == "script":
-        art_data = _load_script_artifact(rt, project_id, fp)
+        art_data = _load_artifact(store, project_id, fp, "script", 1)
         if art_data is not None:
             from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
             from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
@@ -438,16 +524,57 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
             for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
                 validator = vcls()
                 report = validator.run(art_data)
-                reports.append(
-                    {
-                        "validator_id": report.validator_id,
-                        "score": report.score,
-                        "status": str(report.status.value),
-                        "blocking_count": len(report.blocking_issues),
-                        "warning_count": len(report.warnings),
-                        "recommended_actions": report.recommended_actions,
-                    }
-                )
+                reports.append(_report_summary(report))
+
+    elif phase_str == "visual_dev":
+        art_data = _load_artifact(store, project_id, fp, "reference_index", 1)
+        if art_data is not None:
+            from film_pipeline.validation.impl.reference_usability import (
+                ReferenceUsabilityValidator,
+            )
+
+            ref_validator = ReferenceUsabilityValidator()
+            report = ref_validator.run(art_data)
+            reports.append(_report_summary(report))
+
+    elif phase_str == "gen_planning":
+        art_data = _load_artifact(store, project_id, fp, "prompt_registry", 1)
+        if art_data is not None:
+            from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+
+            pr_validator = PromptReadinessValidator()
+            report = pr_validator.run(art_data)
+            reports.append(_report_summary(report))
+
+    elif phase_str == "shot_bible":
+        art_data = _load_artifact(store, project_id, fp, "shot_bible", 1)
+        if art_data is not None:
+            from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+
+            sc_validator = SceneContinuityValidator()
+            report = sc_validator.run(art_data)
+            reports.append(_report_summary(report))
+
+    elif phase_str in ("post", "assembly"):
+        art_data = _load_artifact(store, project_id, fp, "assembly_manifest", 1)
+        if art_data is not None:
+            from film_pipeline.validation.impl.assembly import AssemblyValidator
+
+            asm_validator = AssemblyValidator()
+            report = asm_validator.run(art_data)
+            reports.append(_report_summary(report))
+
+    elif phase_str == "delivery":
+        art_data = _load_artifact(store, project_id, fp, "delivery_package", 1)
+        if art_data is not None:
+            from film_pipeline.validation.impl.delivery_completeness import (
+                DeliveryCompletenessValidator,
+            )
+
+            dc_validator = DeliveryCompletenessValidator()
+            report = dc_validator.run(art_data)
+            reports.append(_report_summary(report))
+
     return _ok(phase=phase_str, reports=reports, source="live")
 
 
@@ -490,13 +617,26 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
     return _ok(phase=phase_str, issues=[], message="No validation issues found.")
 
 
-def _load_script_artifact(rt: object, project_id: str, fp: object) -> dict[str, object] | None:
-    """Try to load the script artifact from the artifact store."""
+def _load_artifact(
+    store: Any, project_id: str, fp: Any, artifact_id: str, version: int
+) -> dict[str, Any] | None:
+    """Try to load an artifact from the artifact store."""
     try:
-        store = rt.services.artifact_store  # type: ignore[attr-defined]
-        return store.load(project_id, fp, "script", 1)  # type: ignore[no-any-return]
+        return store.load(project_id, fp, artifact_id, version)  # type: ignore[no-any-return]
     except (FileNotFoundError, AttributeError):
         return None
+
+
+def _report_summary(report: Any) -> dict[str, Any]:
+    """Convert a ValidationReport into a concise summary dict."""
+    return {
+        "validator_id": report.validator_id,
+        "score": report.score,
+        "status": str(report.status.value),
+        "blocking_count": len(report.blocking_issues),
+        "warning_count": len(report.warnings),
+        "recommended_actions": report.recommended_actions,
+    }
 
 
 # --- Generation tools ----------------------------------------------------
@@ -573,7 +713,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
 
 async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
-    """Approve spend: mark all PREPARED rows as SUBMITTED."""
+    """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
     rt = get_runtime()
     active = rt.get_active()
     if not active:
@@ -582,9 +722,23 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(rt.services.artifact_store)
-    ledger = mgr.approve_spend(project_id)
+
+    # Budget gate: reject if max_cost_usd set and cost exceeds it
+    max_cost_raw = args.get("max_cost_usd", -1)
+    max_cost = float(str(max_cost_raw)) if max_cost_raw not in (-1, None) else -1.0
+
+    try:
+        ledger = mgr.approve_spend(project_id, max_cost_usd=max_cost)
+    except ValueError as e:
+        return _error(str(e))
+
     submitted = [r for r in ledger.rows if r.status.value == "submitted"]
-    return _ok(approved=len(submitted), total_rows=len(ledger.rows))
+    estimated_total = mgr.estimate_total_cost(project_id)
+    return _ok(
+        approved=len(submitted),
+        total_rows=len(ledger.rows),
+        estimated_total_cost_usd=estimated_total,
+    )
 
 
 async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
@@ -650,7 +804,106 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
 
 
 async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
-    return _stub("start_generation_batch")
+    """Submit all SUBMITTED generation rows to their providers.
+
+    Each row is submitted to its provider. The provider_job_id is persisted
+    in the ledger row. Partial failures are recorded per-row.
+    """
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas._base import GenerationStatus
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
+
+    if not submitted_rows:
+        return _ok(submitted=0, message="No SUBMITTED rows to start. Approve spend first.")
+
+    successes: list[dict[str, str]] = []
+    failures: list[dict[str, str]] = []
+
+    for row in submitted_rows:
+        # Skip rows that already have a provider_job_id (duplicate-prevention)
+        if row.provider_job_id:
+            successes.append(
+                {
+                    "generation_id": row.generation_id,
+                    "shot_id": row.shot_id,
+                    "provider_job_id": row.provider_job_id,
+                    "note": "already-submitted",
+                }
+            )
+            continue
+
+        adapter = rt.get_provider(row.provider)
+        if adapter is None:
+            mgr.update_row(
+                project_id,
+                row.generation_id,
+                status=GenerationStatus.FAILED,
+                error_code="unknown_provider",
+                blocking_reason=f"Provider '{row.provider}' not registered.",
+            )
+            failures.append(
+                {
+                    "generation_id": row.generation_id,
+                    "shot_id": row.shot_id,
+                    "error": f"Provider '{row.provider}' not registered.",
+                }
+            )
+            continue
+
+        # Build payload and submit
+        try:
+            payload = adapter.build_payload(
+                prompt=row.prompt_ref,
+                references=row.reference_refs or None,
+                duration=5.0,
+            )
+            job = adapter.submit(payload, row.shot_id)
+        except Exception as exc:
+            mgr.update_row(
+                project_id,
+                row.generation_id,
+                status=GenerationStatus.FAILED,
+                error_code="submit_failed",
+                blocking_reason=str(exc)[:200],
+            )
+            failures.append(
+                {
+                    "generation_id": row.generation_id,
+                    "shot_id": row.shot_id,
+                    "error": str(exc)[:200],
+                }
+            )
+            continue
+
+        # Persist provider_job_id
+        mgr.update_row(
+            project_id,
+            row.generation_id,
+            provider_job_id=job.job_id,
+            status=GenerationStatus.RUNNING,
+            next_action="poll",
+        )
+        successes.append(
+            {
+                "generation_id": row.generation_id,
+                "shot_id": row.shot_id,
+                "provider_job_id": job.job_id,
+            }
+        )
+
+    return _ok(
+        submitted=len(successes),
+        failed=len(failures),
+        successes=successes,
+        failures=failures,
+    )
 
 
 async def resume_generation_polling(args: dict[str, object]) -> dict[str, object]:
@@ -778,7 +1031,31 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
 
 
 async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:
-    return _stub("promote_test_to_production")
+    """Promote completed TEST generation rows to PRODUCTION mode.
+
+    Only rows with mode=TEST and status=COMPLETED are eligible.
+    Provide ``shot_ids`` to promote specific shots, or omit to promote all eligible.
+    """
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+
+    raw_shot_ids = args.get("shot_ids")
+    shot_ids: list[str] | None = None
+    if raw_shot_ids and isinstance(raw_shot_ids, list):
+        shot_ids = [str(s) for s in raw_shot_ids if s]
+
+    count, promoted_ids = mgr.promote_to_production(project_id, shot_ids=shot_ids)
+    return _ok(
+        promoted=count,
+        generation_ids=promoted_ids,
+        message=f"{count} generation(s) promoted to PRODUCTION mode.",
+    )
 
 
 # --- KB tools ------------------------------------------------------------
@@ -973,8 +1250,56 @@ async def list_artifact_versions(args: dict[str, object]) -> dict[str, object]:
 
 
 async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
-    return _stub("rollback_artifact", artifact_id=args.get("artifact_id"))
-    # Requires git backend to restore files — safe stub for now.
+    rt = get_runtime()
+    artifact_id = str(args.get("artifact_id", ""))
+    if not artifact_id:
+        return _error("artifact_id is required.")
+    checkpoint_id = str(args.get("checkpoint_id", ""))
+    active = rt.get_active()
+    if active is None:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+
+    # If a specific checkpoint is given, use it as the restore target
+    if checkpoint_id:
+        cp = rt.get_checkpoint(checkpoint_id)
+        if cp is None:
+            return _error(f"Checkpoint '{checkpoint_id}' not found.")
+        if not cp.git_commit:
+            return _error(f"Checkpoint '{checkpoint_id}' has no git commit ref.")
+        try:
+            manager = rt.checkpoint_managers.get(project_id)
+            if manager is None:
+                return _error("No checkpoint manager for project.")
+            manager.git.restore_files(cp.git_commit, [artifact_id])
+            manager.git.commit(f"rollback: artifact {artifact_id} to {cp.git_commit[:8]}")
+            return _ok(
+                artifact_id=artifact_id,
+                restored_from=checkpoint_id,
+                git_commit=cp.git_commit[:8],
+            )
+        except Exception as e:
+            return _error(str(e))
+
+    # Fallback: find latest checkpoint that contains this artifact
+    cps = rt.list_checkpoints(project_id)
+    for cp in sorted(cps, key=lambda c: c.created_at, reverse=True):
+        if cp.git_commit and artifact_id in cp.artifact_versions:
+            try:
+                manager = rt.checkpoint_managers.get(project_id)
+                if manager is None:
+                    continue
+                manager.git.restore_files(cp.git_commit, [artifact_id])
+                manager.git.commit(f"rollback: artifact {artifact_id} to {cp.git_commit[:8]}")
+                return _ok(
+                    artifact_id=artifact_id,
+                    restored_from=cp.checkpoint_id,
+                    git_commit=cp.git_commit[:8],
+                )
+            except Exception:
+                continue
+
+    return _error(f"No checkpoint found containing artifact '{artifact_id}'.")
 
 
 async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:

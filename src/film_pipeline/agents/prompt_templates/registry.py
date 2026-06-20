@@ -3,6 +3,10 @@
 Critical-path agents resolve templates from this registry. Generic fallback
 prompts assembled from contract metadata are NOT permitted for critical
 execution.
+
+KB reference note: ``film-knowledge-base/promt.md`` is classified as
+**manual reference** only — it is not wired into runtime prompt execution
+and is not consumed by the prompt framework.
 """
 
 from __future__ import annotations

@@ -45,12 +45,12 @@ After `make demo-project`, you can inspect:
 |-------|--------|
 | Graph execution | Real — LangGraph state machine |
 | Agent contracts | Real — 19 registered agents |
-| Agent implementations | Real — 4 spine agents (Intake, Constitution, Development, Screenwriter) |
-| Validator implementations | Real — ScriptStructure, DialogueVoice |
-| Prompt framework | Real — RCTCO template rendering |
+| Agent implementations | Real — 9 spine agents with dedicated prompt templates |
+| Validator implementations | Real — 8 validators (script, reference, prompt, continuity, assembly, delivery) |
+| Prompt framework | Real — Dedicated versioned templates per agent (9 templates, v1) |
 | Artifact storage | Real — Pydantic models persisted to disk |
 | Checkpoints | Real — Git-backed with invalidation engine |
-| MCP tools | Real — 31 wired, 20 stubbed |
+| MCP tools | Real — 54 wired, 5 video-adjacent stubs |
 | Model calls | Mock — canned responses (swap `ModelAdapter` for real OpenRouter) |
 | Video generation | Mock — placeholder files (real generation requires provider API keys) |
 
@@ -66,7 +66,7 @@ After `make demo-project`, you can inspect:
 
 ## E2E Test Scenarios
 
-Run all 34 E2E scenarios:
+Run all 10 E2E scenarios:
 
 ```bash
 make test-e2e

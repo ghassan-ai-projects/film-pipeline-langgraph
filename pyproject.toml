@@ -75,6 +75,7 @@ xfail_strict = true
 markers = [
   "integration: marks tests as integration (slow)",
   "e2e: marks tests as end-to-end (require mock provider harness)",
+  "smoke: marks tests as smoke (validate documented operator workflow)",
 ]
 
 [tool.coverage.run]
