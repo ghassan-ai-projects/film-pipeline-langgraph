@@ -7,6 +7,7 @@ included in error messages.
 Provider → env var mapping:
 - Seedance 2.0: ``OPENROUTER_API_KEY``
 - Veo 3.1 Fast: ``GOOGLE_API_KEY``
+- Imagen 4: ``GOOGLE_API_KEY``
 """
 
 from __future__ import annotations
@@ -50,6 +51,9 @@ def _env_var_for(provider_id: str) -> str | None:
         "seedance-openrouter": "OPENROUTER_API_KEY",
         "veo-fast": "GOOGLE_API_KEY",
         "veo-lite": "GOOGLE_API_KEY",
+        "veo-3.1-fast": "GOOGLE_API_KEY",
+        "gemini-imagen-4": "GOOGLE_API_KEY",
+        "imagen-4": "GOOGLE_API_KEY",
     }
     return mapping.get(provider_id)
 

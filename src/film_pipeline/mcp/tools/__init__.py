@@ -83,6 +83,15 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
                     "Resolved profile stack has blocking conflicts.",
                     conflicts=conflicts,
                 )
+        if runtime_mode == "real":
+            missing_credentials = _missing_provider_credentials(
+                profile_stack, resolved_config["raw"]
+            )
+            if missing_credentials:
+                return _error(
+                    "Real-mode provider credentials are missing.",
+                    missing_credentials=missing_credentials,
+                )
 
         state = rt.create_project(
             project_id=project_id,
@@ -116,7 +125,7 @@ def _collect_profile_providers(args: dict[str, object]) -> list[str]:
         val = args.get(key)
         if val and isinstance(val, str) and val:
             try:
-                loader, src = _load_profile_flex(str(val), ("provider",))
+                _loader, src = _load_profile_flex(str(val), ("provider",))
                 providers = src.raw.get("providers", {})
                 for section in ("video", "image"):
                     for entry in providers.get(section, []):
@@ -1535,10 +1544,11 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
     profile_id = str(args.get("profile_id", ""))
     if not profile_id:
         return _error("profile_id is required.")
-    from film_pipeline.config.loader import ProfileLoader
 
     try:
-        _loader, src = _load_profile_flex(profile_id, ("provider", "quality", "film-type", "review"))
+        _loader, src = _load_profile_flex(
+            profile_id, ("provider", "quality", "film-type", "review")
+        )
         return _ok(
             profile_id=src.path.stem,
             file=str(src.path),
@@ -2123,6 +2133,28 @@ def _provider_specs_from_raw(providers: object) -> list[dict[str, object]]:
         seen.add(key)
         deduped.append(spec)
     return deduped
+
+
+def _missing_provider_credentials(
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> list[dict[str, str]]:
+    from film_pipeline.providers.credentials import _env_var_for, is_configured
+
+    missing: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for spec in _provider_specs(profile_stack, resolved_config):
+        provider_id = str(spec["provider_id"])
+        if provider_id in seen:
+            continue
+        seen.add(provider_id)
+        env_var = _env_var_for(provider_id)
+        if not env_var:
+            continue
+        if is_configured(provider_id):
+            continue
+        missing.append({"provider_id": provider_id, "env_var": env_var})
+    return missing
 
 
 def _load_profile_flex(

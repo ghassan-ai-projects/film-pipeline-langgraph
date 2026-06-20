@@ -15,7 +15,7 @@ Mocks should remain available for tests and demo workflows, but not for the Open
 
 ## Current State
 
-The repository is not doing that today.
+The repository is closer than it was originally, but there are still gaps.
 
 Evidence:
 
@@ -25,6 +25,14 @@ Evidence:
 - `make run-mcp` is explicitly documented as mock mode: [Makefile](/Users/ghassan/my-projects/film-pipeline-langgraph/Makefile:62)
 - Profile selection exists in config code and YAML files, but MCP project creation does not accept or resolve profiles: [src/film_pipeline/config/resolver.py](/Users/ghassan/my-projects/film-pipeline-langgraph/src/film_pipeline/config/resolver.py:1), [src/film_pipeline/mcp/tools/__init__.py](/Users/ghassan/my-projects/film-pipeline-langgraph/src/film_pipeline/mcp/tools/__init__.py:40)
 - The maintained operator walkthrough is the mock-first smoke path, not a real-provider path: [tests/smoke/test_manual_4min_mock_short.py](/Users/ghassan/my-projects/film-pipeline-langgraph/tests/smoke/test_manual_4min_mock_short.py:1)
+
+Status update on June 20, 2026:
+
+- MCP runtime mode alignment is implemented
+- real-mode project creation resolves the profile stack and registers providers from it
+- prompt continuity between phases is fixed
+- the local real provider profile now uses `gemini-imagen-4` for the image lane instead of `mock-image-provider`
+- real project creation rejects missing provider credentials up front
 
 ## Root Causes
 

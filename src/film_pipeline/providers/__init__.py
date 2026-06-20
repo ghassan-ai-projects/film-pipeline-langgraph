@@ -6,6 +6,7 @@ Real providers (Seedance, Veo) and the mock provider all implement the same
 
 from __future__ import annotations
 
+from film_pipeline.providers.adapters.imagen4_gemini import Imagen4GeminiProvider
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
 from film_pipeline.providers.health import ProviderHealth, ProviderHealthTracker
 from film_pipeline.providers.mock_image_provider import MockImageProvider
@@ -14,6 +15,7 @@ from film_pipeline.providers.registry import ProviderRegistry
 
 __all__ = [
     "BaseProviderAdapter",
+    "Imagen4GeminiProvider",
     "MockImageProvider",
     "MockVideoProvider",
     "ProviderHealth",

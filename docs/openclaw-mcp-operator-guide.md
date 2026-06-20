@@ -29,9 +29,12 @@ Set:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-v1-..."
+export GOOGLE_API_KEY="AIza..."
 ```
 
-Real-mode bootstrap now expects this variable.
+Real-mode bootstrap expects `OPENROUTER_API_KEY`.
+Real-mode project creation with the real provider stack also expects `GOOGLE_API_KEY`
+because the image lane now uses Gemini Imagen 4 instead of `mock-image-provider`.
 
 ## What MCP Supports Now
 
@@ -88,6 +91,11 @@ For real mode, inspect the profiles you plan to use and confirm they do not refe
 
 - `mock-*` providers
 - `mock-*` models
+
+Current real image lane:
+
+- `provider.seedance_primary` registers `gemini-imagen-4` for image generation
+- `local-real-provider` also uses `gemini-imagen-4`
 
 Example profile ids:
 
@@ -183,6 +191,8 @@ These behaviors are aligned:
 - project creation cannot contradict server mode
 - `get_runtime_mode` exposes both server and project mode
 - provider registration is derived from the selected project profile stack
+- real-mode provider stacks reject missing credentials before the project is created
+- the real profile image lane uses `gemini-imagen-4`, not `mock-image-provider`
 
 ## What Is Still Missing
 
