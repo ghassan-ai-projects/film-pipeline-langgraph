@@ -291,7 +291,7 @@ def test_server_catalog_returns_full_toolset() -> None:
     assert "export_delivery_package" in names
 
 
-def test_make_registry_has_all_13_groups() -> None:
+def test_make_registry_has_all_14_groups() -> None:
     server = MCPServer()
     groups_present = {c["group"] for c in server.catalog()}
     expected_groups = {g.value for g in ToolGroup}
@@ -568,3 +568,166 @@ def test_wired_kb_explain_context_choice() -> None:
 
     result = asyncio.run(kb_explain_context_choice({}))
     assert result["ok"] is True
+
+
+# --- Profile / Config tools ----------------------------------------------
+
+
+def test_wired_list_profiles() -> None:
+    from film_pipeline.mcp.tools import list_profiles
+
+    result = asyncio.run(list_profiles({}))
+    assert result["ok"] is True
+    profiles = cast(list[object], result["profiles"])
+    assert len(profiles) >= 1
+    first = cast(dict[str, object], profiles[0])
+    assert "id" in first
+    assert "name" in first
+    assert "studio_mode" in first
+
+
+def test_wired_inspect_profile() -> None:
+    from film_pipeline.mcp.tools import inspect_profile
+
+    # Valid profile
+    result = asyncio.run(inspect_profile({"profile_id": "mock-demo"}))
+    assert result["ok"] is True
+    assert result["profile_id"] == "mock-demo"
+    assert "raw" in result
+
+    # Non-existent profile
+    missing = asyncio.run(inspect_profile({"profile_id": "nonexistent"}))
+    assert missing["ok"] is False
+
+
+def test_wired_get_runtime_mode_default_mock() -> None:
+    from film_pipeline.mcp.tools import get_runtime_mode
+
+    result = asyncio.run(get_runtime_mode({}))
+    assert result["ok"] is True
+    assert result["runtime_mode"] == "mock"
+
+
+def test_wired_get_runtime_mode_after_project() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt = gr()
+    rt.create_project(project_id="test-mode-real", title="Mode Test", slug="mode-test")
+    rt.set_active("test-mode-real")
+    # Simulate what create_film_project stores
+    rt.projects["test-mode-real"]["runtime_mode"] = "real"
+    rt.projects["test-mode-real"]["profile_stack"] = {
+        "provider_profile": "seedance_primary",
+        "quality_profile": "studio",
+    }
+
+    from film_pipeline.mcp.tools import get_runtime_mode
+
+    result = asyncio.run(get_runtime_mode({}))
+    assert result["ok"] is True
+    assert result["runtime_mode"] == "real"
+    stack = cast(dict[str, str], result["profile_stack"])
+    assert stack["provider_profile"] == "seedance_primary"
+
+
+def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.mcp.tools import create_film_project
+
+    rt = gr()
+
+    # Create with mock provider in real mode — should reject
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-real-reject-provider",
+                "title": "Test",
+                "slug": "test",
+                "runtime_mode": "real",
+                "provider_profile": "mock-demo",
+            }
+        )
+    )
+    assert result["ok"] is False
+    error = cast(str, result.get("error", ""))
+    assert "mock-" in error or "not allowed" in error
+
+    # Clean up (project shouldn't have been created)
+    assert rt.get_project("test-real-reject-provider") is None
+
+
+def test_wired_create_film_project_accepts_real_provider() -> None:
+    from film_pipeline.mcp.tools import create_film_project
+
+    # Create with real provider in real mode — should accept
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-real-accept",
+                "title": "Test",
+                "slug": "test",
+                "runtime_mode": "real",
+                "provider_profile": "seedance_primary",
+            }
+        )
+    )
+    assert result["ok"] is True
+    state = cast(dict[str, object], result["state"])
+    assert state["runtime_mode"] == "real"
+
+    # Verify profile_stack persisted
+    pstack = cast(dict[str, str], state.get("profile_stack", {}))
+    assert pstack.get("provider_profile") == "seedance_primary"
+
+
+def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
+    from film_pipeline.mcp.tools import create_film_project
+
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-invalid-mode",
+                "title": "Test",
+                "runtime_mode": "production",
+            }
+        )
+    )
+    assert result["ok"] is False
+    error = cast(str, result.get("error", ""))
+    assert "mock" in error or "real" in error
+
+
+def test_wired_create_film_project_defaults_to_mock_mode() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.mcp.tools import create_film_project
+
+    rt = gr()
+
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-default-mock",
+                "title": "Test",
+                "slug": "test",
+            }
+        )
+    )
+    assert result["ok"] is True
+    state = cast(dict[str, object], result["state"])
+    assert state["runtime_mode"] == "mock"
+
+    # Clean up
+    rt.projects.pop("test-default-mock", None)
+
+
+def test_tool_registry_has_config_group() -> None:
+    from film_pipeline.mcp.contract import ToolGroup
+
+    assert ToolGroup.CONFIG.value == "config"
+
+    server = MCPServer()
+    catalog = server.catalog()
+    config_tools = [c for c in catalog if c["group"] == "config"]
+    assert len(config_tools) == 3
+    names = {c["name"] for c in config_tools}
+    assert names == {"list_profiles", "inspect_profile", "get_runtime_mode"}

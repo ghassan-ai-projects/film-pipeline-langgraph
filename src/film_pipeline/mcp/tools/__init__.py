@@ -38,20 +38,97 @@ def _error(message: str, **extra: object) -> dict[str, object]:
 
 
 async def create_film_project(args: dict[str, object]) -> dict[str, object]:
-    """Create a new film project — wired to runtime."""
+    """Create a new film project — wired to runtime.
+
+    Accepts optional profile stack and runtime_mode. In ``real`` mode,
+    mock providers and models are rejected.
+    """
     rt = get_runtime()
     project_id = str(args.get("project_id", ""))
     if not project_id:
         return _error("project_id is required")
+
+    # --- Runtime mode guard ---
+    runtime_mode = str(args.get("runtime_mode", "")).lower()
+    if runtime_mode not in ("", "mock", "real"):
+        return _error(f"runtime_mode must be 'mock' or 'real', got '{runtime_mode}'")
+    if runtime_mode == "real":
+        # Reject mock provider/model ids
+        for pid in _collect_profile_providers(args):
+            if pid.startswith("mock-"):
+                return _error(f"Provider '{pid}' is not allowed in real mode.")
+        for mid in _collect_profile_models(args):
+            if mid.startswith("mock-"):
+                return _error(f"Model '{mid}' is not allowed in real mode.")
+
     try:
         state = rt.create_project(
             project_id=project_id,
             title=str(args.get("title", "")),
             slug=str(args.get("slug", "")),
         )
+        # Persist runtime mode and resolved profile stack
+        state["runtime_mode"] = runtime_mode or "mock"
+        state["profile_stack"] = {
+            "film_type_profile": str(args.get("film_type_profile", "")),
+            "quality_profile": str(args.get("quality_profile", "")),
+            "provider_profile": str(args.get("provider_profile", "")),
+            "review_profile": str(args.get("review_profile", "")),
+        }
+        rt._record_audit(
+            "system",
+            "create_film_project",
+            project_id=project_id,
+            runtime_mode=runtime_mode or "mock",
+        )
         return _ok(project_id=project_id, state=state)
     except ValueError as e:
         return _error(str(e))
+
+
+def _collect_profile_providers(args: dict[str, object]) -> list[str]:
+    """Extract provider ids from profile args for real-mode rejection."""
+    pids: list[str] = []
+    for key in ("provider_profile",):
+        val = args.get(key)
+        if val and isinstance(val, str) and val:
+            try:
+                from film_pipeline.config.loader import ProfileLoader
+
+                loader = ProfileLoader()
+                src = loader.load(str(val))
+                providers = src.raw.get("providers", {})
+                for section in ("video", "image"):
+                    for entry in providers.get(section, []):
+                        if isinstance(entry, dict):
+                            pid = str(entry.get("provider_id", ""))
+                            if pid:
+                                pids.append(pid)
+            except FileNotFoundError:
+                continue
+    return pids
+
+
+def _collect_profile_models(args: dict[str, object]) -> list[str]:
+    """Extract model ids from profile args for real-mode rejection."""
+    mids: list[str] = []
+    for key in ("quality_profile",):
+        val = args.get(key)
+        if val and isinstance(val, str) and val:
+            try:
+                from film_pipeline.config.loader import ProfileLoader
+
+                loader = ProfileLoader()
+                src = loader.load(str(val))
+                models = src.raw.get("models", {})
+                for entry in models.get("available", []):
+                    if isinstance(entry, dict):
+                        mid = str(entry.get("model_id", ""))
+                        if mid:
+                            mids.append(mid)
+            except FileNotFoundError:
+                continue
+    return mids
 
 
 async def list_projects(args: dict[str, object]) -> dict[str, object]:
@@ -1401,6 +1478,75 @@ async def explain_kb_context(args: dict[str, object]) -> dict[str, object]:
     )
 
 
+# --- Config / Profile tools -----------------------------------------------
+
+
+async def list_profiles(args: dict[str, object]) -> dict[str, object]:
+    """List available config profiles from the profiles/ directory."""
+    from film_pipeline.config.loader import ProfileLoader
+
+    try:
+        loader = ProfileLoader()
+        names = loader.all_names()
+        profiles: list[dict[str, object]] = []
+        for name in names:
+            try:
+                src = loader.load(name)
+                pid = src.raw.get("profile", {}).get("id", name)
+                pname = src.raw.get("profile", {}).get("name", name)
+                desc = src.raw.get("profile", {}).get("description", "")
+                mode = src.raw.get("studio", {}).get("mode", "unknown")
+                profiles.append(
+                    {
+                        "id": pid,
+                        "name": pname,
+                        "description": desc,
+                        "studio_mode": mode,
+                        "file": str(src.path),
+                    }
+                )
+            except Exception:
+                continue
+        return _ok(profiles=profiles, total=len(profiles))
+    except Exception as e:
+        return _error(str(e))
+
+
+async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
+    """Load and return the full content of a specific profile."""
+    profile_id = str(args.get("profile_id", ""))
+    if not profile_id:
+        return _error("profile_id is required.")
+    from film_pipeline.config.loader import ProfileLoader
+
+    try:
+        loader = ProfileLoader()
+        src = loader.load(profile_id)
+        return _ok(
+            profile_id=src.name,
+            file=str(src.path),
+            raw=src.raw,
+        )
+    except FileNotFoundError:
+        return _error(f"Profile '{profile_id}' not found.")
+    except Exception as e:
+        return _error(str(e))
+
+
+async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
+    """Return the current runtime mode (mock or real) and active profile."""
+    rt = get_runtime()
+    active = rt.get_active()
+    mode = "mock"  # default
+    profile_stack: dict[str, str] = {}
+    if active is not None:
+        mode = str(active.get("runtime_mode", mode))
+        stack = active.get("profile_stack", {})
+        if isinstance(stack, dict):
+            profile_stack = {str(k): str(v) for k, v in stack.items()}
+    return _ok(runtime_mode=mode, profile_stack=profile_stack)
+
+
 # --- Provider tools ------------------------------------------------------
 
 
@@ -1747,6 +1893,13 @@ def register_all_tools(registry: ToolRegistry) -> None:
         resolve_provider_block,
     )
     registry.register(_make("list_providers", ToolGroup.PROVIDER, list_providers), list_providers)
+
+    # config / profile
+    registry.register(_make("list_profiles", ToolGroup.CONFIG, list_profiles), list_profiles)
+    registry.register(_make("inspect_profile", ToolGroup.CONFIG, inspect_profile), inspect_profile)
+    registry.register(
+        _make("get_runtime_mode", ToolGroup.CONFIG, get_runtime_mode), get_runtime_mode
+    )
 
     # coverage
     registry.register(

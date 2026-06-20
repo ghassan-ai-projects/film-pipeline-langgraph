@@ -36,6 +36,7 @@ class ToolGroup(StrEnum):
     CHECKPOINT = "checkpoint"
     AUDIT = "audit"
     PROVIDER = "provider"
+    CONFIG = "config"
     COVERAGE = "coverage"
     ASSEMBLY = "assembly"
 
