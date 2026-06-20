@@ -21,6 +21,19 @@ This plan is stricter than the earlier implementation plan in one important way:
 
 That is required because the product cannot truthfully claim dynamic agents, model policy, or prompt-governed execution while models are still baked into code paths and prompts remain generic.
 
+The supported product target for this plan is:
+
+- idea to validated clips
+- all required approvals, validation, rollback, and audit behavior through MCP
+- operator-visible clip handoff material for external finishing
+
+The following are not required for completion of this plan:
+
+- final cut assembly
+- audio post
+- color grading
+- delivery package export
+
 ---
 
 ## Program Principles
@@ -43,7 +56,7 @@ That is required because the product cannot truthfully claim dynamic agents, mod
 | 02 | Core agent execution and persisted artifacts | Make critical agents do real work |
 | 03 | Dynamic routing, handoffs, and explainability | Make agents truly dynamic rather than static wiring |
 | 04 | Validation-driven runtime control | Make validators change what the system does |
-| 05 | MCP surface completion and non-video generation flow | Finish the operator product boundary |
+| 05 | MCP surface completion and non-video generation flow | Finish the operator boundary through validated clips |
 | 06 | E2E recovery, operator workflow, and release proof | Prove the whole product works for another operator |
 
 ---

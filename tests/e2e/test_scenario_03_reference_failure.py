@@ -9,6 +9,7 @@ import pytest
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.graph.router import compute_actions
 from film_pipeline.graph.services import GraphServices
+from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
 
 @pytest.mark.e2e
@@ -67,3 +68,41 @@ class TestReferenceFailure:
         assert active is not None
         refs_after = list(active.get("artifact_refs", []))
         assert refs_after == refs_before, "Artifact refs unchanged after blocking issue"
+
+    def test_real_validator_detects_low_quality(self) -> None:
+        """Reference with quality_score < 60 triggers low_resolution blocking issue."""
+        validator = ReferenceUsabilityValidator()
+        report = validator.run(
+            {
+                "entries": [
+                    {
+                        "reference_id": "ref-001",
+                        "quality_score": 45,
+                        "moderation_risk": "low",
+                        "subject_type": "character",
+                        "notes": "",
+                    }
+                ]
+            }
+        )
+        assert any(i.code == "low_resolution" for i in report.blocking_issues)
+        assert report.score < 85
+
+    def test_real_validator_clean_ref_passes(self) -> None:
+        """A reference with good quality passes validation."""
+        validator = ReferenceUsabilityValidator()
+        report = validator.run(
+            {
+                "entries": [
+                    {
+                        "reference_id": "ref-001",
+                        "quality_score": 95,
+                        "moderation_risk": "low",
+                        "subject_type": "character",
+                        "notes": "",
+                    }
+                ]
+            }
+        )
+        assert report.status.value == "pass"
+        assert report.score == 100.0

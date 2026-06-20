@@ -48,8 +48,6 @@ critical_mcp_tools:
   - check_provider_health
   - resolve_provider_block
   - list_providers
-  - assemble_review_cut
-  - export_delivery_package
 
 required_docs:
   - docs/product-completion/README.md

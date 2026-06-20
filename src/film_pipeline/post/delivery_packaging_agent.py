@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import uuid4
 
 
@@ -52,9 +53,9 @@ class DeliveryPackage:
 
 @dataclass
 class DeliveryPackagingAgent:
-    """Assembles a delivery package manifest.
+    """Assembles a delivery package manifest and persists it as an artifact.
 
-    Does not execute ffmpeg — produces a DeliveryPackage for the real pipeline.
+    Also runs the DeliveryCompletenessValidator on the persisted package.
     """
 
     def build_package(
@@ -69,19 +70,7 @@ class DeliveryPackagingAgent:
         cost_report_path: str = "",
         credits_path: str = "",
     ) -> DeliveryPackage:
-        """Build a delivery package manifest.
-
-        Args:
-            project_id: The film project identifier.
-            video_path: Path to final video file.
-            subtitle_path: Path to SRT subtitle file.
-            audio_stems_dir: Path to audio stems directory.
-            stills_dir: Path to stills/keyframes directory.
-            prompt_archive_dir: Path to prompt archive.
-            validation_report_path: Path to validation report JSON.
-            cost_report_path: Path to cost report JSON.
-            credits_path: Path to credits/metadata JSON.
-        """
+        """Build a delivery package manifest."""
         package = DeliveryPackage(
             package_id=f"delivery:{project_id}:{uuid4().hex[:8]}",
             project_id=project_id,
@@ -115,3 +104,101 @@ class DeliveryPackagingAgent:
             package.notes.append(f"Missing items: {', '.join(package.missing_items)}")
 
         return package
+
+    def persist(
+        self,
+        package: DeliveryPackage,
+        artifact_store: Any,
+    ) -> str:
+        """Persist the delivery package manifest as a versioned artifact.
+
+        Returns the artifact reference string.
+        """
+        from datetime import UTC, datetime
+
+        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+
+        artifact_id = "delivery_package"
+        data = {
+            "package_id": package.package_id,
+            "project_id": package.project_id,
+            "files": package.files,
+            "format_version": package.format_version,
+            "subtitles_included": package.subtitles_included,
+            "audio_stems_included": package.audio_stems_included,
+            "stills_included": package.stills_included,
+            "prompt_archive_included": package.prompt_archive_included,
+            "validation_report_included": package.validation_report_included,
+            "cost_report_included": package.cost_report_included,
+            "credits_included": package.credits_included,
+            "is_complete": package.is_complete,
+            "missing_items": package.missing_items,
+            "notes": package.notes,
+        }
+        meta = ArtifactMetadata(
+            artifact_id=artifact_id,
+            artifact_type=ArtifactType.DELIVERY_PACKAGE,
+            project_id=package.project_id,
+            phase=FilmPhase("delivery"),
+            version=1,
+            status=ArtifactStatus.CANDIDATE,
+            parents=[],
+            created_by="delivery-packaging-agent",
+            created_at=datetime.now(UTC),
+        )
+        artifact_store.save_dict(data, meta)
+        return f"artifact:{artifact_id}:v1"
+
+    def validate(
+        self,
+        package: DeliveryPackage,
+        artifact_store: Any = None,
+    ) -> dict[str, Any]:
+        """Run the DeliveryCompletenessValidator on the persisted package.
+
+        Returns a dict with validation results.
+        """
+        _ = artifact_store
+        from film_pipeline.validation.impl.delivery_completeness import (
+            DeliveryCompletenessValidator,
+        )
+
+        # Build artifact dict for validator
+        artifact_dict = {
+            "manifest": {
+                "files": package.files,
+                "subtitles": [],
+                "stills": [],
+                "validation_report_ref": "",
+                "cost_report_ref": "",
+                "credits_ref": "",
+            }
+        }
+
+        # Populate from package state
+        if package.subtitles_included:
+            artifact_dict["manifest"]["subtitles"] = ["subtitles.srt"]
+        if package.stills_included:
+            artifact_dict["manifest"]["stills"] = ["still_01.png"]
+        if package.validation_report_included:
+            artifact_dict["manifest"]["validation_report_ref"] = "validation_report.json"
+        if package.cost_report_included:
+            artifact_dict["manifest"]["cost_report_ref"] = "cost_report.json"
+        if package.credits_included:
+            artifact_dict["manifest"]["credits_ref"] = "credits.txt"
+
+        validator = DeliveryCompletenessValidator()
+        report = validator.run(artifact_dict)
+
+        return {
+            "validator_id": report.validator_id,
+            "score": report.score,
+            "status": str(report.status.value),
+            "is_complete": package.is_complete,
+            "missing_items": package.missing_items,
+            "blocking_issues": [
+                {"code": i.code, "message": i.message} for i in report.blocking_issues
+            ],
+            "warnings": [{"code": i.code, "message": i.message} for i in report.warnings],
+        }

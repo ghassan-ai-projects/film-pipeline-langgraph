@@ -57,3 +57,12 @@ class TestKBConflict:
         conflicts = active.get("kb_conflicts", [])
         assert len(conflicts) == 1
         assert conflicts[0]["resolution"] == "pending"
+
+    def test_kb_explain_context_choice(self, studio_runtime: StudioRuntime) -> None:
+        """KB context explanation tool returns without error."""
+        rt = studio_runtime
+        from tests.e2e.conftest import invoke_tool
+
+        result = invoke_tool(rt, "kb_explain_context_choice")
+        assert result["ok"] is True
+        assert "message" in result

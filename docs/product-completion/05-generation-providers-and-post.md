@@ -1,10 +1,10 @@
-# 05 Generation, Providers, And Post
+# 05 Generation, Providers, And Clip Handoff
 
 ---
 
 ## Goal
 
-Make generation safe and make post-production produce real outputs.
+Make generation safe and make clip handoff to downstream finishing tools real.
 
 ---
 
@@ -29,14 +29,12 @@ When generation is complete:
 
 ---
 
-## Required Post Behavior
+## Required Clip Handoff Behavior
 
-- assemble a real review cut from generated assets
-- produce subtitle outputs
-- export a delivery package
-- validate delivery completeness
-
-Planning-only post agents are not sufficient for final product completion.
+- persist generated clips as inspectable artifacts
+- persist clip-level validation evidence
+- persist the prompt and reference lineage needed for downstream finishing
+- persist enough operator-visible metadata to hand clips to DaVinci Resolve safely
 
 ---
 
@@ -55,12 +53,12 @@ Planning-only post agents are not sufficient for final product completion.
 - provider accepts job id and network fails afterward -> resume polls existing job
 - quota exhaustion pauses queue safely
 - generation resumes from latest safe snapshot
-- review cut assembly consumes persisted clip artifacts
-- delivery export reports missing required assets correctly
+- generated clip artifacts remain inspectable after resume and rollback
+- clip handoff evidence reports missing required inputs correctly
 
 ### Final Acceptance Tests
 
-- generated assets can be assembled into a review cut
+- generated assets become a validated clip artifact chain
 - no duplicate submit occurs in ambiguous network-failure scenarios
 - provider-block resolution resumes the correct job sequence
 
@@ -73,5 +71,5 @@ This area is done only when all of the following are true:
 - generation is idempotent and recoverable
 - provider failures do not corrupt project state
 - budget and approval policy gate expensive generation
-- review cut is a real artifact built from generated assets
-- delivery package export is real and completeness-validated
+- clip outputs are real artifacts built from the supported workflow
+- clip handoff evidence is real and completeness-validated

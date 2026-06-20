@@ -25,9 +25,9 @@ uv run --python 3.12 --group dev pytest tests/unit/app/test_product_gate.py -v
 make test-e2e
 
 # 5. Docs match code
-# - operations-guide.md commands work
-# - runbook-first-film.md is reproducible
-# - demo-guide.md steps match tool signatures
+# - documentation/README.md is current
+# - documentation/onboarding.md matches the code layout
+# - documentation/manual-4min-mock-short.md matches the executable smoke test
 # - README.md is up to date
 
 # 6. No secrets in code, docs, or artifacts
@@ -86,3 +86,9 @@ All items under "Final Ship Checklist" must be green:
 - build green
 - docs match commands and product behavior
 - no core functionality missing under the allowed-stub policy
+
+## Documentation Entry Point
+
+Practical documentation lives in:
+
+- [../documentation/README.md](../documentation/README.md)

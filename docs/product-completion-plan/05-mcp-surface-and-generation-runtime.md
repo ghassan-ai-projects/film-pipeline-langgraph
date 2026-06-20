@@ -7,7 +7,7 @@ Blocks: Phase 06
 
 ## Goal
 
-Finish the operator product boundary by replacing remaining important stubs and making the non-video generation lifecycle real, safe, and recoverable.
+Finish the operator product boundary by replacing remaining important stubs and making the non-video generation lifecycle real, safe, recoverable, and sufficient to hand off validated clips to external finishing tools.
 
 ---
 
@@ -27,7 +27,6 @@ The following behavior may not remain stubbed:
 - promotion bookkeeping
 - rollback mechanics
 - coverage-group planning
-- final-cut assembly bookkeeping
 
 ---
 
@@ -40,6 +39,7 @@ When this phase is complete:
 - runtime can resume polling without duplicate submit
 - rollback and recovery behavior is meaningful
 - remaining non-video product-surface gaps are closed
+- clip outputs and clip handoff evidence are operator-visible
 
 ---
 
@@ -56,10 +56,10 @@ When this phase is complete:
 - make provider-job correlation and duplicate-prevention explicit
 - allow safe failure handling after job id creation
 
-### Rollback And Assembly
+### Rollback And Clip Handoff
 
 - make rollback mutation tools operate on meaningful stored state
-- make final-cut assembly produce operator-visible output records even if costly media generation remains mocked
+- make clip handoff records operator-visible without requiring in-repo assembly or delivery export
 
 ---
 
@@ -82,7 +82,7 @@ When this phase is complete:
 - cancellation updates the stored request state
 - promotion bookkeeping updates the correct artifact lineage
 - rollback restores meaningful prior state
-- final-cut assembly creates a real output record
+- clip handoff evidence creates a real output record
 
 ---
 
@@ -92,7 +92,7 @@ When this phase is complete:
 - [ ] non-video generation lifecycle is behavior-tested end to end
 - [ ] duplicate-prevention is proven
 - [ ] rollback behavior is meaningful and tested
-- [ ] final-cut assembly is no longer a placeholder surface
+- [ ] clip handoff evidence is no longer a placeholder surface
 - [ ] MCP operator flow can be exercised without hidden internal APIs
 
 ---

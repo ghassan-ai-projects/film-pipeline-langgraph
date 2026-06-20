@@ -18,14 +18,23 @@ The standard is not:
 
 The standard is:
 
-- a film can move from idea to delivery through MCP
+- a film can move from idea to validated clips through MCP
 - every core phase performs real work
 - agents use the prompt framework for real outputs
 - dynamic agent routing is operational
 - validation changes runtime behavior
 - checkpoints and rollback restore meaningful project state
 - generation is safe and recoverable
+- clip outputs, validation evidence, and handoff material are real
 - another operator can run the product from docs alone
+
+The current product target does not include final editorial finishing inside this repository.
+
+For the supported path today:
+
+- the repository must reach approved, validated clip outputs
+- the system must produce the evidence needed to hand those clips to an external NLE
+- final assembly, audio mix, color, and delivery packaging are out of current completion scope
 
 If a capability depends on placeholders, stubs, or manual developer intervention, it is not done.
 

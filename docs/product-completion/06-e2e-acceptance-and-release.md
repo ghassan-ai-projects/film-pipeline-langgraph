@@ -12,7 +12,7 @@ Prove the system works as a real product and can be operated safely by another p
 
 These are mandatory product scenarios.
 
-1. happy path: idea to review cut
+1. happy path: idea to validated clips
 2. script revision loop
 3. reference validation failure
 4. quota exhausted pause/resume
@@ -87,7 +87,7 @@ Release readiness requires:
 This area is done only when all of the following are true:
 
 - all 10 E2E scenarios pass
-- the happy path produces a real review-cut artifact chain
+- the happy path produces a real validated-clip artifact chain
 - failure-path scenarios prove safe stop, repair, resume, or rollback behavior
 - smoke and release-check commands validate the supported operator workflow
 - another operator can reproduce the documented mock-mode path from docs alone

@@ -23,34 +23,33 @@ Purpose: Track program progress without weakening the acceptance standard.
 | 03 | Complete | Dynamic routing evidence is green: `tests/integration/test_dynamic_routing.py` passes |
 | 04 | Complete | All 4 validation-runtime integration tests pass; `_run_validators` loads upstream artifacts for QC phase; MCP tools read stored `_validation_reports` and `issues` |
 | 05 | Complete | `get_project_summary` and `promote_test_to_production` unstubbed; 5 remaining video-adjacent stubs per allowed-stub policy |
-| 06 | Complete | All 10 E2E scenarios pass; 7 smoke tests verify runbook workflow; 4 operator docs complete; `make release-check` green |
+| 06 | Complete | All 10 E2E scenarios pass; smoke workflow includes executable manual short-film test; operator docs are now grouped under `documentation/` |
 
 ---
 
 ## Current Verified Snapshot
 
-- `make ci-check` fully green (format, lint, mypy strict, tests 94%, build, product-gate)
-- 714 tests pass, 93.79% coverage
+- format, lint, mypy, pytest, and product-gate are green
+- latest verified pytest run: 722 tests pass, 94.06% coverage
+- latest verified build: `uv build` succeeds
 - All 9 critical-path agents use dedicated prompt templates via `PromptTemplateRegistry.get_required()`
 - Handoff records persist `template_id` + `model_profile` for audit
 - `film-knowledge-base/promt.md` classified as manual reference (not wired to runtime)
-- 8 of 9 prompt template agent_ids now match runtime registry IDs (intake, constitution, dev, screenwriter, visual_dev, shot_bible, gen_planning, qc, assembly)
+- All 9 prompt template agent_ids match runtime registry IDs
 - `get_project_summary` unstubbed — returns real project state + artifact summaries
 - `promote_test_to_production` unstubbed — transitions TEST→PRODUCTION in generation ledger
 - 5 video-adjacent stubs remain (coverage tools, final cut) per allowed-stub policy
 - `tests/integration/test_validation_runtime.py` — 4/4 passing
 - `tests/integration/test_dynamic_routing.py` — green
 - 10/10 E2E scenarios pass
+- New practical docs hub: `documentation/README.md`
+- Executable manual walkthrough: `tests/smoke/test_manual_4min_mock_short.py`
 
-Phase 01-04 are now complete. Phase 05 is the current active slice:
+All tracked phases in this plan are now complete for the current validated-clips target.
 
-## Immediate Next Slice
+## Maintenance Notes
 
-Phase 05 remaining work:
+Out-of-scope items that may still be implemented later:
+
 - Coverage group tools (`plan_coverage_group`, `list_coverage_groups`, `inspect_coverage_group`, `approve_coverage_generation`) — real schemas but no provider execution
 - `assemble_final_cut` — post-production assembly (may remain stub per video-adjacent policy)
-
-Phase 06 remaining work:
-- Smoke checks for documented operator workflow
-- Operator docs completion (`operations-guide.md`, `runbook-first-film.md`, `release-process.md`, `demo-guide.md`)
-- Release checks

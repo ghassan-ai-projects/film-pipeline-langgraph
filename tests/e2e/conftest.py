@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
+from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
@@ -217,9 +220,161 @@ def graph_services(
             },
         }
     }
+    runner.mock_responses[
+        "Create visual development references from the script and constitution."
+    ] = {
+        "visual_dev": {
+            "project_id": "test-proj",
+            "reference_entries": [
+                {
+                    "reference_id": "ref_001",
+                    "asset_path": "refs/walker.png",
+                    "asset_type": "character_identity_sheet",
+                    "subject_type": "character",
+                    "subject_id": "walker",
+                    "approved_for": ["prompt_anchor"],
+                    "quality_score": 88.0,
+                    "notes": "Young walker in muted pilgrimage clothes.",
+                },
+                {
+                    "reference_id": "ref_002",
+                    "asset_path": "refs/field_sequence.png",
+                    "asset_type": "environment_establishing",
+                    "subject_type": "environment",
+                    "subject_id": "field-sequence",
+                    "approved_for": ["prompt_anchor"],
+                    "quality_score": 84.0,
+                    "notes": "Five changing fields under a dramatic sky.",
+                },
+            ],
+        }
+    }
+    runner.mock_responses[
+        "Create the detailed shot matrix from the script and visual references."
+    ] = {
+        "shot_matrix": {
+            "project_id": "test-proj",
+            "rows": [
+                {
+                    "shot_id": "shot_0001",
+                    "act_id": "act1",
+                    "sequence_id": "seq_001",
+                    "scene_id": "sc_001",
+                    "scene_intent_ref": "s_001",
+                    "duration_seconds": 6,
+                    "story_function": "Establish the walker and the first field.",
+                    "characters": ["walker"],
+                    "environment": "field-one",
+                    "camera_profile": "wide_slow_push",
+                    "prompt_ref": "prompt:shot_0001:v1",
+                    "generation_order": 1,
+                    "priority": "high",
+                    "risk_level": "low",
+                    "chaining": {"input_frame_ref": "", "re_anchor": False},
+                }
+            ],
+            "coverage_groups": [
+                {
+                    "coverage_group_id": "cg_001",
+                    "scene_id": "sc_001",
+                    "story_moment": "opening passage",
+                    "continuity_event": "walker enters field",
+                    "coverage_type": "environmental_progression",
+                    "required_angles": ["wide", "detail"],
+                    "editorial_intent": "Give editorial a clear opening beat.",
+                }
+            ],
+        }
+    }
+    runner.mock_responses[
+        "Create the generation plan from the shot matrix and budget constraints."
+    ] = {
+        "generation_plan": {
+            "cost_estimate": {
+                "project_id": "test-proj",
+                "batch_id": "batch-001",
+                "provider": "mock-video-provider",
+                "estimated_cost_usd": 0.0,
+                "clip_count": 1,
+                "notes": "Mock demo generation plan for one short clip.",
+            },
+            "shot_groups": [
+                {
+                    "shot_id": "shot_0001",
+                    "provider": "mock-video-provider",
+                    "model": "mock-fast",
+                    "mode": "test",
+                    "priority": 1,
+                    "estimated_cost_usd": 0.0,
+                }
+            ],
+        }
+    }
+    runner.mock_responses["Synthesize validator reports into a unified QC report."] = {
+        "consensus": {
+            "review_id": "qc-001",
+            "artifact_refs": ["artifact:script:v1", "artifact:shot_matrix:v1"],
+            "reviewers": [
+                {
+                    "model_id": "mock-validator",
+                    "validator_id": "scene-continuity-validator",
+                    "score": 90.0,
+                    "status": "pass",
+                }
+            ],
+            "agreement_level": "high",
+            "consensus_status": "pass",
+            "shared_findings": ["Core artifacts are structurally coherent."],
+            "disagreements": [],
+            "orchestrator_recommendation": "Proceed with QC review.",
+        }
+    }
     return GraphServices(
         prompt_runner=runner,
         artifact_store=ArtifactStore(root=tmp_path / "artifacts"),
         agent_registry=agent_registry,
         kb_builder=kb_builder,
     )
+
+
+@pytest.fixture
+def studio_runtime(
+    graph_services: GraphServices,
+    mock_provider: MockVideoProvider,
+    tmp_path: Path,
+) -> StudioRuntime:
+    """A fully wired StudioRuntime for E2E MCP-driven tests."""
+    rt = StudioRuntime(runtime_root=tmp_path / "e2e-runtime")
+    rt.services = graph_services
+    rt.register_provider("mock-video-provider", mock_provider)
+    rt.provider_health["mock-video-provider"] = {
+        "status": "healthy",
+        "reason": "",
+    }
+    return rt
+
+
+def invoke_tool(
+    rt: StudioRuntime,
+    tool_name: str,
+    **args: Any,
+) -> dict[str, Any]:
+    """Synchronously invoke an MCP tool by name against the runtime.
+
+    Sets the runtime singleton so MCP tools resolve to the test runtime.
+    """
+    import importlib
+
+    # Set the runtime singleton for MCP tools
+    import film_pipeline.app.runtime as rt_mod
+
+    rt_mod._RUNTIME = rt
+
+    async def _invoke() -> dict[str, Any]:
+        mod = importlib.import_module("film_pipeline.mcp.tools")
+        handler = getattr(mod, tool_name, None)
+        if handler is None:
+            raise ValueError(f"Unknown MCP tool: {tool_name}")
+        return await handler(dict(args))  # type: ignore[no-any-return]
+
+    return asyncio.run(_invoke())

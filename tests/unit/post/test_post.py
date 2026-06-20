@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.post.assembly_agent import AssemblyAgent
 from film_pipeline.post.audio_design_agent import AudioDesignAgent
 from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
@@ -271,3 +274,97 @@ class TestValidators:
         validator = PostValidator()
         issues = validator.validate_subtitles(cue_count=0, dialogue_count=5)
         assert any("No subtitle cues" in i for i in issues)
+
+
+# ── Artifact persistence tests ──────────────────────────────────────────────
+
+
+class TestAssemblyPersist:
+    def test_persist_plan_to_artifact_store(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        agent = AssemblyAgent()
+        plan = agent.build_plan(
+            project_id="test-persist",
+            shot_ids=["S001", "S002"],
+            clip_paths=["clips/S001.mp4", "clips/S002.mp4"],
+        )
+        ref = agent.persist(plan, store)
+        assert ref.startswith("artifact:")
+        # Verify artifact is loadable
+        from film_pipeline.schemas._base import FilmPhase
+
+        data = store.load("test-persist", FilmPhase("post"), "assembly_manifest", 1)
+        assert data["clip_count"] == 2
+        assert len(data["clip_order"]) == 2
+
+
+class TestSubtitlePersist:
+    def test_persist_subtitles_to_artifact_store(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        agent = SubtitleAgent()
+        plan = agent.generate_subtitles(
+            project_id="test-persist",
+            dialogue_lines=["Hello", "World"],
+        )
+        ref = agent.persist(plan, store)
+        assert ref.startswith("artifact:")
+        from film_pipeline.schemas._base import FilmPhase
+
+        data = store.load("test-persist", FilmPhase("post"), "subtitles", 1)
+        assert data["cue_count"] == 2
+        assert "Hello" in data["srt_content"]
+        assert "-->" in data["srt_content"]
+
+
+class TestDeliveryPersist:
+    def test_persist_delivery_package(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        agent = DeliveryPackagingAgent()
+        package = agent.build_package(
+            project_id="test-persist",
+            video_path="final.mp4",
+            subtitle_path="subs.srt",
+            audio_stems_dir="stems/",
+            validation_report_path="report.json",
+            cost_report_path="cost.json",
+            credits_path="credits.json",
+        )
+        ref = agent.persist(package, store)
+        assert ref.startswith("artifact:")
+        from film_pipeline.schemas._base import FilmPhase
+
+        data = store.load("test-persist", FilmPhase("delivery"), "delivery_package", 1)
+        assert data["is_complete"] is True
+        assert data["subtitles_included"] is True
+
+    def test_validate_delivery_package(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        agent = DeliveryPackagingAgent()
+        package = agent.build_package(
+            project_id="test-validate",
+            video_path="final_video.mp4",
+            subtitle_path="subtitles.srt",
+            audio_stems_dir="stems/",
+            validation_report_path="validation_report.json",
+            cost_report_path="cost_report.json",
+            credits_path="credits.txt",
+        )
+        # Also add review_cut for completeness
+        package.files.append({"path": "review_cut.mp4", "type": "video"})
+        package.files.append({"path": "still_01.png", "type": "still"})
+        result = agent.validate(package, store)
+        assert result["is_complete"] is True
+        assert result["score"] == 100.0
+        assert result["status"] == "pass"
+
+    def test_validate_incomplete_package(self, tmp_path: Path) -> None:
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        agent = DeliveryPackagingAgent()
+        package = agent.build_package(
+            project_id="test-incomplete",
+            video_path="final.mp4",
+        )
+        result = agent.validate(package, store)
+        assert result["is_complete"] is False
+        assert len(result["missing_items"]) > 0
+        assert result["score"] < 100.0

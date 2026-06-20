@@ -17,8 +17,6 @@ Core phases:
 - generation planning
 - generation
 - QC
-- post
-- delivery
 
 ---
 
@@ -85,16 +83,11 @@ When this area is complete:
 - QC validation bundle
 - continuity review bundle
 
-### Post
+### External Handoff
 
-- review cut artifact
-- subtitle artifact
-- assembly manifest
-
-### Delivery
-
-- delivery package manifest
-- export artifact set
+- validated clip inventory
+- prompt/reference archive for downstream editorial
+- validation summary for manual finishing
 
 ---
 
@@ -137,6 +130,7 @@ Every artifact must include:
 - `idea -> constitution -> development -> script` produces real persisted artifacts
 - visual development produces approved references before shot-bible work is allowed
 - generation planning consumes approved upstream artifacts only
+- generation and QC produce inspectable clip-level outputs and validation evidence for external finishing
 
 ---
 

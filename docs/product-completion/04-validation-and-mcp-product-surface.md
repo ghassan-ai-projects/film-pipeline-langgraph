@@ -15,7 +15,7 @@ MCP must expose complete operator workflows.
 
 When validation is complete:
 
-- scripts, references, prompts, clips, continuity, assembly, and delivery are validated by real logic
+- scripts, references, prompts, clips, and continuity are validated by real logic
 - blocking findings stop downstream work
 - warnings are preserved without pretending they are blockers
 - validation reports are stored and inspectable
@@ -31,8 +31,6 @@ When validation is complete:
 - clip quality validator
 - prompt adherence validator
 - scene continuity validator
-- assembly validator
-- delivery completeness validator
 
 Registry entries alone are not enough.
 
@@ -44,7 +42,7 @@ When MCP productization is complete:
 
 - an operator can run the full supported workflow through MCP only
 - critical-path tools return real data and mutate real state
-- approvals, validation, generation, rollback, and export are all available through MCP
+- approvals, validation, generation, rollback, and clip inspection are all available through MCP
 - no operator needs hidden direct runtime access
 
 ---
@@ -64,8 +62,8 @@ When MCP productization is complete:
 - rollback request and execution
 - provider health
 - audit inspection
-- review cut assembly
-- delivery export
+- clip output inspection
+- downstream handoff evidence inspection
 
 ### Must Not Remain Stubbed
 

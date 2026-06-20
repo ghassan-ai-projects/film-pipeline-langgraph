@@ -22,8 +22,9 @@ The minimum supported spine for product completion is:
 - visual development
 - shot bible creation
 - generation planning
-- review cut assembly
-- delivery export
+- generation ledgering
+- QC validation
+- validated clip handoff evidence
 
 If these phases only advance labels or return shells, the product is not complete.
 
@@ -37,6 +38,7 @@ When this phase is complete:
 - artifacts are persisted with metadata and lineage
 - downstream steps consume prior artifacts rather than rebuilding from scratch
 - review packages and approvals point to real artifacts
+- clip-producing workflow artifacts are sufficient for downstream external finishing
 
 ---
 
@@ -52,7 +54,6 @@ When this phase is complete:
   - shot bible agent
   - generation planner agent
   - QC synthesis agent
-  - assembly agent
 
 ### Artifact Truth
 
@@ -101,13 +102,16 @@ When this phase is complete:
 - [x] artifact lineage is visible and testable
 - [x] review packages reference real artifact outputs
 - [x] approvals persist artifact refs and checkpoint evidence
-- [x] behavior tests prove the artifact-producing spine
+- [ ] real agent execution is prompt-governed rather than generic-prompt-driven
+- [ ] prompt template version, model profile, and KB context ref are persisted in runtime evidence for the supported spine
+- [ ] clip-producing workflow artifacts are sufficient for validated external handoff
+- [x] behavior tests prove the artifact-producing spine exists
 
 ---
 
 ## Exit Condition
 
-✅ This phase is done — the spine agents produce and consume real persisted artifacts.
+This phase is done when the supported spine produces and consumes real persisted artifacts under the real prompt framework, with enough evidence to hand validated clips to external finishing.
 
 ## Implementation Notes
 
