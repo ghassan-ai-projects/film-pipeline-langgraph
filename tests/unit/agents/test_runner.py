@@ -49,7 +49,11 @@ class TestPromptRunner:
             role="r", core_task="ct", context="c", constraints="x", output_format="y"
         )
         result = runner.call_model(prompt)
-        assert result == {"status": "ok", "agent": "mock", "output": {}}
+        assert result == {
+            "status": "ok",
+            "agent": "mock",
+            "output": {"_warning": "generic_fallback"},
+        }
 
     def test_call_model_mock_response(self) -> None:
         runner = PromptRunner(mock_responses={"Test task": {"result": "canned", "score": 95}})
@@ -136,7 +140,11 @@ class TestPromptRunner:
             role="r", core_task="unknown", context="c", constraints="x", output_format="y"
         )
         result = runner.call_model(prompt)
-        assert result == {"status": "ok", "agent": "mock", "output": {}}
+        assert result == {
+            "status": "ok",
+            "agent": "mock",
+            "output": {"_warning": "generic_fallback"},
+        }
 
     def test_call_model_with_adapter_and_no_mock(self) -> None:
         """When model_adapter is set and no mock matches, call the real adapter."""

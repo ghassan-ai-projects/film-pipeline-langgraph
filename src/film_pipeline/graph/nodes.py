@@ -10,6 +10,8 @@ from copy import deepcopy
 from typing import Any
 
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.schemas._base import ArtifactType as _ArtifactType
+from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 
 
 def _get_services(state: dict[str, Any]) -> GraphServices | None:
@@ -73,7 +75,8 @@ def _run_agent(
         return {"status": "no_impl", "agent": agent_id, "model_output": model_output}
 
     instance: BaseAgent = agent_cls(contract)
-    return instance.execute(model_output)
+    # Call via run() so validate() is invoked (not execute() which skips validation)
+    return instance.run(state, kb, task, model_output)
 
 
 def _save_artifact(
@@ -81,35 +84,78 @@ def _save_artifact(
     artifact: Any,
     artifact_id: str,
     phase: str,
+    artifact_type: str | None = None,
 ) -> str | None:
-    """Persist an artifact via ArtifactStore and return its ref string."""
+    """Persist an artifact via ArtifactStore and return its ref string.
+
+    ``artifact_type`` is an optional ArtifactType enum value. When omitted,
+    inferred from the class name via mapping.
+    """
     services = _get_services(state)
     if services is None:
         return None
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
 
-    artifact_type_str = type(artifact).__name__.lower()
-    try:
-        artifact_type = ArtifactType(artifact_type_str)
-    except ValueError:
-        artifact_type = ArtifactType.SCRIPT  # fallback for unknown types
+    if artifact_type is not None:
+        try:
+            atype = _ArtifactType(artifact_type)
+        except ValueError:
+            atype = _ArtifactType.SCRIPT
+    else:
+        atype = _infer_artifact_type(artifact)
+
+    parent_refs = state.get("artifact_refs", [])
+    parents = [_parse_ref(r) for r in parent_refs]
 
     meta = ArtifactMetadata(
         artifact_id=artifact_id,
-        artifact_type=artifact_type,
+        artifact_type=atype,
         project_id=str(state.get("project_id", "")),
         phase=FilmPhase(phase),
         version=1,
         status=ArtifactStatus.CANDIDATE,
-        parents=[],
+        parents=parents,
         created_by="graph_node",
         created_at=datetime.now(UTC),
     )
     services.artifact_store.save(artifact, meta)
     return f"artifact:{artifact_id}:v1"
+
+
+_ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
+    "ProjectProfile": "project_config",
+    "FilmConstitution": "film_constitution",
+    "Treatment": "treatment",
+    "SceneList": "scene_list",
+    "StoryBible": "script",
+    "Script": "script",
+    "MasterFilmMatrix": "shot_bible",
+    "CostEstimate": "cost_estimate_bom",
+    "ConsensusReport": "consensus_report",
+    "AssemblyManifest": "assembly_manifest",
+}
+
+
+def _infer_artifact_type(artifact: Any) -> _ArtifactType:
+    """Infer ArtifactType from the object's class name."""
+    class_name = type(artifact).__name__
+    mapped = _ARTIFACT_TYPE_BY_CLASS.get(class_name, "script")
+    try:
+        return _ArtifactType(mapped)
+    except ValueError:
+        return _ArtifactType.SCRIPT
+
+
+def _parse_ref(ref_str: str) -> _ArtifactRef:
+    """Parse an artifact ref string like 'artifact:id:v1' into an ArtifactRef."""
+    parts = ref_str.split(":")
+    artifact_id = parts[1] if len(parts) > 1 else ref_str
+    version_str = parts[2] if len(parts) > 2 else "1"
+    version = int(version_str.lstrip("v"))
+    return _ArtifactRef(artifact_id=artifact_id, version=version)
 
 
 # ── Intake ───────────────────────────────────────────────────────────────────
@@ -245,9 +291,9 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
         phase="visual_dev",
         task="Create visual development references from the script and constitution.",
     )
-    entries = result.get("reference_entries")
-    if entries:
-        ref = _save_artifact(new_state, entries, "reference_entries", "visual_dev")
+    index = result.get("reference_index")
+    if index is not None:
+        ref = _save_artifact(new_state, index, "reference_index", "visual_dev")
         if ref:
             new_state["visual_refs"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
