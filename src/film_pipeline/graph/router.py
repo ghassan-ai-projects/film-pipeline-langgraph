@@ -142,6 +142,13 @@ def route_agent(
 
     default_agent = _PHASE_DEFAULT_AGENTS.get(phase, "orchestrator-agent")
 
+    # Map preferred_capability to task_type when registry is absent
+    if preferred_capability:
+        if preferred_capability in _REPAIR_CAPABILITIES:
+            task_type = "repair"
+        elif preferred_capability in _REVIEW_CAPABILITIES:
+            task_type = "review"
+
     # Route by task type when registry is available
     if registry is not None:
         if task_type == "repair" or preferred_capability in _REPAIR_CAPABILITIES:
