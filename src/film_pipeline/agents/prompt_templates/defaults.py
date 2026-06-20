@@ -37,17 +37,19 @@ def _intake_classifier() -> PromptTemplate:
         role="You are the intake-classifier-agent (Intake Classifier). "
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
-            "Classify the user's film idea and produce a project profile. "
-            "Determine the genre, target audience, runtime estimate, "
+            "Classify the user's film idea and produce a detailed project profile. "
+            "Determine the genre, target audience, realistic runtime estimate (based on story complexity), "
             "aspect ratio, and delivery mode. Identify any ambiguities "
-            "and flag risks: IP conflicts, sensitivity concerns, budget concerns."
+            "and flag risks: IP conflicts, sensitivity concerns, budget concerns, production complexity."
         ),
         context_template=("User idea: {idea}\nProject ID: {project_id}\nKB refs: {kb_refs}"),
         constraints=(
             "Genre classification must be specific (not just 'sci-fi' but "
-            "'grounded sci-fi drama' or 'sci-fi action comedy'). "
-            "Runtime must be realistic for the story scope. "
-            "Flag risks explicitly — do not dismiss concerns."
+            "'grounded sci-fi drama' or 'cyberpunk noir thriller'). "
+            "Runtime must be realistic for the story scope — estimate actual seconds. "
+            "Aspect ratio must fit the story's visual intent (e.g., 2.35:1 for epic, 1.85:1 for intimate). "
+            "Flag risks explicitly — do not dismiss concerns. "
+            "The output JSON MUST be valid and contain ALL fields shown in Output."
         ),
         output_format=(
             "Respond with valid JSON matching the ProjectProfile schema:\n"
@@ -123,7 +125,10 @@ def _development_creator() -> PromptTemplate:
             "structure, and break down every scene with its dramatic function."
         ),
         context_template=(
-            "Constitution ref: {constitution_ref}\nProject ID: {project_id}\nKB refs: {kb_refs}"
+            "Constitution ref: {constitution_ref}\n"
+            "Constitution content:\n{constitution_content}\n"
+            "Project ID: {project_id}\n"
+            "KB refs: {kb_refs}"
         ),
         constraints=(
             "Every scene must have a clear dramatic function, emotional shift, "
@@ -171,8 +176,11 @@ def _screenwriter() -> PromptTemplate:
         ),
         context_template=(
             "Treatment ref: {treatment_ref}\n"
+            "Treatment content:\n{treatment_content}\n"
             "Scene list ref: {scene_list_ref}\n"
+            "Scene list content:\n{scene_list_content}\n"
             "Constitution ref: {constitution_ref}\n"
+            "Constitution content:\n{constitution_content}\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"
         ),
@@ -221,7 +229,11 @@ def _visual_development_creator() -> PromptTemplate:
         ),
         context_template=(
             "Script ref: {script_ref}\n"
+            "Script content:\n{script_content}\n"
+            "Story bible ref: {story_bible_ref}\n"
+            "Story bible content:\n{story_bible_content}\n"
             "Constitution ref: {constitution_ref}\n"
+            "Constitution content:\n{constitution_content}\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"
         ),
@@ -249,7 +261,9 @@ def _shot_bible_creator() -> PromptTemplate:
         ),
         context_template=(
             "Script ref: {script_ref}\n"
+            "Script content:\n{script_content}\n"
             "Visual refs: {visual_refs}\n"
+            "Visual refs content:\n{visual_refs_content}\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"
         ),
@@ -277,6 +291,7 @@ def _generation_planner() -> PromptTemplate:
         ),
         context_template=(
             "Shot matrix ref: {shot_matrix_ref}\n"
+            "Shot matrix content:\n{shot_matrix_content}\n"
             "Budget cap: {budget_cap}\n"
             "Preferred providers: {preferred_providers}\n"
             "Project ID: {project_id}\n"

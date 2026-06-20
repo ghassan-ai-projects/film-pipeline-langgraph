@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+from film_pipeline.kb.paths import kb_manifest_path
 
 
 def validate_environment() -> list[str]:
@@ -18,10 +21,10 @@ def validate_environment() -> list[str]:
         issues.append("profiles/ directory not found. Create it with at least one profile YAML.")
 
     # Check KB manifest
-    kb_manifest = Path("film-knowledge-base/manifest.yaml")
+    kb_manifest = kb_manifest_path()
     if not kb_manifest.exists():
         issues.append(
-            "film-knowledge-base/manifest.yaml not found. "
+            "film-knowledge-base/index/kb-manifest.yaml not found. "
             "The KB manifest is required for context packets."
         )
 
@@ -36,6 +39,12 @@ def validate_environment() -> list[str]:
             test.unlink()
         except OSError:
             issues.append("Cannot write to artifacts/ directory.")
+
+    if os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower() == "real":
+        if not os.getenv("OPENROUTER_API_KEY"):
+            issues.append(
+                "OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real."
+            )
 
     return issues
 

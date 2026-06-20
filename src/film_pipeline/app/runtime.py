@@ -7,6 +7,7 @@ In production, this would be a proper session/process manager.
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -35,7 +36,8 @@ class StudioRuntime:
     projects: dict[str, dict[str, Any]] = field(default_factory=dict)
     active_project_id: str = ""
     graph: Any = None  # CompiledStateGraph
-    services: GraphServices = field(default_factory=GraphServices.for_mock_runtime)
+    server_mode: str = "mock"
+    services: GraphServices | None = None
     checkpoints: dict[str, CheckpointMetadata] = field(default_factory=dict)
     audit_events: list[dict[str, Any]] = field(default_factory=list)
     block_entries: list[dict[str, str]] = field(default_factory=list)
@@ -46,6 +48,11 @@ class StudioRuntime:
     runtime_root: Path = field(
         default_factory=lambda: Path(tempfile.gettempdir()) / "film_pipeline_runtime"
     )
+
+    def __post_init__(self) -> None:
+        self.server_mode = _normalize_server_mode(self.server_mode)
+        if self.services is None:
+            self.services = _build_services_for_mode(self.server_mode)
 
     # --- Project management ---
 
@@ -58,6 +65,7 @@ class StudioRuntime:
             "project_id": project_id,
             "title": title,
             "slug": slug or project_id,
+            "server_mode": self.server_mode,
             "current_phase": "",
             "approved": False,
             "human_approval_required": False,
@@ -265,6 +273,10 @@ class StudioRuntime:
     def list_providers(self) -> list[str]:
         return list(self.provider_adapters.keys())
 
+    def clear_providers(self) -> None:
+        self.provider_adapters.clear()
+        self.provider_health.clear()
+
     # --- Provider health ---
 
     def set_provider_health(self, provider_id: str, status: str, reason: str = "") -> None:
@@ -349,9 +361,49 @@ class StudioRuntime:
         return node(state)
 
 
-# Global singleton for MCP tools
-_RUNTIME = StudioRuntime()
+def create_runtime(server_mode: str | None = None) -> StudioRuntime:
+    """Create a runtime aligned to the requested or configured server mode."""
+    mode = _normalize_server_mode(server_mode or _configured_server_mode())
+    return StudioRuntime(server_mode=mode)
+
+
+def reset_runtime(server_mode: str | None = None) -> StudioRuntime:
+    """Recreate the global runtime, primarily for tests and mode changes."""
+    global _RUNTIME, _RUNTIME_MODE_OVERRIDE
+    _RUNTIME_MODE_OVERRIDE = (
+        _normalize_server_mode(server_mode) if server_mode is not None else None
+    )
+    _RUNTIME = create_runtime(server_mode)
+    return _RUNTIME
 
 
 def get_runtime() -> StudioRuntime:
+    global _RUNTIME
+    configured_mode = _configured_server_mode()
+    if _RUNTIME is None or _RUNTIME.server_mode != configured_mode:
+        _RUNTIME = create_runtime(configured_mode)
     return _RUNTIME
+
+
+def _build_services_for_mode(server_mode: str) -> GraphServices:
+    if server_mode == "real":
+        return GraphServices.for_real_runtime()
+    return GraphServices.for_mock_runtime()
+
+
+def _normalize_server_mode(server_mode: str) -> str:
+    mode = server_mode.strip().lower()
+    if mode not in {"mock", "real"}:
+        raise ValueError(f"server_mode must be 'mock' or 'real', got '{server_mode}'")
+    return mode
+
+
+def _configured_server_mode() -> str:
+    if _RUNTIME_MODE_OVERRIDE is not None:
+        return _RUNTIME_MODE_OVERRIDE
+    return _normalize_server_mode(os.getenv("FILM_PIPELINE_MCP_MODE", "mock"))
+
+
+# Global singleton for MCP tools
+_RUNTIME: StudioRuntime | None = None
+_RUNTIME_MODE_OVERRIDE: str | None = None

@@ -15,7 +15,6 @@ from film_pipeline.mcp.resolution import (
     ProjectRegistry,
     ResolutionResult,
 )
-from film_pipeline.mcp.server import MCPServer
 
 __all__ = [
     "AmbiguousProjectError",
@@ -33,3 +32,11 @@ __all__ = [
     "ToolRegistry",
     "new_envelope",
 ]
+
+
+def __getattr__(name: str) -> object:
+    if name == "MCPServer":
+        from film_pipeline.mcp.server import MCPServer
+
+        return MCPServer
+    raise AttributeError(name)

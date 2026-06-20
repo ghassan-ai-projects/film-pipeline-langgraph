@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+import subprocess
+import sys
 from typing import cast
 
 import pytest
@@ -260,6 +264,66 @@ def test_server_handles_handler_exception() -> None:
     assert resp.success is False
     assert resp.error is not None
     assert resp.error.code == MCPErrorCode.INTERNAL_ERROR
+
+
+def test_server_jsonrpc_initialize() -> None:
+    from film_pipeline.mcp.server import handle_jsonrpc
+
+    server = MCPServer()
+    response = asyncio.run(
+        handle_jsonrpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {},
+            },
+        )
+    )
+    assert response is not None
+    result = cast(dict[str, object], response["result"])
+    assert result["protocolVersion"] == "2025-03-26"
+
+
+def test_server_stdio_initialize_and_tools_list() -> None:
+    init_request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {},
+    }
+    tools_request = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/list",
+        "params": {},
+    }
+    call_request = {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/call",
+        "params": {"name": "list_profiles", "arguments": {}},
+    }
+    wire = b"".join(_frame_message(req) for req in (init_request, tools_request, call_request))
+    proc = subprocess.run(
+        [sys.executable, "-m", "film_pipeline.mcp.server"],
+        input=wire,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr.decode()
+    responses = _read_framed_messages(proc.stdout)
+    assert len(responses) == 3
+    init_result = cast(dict[str, object], responses[0]["result"])
+    assert init_result["protocolVersion"] == "2025-03-26"
+    tools_result = cast(dict[str, object], responses[1]["result"])
+    tools = cast(list[object], tools_result["tools"])
+    assert any(cast(dict[str, object], tool)["name"] == "create_film_project" for tool in tools)
+    call_result = cast(dict[str, object], responses[2]["result"])
+    structured = cast(dict[str, object], call_result["structuredContent"])
+    assert structured["ok"] is True
 
 
 def test_server_handles_mcp_error() -> None:
@@ -601,16 +665,20 @@ def test_wired_inspect_profile() -> None:
 
 
 def test_wired_get_runtime_mode_default_mock() -> None:
+    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import get_runtime_mode
 
+    reset_runtime("mock")
     result = asyncio.run(get_runtime_mode({}))
     assert result["ok"] is True
+    assert result["server_mode"] == "mock"
     assert result["runtime_mode"] == "mock"
 
 
 def test_wired_get_runtime_mode_after_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
 
+    reset_runtime("real")
     rt = gr()
     rt.create_project(project_id="test-mode-real", title="Mode Test", slug="mode-test")
     rt.set_active("test-mode-real")
@@ -625,15 +693,33 @@ def test_wired_get_runtime_mode_after_project() -> None:
 
     result = asyncio.run(get_runtime_mode({}))
     assert result["ok"] is True
+    assert result["server_mode"] == "real"
     assert result["runtime_mode"] == "real"
     stack = cast(dict[str, str], result["profile_stack"])
     assert stack["provider_profile"] == "seedance_primary"
 
 
+def test_wired_get_runtime_mode_rejects_mismatch() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+    from film_pipeline.mcp.tools import get_runtime_mode
+
+    reset_runtime("real")
+    rt = gr()
+    rt.create_project(project_id="test-mode-mismatch", title="Mismatch", slug="mismatch")
+    rt.set_active("test-mode-mismatch")
+    rt.projects["test-mode-mismatch"]["runtime_mode"] = "mock"
+
+    result = asyncio.run(get_runtime_mode({}))
+    assert result["ok"] is False
+    assert result["server_mode"] == "real"
+    assert result["project_runtime_mode"] == "mock"
+
+
 def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    reset_runtime("real")
     rt = gr()
 
     # Create with mock provider in real mode — should reject
@@ -657,8 +743,10 @@ def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
 
 
 def test_wired_create_film_project_accepts_real_provider() -> None:
+    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    reset_runtime("real")
     # Create with real provider in real mode — should accept
     result = asyncio.run(
         create_film_project(
@@ -674,15 +762,26 @@ def test_wired_create_film_project_accepts_real_provider() -> None:
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
     assert state["runtime_mode"] == "real"
+    assert state["resolved_config"]  # type: ignore[truthy-function]
+    assert "base.studio" in cast(list[str], state["resolved_config_sources"])
 
     # Verify profile_stack persisted
     pstack = cast(dict[str, str], state.get("profile_stack", {}))
-    assert pstack.get("provider_profile") == "seedance_primary"
+    assert pstack.get("provider_profile") == "provider.seedance_primary"
+
+    rt = gr()
+    providers = rt.list_providers()
+    assert "seedance-openrouter" in providers
+    health = rt.get_provider_health("seedance-openrouter")
+    assert health is not None
+    assert health["status"] == "healthy"
 
 
 def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
+    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    reset_runtime("mock")
     result = asyncio.run(
         create_film_project(
             {
@@ -698,9 +797,10 @@ def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
 
 
 def test_wired_create_film_project_defaults_to_mock_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    reset_runtime("mock")
     rt = gr()
 
     result = asyncio.run(
@@ -720,6 +820,57 @@ def test_wired_create_film_project_defaults_to_mock_mode() -> None:
     rt.projects.pop("test-default-mock", None)
 
 
+def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real() -> None:
+    from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.mcp.tools import create_film_project
+
+    reset_runtime("real")
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-default-real",
+                "title": "Test",
+                "slug": "test-real",
+                "provider_profile": "provider.seedance_primary",
+            }
+        )
+    )
+    assert result["ok"] is True
+    state = cast(dict[str, object], result["state"])
+    assert state["runtime_mode"] == "real"
+    assert state["server_mode"] == "real"
+    pstack = cast(dict[str, str], state.get("profile_stack", {}))
+    assert pstack["provider_profile"] == "provider.seedance_primary"
+
+
+def test_wired_create_film_project_rejects_mode_mismatch() -> None:
+    from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.mcp.tools import create_film_project
+
+    reset_runtime("mock")
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "test-mode-mismatch-reject",
+                "title": "Mismatch",
+                "runtime_mode": "real",
+                "provider_profile": "provider.seedance_primary",
+            }
+        )
+    )
+    assert result["ok"] is False
+    assert result["server_mode"] == "mock"
+    assert result["requested_runtime_mode"] == "real"
+
+
+def test_wired_inspect_profile_accepts_friendly_provider_name() -> None:
+    from film_pipeline.mcp.tools import inspect_profile
+
+    result = asyncio.run(inspect_profile({"profile_id": "seedance_primary"}))
+    assert result["ok"] is True
+    assert result["profile_id"] == "provider.seedance_primary"
+
+
 def test_tool_registry_has_config_group() -> None:
     from film_pipeline.mcp.contract import ToolGroup
 
@@ -731,3 +882,55 @@ def test_tool_registry_has_config_group() -> None:
     assert len(config_tools) == 3
     names = {c["name"] for c in config_tools}
     assert names == {"list_profiles", "inspect_profile", "get_runtime_mode"}
+
+
+def test_list_providers_real_mode_has_no_mock_fallback() -> None:
+    from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.mcp.tools import list_providers
+
+    reset_runtime("real")
+    result = asyncio.run(list_providers({}))
+    assert result["ok"] is True
+    assert result["providers"] == []
+    assert result["total"] == 0
+
+
+def test_server_stdio_real_mode_requires_bootstrap() -> None:
+    env = dict(os.environ)
+    env["FILM_PIPELINE_MCP_MODE"] = "real"
+    env.pop("OPENROUTER_API_KEY", None)
+    proc = subprocess.run(
+        [sys.executable, "-m", "film_pipeline.mcp.server"],
+        input=b"",
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        check=False,
+    )
+    assert proc.returncode == 1
+    assert "OPENROUTER_API_KEY" in proc.stderr.decode("utf-8")
+
+
+def _frame_message(payload: dict[str, object]) -> bytes:
+    body = json.dumps(payload).encode("utf-8")
+    return f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8") + body
+
+
+def _read_framed_messages(data: bytes) -> list[dict[str, object]]:
+    messages: list[dict[str, object]] = []
+    idx = 0
+    while idx < len(data):
+        header_end = data.find(b"\r\n\r\n", idx)
+        assert header_end != -1
+        header_block = data[idx:header_end].decode("utf-8")
+        length = 0
+        for line in header_block.splitlines():
+            if line.lower().startswith("content-length:"):
+                length = int(line.split(":", 1)[1].strip())
+                break
+        assert length > 0
+        start = header_end + 4
+        end = start + length
+        messages.append(cast(dict[str, object], json.loads(data[start:end].decode("utf-8"))))
+        idx = end
+    return messages

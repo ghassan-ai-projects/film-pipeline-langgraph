@@ -1,186 +1,213 @@
 # OpenClaw MCP Operator Guide
 
-This guide covers the OpenClaw production MCP path — real models, real providers,
-profile-aware project setup. It is **not** the mock-first demo path.
+This guide covers the aligned MCP behavior for OpenClaw.
 
-For the mock demo path, use the [manual 4-minute mock short](../documentation/manual-4min-mock-short.md).
+The key rule is now:
 
----
+- server mode is the source of truth
+- project mode must match server mode
 
-## Two Modes
+## Modes
 
-| Mode | Path | Purpose | Mock allowed? |
-|------|------|---------|---------------|
-| **mock** | `make run-mcp` | Local development, CI, demos | Yes |
-| **real** | OpenClaw via MCP with `runtime_mode: "real"` | Production operator use | No |
+Use one of these startup commands:
 
-OpenClaw should always operate in **real** mode. The runtime guard in
-`create_film_project` enforces this — passing `runtime_mode: "real"` with
-mock provider/model ids is rejected before project creation.
+```bash
+make run-mcp-mock
+make run-mcp-real
+```
 
----
+Notes:
 
-## Before Starting
+- `make run-mcp` still exists as a legacy mock alias
+- `FILM_PIPELINE_MCP_MODE=real` now drives the runtime construction
+- real mode uses the real prompt-runner path, not canned mock responses
+- the server now speaks stdio MCP directly for `initialize`, `tools/list`, and `tools/call`
 
-### Required environment variables
+## Before Starting Real Mode
+
+Set:
 
 ```bash
 export OPENROUTER_API_KEY="sk-or-v1-..."
 ```
 
-Without this, real model calls will fail. `list_profiles` and `inspect_profile`
-work read-only regardless.
+Real-mode bootstrap now expects this variable.
 
-### Verify profiles exist
+## What MCP Supports Now
+
+OpenClaw can now:
+
+- discover profiles with `list_profiles`
+- inspect profiles with `inspect_profile`
+- create a project with explicit `runtime_mode`
+- verify mode alignment with `get_runtime_mode`
+- inspect registered providers after project creation with `list_providers`
+
+Real-mode project creation now aligns with the actual server mode:
+
+- real server mode + real project mode: allowed
+- mock server mode + mock project mode: allowed
+- any mismatch: rejected
+
+## Profile Naming
+
+Use actual file stems:
+
+- `provider.seedance_primary`
+- `provider.free_or_low_cost`
+- `quality.studio`
+- `quality.draft`
+- `quality.festival`
+- `film-type.narrative`
+- `film-type.visual_poetry`
+- `film-type.experimental`
+- `review.strict_continuity`
+- `mock-demo`
+- `local-real-provider`
+
+## Step 1. Start The Correct Server Mode
+
+For OpenClaw production use:
 
 ```bash
-ls profiles/*.yaml
+make run-mcp-real
 ```
 
-You should see at minimum:
-- `base.studio.yaml` — studio defaults
-- `provider.seedance_primary.yaml` — real provider stack (Seedance via OpenRouter)
-- `provider.free_or_low_cost.yaml` — cost-conscious alternative
-- `quality.studio.yaml` — model routing preferences for studio quality
-- `quality.draft.yaml` — draft-quality model routing
-- `quality.festival.yaml` — festival-quality model routing
-- `film-type.narrative.yaml` — narrative film conventions
-- `film-type.visual_poetry.yaml` — visual poetry conventions
-- `film-type.experimental.yaml` — experimental film conventions
-- `review.strict_continuity.yaml` — strict continuity review
-- `local-real-provider.yaml` — local development with real provider
-- `mock-demo.yaml` — mock mode (rejected in real mode)
+Do not use `make run-mcp-mock` for real operator work.
 
----
+## Step 2. Discover And Inspect Profiles
 
-## Workflow
+Call:
 
-### 1. Discover available profiles
-
-```
-MCP: list_profiles
+```text
+list_profiles
+inspect_profile
 ```
 
-Returns every profile in `profiles/` with id, name, description, and `studio_mode`.
+For real mode, inspect the profiles you plan to use and confirm they do not reference:
 
-Example response:
+- `mock-*` providers
+- `mock-*` models
+
+Example profile ids:
+
+```json
+{ "profile_id": "provider.seedance_primary" }
+```
+
+```json
+{ "profile_id": "quality.studio" }
+```
+
+## Step 3. Create The Project In The Same Mode As The Server
+
+Example:
+
 ```json
 {
-  "ok": true,
-  "profiles": [
-    {
-      "id": "seedance_primary",
-      "name": "Seedance Primary",
-      "description": "Primary video generation via Seedance 2.0 on OpenRouter.",
-      "studio_mode": "production",
-      "file": "profiles/provider.seedance_primary.yaml"
-    },
-    {
-      "id": "mock-demo",
-      "name": "Mock Demo",
-      "description": "Safe profile for testing with zero-cost mock provider.",
-      "studio_mode": "mock",
-      "file": "profiles/mock-demo.yaml"
-    }
-  ],
-  "total": 12
-}
-```
-
-### 2. Inspect a profile
-
-```
-MCP: inspect_profile { "profile_id": "seedance_primary" }
-```
-
-Returns the full YAML raw. Use this to verify provider ids, model ids, budget caps,
-and validator strictness before creating a project.
-
-### 3. Create a real-mode project
-
-```
-MCP: create_film_project {
-  "project_id":         "my-film-001",
-  "title":              "After the Fall",
-  "slug":               "after-the-fall",
-  "runtime_mode":       "real",
-  "provider_profile":   "seedance_primary",
-  "quality_profile":    "studio",
-  "film_type_profile":  "narrative",
-  "review_profile":     "strict_continuity"
-}
-```
-
-**Real-mode guards:**
-- Any profile referencing a `mock-*` provider or model id is rejected
-- `runtime_mode` must be `"mock"` or `"real"` — anything else returns an error
-
-If the call succeeds, the project is locked into real mode. The resolved profile
-stack is persisted in project state and visible via `get_runtime_mode`.
-
-### 4. Verify the mode
-
-```
-MCP: get_runtime_mode
-```
-
-Returns:
-```json
-{
-  "ok": true,
+  "project_id": "after-the-fall-001",
+  "title": "After the Fall",
+  "slug": "after-the-fall",
   "runtime_mode": "real",
+  "provider_profile": "provider.seedance_primary",
+  "quality_profile": "quality.studio",
+  "film_type_profile": "film-type.narrative",
+  "review_profile": "review.strict_continuity"
+}
+```
+
+Behavior:
+
+- if the server is running in `real`, the project must be `real`
+- if the server is running in `mock`, the project must be `mock`
+- if `runtime_mode` is omitted, it defaults to the server mode
+- in real mode, mock provider/model profiles are rejected
+- the selected profile stack is resolved and stored with the project
+- providers are registered from the selected profile stack during project creation
+
+## Step 4. Verify Alignment
+
+Call:
+
+```text
+get_runtime_mode
+```
+
+Expected real-mode shape:
+
+```json
+{
+  "ok": true,
+  "server_mode": "real",
+  "runtime_mode": "real",
+  "project_runtime_mode": "real",
+  "aligned": true,
   "profile_stack": {
-    "provider_profile": "seedance_primary",
-    "quality_profile": "studio",
-    "film_type_profile": "narrative",
-    "review_profile": "strict_continuity"
+    "film_type_profile": "film-type.narrative",
+    "quality_profile": "quality.studio",
+    "provider_profile": "provider.seedance_primary",
+    "review_profile": "review.strict_continuity"
   }
 }
 ```
 
-### 5. Proceed with the normal workflow
+If project mode and server mode differ, the tool returns an error.
 
-```
-MCP: submit_idea    { "idea": "A survivor discovers..." }
-MCP: approve_phase
-MCP: approve_phase  (after each phase)
-MCP: request_revision { "note": "Tone needs to be darker." }
-```
+## Step 5. Continue With The Film Workflow
 
-The existing MCP workflow is unchanged. Profile resolution happens once at project
-creation time and is stored in state.
+After project creation, the normal MCP flow is unchanged:
 
----
+1. `set_active_project`
+2. `submit_idea`
+3. `approve_intake`
+4. `approve_phase`
+5. inspect artifacts and validation as needed
 
-## Detecting Accidental Mock Mode
+Useful follow-up tools:
 
-If `get_runtime_mode` returns `"mock"`, OpenClaw is NOT in production mode.
-Do not proceed with a project that expects real execution.
+- `review_phase_artifacts`
+- `inspect_artifact`
+- `get_validation_report`
+- `list_validation_issues`
+- `request_revision`
+- `list_providers`
+- `check_provider_health`
 
-Check:
-1. Was `runtime_mode: "real"` passed to `create_film_project`?
-2. Did any profile reference a `mock-*` id that caused rejection at creation time?
+## What Is Aligned Now
 
-**To retroactively verify a project:** call `inspect_profile` on the profiles
-referenced in `get_runtime_mode`'s `profile_stack`. If any return `studio_mode: "mock"`,
-the project was created with mock infrastructure.
+These behaviors are aligned:
 
----
+- runtime mode is chosen at server startup
+- the global runtime is rebuilt from that mode
+- real mode uses the real model adapter path
+- project creation cannot contradict server mode
+- `get_runtime_mode` exposes both server and project mode
+- provider registration is derived from the selected project profile stack
 
-## Current Limitations (first slice)
+## What Is Still Missing
 
-This is the **first slice** of the real-mode MCP path. The following is still in progress:
+This is still not the final end-state.
 
-| Capability | Status |
-|-----------|--------|
-| Profile-aware project creation with real-mode guards | ✅ Done |
-| Profile discovery and inspection via MCP | ✅ Done |
-| Real-mode enforcement (mock rejection at project creation) | ✅ Done |
-| Real model adapter execution (live LLM calls) | Not yet — `GraphServices.for_real_runtime()` planned |
-| Real provider registration from resolved config | Not yet — providers not auto-registered at startup |
-| Real-mode bootstrap (credential validation at startup) | Not yet |
-| Audit evidence proving live model usage | Not yet |
+Remaining gaps:
 
-The gap between "project is marked real" and "runtime actually calls real models"
-is tracked in [real-model-only-mcp-plan.md](./mcp-openclaw/real-model-only-mcp-plan.md).
-The remaining phases are scoped and ordered in that document.
+- resolved config is stored in project state, but not yet exposed as a dedicated first-class MCP artifact
+- live-provider readiness and provider health are still lighter than the full target plan
+- audit proof for live model/provider execution is still limited
+
+So the correct interpretation is:
+
+- real mode is now behaviorally aligned at the runtime/project contract level
+- full live-provider productization is still in progress
+
+## Decision Rule
+
+Use this rule:
+
+- if `make run-mcp-real` started the server and `get_runtime_mode` reports `aligned: true` with `server_mode=real`, OpenClaw is on the correct real-mode contract
+- if either the startup mode or `get_runtime_mode` says `mock`, treat it as non-production
+
+## Related Doc
+
+Remaining productization work is tracked here:
+
+- [real-model-only-mcp-plan.md](./mcp-openclaw/real-model-only-mcp-plan.md)

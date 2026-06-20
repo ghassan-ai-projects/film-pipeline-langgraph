@@ -7,6 +7,7 @@ and persist artifacts. Remaining phases are flag-only pending fan-out.
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 from typing import Any
 
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
@@ -103,6 +104,22 @@ def _run_agent(
             "project_id": str(state.get("project_id", "")),
             "idea": str(state.get("idea", state.get("input", ""))),
             "kb_refs": kb.kb_context_id,
+            "constitution_ref": "",
+            "constitution_content": "",
+            "treatment_ref": "",
+            "treatment_content": "",
+            "scene_list_ref": "",
+            "scene_list_content": "",
+            "script_ref": "",
+            "script_content": "",
+            "story_bible_ref": "",
+            "story_bible_content": "",
+            "shot_matrix_ref": "",
+            "shot_matrix_content": "",
+            "visual_refs": "",
+            "visual_refs_content": "",
+            "budget_cap": "",
+            "preferred_providers": "",
         }
         for key in (
             "constitution_ref",
@@ -116,6 +133,8 @@ def _run_agent(
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
+        _inject_artifact_context(state, services, context_vars)
+        _inject_config_context(state, context_vars)
 
         model_output, template_id, model_profile = services.prompt_runner.run_from_template(
             template, kb, task, context_vars=context_vars
@@ -262,6 +281,80 @@ def _parse_ref(ref_str: str) -> _ArtifactRef:
     version_str = parts[2] if len(parts) > 2 else "1"
     version = int(version_str.lstrip("v"))
     return _ArtifactRef(artifact_id=artifact_id, version=version)
+
+
+def _inject_artifact_context(
+    state: dict[str, Any],
+    services: GraphServices,
+    context_vars: dict[str, str],
+) -> None:
+    """Load upstream artifact content into prompt context to preserve continuity."""
+    project_id = str(state.get("project_id", ""))
+    if not project_id:
+        return
+
+    from film_pipeline.schemas._base import FilmPhase
+
+    artifact_map = {
+        "constitution_ref": ("constitution", "constitution_content"),
+        "treatment_ref": ("development", "treatment_content"),
+        "scene_list_ref": ("development", "scene_list_content"),
+        "story_bible_ref": ("script", "story_bible_content"),
+        "script_ref": ("script", "script_content"),
+        "shot_matrix_ref": ("shot_bible", "shot_matrix_content"),
+        "visual_refs": ("visual_dev", "visual_refs_content"),
+    }
+    for ref_key, (phase_name, content_key) in artifact_map.items():
+        ref = str(state.get(ref_key, "") or "").strip()
+        if not ref:
+            continue
+        try:
+            parsed = _parse_ref(ref)
+            data = services.artifact_store.load(
+                project_id,
+                FilmPhase(phase_name),
+                parsed.artifact_id,
+                parsed.version,
+            )
+            context_vars[content_key] = _compact_json_context(data)
+        except (FileNotFoundError, ValueError, KeyError):
+            continue
+
+
+def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) -> None:
+    """Expose resolved config details that matter for planning prompts."""
+    resolved_config = state.get("resolved_config", {})
+    if not isinstance(resolved_config, dict):
+        return
+    budget = resolved_config.get("budget", {})
+    providers = resolved_config.get("providers", {})
+    if isinstance(budget, dict):
+        for key in ("project_cap_usd", "max_total_usd"):
+            value = budget.get(key)
+            if value is not None:
+                context_vars["budget_cap"] = str(value)
+                break
+    preferred: list[str] = []
+    if isinstance(providers, dict):
+        order = providers.get("order", [])
+        if isinstance(order, list):
+            preferred = [str(item) for item in order if str(item)]
+        elif isinstance(providers.get("video"), list):
+            preferred = [
+                str(entry.get("provider_id", ""))
+                for entry in providers["video"]
+                if isinstance(entry, dict) and str(entry.get("provider_id", ""))
+            ]
+    if preferred:
+        context_vars["preferred_providers"] = ", ".join(preferred)
+
+
+def _compact_json_context(data: dict[str, Any], max_chars: int = 6000) -> str:
+    """Serialize artifact content for prompt context without exploding token count."""
+    text = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=True)
+    if len(text) <= max_chars:
+        return text
+    return f"{text[:max_chars]}\n... [truncated]"
 
 
 # ── Intake ───────────────────────────────────────────────────────────────────

@@ -59,8 +59,14 @@ test-cov: ## Run pytest and generate HTML coverage output
 build: ## Build sdist and wheel
 	uv build
 
-run-mcp: ## Start the MCP server (mock mode)
+run-mcp: ## Start the MCP server in mock mode (legacy alias)
 	$(UV_RUN) python -m film_pipeline.mcp.server
+
+run-mcp-mock: ## Start the MCP server in explicit mock mode
+	FILM_PIPELINE_MCP_MODE=mock $(UV_RUN) python -m film_pipeline.mcp.server
+
+run-mcp-real: ## Start the MCP server in explicit real mode
+	FILM_PIPELINE_MCP_MODE=real $(UV_RUN) python -m film_pipeline.mcp.server
 
 demo-project: ## Create and run a demo project in mock mode
 	$(UV_RUN) python -m film_pipeline.app.smoke

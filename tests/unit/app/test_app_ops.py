@@ -45,6 +45,18 @@ class TestBootstrap:
         (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
         assert bootstrap_ok() is True
 
+    def test_validate_environment_requires_openrouter_key_in_real_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("FILM_PIPELINE_MCP_MODE", "real")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        issues = validate_environment()
+        assert any("OPENROUTER_API_KEY" in issue for issue in issues)
+
 
 class TestHealth:
     def test_health_status_default(self) -> None:

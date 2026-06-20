@@ -119,6 +119,9 @@ class ModelAdapter:
         """Send a prompt, expect a JSON response, parse and return it.
 
         ``model`` is REQUIRED — no hardcoded default.
+
+        Robustly handles markdown-fenced JSON, leading/trailing prose,
+        and extremely long responses from Gemini-style streaming.
         """
         text = self.chat(
             prompt,
@@ -128,22 +131,57 @@ class ModelAdapter:
             temperature=temperature,
         ).strip()
 
-        # Try direct JSON parse first
+        # Strategy 1: Direct JSON parse
         try:
             return dict(json.loads(text))
         except json.JSONDecodeError:
             pass
 
-        # Try extracting from markdown fences
-        for fence in ("```json", "```"):
-            if fence in text:
-                block = text.split(fence, 1)[1]
-                if "```" in block:
-                    block = block.split("```", 1)[0]
-                try:
-                    result: Any = json.loads(block.strip())
-                    return dict(result)
-                except json.JSONDecodeError:
-                    continue
+        # Strategy 2: extract from markdown fences (most common with Gemini)
+        for fence_start in ("```json", "```JSON", "```"):
+            if fence_start not in text:
+                continue
+            # Find the LAST opening fence and FIRST closing fence after it
+            # (Gemini sometimes has multiple code blocks)
+            last_open = text.rfind(fence_start)
+            block = text[last_open + len(fence_start):]
+            close_idx = block.find("```")
+            if close_idx != -1:
+                block = block[:close_idx]
+            candidate = block.strip()
+            if not candidate:
+                continue
+            # Handle Gemini injecting trailing content right after closing ````
+            try:
+                result: Any = json.loads(candidate)
+                return dict(result)
+            except json.JSONDecodeError:
+                pass
 
-        raise ValueError(f"Model response is not valid JSON. Response preview: {text[:200]}")
+        # Strategy 3: Find the outermost brace pair anywhere in text
+        brace_start = text.find('{')
+        brace_end = text.rfind('}')
+        if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
+            candidate = text[brace_start:brace_end + 1]
+            try:
+                result: Any = json.loads(candidate)
+                return dict(result)
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 4: Find outermost bracket pair (for array responses)
+        bracket_start = text.find('[')
+        bracket_end = text.rfind(']')
+        if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
+            candidate = text[bracket_start:bracket_end + 1]
+            try:
+                result: Any = json.loads(candidate)
+                return dict(result)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        raise ValueError(
+            f"Model response is not valid JSON after 4 extraction strategies. "
+            f"Response length: {len(text)} chars. "
+            f"Preview: {text[:300]}"
+        )
