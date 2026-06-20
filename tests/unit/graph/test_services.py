@@ -40,18 +40,23 @@ def test_run_agent_no_services() -> None:
 
 
 def test_run_agent_not_found() -> None:
+    """Dynamically-routed agent resolves to default for phase but registry is empty."""
     registry = AgentRegistry()
     services = GraphServices(agent_registry=registry)
     state = {"project_id": "p1", SERVICES_KEY: services}
     result = _run_agent(state, "nonexistent", "script", "task")
-    assert result == {"status": "agent_not_found", "agent": "nonexistent"}
+    # Routing resolves 'nonexistent' → 'screenwriter-agent' (default for script phase)
+    # Empty registry → agent_not_found for resolved agent
+    assert result["status"] == "agent_not_found"
+    assert result["agent"] == "screenwriter-agent"
 
 
 def test_run_agent_no_impl() -> None:
+    """Agent registered but not in agent_map — returns no_impl status."""
     contract = AgentRegistration(
-        agent_id="unknown-agent",
+        agent_id="orchestrator-agent",  # Registered but not in agent_map
         family=AgentFamily.OPERATIONS,
-        role=AgentRole.CREATOR,
+        role=AgentRole.ORCHESTRATOR,
         capabilities=[],
         input_artifacts=[],
         output_artifacts=[],
@@ -65,9 +70,10 @@ def test_run_agent_no_impl() -> None:
     runner = PromptRunner(mock_responses={"task": {"output": "data"}})
     services = GraphServices(prompt_runner=runner, agent_registry=registry)
     state = {"project_id": "p1", SERVICES_KEY: services}
-    result = _run_agent(state, "unknown-agent", "script", "task")
+    # delivery phase defaults to orchestrator-agent — registered but no impl class
+    result = _run_agent(state, "some-agent", "delivery", "task")
     assert result["status"] == "no_impl"
-    assert result["agent"] == "unknown-agent"
+    assert result["agent"] == "orchestrator-agent"
 
 
 def test_graph_services_kb_for_without_builder() -> None:

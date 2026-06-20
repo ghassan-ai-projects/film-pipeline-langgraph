@@ -1022,9 +1022,32 @@ async def explain_last_decision(args: dict[str, object]) -> dict[str, object]:
 
 
 async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
+    rt = get_runtime()
+    active = rt.get_active()
+
+    if active is None:
+        return _ok(decisions=[], message="No active project. Routing data is session-scoped.")
+
+    routing_decisions = active.get("_routing_decisions", [])
+
+    if not routing_decisions:
+        return _ok(
+            decisions=[],
+            message="No routing decisions recorded yet. Run a phase to populate routing history.",
+        )
+
+    summary_lines: list[str] = []
+    for rd in routing_decisions:
+        agent = rd.get("agent_id", "unknown")
+        reason = rd.get("routing_reason", "")
+        was_fallback = rd.get("fallback", False)
+        label = " [FALLBACK]" if was_fallback else ""
+        summary_lines.append(f"{agent}{label}: {reason}")
+
     return _ok(
-        message="Agent routing: agents are selected by capability from the registry. "
-        "Use get_orchestrator_summary for current state.",
+        decisions=routing_decisions,
+        summary="\n".join(summary_lines),
+        message=f"{len(routing_decisions)} routing decision(s) recorded.",
     )
 
 
