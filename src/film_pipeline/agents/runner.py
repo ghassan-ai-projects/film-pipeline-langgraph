@@ -1,4 +1,9 @@
-"""RCTCO prompt runner — builds prompts, injects KB context, calls model."""
+"""RCTCO prompt runner — builds prompts, injects KB context, calls model.
+
+Dedicated prompt templates (not generic RCTCO assembly) are required for
+critical-path agent execution. Model selection always flows through the
+ModelRouter — no hardcoded model strings in execution paths.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from film_pipeline.agents.model_adapter import ModelAdapter
+from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.schemas.handoff import AgentHandoff, AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 
@@ -38,12 +44,18 @@ class PromptRunner:
     """Builds RCTCO prompts, injects KB context, runs model, parses output.
 
     Uses mock responses by default. Pass ``model_adapter`` to call a real LLM
-    via OpenRouter. When a mock response is registered for a task it takes
-    precedence over the real adapter.
+    via OpenRouter, and ``model_router`` to resolve model profiles. When a
+    mock response is registered for a task it takes precedence over the real
+    adapter.
+
+    For real model calls, ``model_profile`` is REQUIRED — the runner resolves
+    it through the router to determine the provider model id, max_tokens, and
+    temperature.
     """
 
     mock_responses: dict[str, dict[str, Any]] = field(default_factory=dict)
     model_adapter: ModelAdapter | None = None
+    model_router: ModelRouter | None = None
 
     def build_rctco(
         self,
@@ -90,19 +102,34 @@ class PromptRunner:
             output_format=output_format,
         )
 
-    def call_model(self, prompt: RCTCOPrompt) -> dict[str, Any]:
+    def call_model(
+        self,
+        prompt: RCTCOPrompt,
+        *,
+        model_profile: str = "operations_triage",
+    ) -> dict[str, Any]:
         """Call the model. Uses mock if a canned response is registered.
 
-        When ``model_adapter`` is set and no mock matches, calls the real LLM
-        and expects a JSON response.
+        When ``model_adapter`` is set and no mock matches, resolves the model
+        through the router and calls the real LLM, expecting a JSON response.
         """
         if prompt.core_task in self.mock_responses:
             return self.mock_responses[prompt.core_task]
         if self.model_adapter is not None:
+            if self.model_router is None:
+                raise RuntimeError(
+                    "Model adapter is configured but no model router is set. "
+                    "Pass model_router= to PromptRunner."
+                )
+            model_id, max_tokens, temperature = self.model_router.resolve_model_params(
+                model_profile
+            )
             return self.model_adapter.chat_json(
                 prompt.rendered,
+                model=model_id,
                 system=prompt.role,
-                temperature=0.7,
+                max_tokens=max_tokens,
+                temperature=temperature,
             )
         # Default mock response when nothing is configured
         return {"status": "ok", "agent": "mock", "output": {}}
@@ -112,10 +139,12 @@ class PromptRunner:
         contract: AgentRegistration,
         kb_context: KBContextPacket,
         task: str,
+        *,
+        model_profile: str = "operations_triage",
     ) -> dict[str, Any]:
         """Full run: build RCTCO → call model → parse output."""
         prompt = self.build_rctco(contract, kb_context, task)
-        raw = self.call_model(prompt)
+        raw = self.call_model(prompt, model_profile=model_profile)
         # Validate it's a dict (basic)
         if not isinstance(raw, dict):
             raise ValueError(f"Model output is not a dict: {type(raw)}")

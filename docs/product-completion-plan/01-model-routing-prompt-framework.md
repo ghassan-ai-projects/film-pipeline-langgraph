@@ -129,16 +129,26 @@ When this phase is complete:
 
 ## Acceptance Criteria
 
-- [ ] no hard-coded provider model strings remain in core agent execution paths
-- [ ] critical-path agents resolve models through config and routing policy
-- [ ] dedicated prompt templates exist for all critical-path agents
-- [ ] generic fallback prompts are forbidden for critical-path execution
-- [ ] prompt template version and selected model profile are observable in runtime state, handoff, or audit evidence
-- [ ] secret-redaction tests prove keys are not leaked
-- [ ] unit and integration tests prove the new behavior
+- [x] no hard-coded provider model strings remain in core agent execution paths
+- [x] critical-path agents resolve models through config and routing policy
+- [x] dedicated prompt templates exist for all critical-path agents
+- [x] generic fallback prompts are forbidden for critical-path execution
+- [x] prompt template version and selected model profile are observable in runtime state, handoff, or audit evidence
+- [x] secret-redaction tests prove keys are not leaked
+- [x] unit and integration tests prove the new behavior
 
 ---
 
 ## Exit Condition
 
-This phase is done when the repo can honestly say model selection and prompt execution are governed by runtime policy rather than hidden code defaults.
+✅ This phase is done — model selection and prompt execution are governed by runtime policy, not hidden code defaults.
+
+## Implementation Notes
+
+- `ModelAdapter.chat()` and `.chat_json()` no longer have default `model` values — `model` is required
+- `ModelRouter.select()` and `.resolve_or_raise()` raise `ModelResolutionError` for unknown profiles (no silent fallback)
+- `PromptRunner` now requires `model_router` when `model_adapter` is set; resolves model + params through router
+- 8 dedicated prompt templates created in `agents/prompt_templates/defaults.py` with v1 versioning
+- `PromptTemplateRegistry.get_required()` fails for unregistered agents — generic RCTCO disallowed for critical path
+- Secret redaction tests added for: HTTP error bodies, OpenRouter key patterns, Google key patterns, .env loading silence
+- Model router profiles renamed to qualified OpenRouter ids (e.g. `openrouter/gpt-4o-mini` vs old `gpt-5-mini`)

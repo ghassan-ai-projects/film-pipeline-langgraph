@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.runner import PromptRunner, RCTCOPrompt
 from film_pipeline.schemas._base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
@@ -143,7 +144,16 @@ class TestPromptRunner:
 
         mock_adapter = MagicMock()
         mock_adapter.chat_json.return_value = {"real": True, "score": 100}
-        runner = PromptRunner(model_adapter=mock_adapter)
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "test-model",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
         prompt = RCTCOPrompt(
             role="You are a test agent.",
             core_task="Real LLM task",
@@ -155,7 +165,8 @@ class TestPromptRunner:
         assert result == {"real": True, "score": 100}
         mock_adapter.chat_json.assert_called_once()
         call_kwargs = mock_adapter.chat_json.call_args.kwargs
-        assert call_kwargs["temperature"] == 0.7
+        assert call_kwargs["temperature"] == 0.2
+        assert call_kwargs["model"] == "test-model"
         assert "You are a test agent." in call_kwargs["system"]
 
     def test_call_model_mock_wins_over_adapter(self) -> None:

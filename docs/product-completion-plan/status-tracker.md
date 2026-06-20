@@ -18,7 +18,7 @@ Purpose: Track program progress without weakening the acceptance standard.
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 00 | **Complete** | Product-gate wired into `make ci-check`, dual-manifest loading, hard acceptance controls enforced |
-| 01 | Planned | Hard-coded model defaults and generic prompt execution still need correction |
+| 01 | **Complete** | Hardcoded model defaults removed, ModelRouter fail-fast, dedicated templates for 8 critical agents, secret redaction tests |
 | 02 | Planned | Core artifact-producing flow still incomplete |
 | 03 | Planned | Dynamic routing exists as scaffold more than proven behavior |
 | 04 | Planned | Validation framework exists; runtime-control proof still incomplete |
