@@ -48,10 +48,21 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     if not project_id:
         return _error("project_id is required")
 
-    # --- Runtime mode guard ---
-    runtime_mode = str(args.get("runtime_mode", "")).lower()
-    if runtime_mode not in ("", "mock", "real"):
-        return _error(f"runtime_mode must be 'mock' or 'real', got '{runtime_mode}'")
+    server_mode = rt.server_mode
+
+    # --- Runtime mode alignment ---
+    requested_mode = str(args.get("runtime_mode", "")).lower()
+    if requested_mode not in ("", "mock", "real"):
+        return _error(f"runtime_mode must be 'mock' or 'real', got '{requested_mode}'")
+
+    runtime_mode = requested_mode or server_mode
+    if runtime_mode != server_mode:
+        return _error(
+            "Project runtime_mode must match the MCP server mode.",
+            server_mode=server_mode,
+            requested_runtime_mode=runtime_mode,
+        )
+
     if runtime_mode == "real":
         # Reject mock provider/model ids
         for pid in _collect_profile_providers(args):
@@ -62,24 +73,36 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
                 return _error(f"Model '{mid}' is not allowed in real mode.")
 
     try:
+        profile_stack = _canonicalize_profile_stack(args)
+        resolved_config = _resolve_project_config(profile_stack)
+        conflicts = list(resolved_config.get("conflicts", []))
+        if conflicts:
+            blocking = [c for c in conflicts if c.get("severity") == "blocking"]
+            if blocking:
+                return _error(
+                    "Resolved profile stack has blocking conflicts.",
+                    conflicts=conflicts,
+                )
+
         state = rt.create_project(
             project_id=project_id,
             title=str(args.get("title", "")),
             slug=str(args.get("slug", "")),
         )
         # Persist runtime mode and resolved profile stack
-        state["runtime_mode"] = runtime_mode or "mock"
-        state["profile_stack"] = {
-            "film_type_profile": str(args.get("film_type_profile", "")),
-            "quality_profile": str(args.get("quality_profile", "")),
-            "provider_profile": str(args.get("provider_profile", "")),
-            "review_profile": str(args.get("review_profile", "")),
-        }
+        state["runtime_mode"] = runtime_mode
+        state["profile_stack"] = profile_stack
+        state["server_mode"] = server_mode
+        state["resolved_config"] = resolved_config["raw"]
+        state["resolved_config_sources"] = resolved_config["sources"]
+        state["config_conflicts"] = conflicts
+        _register_project_providers(rt, profile_stack, resolved_config["raw"])
         rt._record_audit(
             "system",
             "create_film_project",
             project_id=project_id,
-            runtime_mode=runtime_mode or "mock",
+            runtime_mode=runtime_mode,
+            server_mode=server_mode,
         )
         return _ok(project_id=project_id, state=state)
     except ValueError as e:
@@ -93,10 +116,7 @@ def _collect_profile_providers(args: dict[str, object]) -> list[str]:
         val = args.get(key)
         if val and isinstance(val, str) and val:
             try:
-                from film_pipeline.config.loader import ProfileLoader
-
-                loader = ProfileLoader()
-                src = loader.load(str(val))
+                loader, src = _load_profile_flex(str(val), ("provider",))
                 providers = src.raw.get("providers", {})
                 for section in ("video", "image"):
                     for entry in providers.get(section, []):
@@ -104,6 +124,10 @@ def _collect_profile_providers(args: dict[str, object]) -> list[str]:
                             pid = str(entry.get("provider_id", ""))
                             if pid:
                                 pids.append(pid)
+                for provider_id in providers.get("order", []):
+                    pid = str(provider_id)
+                    if pid:
+                        pids.append(pid)
             except FileNotFoundError:
                 continue
     return pids
@@ -116,10 +140,7 @@ def _collect_profile_models(args: dict[str, object]) -> list[str]:
         val = args.get(key)
         if val and isinstance(val, str) and val:
             try:
-                from film_pipeline.config.loader import ProfileLoader
-
-                loader = ProfileLoader()
-                src = loader.load(str(val))
+                _loader, src = _load_profile_flex(str(val), ("quality",))
                 models = src.raw.get("models", {})
                 for entry in models.get("available", []):
                     if isinstance(entry, dict):
@@ -1142,17 +1163,16 @@ async def kb_search(args: dict[str, object]) -> dict[str, object]:
     query = str(args.get("query", ""))
     phase = str(args.get("phase", ""))
     try:
-        from pathlib import Path
-
         from film_pipeline.kb.manifest import KBManifest
+        from film_pipeline.kb.paths import kb_manifest_path
         from film_pipeline.kb.retrieval import KBRetrieval
 
-        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        manifest_path = kb_manifest_path()
         if not manifest_path.exists():
             return _ok(
                 items=[],
                 total=0,
-                message="KB manifest not found at film-knowledge-base/manifest.yaml",
+                message="KB manifest not found.",
             )
         manifest = KBManifest.from_yaml(manifest_path)
         retrieval = KBRetrieval(manifest)
@@ -1179,11 +1199,10 @@ async def kb_search(args: dict[str, object]) -> dict[str, object]:
 async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
     item_id = str(args.get("item_id", ""))
     try:
-        from pathlib import Path
-
         from film_pipeline.kb.manifest import KBManifest
+        from film_pipeline.kb.paths import kb_manifest_path
 
-        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        manifest_path = kb_manifest_path()
         if not manifest_path.exists():
             return _error("KB manifest not found.")
         manifest = KBManifest.from_yaml(manifest_path)
@@ -1211,11 +1230,10 @@ async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.kb.packets import KBContextPacketBuilder
 
     try:
-        from pathlib import Path
-
         from film_pipeline.kb.manifest import KBManifest
+        from film_pipeline.kb.paths import kb_manifest_path
 
-        manifest_path = Path("film-knowledge-base/manifest.yaml")
+        manifest_path = kb_manifest_path()
         if not manifest_path.exists():
             return _ok(packet={"items": []}, message="KB manifest not found.")
         manifest = KBManifest.from_yaml(manifest_path)
@@ -1520,10 +1538,9 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.config.loader import ProfileLoader
 
     try:
-        loader = ProfileLoader()
-        src = loader.load(profile_id)
+        _loader, src = _load_profile_flex(profile_id, ("provider", "quality", "film-type", "review"))
         return _ok(
-            profile_id=src.name,
+            profile_id=src.path.stem,
             file=str(src.path),
             raw=src.raw,
         )
@@ -1534,17 +1551,30 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
-    """Return the current runtime mode (mock or real) and active profile."""
+    """Return current server mode and the active project's stored runtime mode."""
     rt = get_runtime()
     active = rt.get_active()
-    mode = "mock"  # default
+    project_mode = rt.server_mode
     profile_stack: dict[str, str] = {}
     if active is not None:
-        mode = str(active.get("runtime_mode", mode))
+        project_mode = str(active.get("runtime_mode", project_mode))
         stack = active.get("profile_stack", {})
         if isinstance(stack, dict):
             profile_stack = {str(k): str(v) for k, v in stack.items()}
-    return _ok(runtime_mode=mode, profile_stack=profile_stack)
+    if active is not None and project_mode != rt.server_mode:
+        return _error(
+            "Active project runtime_mode does not match the MCP server mode.",
+            server_mode=rt.server_mode,
+            project_runtime_mode=project_mode,
+            profile_stack=profile_stack,
+        )
+    return _ok(
+        server_mode=rt.server_mode,
+        runtime_mode=project_mode,
+        project_runtime_mode=project_mode if active is not None else "",
+        aligned=True,
+        profile_stack=profile_stack,
+    )
 
 
 # --- Provider tools ------------------------------------------------------
@@ -1552,7 +1582,15 @@ async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
 
 async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
     rt = get_runtime()
-    provider_id = str(args.get("provider_id", "mock-video-provider"))
+    provider_id = str(args.get("provider_id", "")).strip()
+    if not provider_id:
+        provider_ids = rt.list_providers()
+        if rt.server_mode == "mock" and not provider_ids:
+            provider_id = "mock-video-provider"
+        elif provider_ids:
+            provider_id = provider_ids[0]
+        else:
+            return _error("provider_id is required when no providers are registered.")
     health = rt.get_provider_health(provider_id)
     if health is None:
         return _ok(provider_id=provider_id, status="unknown", message="No health data recorded.")
@@ -1580,7 +1618,7 @@ async def list_providers(args: dict[str, object]) -> dict[str, object]:
                 "status": health["status"] if health else "unknown",
             }
         )
-    if not result:
+    if not result and rt.server_mode == "mock":
         result.append({"provider_id": "mock-video-provider", "status": "healthy"})
     return _ok(providers=result, total=len(result))
 
@@ -1947,3 +1985,159 @@ def register_all_tools(registry: ToolRegistry) -> None:
 
 
 __all__ = ["register_all_tools"]
+
+
+def _canonicalize_profile_stack(args: dict[str, object]) -> dict[str, str]:
+    stack: dict[str, str] = {}
+    mapping = {
+        "film_type_profile": ("film-type",),
+        "quality_profile": ("quality",),
+        "provider_profile": ("provider",),
+        "review_profile": ("review",),
+    }
+    for key, prefixes in mapping.items():
+        raw = str(args.get(key, "")).strip()
+        if raw:
+            _loader, src = _load_profile_flex(raw, prefixes)
+            stack[key] = src.path.stem
+        else:
+            stack[key] = ""
+    return stack
+
+
+def _resolve_project_config(profile_stack: dict[str, str]) -> dict[str, object]:
+    from film_pipeline.config.resolver import ConfigResolver
+
+    names = ["base.studio"]
+    for key in (
+        "film_type_profile",
+        "quality_profile",
+        "provider_profile",
+        "review_profile",
+    ):
+        value = profile_stack.get(key, "")
+        if value:
+            names.append(value)
+
+    resolver = ConfigResolver()
+    resolved = resolver.resolve(names)
+    return {
+        "raw": resolved.raw,
+        "sources": [source.path.stem for source in resolved.sources],
+        "conflicts": [
+            {
+                "code": conflict.code,
+                "message": conflict.message,
+                "severity": conflict.severity,
+            }
+            for conflict in resolved.conflicts
+        ],
+    }
+
+
+def _register_project_providers(
+    rt: Any,
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> None:
+    from film_pipeline.providers.factory import build_provider_adapter
+
+    provider_ids = _provider_specs(profile_stack, resolved_config)
+    if not provider_ids:
+        return
+
+    rt.clear_providers()
+    for spec in provider_ids:
+        provider_id = str(spec["provider_id"])
+        provider_type = str(spec.get("provider_type", "video"))
+        models = [str(model) for model in spec.get("models", []) if str(model)]
+        adapter = build_provider_adapter(
+            provider_id,
+            provider_type=provider_type,
+            models=models,
+        )
+        rt.register_provider(provider_id, adapter)
+        rt.set_provider_health(provider_id, "healthy")
+
+
+def _provider_specs(
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> list[dict[str, object]]:
+    provider_profile = profile_stack.get("provider_profile", "")
+    if provider_profile:
+        try:
+            _loader, src = _load_profile_flex(provider_profile, ("provider",))
+            providers = src.raw.get("providers", {})
+            specs = _provider_specs_from_raw(providers)
+            if specs:
+                return specs
+        except FileNotFoundError:
+            pass
+
+    providers = resolved_config.get("providers", {})
+    if isinstance(providers, dict):
+        specs = _provider_specs_from_raw(providers)
+        if specs:
+            return specs
+    return []
+
+
+def _provider_specs_from_raw(providers: object) -> list[dict[str, object]]:
+    if not isinstance(providers, dict):
+        return []
+    specs: list[dict[str, object]] = []
+    for section, provider_type in (("video", "video"), ("image", "image")):
+        entries = providers.get(section, [])
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, dict):
+                    provider_id = str(entry.get("provider_id", "")).strip()
+                    if provider_id:
+                        models = entry.get("models", [])
+                        specs.append(
+                            {
+                                "provider_id": provider_id,
+                                "provider_type": provider_type,
+                                "models": models if isinstance(models, list) else [],
+                            }
+                        )
+    order = providers.get("order", [])
+    if isinstance(order, list):
+        for item in order:
+            provider_id = str(item).strip()
+            if provider_id:
+                specs.append(
+                    {
+                        "provider_id": provider_id,
+                        "provider_type": "video",
+                        "models": [],
+                    }
+                )
+    deduped: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for spec in specs:
+        key = (str(spec["provider_id"]), str(spec["provider_type"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(spec)
+    return deduped
+
+
+def _load_profile_flex(
+    profile_id: str,
+    prefixes: tuple[str, ...],
+) -> tuple[object, object]:
+    from film_pipeline.config.loader import ProfileLoader
+
+    loader = ProfileLoader()
+    candidates = [profile_id]
+    if "." not in profile_id:
+        candidates.extend(f"{prefix}.{profile_id}" for prefix in prefixes)
+    for candidate in candidates:
+        try:
+            return loader, loader.load(candidate)
+        except FileNotFoundError:
+            continue
+    raise FileNotFoundError(profile_id)

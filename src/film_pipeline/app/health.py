@@ -17,6 +17,7 @@ class HealthStatus:
 def check_readiness() -> HealthStatus:
     """Run all health checks and return aggregate status."""
     from film_pipeline.app.bootstrap import validate_environment
+    from film_pipeline.kb.paths import kb_manifest_path
 
     status = HealthStatus()
     env_issues = validate_environment()
@@ -41,9 +42,7 @@ def check_readiness() -> HealthStatus:
         status.checks["providers"] = True  # No providers = no failures
 
     # Check KB
-    from pathlib import Path
-
-    status.checks["kb"] = Path("film-knowledge-base/manifest.yaml").exists()
+    status.checks["kb"] = kb_manifest_path().exists()
     if not status.checks["kb"]:
         status.messages.append("KB manifest not found.")
 

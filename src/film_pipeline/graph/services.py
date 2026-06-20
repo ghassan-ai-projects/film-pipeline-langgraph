@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
+from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
@@ -35,8 +37,6 @@ class GraphServices:
         PromptRunner with canned mock responses for the core spine agents,
         and wires a ModelRouter.
         """
-        from pathlib import Path
-
         from film_pipeline.agents.mvp import MVP_AGENTS
 
         registry = AgentRegistry()
@@ -44,6 +44,29 @@ class GraphServices:
 
         runner = PromptRunner(
             mock_responses=_default_mock_responses(),
+            model_router=ModelRouter(),
+        )
+        return cls(
+            prompt_runner=runner,
+            artifact_store=ArtifactStore(root=Path(artifacts_root)),
+            agent_registry=registry,
+        )
+
+    @classmethod
+    def for_real_runtime(cls, artifacts_root: str = "projects") -> GraphServices:
+        """Create services wired for real model execution.
+
+        This keeps the same agent registry and artifact store contract as mock
+        mode, but removes canned prompt responses and enables the real model
+        adapter path through OpenRouter.
+        """
+        from film_pipeline.agents.mvp import MVP_AGENTS
+
+        registry = AgentRegistry()
+        registry.register_many(MVP_AGENTS)
+
+        runner = PromptRunner(
+            model_adapter=ModelAdapter(),
             model_router=ModelRouter(),
         )
         return cls(

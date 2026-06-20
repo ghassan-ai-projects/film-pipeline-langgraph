@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import _run_agent, _save_artifact
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 from film_pipeline.schemas.script import Script
@@ -131,3 +136,102 @@ def test_run_agent_with_intake_agent(tmp_path: Path) -> None:
     )
     assert "profile" in result
     assert result["profile"].identity.title == "Test"
+
+
+def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
+    class CaptureAdapter:
+        def __init__(self) -> None:
+            self.prompt = ""
+
+        def chat_json(
+            self,
+            prompt: str,
+            *,
+            model: str,
+            system: str = "",
+            max_tokens: int = 4096,
+            temperature: float = 0.7,
+        ) -> dict[str, Any]:
+            _ = (model, system, max_tokens, temperature)
+            self.prompt = prompt
+            return {
+                "development": {
+                    "treatment": {
+                        "text": "A treatment rooted in the constitution.",
+                        "themes": ["memory"],
+                        "act_map": {
+                            "act1_setup": "Setup",
+                            "act2_confrontation": "Confrontation",
+                            "act3_resolution": "Resolution",
+                        },
+                    },
+                    "scenes": [
+                        {
+                            "scene_id": "s_001",
+                            "dramatic_function": "Open",
+                            "emotional_shift": "fear to resolve",
+                            "conflict": "internal",
+                            "outcome": "commitment",
+                        }
+                    ],
+                }
+            }
+
+    contract = AgentRegistration(
+        agent_id="treatment-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["story_development"],
+        input_artifacts=["film_constitution"],
+        output_artifacts=["treatment", "scene_list"],
+        allowed_kb_domains=[],
+        blocked_kb_domains=[],
+        reviewed_by=[],
+        failure_modes=[],
+    )
+    registry = AgentRegistry()
+    registry.register(contract)
+    adapter = CaptureAdapter()
+    runner = PromptRunner(model_adapter=adapter, model_router=ModelRouter())
+    store = ArtifactStore(root=tmp_path / "artifacts")
+    constitution = FilmConstitution(
+        project_id="p1",
+        theme="Memory is a wound.",
+        tone="dark, intimate",
+        emotional_promise="Uneasy recognition.",
+        visual_language="wet neon realism",
+        camera_philosophy="patient observation",
+        quality_bar="No generic thriller beats.",
+        taboo_mistakes=["No amnesia cliches."],
+    )
+    meta = ArtifactMetadata(
+        artifact_id="film_constitution",
+        artifact_type=ArtifactType.FILM_CONSTITUTION,
+        project_id="p1",
+        phase=FilmPhase("constitution"),
+        version=1,
+        status=ArtifactStatus.CANDIDATE,
+        created_by="test",
+        created_at=datetime.now(UTC),
+    )
+    store.save(constitution, meta)
+    services = GraphServices(
+        prompt_runner=runner,
+        agent_registry=registry,
+        artifact_store=store,
+    )
+    state: dict[str, object] = {
+        "project_id": "p1",
+        "idea": "A memory story.",
+        "constitution_ref": "artifact:film_constitution:v1",
+        SERVICES_KEY: services,
+    }
+    result = _run_agent(
+        state,
+        agent_id="treatment-agent",
+        phase="development",
+        task="Write the film treatment and scene breakdown from the constitution.",
+    )
+    assert "treatment" in result
+    assert "Memory is a wound." in adapter.prompt
+    assert "artifact:film_constitution:v1" in adapter.prompt
