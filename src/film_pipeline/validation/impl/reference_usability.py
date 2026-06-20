@@ -60,6 +60,8 @@ class ReferenceUsabilityValidator(BaseValidator):
 
         for entry in entries:
             ref_id = str(entry.get("reference_id", "?"))
+            asset_path = str(entry.get("asset_path", ""))
+            generation_status = str(entry.get("generation_status", "planned"))
 
             # Blocking: low resolution (inferred from quality_score)
             quality: float = float(entry.get("quality_score", 100))
@@ -96,6 +98,28 @@ class ReferenceUsabilityValidator(BaseValidator):
                         "severity": "blocking",
                         "message": (
                             f"Reference '{ref_id}' has unknown subject_type '{subject_type}'."
+                        ),
+                    }
+                )
+
+            if generation_status in {"failed"}:
+                wrong_subject += 1
+                issues.append(
+                    {
+                        "code": "generation_failed",
+                        "severity": "blocking",
+                        "message": f"Reference '{ref_id}' failed during image generation.",
+                    }
+                )
+
+            if generation_status in {"generated", "validated"} and not asset_path:
+                low_res_count += 1
+                issues.append(
+                    {
+                        "code": "missing_asset",
+                        "severity": "blocking",
+                        "message": (
+                            f"Reference '{ref_id}' is marked generated but has no asset_path."
                         ),
                     }
                 )

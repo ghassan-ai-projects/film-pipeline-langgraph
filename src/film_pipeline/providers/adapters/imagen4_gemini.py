@@ -1,35 +1,34 @@
-"""Imagen 4 provider adapter via Google's Gemini/Imagen surface.
-
-The repository does not yet execute a dedicated reference-image generation
-phase through MCP, but real-mode provider registration must still represent
-the correct stack. This adapter implements the provider contract so the image
-lane can be registered, health-checked, and exercised in targeted tests.
-
-Requires ``GOOGLE_API_KEY``.
-"""
+"""Imagen 4 provider adapter via the Gemini API REST surface."""
 
 from __future__ import annotations
 
+import base64
+import json
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
-from film_pipeline.providers.credentials import lookup
+from film_pipeline.providers.credentials import lookup, redact
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
-_MINIMAL_PNG = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f"
-    b"\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
-)
+GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
+_DEFAULT_PERSON_GENERATION = "allow_adult"
+_DEFAULT_IMAGE_SIZE = "1K"
 
 
 class Imagen4GeminiProvider(BaseProviderAdapter):
     """Google-backed Imagen 4 adapter for reference image generation."""
 
-    def __init__(self, entry: ProviderRegistryEntry) -> None:
+    def __init__(
+        self,
+        entry: ProviderRegistryEntry,
+        http_opener: Any = None,
+    ) -> None:
         super().__init__(entry)
+        self._http_opener = http_opener
         self._configured_api_key = lookup(entry.provider_id)
 
     def _api_key(self) -> str:
@@ -37,6 +36,29 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         if not key:
             raise RuntimeError("GOOGLE_API_KEY is not set.")
         return key
+
+    def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        model = self.entry.models[0] if self.entry.models else "imagen-4.0-fast-generate-001"
+        req = urllib.request.Request(
+            f"{GEMINI_API}/{model}:predict",
+            data=json.dumps(payload).encode(),
+            headers={
+                "x-goog-api-key": self._api_key(),
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        opener = self._http_opener or urllib.request.build_opener()
+        try:
+            with opener.open(req) as response:
+                raw: Any = json.loads(response.read())
+                return dict(raw)
+        except (urllib.error.HTTPError, OSError) as exc:
+            detail = str(exc)
+            if isinstance(exc, urllib.error.HTTPError):
+                body_text = exc.read().decode(errors="replace")
+                detail = f"HTTP {exc.code}: {redact(body_text)[:300]}"
+            raise RuntimeError(f"Imagen predict failed: {detail}") from exc
 
     def build_payload(
         self,
@@ -47,27 +69,38 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         seed: int | None = None,
     ) -> dict[str, Any]:
         _ = duration
-        model = self.entry.models[0] if self.entry.models else "imagen-4"
-        payload: dict[str, Any] = {
-            "model": model,
-            "prompt": prompt,
-            "aspect_ratio": aspect_ratio,
+        _ = references
+        parameters: dict[str, Any] = {
+            "sampleCount": 1,
+            "aspectRatio": aspect_ratio,
+            "personGeneration": _DEFAULT_PERSON_GENERATION,
         }
-        if references:
-            payload["reference_images"] = references
+        model = self.entry.models[0] if self.entry.models else "imagen-4.0-fast-generate-001"
+        if "ultra" in model or ("generate-001" in model and "fast" not in model):
+            parameters["imageSize"] = _DEFAULT_IMAGE_SIZE
         if seed is not None:
-            payload["seed"] = seed
-        return payload
+            parameters["seed"] = seed
+        return {
+            "model": model,
+            "instances": [{"prompt": prompt}],
+            "parameters": parameters,
+        }
 
     def submit(self, payload: dict[str, Any], shot_id: str) -> ProviderJob:
-        self._api_key()
+        response = self._request(payload)
+        image_bytes, mime_type = _extract_image_bytes(response)
         return ProviderJob(
             job_id=f"imagen-{uuid4().hex[:12]}",
             shot_id=shot_id,
             provider_id=self.entry.provider_id,
-            model=str(payload.get("model", "imagen-4")),
+            model=str(payload.get("model", self.entry.models[0] if self.entry.models else "")),
             payload=payload,
             status="submitted",
+            metadata={
+                "response": response,
+                "image_bytes_b64": base64.b64encode(image_bytes).decode(),
+                "mime_type": mime_type,
+            },
         )
 
     def poll(self, job: ProviderJob) -> ProviderJob:
@@ -76,27 +109,76 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         return job
 
     def download(self, job: ProviderJob, output_dir: str) -> str:
+        meta = job.metadata or {}
+        image_b64 = str(meta.get("image_bytes_b64", ""))
+        if not image_b64:
+            raise RuntimeError("Imagen response contained no image bytes.")
+
+        image_bytes = base64.b64decode(image_b64)
+        mime_type = str(meta.get("mime_type", "image/png")) or "image/png"
+        suffix = ".png" if mime_type == "image/png" else ".jpg"
+
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
-        path = out / f"{job.shot_id}.png"
-        path.write_bytes(_MINIMAL_PNG)
-        job.metadata = {
-            "provider": self.entry.provider_id,
-            "model": job.model,
-            "placeholder": True,
-        }
+        path = out / f"{job.shot_id}{suffix}"
+        path.write_bytes(image_bytes)
+
+        meta["download_path"] = str(path)
+        meta["mime_type"] = mime_type
+        meta["placeholder"] = False
+        job.metadata = meta
         return str(path)
 
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)
+        if not path.exists():
+            return {"error": "file_not_found"}
+
         return {
             "file": file_path,
             "provider": self.entry.provider_id,
-            "size_bytes": path.stat().st_size if path.exists() else 0,
-            "placeholder": True,
+            "size_bytes": path.stat().st_size,
+            "mime_type": _infer_mime_type(path),
+            "placeholder": False,
         }
 
     def estimate_cost(self, duration: float, model: str | None = None) -> float:
         _ = duration
-        _ = model
-        return 0.0
+        model_id = model or (self.entry.models[0] if self.entry.models else "")
+        if "ultra" in model_id:
+            return 0.10
+        if "fast" in model_id:
+            return 0.02
+        return 0.05
+
+
+def _extract_image_bytes(response: dict[str, Any]) -> tuple[bytes, str]:
+    predictions = response.get("predictions")
+    if isinstance(predictions, list):
+        for prediction in predictions:
+            if isinstance(prediction, dict):
+                image_b64 = str(prediction.get("bytesBase64Encoded", ""))
+                if image_b64:
+                    mime_type = str(prediction.get("mimeType", "image/png")) or "image/png"
+                    return base64.b64decode(image_b64), mime_type
+
+    generated = response.get("generatedImages")
+    if isinstance(generated, list):
+        for item in generated:
+            if not isinstance(item, dict):
+                continue
+            image = item.get("image")
+            if isinstance(image, dict):
+                image_b64 = str(image.get("imageBytes", ""))
+                if image_b64:
+                    mime_type = str(image.get("mimeType", "image/png")) or "image/png"
+                    return base64.b64decode(image_b64), mime_type
+
+    raise RuntimeError("Imagen response did not include generated image bytes.")
+
+
+def _infer_mime_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        return "image/jpeg"
+    return "image/png"

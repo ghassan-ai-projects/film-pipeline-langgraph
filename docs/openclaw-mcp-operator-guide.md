@@ -45,6 +45,7 @@ OpenClaw can now:
 - create a project with explicit `runtime_mode`
 - verify mode alignment with `get_runtime_mode`
 - inspect registered providers after project creation with `list_providers`
+- generate persisted reference images with `generate_reference_images`
 
 Real-mode project creation now aligns with the actual server mode:
 
@@ -161,7 +162,32 @@ Expected real-mode shape:
 
 If project mode and server mode differ, the tool returns an error.
 
-## Step 5. Continue With The Film Workflow
+## Step 5. Generate Reference Images In Visual Dev
+
+After the script phase reaches `visual_dev`, OpenClaw can turn the planned
+`reference_index` entries into persisted image assets.
+
+Call:
+
+```text
+generate_reference_images
+```
+
+Behavior:
+
+- uses the registered image provider from the project profile stack
+- generates reference assets under the project `references/` tree
+- updates the `reference_index` artifact with real `asset_path`, provider, and validation metadata
+- keeps PNG as the canonical registered format for reference assets
+
+Then inspect individual results with:
+
+```text
+inspect_reference
+get_validation_report
+```
+
+## Step 6. Continue With The Film Workflow
 
 After project creation, the normal MCP flow is unchanged:
 
@@ -169,12 +195,14 @@ After project creation, the normal MCP flow is unchanged:
 2. `submit_idea`
 3. `approve_intake`
 4. `approve_phase`
-5. inspect artifacts and validation as needed
+5. `generate_reference_images` once `visual_dev` is reached
+6. inspect artifacts and validation as needed
 
 Useful follow-up tools:
 
 - `review_phase_artifacts`
 - `inspect_artifact`
+- `inspect_reference`
 - `get_validation_report`
 - `list_validation_issues`
 - `request_revision`
@@ -193,6 +221,7 @@ These behaviors are aligned:
 - provider registration is derived from the selected project profile stack
 - real-mode provider stacks reject missing credentials before the project is created
 - the real profile image lane uses `gemini-imagen-4`, not `mock-image-provider`
+- visual-dev references can now be generated and persisted through MCP
 
 ## What Is Still Missing
 

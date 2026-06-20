@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -350,6 +351,7 @@ def test_server_catalog_returns_full_toolset() -> None:
     assert "create_film_project" in names
     assert "submit_idea" in names
     assert "approve_phase" in names
+    assert "generate_reference_images" in names
     assert "rollback_to_checkpoint" in names
     assert "export_delivery_package" in names
 
@@ -898,6 +900,51 @@ def test_wired_create_film_project_rejects_mode_mismatch() -> None:
     assert result["ok"] is False
     assert result["server_mode"] == "mock"
     assert result["requested_runtime_mode"] == "real"
+
+
+def test_generate_reference_images_persists_assets_and_updates_reference_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import film_pipeline.mcp.tools as mcp_tools
+    from film_pipeline.app import runtime as runtime_mod
+    from film_pipeline.providers.factory import build_provider_adapter
+
+    rt = runtime_mod.StudioRuntime(runtime_root=tmp_path / "runtime")
+    rt.create_project("ref-gen-test", "Reference Test")
+    rt.set_active("ref-gen-test")
+
+    state = rt._run_phase_node(rt.get_active() or {}, "intake")
+    state = rt._run_phase_node(state, "constitution")
+    state = rt._run_phase_node(state, "development")
+    state = rt._run_phase_node(state, "script")
+    state = rt._run_phase_node(state, "visual_dev")
+    rt.projects["ref-gen-test"] = state
+
+    adapter = build_provider_adapter(
+        "mock-image-provider",
+        provider_type="image",
+        models=["mock-fast"],
+    )
+    rt.register_provider("mock-image-provider", adapter)
+    rt.set_provider_health("mock-image-provider", "healthy")
+
+    monkeypatch.setattr(mcp_tools, "get_runtime", lambda: rt)
+    result = asyncio.run(mcp_tools.generate_reference_images({}))
+    assert result["ok"] is True
+    assert cast(int, result["generated"]) >= 1
+
+    active = rt.get_active()
+    assert active is not None
+    ref = str(active.get("visual_refs", ""))
+    assert ref.startswith("artifact:reference_index:v")
+
+    inspect_result = asyncio.run(mcp_tools.inspect_reference({"reference_id": "ref_001"}))
+    assert inspect_result["ok"] is True
+    reference = cast(dict[str, object], inspect_result["reference"])
+    asset_path = cast(str, reference["asset_path"])
+    assert asset_path.startswith("references/sheets/")
+    assert (rt.project_roots["ref-gen-test"] / asset_path).exists()
+    assert reference["provider"] == "mock-image-provider"
 
 
 def test_wired_inspect_profile_accepts_friendly_provider_name() -> None:

@@ -247,7 +247,7 @@ def _read_message(stream: Any) -> dict[str, Any] | None:
 
 def _write_message(stream: Any, payload: dict[str, Any]) -> None:
     body = json.dumps(payload).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8")
+    header = f"Content-Length: {len(body)}\r\n\r\n".encode()
     stream.write(header)
     stream.write(body)
     stream.flush()

@@ -5,6 +5,29 @@ from __future__ import annotations
 from pydantic import Field
 
 from film_pipeline.schemas._base import ArtifactStatus, SchemaBase
+from film_pipeline.schemas.validation import ValidationIssue
+
+
+class ReferenceValidationSummary(SchemaBase):
+    """Validation state for a generated reference asset."""
+
+    status: str = Field(
+        default="pending",
+        description=(
+            "'pending' | 'approved' | 'approved_with_notes' | "
+            "'needs_delta_fix' | 'needs_regeneration' | 'human_review_required' | 'rejected'."
+        ),
+    )
+    score: float = Field(default=0.0, ge=0, le=100)
+    reports: list[str] = Field(default_factory=list)
+
+
+class ReferenceAIUsability(SchemaBase):
+    """AI-usability score and risk tags for a reference asset."""
+
+    score: float = Field(default=0.0, ge=0, le=100)
+    risks: list[str] = Field(default_factory=list)
+    notes: str = ""
 
 
 class ReferenceIndexEntry(SchemaBase):
@@ -22,11 +45,24 @@ class ReferenceIndexEntry(SchemaBase):
         description="Use cases, e.g. 'prompt_anchor', 're_anchor', 'clip_validation'.",
     )
     quality_score: float = Field(ge=0, le=100)
+    provider: str = ""
+    prompt_text: str = ""
+    prompt_refs: list[str] = Field(default_factory=list)
+    source_frames: list[str] = Field(default_factory=list)
     moderation_risk: str = Field(default="low", description="'low' | 'medium' | 'high'.")
     notes: str = ""
+    generation_status: str = Field(
+        default="planned",
+        description="'planned' | 'generated' | 'failed' | 'validated'.",
+    )
+    original_mime_type: str = ""
+    normalized_mime_type: str = "image/png"
     status: ArtifactStatus = ArtifactStatus.CANDIDATE
     version: int = 1
     locked: bool = False
+    validation: ReferenceValidationSummary = Field(default_factory=ReferenceValidationSummary)
+    ai_usability: ReferenceAIUsability = Field(default_factory=ReferenceAIUsability)
+    issues: list[ValidationIssue] = Field(default_factory=list)
 
 
 class ReferenceIndex(SchemaBase):

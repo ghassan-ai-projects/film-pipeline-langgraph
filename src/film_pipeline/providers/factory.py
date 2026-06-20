@@ -48,8 +48,8 @@ def _default_models(provider_id: str) -> list[str]:
         "seedance-openrouter": ["bytedance/seedance-2.0"],
         "veo-fast": ["veo-3.1-fast"],
         "veo-3.1-fast": ["veo-3.1-fast"],
-        "gemini-imagen-4": ["imagen-4"],
-        "imagen-4": ["imagen-4"],
+        "gemini-imagen-4": ["imagen-4.0-fast-generate-001"],
+        "imagen-4": ["imagen-4.0-fast-generate-001"],
         "mock-video-provider": ["mock-fast"],
         "mock-image-provider": ["mock-fast"],
     }.get(provider_id, [])

@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.schemas.reference import ReferenceIndex, ReferenceIndexEntry
+from film_pipeline.schemas.reference import (
+    ReferenceAIUsability,
+    ReferenceIndex,
+    ReferenceIndexEntry,
+    ReferenceValidationSummary,
+)
 
 
 class VisualDevAgent(BaseAgent):
@@ -43,7 +48,21 @@ class VisualDevAgent(BaseAgent):
                 subject_id=str(e.get("subject_id", "")),
                 approved_for=[str(a) for a in e.get("approved_for", ["prompt_anchor"])],
                 quality_score=float(e.get("quality_score", 80.0)),
+                provider=str(e.get("provider", "")),
+                prompt_text=str(e.get("prompt_text", e.get("notes", ""))),
+                prompt_refs=[str(p) for p in e.get("prompt_refs", []) if str(p)],
+                source_frames=[str(p) for p in e.get("source_frames", []) if str(p)],
                 notes=str(e.get("notes", "")),
+                validation=ReferenceValidationSummary(
+                    status=str(e.get("validation", {}).get("status", "pending")),
+                    score=float(e.get("validation", {}).get("score", 0.0)),
+                    reports=[str(r) for r in e.get("validation", {}).get("reports", []) if str(r)],
+                ),
+                ai_usability=ReferenceAIUsability(
+                    score=float(e.get("ai_usability", {}).get("score", 0.0)),
+                    risks=[str(r) for r in e.get("ai_usability", {}).get("risks", []) if str(r)],
+                    notes=str(e.get("ai_usability", {}).get("notes", "")),
+                ),
             )
             for i, e in enumerate(entries_data)
         ]

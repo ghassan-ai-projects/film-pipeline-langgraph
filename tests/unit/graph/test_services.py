@@ -12,7 +12,13 @@ from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import _run_agent, _save_artifact
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas._base import (
+    AgentFamily,
+    AgentRole,
+    ArtifactStatus,
+    ArtifactType,
+    FilmPhase,
+)
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration

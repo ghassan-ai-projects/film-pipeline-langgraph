@@ -40,11 +40,10 @@ def validate_environment() -> list[str]:
         except OSError:
             issues.append("Cannot write to artifacts/ directory.")
 
-    if os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower() == "real":
-        if not os.getenv("OPENROUTER_API_KEY"):
-            issues.append(
-                "OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real."
-            )
+    if os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower() == "real" and not os.getenv(
+        "OPENROUTER_API_KEY"
+    ):
+        issues.append("OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real.")
 
     return issues
 
