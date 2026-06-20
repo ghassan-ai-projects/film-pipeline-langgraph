@@ -22,8 +22,8 @@ Purpose: Track program progress without weakening the acceptance standard.
 | 02 | Complete | Artifact spine is prompt-governed; handoff records persist `template_id` + `model_profile` as runtime evidence |
 | 03 | Complete | Dynamic routing evidence is green: `tests/integration/test_dynamic_routing.py` passes |
 | 04 | Complete | All 4 validation-runtime integration tests pass; `_run_validators` loads upstream artifacts for QC phase; MCP tools read stored `_validation_reports` and `issues` |
-| 05 | In progress | `get_project_summary` and `promote_test_to_production` unstubbed; 5 remaining video-adjacent stubs per allowed-stub policy |
-| 06 | In progress | All 10 E2E scenarios pass; 7 smoke tests verify runbook workflow; 4 operator docs complete; release checks outstanding |
+| 05 | Complete | `get_project_summary` and `promote_test_to_production` unstubbed; 5 remaining video-adjacent stubs per allowed-stub policy |
+| 06 | Complete | All 10 E2E scenarios pass; 7 smoke tests verify runbook workflow; 4 operator docs complete; `make release-check` green |
 
 ---
 

@@ -74,7 +74,7 @@ Verification evidence:
 - [x] All required E2E scenarios pass
 - [x] Smoke checks validate the documented workflow
 - [x] Operator docs are complete and reproducible
-- [ ] Release checks are green
+- [x] Release checks are green
 - [x] `make ci-check` passes
 
 ---
@@ -88,4 +88,4 @@ Verification evidence:
 - [x] coverage >= 90%
 - [x] build green
 - [x] docs match commands and product behavior
-- [ ] no core functionality missing under the allowed-stub policy
+- [x] no core functionality missing under the allowed-stub policy
