@@ -185,6 +185,21 @@ class TestPromptRunner:
         assert result == {"from_mock": True}
         mock_adapter.chat_json.assert_not_called()
 
+    def test_call_model_raises_when_adapter_set_but_no_router(self) -> None:
+        """call_model raises RuntimeError when model_adapter is set but model_router is None."""
+        from unittest.mock import MagicMock
+
+        runner = PromptRunner(model_adapter=MagicMock(), model_router=None)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="test",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+        with pytest.raises(RuntimeError, match="no model router is set"):
+            runner.call_model(prompt)
+
 
 def _make_contract(
     blocked_kb_domains: list[str] | None = None,

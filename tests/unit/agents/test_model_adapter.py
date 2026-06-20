@@ -106,3 +106,12 @@ class TestModelAdapter:
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
         with pytest.raises(RuntimeError, match="OpenRouter chat completions failed"):
             adapter.chat("Hello", model="test-model")
+
+    def test_no_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When no key is configured, _api_key() raises RuntimeError."""
+        import film_pipeline.agents.model_adapter as ma
+
+        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        adapter = ModelAdapter(api_key=None)
+        with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY is not set"):
+            adapter.chat("Hello", model="test-model")
