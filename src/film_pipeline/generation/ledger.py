@@ -92,16 +92,27 @@ class GenerationLedgerManager:
 
     # ── approve spend ────────────────────────────────────────────────────
 
-    def approve_spend(self, project_id: str) -> GenerationLedger:
-        """Mark all PREPARED rows as SUBMITTED and record submit time.
+    def approve_spend(self, project_id: str, max_cost_usd: float = -1.0) -> GenerationLedger:
+        """Mark PREPARED rows as SUBMITTED and record submit time.
 
         This is a local state transition only. It does not call any provider.
+
+        Skips rows already SUBMITTED (duplicate-submit prevention).
+        If *max_cost_usd* is set (>= 0), rejects if estimated cost exceeds budget.
         """
         ledger = self.load(project_id)
         now = datetime.now(UTC)
         new_rows: list[GenerationLedgerRow] = []
+        submitted_count = 0
+
         for row in ledger.rows:
+            if row.status == GenerationStatus.SUBMITTED:
+                # Already submitted — skip (duplicate-prevention)
+                new_rows.append(row)
+                continue
+
             if row.status == GenerationStatus.PREPARED:
+                submitted_count += 1
                 row = row.model_copy(
                     update={
                         "status": GenerationStatus.SUBMITTED,
@@ -110,9 +121,79 @@ class GenerationLedgerManager:
                     }
                 )
             new_rows.append(row)
+
+        if max_cost_usd >= 0:
+            total_cost = sum(
+                r.estimated_cost_usd for r in new_rows if r.status == GenerationStatus.SUBMITTED
+            )
+            if total_cost > max_cost_usd:
+                # Revert the rows we just transitioned
+                raise ValueError(
+                    f"Total estimated cost ${total_cost:.2f} exceeds budget ${max_cost_usd:.2f}. "
+                    f"({submitted_count} new request(s) would be submitted). "
+                    "Reduce batch or increase max_cost_usd."
+                )
+
         ledger = ledger.model_copy(update={"rows": new_rows})
         self._persist(ledger)
         return ledger
+
+    def estimate_total_cost(self, project_id: str) -> float:
+        """Sum estimated_cost_usd for all non-terminal rows."""
+        ledger = self.load(project_id)
+        terminal = {
+            GenerationStatus.COMPLETED,
+            GenerationStatus.FAILED,
+            GenerationStatus.CANCELLED,
+            GenerationStatus.TIMED_OUT,
+        }
+        return sum(r.estimated_cost_usd for r in ledger.rows if r.status not in terminal)
+
+    # ── promote ──────────────────────────────────────────────────────────
+
+    def promote_to_production(
+        self,
+        project_id: str,
+        *,
+        shot_ids: list[str] | None = None,
+    ) -> tuple[int, list[str]]:
+        """Transition COMPLETED TEST rows to PRODUCTION mode.
+
+        Only rows with mode=TEST and status=COMPLETED are eligible.
+        Returns (promoted_count, promoted_generation_ids).
+
+        If *shot_ids* is provided, only promotes those specific shots.
+        """
+        from film_pipeline.schemas._base import GenerationMode
+
+        ledger = self.load(project_id)
+        promoted: list[str] = []
+        new_rows: list[GenerationLedgerRow] = []
+
+        for row in ledger.rows:
+            eligible = (
+                row.mode == GenerationMode.TEST
+                and row.status == GenerationStatus.COMPLETED
+                and (shot_ids is None or row.shot_id in shot_ids)
+            )
+            if eligible:
+                promoted.append(row.generation_id)
+                new_rows.append(
+                    row.model_copy(
+                        update={
+                            "mode": GenerationMode.PRODUCTION,
+                            "next_action": "stop",
+                        }
+                    )
+                )
+            else:
+                new_rows.append(row)
+
+        if promoted:
+            ledger = ledger.model_copy(update={"rows": new_rows})
+            self._persist(ledger)
+
+        return len(promoted), promoted
 
     # ── query ────────────────────────────────────────────────────────────
 

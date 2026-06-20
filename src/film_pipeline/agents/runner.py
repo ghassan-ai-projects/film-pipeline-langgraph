@@ -158,6 +158,38 @@ class PromptRunner:
             raise ValueError(f"Model output is not a dict: {type(raw)}")
         return raw
 
+    def run_from_template(
+        self,
+        template: Any,  # PromptTemplate (lazy import to avoid circular)
+        _kb_context: KBContextPacket,
+        task: str,
+        *,
+        model_profile: str = "operations_triage",
+        context_vars: dict[str, str] | None = None,
+    ) -> tuple[dict[str, Any], str, str]:
+        """Run using a dedicated prompt template. Returns (output, template_id, model_profile).
+
+        This is the REQUIRED path for critical-agent execution. Generic RCTCO
+        assembly via ``run()`` is forbidden for critical-path agents.
+        """
+        # Render the dedicated template
+        rendered_text = template.render(**(context_vars or {}))
+
+        # Build a lightweight prompt for call_model() compatibility (mock dispatch uses core_task)
+        prompt = RCTCOPrompt(
+            role=template.role,
+            core_task=task,
+            context=rendered_text,
+            constraints=template.constraints,
+            output_format=template.output_format,
+        )
+        prompt.rendered = rendered_text
+
+        raw = self.call_model(prompt, model_profile=model_profile)
+        if not isinstance(raw, dict):
+            raise ValueError(f"Model output is not a dict: {type(raw)}")
+        return raw, template.template_id, model_profile
+
     def create_handoff(
         self,
         contract: AgentRegistration,

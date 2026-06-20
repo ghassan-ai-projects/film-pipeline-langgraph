@@ -18,6 +18,7 @@ from film_pipeline.agents.prompt_templates.registry import (
 
 def load_all(reg: PromptTemplateRegistry) -> None:
     """Register all critical-path agent templates."""
+    reg.register(_intake_classifier())
     reg.register(_constitution_creator())
     reg.register(_development_creator())
     reg.register(_screenwriter())
@@ -28,10 +29,51 @@ def load_all(reg: PromptTemplateRegistry) -> None:
     reg.register(_assembly_agent())
 
 
+def _intake_classifier() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="intake-classifier-v1",
+        agent_id="intake-classifier-agent",
+        version=1,
+        role="You are the intake-classifier-agent (Intake Classifier). "
+        "Your role is to classify the user's film idea and produce a project profile.",
+        core_task=(
+            "Classify the user's film idea and produce a project profile. "
+            "Determine the genre, target audience, runtime estimate, "
+            "aspect ratio, and delivery mode. Identify any ambiguities "
+            "and flag risks: IP conflicts, sensitivity concerns, budget concerns."
+        ),
+        context_template=("User idea: {idea}\nProject ID: {project_id}\nKB refs: {kb_refs}"),
+        constraints=(
+            "Genre classification must be specific (not just 'sci-fi' but "
+            "'grounded sci-fi drama' or 'sci-fi action comedy'). "
+            "Runtime must be realistic for the story scope. "
+            "Flag risks explicitly — do not dismiss concerns."
+        ),
+        output_format=(
+            "Respond with valid JSON matching the ProjectProfile schema:\n"
+            "{\n"
+            '  "identity": {\n'
+            '    "project_id": "...",\n'
+            '    "slug": "...",\n'
+            '    "title": "...",\n'
+            '    "aliases": []\n'
+            "  },\n"
+            '  "target_runtime_seconds": ...,\n'
+            '  "aspect_ratio": "...",\n'
+            '  "delivery_modes": ["..."],\n'
+            '  "classified_input": "...",\n'
+            '  "genre_tags": ["..."],\n'
+            '  "risk_flags": []\n'
+            "}"
+        ),
+        output_schema_ref="project.ProjectProfile",
+    )
+
+
 def _constitution_creator() -> PromptTemplate:
     return PromptTemplate(
         template_id="constitution-creator-v1",
-        agent_id="constitution-agent",
+        agent_id="film-constitution-agent",
         version=1,
         role="You are the constitution-agent (Constitution Creator). "
         "Your role is to define the creative constitution of a film project.",
@@ -71,7 +113,7 @@ def _constitution_creator() -> PromptTemplate:
 def _development_creator() -> PromptTemplate:
     return PromptTemplate(
         template_id="development-creator-v1",
-        agent_id="development-agent",
+        agent_id="treatment-agent",
         version=1,
         role="You are the development-agent (Development Creator). "
         "Your role is to develop the film treatment and scene breakdown.",
@@ -168,7 +210,7 @@ def _screenwriter() -> PromptTemplate:
 def _visual_development_creator() -> PromptTemplate:
     return PromptTemplate(
         template_id="visual-dev-creator-v1",
-        agent_id="visual-dev-agent",
+        agent_id="reference-strategy-planner",
         version=1,
         role="You are the visual-dev-agent (Visual Development Creator). "
         "Your role is to design the visual look of the film.",
@@ -196,7 +238,7 @@ def _visual_development_creator() -> PromptTemplate:
 def _shot_bible_creator() -> PromptTemplate:
     return PromptTemplate(
         template_id="shot-bible-creator-v1",
-        agent_id="shot-bible-agent",
+        agent_id="shot-design-agent",
         version=1,
         role="You are the shot-bible-agent (Shot Bible Creator). "
         "Your role is to create the detailed shot matrix from the script.",
@@ -224,7 +266,7 @@ def _shot_bible_creator() -> PromptTemplate:
 def _generation_planner() -> PromptTemplate:
     return PromptTemplate(
         template_id="generation-planner-v1",
-        agent_id="generation-planner-agent",
+        agent_id="provider-planning-agent",
         version=1,
         role="You are the generation-planner-agent (Generation Planner). "
         "Your role is to plan the generation batch for the shot matrix.",
@@ -255,7 +297,7 @@ def _generation_planner() -> PromptTemplate:
 def _qc_synthesizer() -> PromptTemplate:
     return PromptTemplate(
         template_id="qc-synthesizer-v1",
-        agent_id="qc-synthesis-agent",
+        agent_id="clip-validator",
         version=1,
         role="You are the qc-synthesis-agent (QC Synthesizer). "
         "Your role is to synthesize validation reports into a unified review.",
@@ -282,7 +324,7 @@ def _qc_synthesizer() -> PromptTemplate:
 def _assembly_agent() -> PromptTemplate:
     return PromptTemplate(
         template_id="assembly-agent-v1",
-        agent_id="assembly-agent",
+        agent_id="failure-handling-agent",
         version=1,
         role="You are the assembly-agent (Post-Production Assembly). "
         "Your role is to assemble the final cut from generated media.",

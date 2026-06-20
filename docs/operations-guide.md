@@ -115,7 +115,7 @@ If polling fails after submit:
 
 ## Test Scenarios
 
-34 E2E scenarios cover:
+10 E2E scenarios cover:
 1. Happy path (idea → review cut)
 2. Script revision loop
 3. Reference validation failure

@@ -67,7 +67,7 @@ def test_detect_stubbed_critical_tools_ignores_allowed_stubs() -> None:
         critical_mcp_tools=(
             "start_generation_batch",
             "approve_phase",
-            "promote_test_to_production",
+            "approve_coverage_generation",
         ),
         required_docs=(),
         required_e2e_tests=(),
@@ -78,7 +78,7 @@ def test_detect_stubbed_critical_tools_ignores_allowed_stubs() -> None:
 
     assert "start_generation_batch" not in stubbed
     assert "approve_phase" not in stubbed
-    assert "promote_test_to_production" in stubbed
+    assert "approve_coverage_generation" in stubbed
 
 
 def test_evaluate_product_gate_reports_missing_files(
