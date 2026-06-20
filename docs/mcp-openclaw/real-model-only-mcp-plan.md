@@ -33,6 +33,7 @@ Status update on June 20, 2026:
 - prompt continuity between phases is fixed
 - the local real provider profile now uses `gemini-imagen-4` for the image lane instead of `mock-image-provider`
 - real project creation rejects missing provider credentials up front
+- MCP now has a real `generate_reference_images` path that persists visual-dev reference assets and updates the `reference_index`
 
 ## Root Causes
 

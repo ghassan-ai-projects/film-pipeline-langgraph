@@ -38,9 +38,10 @@ def _intake_classifier() -> PromptTemplate:
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
             "Classify the user's film idea and produce a detailed project profile. "
-            "Determine the genre, target audience, realistic runtime estimate (based on story complexity), "
-            "aspect ratio, and delivery mode. Identify any ambiguities "
-            "and flag risks: IP conflicts, sensitivity concerns, budget concerns, production complexity."
+            "Determine the genre, target audience, realistic runtime estimate "
+            "(based on story complexity), aspect ratio, and delivery mode. "
+            "Identify any ambiguities and flag risks: IP conflicts, "
+            "sensitivity concerns, budget concerns, production complexity."
         ),
         context_template=("User idea: {idea}\nProject ID: {project_id}\nKB refs: {kb_refs}"),
         constraints=(
@@ -48,8 +49,10 @@ def _intake_classifier() -> PromptTemplate:
             "'grounded sci-fi drama' or 'cyberpunk noir thriller'). "
             "Runtime must be realistic for the story scope — estimate actual seconds, "
             "and never use 1 second unless the user explicitly asked for a 1-second film. "
-            "For a normal short film idea, target_runtime_seconds should usually be between 60 and 1800. "
-            "Aspect ratio must fit the story's visual intent (e.g., 2.35:1 for epic, 1.85:1 for intimate). "
+            "For a normal short film idea, target_runtime_seconds "
+            "should usually be between 60 and 1800. "
+            "Aspect ratio must fit the story's visual intent "
+            "(e.g., 2.35:1 for epic, 1.85:1 for intimate). "
             "You must provide at least one concrete genre tag. "
             "risk_flags must be an empty array or a list of concrete risks. "
             "Flag risks explicitly — do not dismiss concerns. "
@@ -64,7 +67,8 @@ def _intake_classifier() -> PromptTemplate:
             '    "title": "...",\n'
             '    "aliases": []\n'
             "  },\n"
-            '  "film_type": "narrative | visual_poetry | experimental | short_drama | commercial",\n'
+            '  "film_type": "narrative | visual_poetry | experimental'
+            ' | short_drama | commercial",\n'
             '  "target_runtime_seconds": ...,\n'
             '  "aspect_ratio": "...",\n'
             '  "delivery_modes": ["..."],\n'

@@ -65,7 +65,7 @@ Hard acceptance and product-completion docs remain in [docs/product-completion/R
 - **Review:** `review_phase_artifacts`, `approve_phase`, `request_revision`
 - **Artifact:** `list_artifacts`, `inspect_artifact`, `list_shots`, `inspect_shot`, `inspect_scene`, `inspect_reference`
 - **Validation:** `get_validation_report`, `list_validation_issues`
-- **Generation:** `plan_generation_batch`, `approve_generation_spend`, `start_generation_batch`, `get_generation_status`, `resume_generation_polling`, `list_active_generations`, `cancel_generation_request`, `promote_test_to_production`
+- **Generation:** `generate_reference_images`, `plan_generation_batch`, `approve_generation_spend`, `start_generation_batch`, `get_generation_status`, `resume_generation_polling`, `list_active_generations`, `cancel_generation_request`, `promote_test_to_production`
 - **KB:** `kb_search`, `kb_get_item`, `kb_get_context_packet`, `kb_explain_context_choice`
 - **Checkpoint:** `list_checkpoints`, `create_checkpoint`, `get_checkpoint`, `compare_versions`, `list_artifact_versions`, `rollback_artifact`, `rollback_to_checkpoint`, `get_invalidation_report`
 - **Audit:** `get_audit_log`, `explain_last_decision`, `explain_agent_routing`, `explain_kb_context`
@@ -80,4 +80,4 @@ Hard acceptance and product-completion docs remain in [docs/product-completion/R
 - Git for checkpoint operations
 - Optional: provider keys via environment variables or a local `.env` file
 - `OPENROUTER_API_KEY` for real Seedance/OpenRouter calls
-- `GOOGLE_API_KEY` for Veo-family adapters
+- `GOOGLE_API_KEY` for Gemini Imagen 4 and Veo-family adapters

@@ -144,7 +144,7 @@ class ModelAdapter:
             # Find the LAST opening fence and FIRST closing fence after it
             # (Gemini sometimes has multiple code blocks)
             last_open = text.rfind(fence_start)
-            block = text[last_open + len(fence_start):]
+            block = text[last_open + len(fence_start) :]
             close_idx = block.find("```")
             if close_idx != -1:
                 block = block[:close_idx]
@@ -159,10 +159,10 @@ class ModelAdapter:
                 pass
 
         # Strategy 3: Find the outermost brace pair anywhere in text
-        brace_start = text.find('{')
-        brace_end = text.rfind('}')
+        brace_start = text.find("{")
+        brace_end = text.rfind("}")
         if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
-            candidate = text[brace_start:brace_end + 1]
+            candidate = text[brace_start : brace_end + 1]
             try:
                 result: Any = json.loads(candidate)
                 return dict(result)
@@ -170,10 +170,10 @@ class ModelAdapter:
                 pass
 
         # Strategy 4: Find outermost bracket pair (for array responses)
-        bracket_start = text.find('[')
-        bracket_end = text.rfind(']')
+        bracket_start = text.find("[")
+        bracket_end = text.rfind("]")
         if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
-            candidate = text[bracket_start:bracket_end + 1]
+            candidate = text[bracket_start : bracket_end + 1]
             try:
                 result: Any = json.loads(candidate)
                 return dict(result)
