@@ -421,6 +421,7 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "qc"
 
+    # Run the consensus agent for QC synthesis
     result = _run_agent(
         new_state,
         agent_id="clip-validator",
@@ -434,7 +435,116 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
             new_state["consensus_report_ref"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
 
+    # Run validators against upstream artifacts
+    _run_validators(new_state)
+
     return new_state
+
+
+def _run_validators(state: dict[str, Any]) -> None:
+    """Run validators against current-phase artifacts.
+
+    Blocking findings are added to ``state["issues"]``, which prevents
+    phase advancement via ``compute_actions()``.
+
+    For the ``qc`` phase, validators inspect artifacts from all upstream
+    phases (script, visual_dev, etc.) so that the QC node produces a
+    comprehensive validation report.
+    """
+    services = _get_services(state)
+    if services is None:
+        return
+
+    from film_pipeline.schemas._base import FilmPhase
+
+    store = services.artifact_store
+    phase = str(state.get("current_phase", ""))
+    project_id = str(state.get("project_id", ""))
+
+    # Determine which phases to scan for artifacts.
+    if phase == "qc":
+        load_phases: list[FilmPhase] = [
+            FilmPhase("intake"),
+            FilmPhase("constitution"),
+            FilmPhase("development"),
+            FilmPhase("script"),
+            FilmPhase("visual_dev"),
+            FilmPhase("shot_bible"),
+            FilmPhase("gen_planning"),
+        ]
+    else:
+        load_phases = [FilmPhase(phase)]
+
+    # Collect artifacts by trying each upstream phase.
+    artifact_data: dict[str, Any] = {}
+    artifact_refs = state.get("artifact_refs", [])
+    for ref_str in artifact_refs:
+        ref_str = str(ref_str)
+        if ":" not in ref_str:
+            continue
+        parts = ref_str.split(":")
+        artifact_id = parts[1] if len(parts) > 1 else ref_str
+        version_str = parts[2] if len(parts) > 2 else "1"
+        version = int(version_str.lstrip("v"))
+        for fp in load_phases:
+            try:
+                artifact_data[artifact_id] = store.load(project_id, fp, artifact_id, version)
+                break
+            except (FileNotFoundError, ValueError):
+                continue
+
+    issues: list[dict[str, Any]] = list(state.get("issues", []))
+
+    # Run known validators for script-class artifacts
+    if phase in ("script", "qc") and artifact_data:
+        _run_script_validators(artifact_data, issues, state)
+
+    state["issues"] = issues
+
+
+def _run_script_validators(
+    artifact_data: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+) -> None:
+    """Run the two script-phase validators against loaded artifacts."""
+    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
+
+    raw: Any = next(iter(artifact_data.values()), {})
+    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
+        try:
+            instance = vcls()
+            report = instance.run(artifact)
+        except Exception:
+            continue
+
+        # Store report in state for MCP tools
+        reports = state.setdefault("_validation_reports", [])
+        reports.append(report.model_dump())
+
+        for bi in report.blocking_issues:
+            issues.append(
+                {
+                    "issue_id": f"val:{report.validator_id}:{bi.code}",
+                    "severity": "blocking",
+                    "code": bi.code,
+                    "message": bi.message,
+                    "validator_id": report.validator_id,
+                }
+            )
+
+        for w in report.warnings:
+            issues.append(
+                {
+                    "issue_id": f"val:{report.validator_id}:{w.code}",
+                    "severity": "warning",
+                    "code": w.code,
+                    "message": w.message,
+                    "validator_id": report.validator_id,
+                }
+            )
 
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:

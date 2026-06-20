@@ -393,14 +393,32 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
-    """Run validators against the active project's current phase artifacts."""
+    """Return validation reports for the active project's current phase.
+
+    Reads from stored ``_validation_reports`` in project state (populated
+    by the QC node). Falls back to live validator runs if no stored reports.
+    """
     rt = get_runtime()
     active = rt.get_active()
     if not active:
         return _error("No active project.")
+
+    # Check stored reports first (from QC node) — works even without a
+    # current phase because the data is already persisted in state.
+    stored = active.get("_validation_reports")
+    if stored and isinstance(stored, list):
+        return _ok(
+            phase=str(active.get("current_phase", "")),
+            reports=list(stored),
+            source="qc_node",
+            message=f"{len(stored)} validation report(s) from QC node.",
+        )
+
     phase_str = str(active.get("current_phase", ""))
     if not phase_str:
-        return _error("No active phase to validate.")
+        return _error("No active phase to validate (and no stored reports).")
+
+    # Fallback: run validators live
     project_id = str(active["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
@@ -430,46 +448,46 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
                         "recommended_actions": report.recommended_actions,
                     }
                 )
-    return _ok(phase=phase_str, reports=reports)
+    return _ok(phase=phase_str, reports=reports, source="live")
 
 
 async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
-    """List all validation issues for the active project's current phase."""
+    """List all validation issues for the active project's current phase.
+
+    Reads from stored ``issues`` in project state (populated by QC node).
+    """
     rt = get_runtime()
     active = rt.get_active()
     if not active:
         return _error("No active project.")
+
+    # Read from stored issues first — works even without a current phase.
+    stored_issues = active.get("issues", [])
+    issues: list[dict[str, object]] = []
+    if isinstance(stored_issues, list):
+        for issue in stored_issues:
+            if isinstance(issue, dict) and "validator_id" in issue:
+                issues.append(
+                    {
+                        "code": str(issue.get("code", "")),
+                        "message": str(issue.get("message", "")),
+                        "severity": str(issue.get("severity", "")),
+                        "validator_id": str(issue.get("validator_id", "")),
+                    }
+                )
+
+    if issues:
+        return _ok(
+            phase=str(active.get("current_phase", "")),
+            issues=issues,
+            message=f"{len(issues)} issue(s) found.",
+        )
+
     phase_str = str(active.get("current_phase", ""))
     if not phase_str:
-        return _error("No active phase to inspect.")
-    project_id = str(active["project_id"])
-    from film_pipeline.schemas._base import FilmPhase
+        return _ok(phase="", issues=[], message="No active phase and no stored issues.")
 
-    try:
-        fp = FilmPhase(phase_str)
-    except ValueError:
-        return _error(f"Unknown phase: {phase_str}")
-
-    issues: list[dict[str, object]] = []
-    if phase_str == "script":
-        art_data = _load_script_artifact(rt, project_id, fp)
-        if art_data is not None:
-            from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-            from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
-
-            for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
-                validator = vcls()
-                report = validator.run(art_data)
-                for issue in report.blocking_issues + report.warnings:
-                    issues.append(
-                        {
-                            "code": issue.code,
-                            "message": issue.message,
-                            "severity": issue.severity,
-                            "validator_id": report.validator_id,
-                        }
-                    )
-    return _ok(phase=phase_str, issues=issues)
+    return _ok(phase=phase_str, issues=[], message="No validation issues found.")
 
 
 def _load_script_artifact(rt: object, project_id: str, fp: object) -> dict[str, object] | None:

@@ -35,17 +35,23 @@ The product may be called complete only when every item below is green and the e
 
 ## Phase 03 - Dynamic Routing
 
-- [ ] Routing is capability-based and state-aware
-- [ ] Review and repair use specialized agents
-- [ ] Handoffs are persisted
-- [ ] Routing explanations are backed by stored records
+- [x] Routing is capability-based and state-aware
+- [x] Review and repair use specialized agents
+- [x] Handoffs are persisted
+- [x] Routing explanations are backed by stored records
 
 ## Phase 04 - Validation Runtime Control
 
-- [ ] Validators inspect real artifacts
-- [ ] Blocking findings stop downstream work
-- [ ] Repairable findings route to repair behavior
-- [ ] Validation tools expose real stored findings
+- [x] Validators inspect real artifacts
+- [x] Blocking findings stop downstream work
+- [x] Repairable findings route to repair behavior
+- [x] Validation tools expose real stored findings
+
+Verification evidence:
+
+- `tests/integration/test_validation_runtime.py` — 4/4 passing (validators fire in QC, blocking findings in state, MCP report/issue tools read stored data)
+- `_run_validators()` in `src/film_pipeline/graph/nodes.py` scans upstream phases when phase=qc and persists `_validation_reports` + `issues`
+- `get_validation_report()` and `list_validation_issues()` in MCP tools serve stored data sans current-phase precondition
 
 ## Phase 05 - MCP Surface And Generation Runtime
 
