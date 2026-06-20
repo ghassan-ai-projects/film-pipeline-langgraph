@@ -309,8 +309,7 @@ def test_server_stdio_initialize_and_tools_list() -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "film_pipeline.mcp.server"],
         input=wire,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     assert proc.returncode == 0, proc.stderr.decode()
@@ -676,10 +675,10 @@ def test_wired_get_runtime_mode_default_mock() -> None:
 
 
 def test_wired_get_runtime_mode_after_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+    from film_pipeline.app import runtime as runtime_mod
 
-    reset_runtime("real")
-    rt = gr()
+    runtime_mod.reset_runtime("real")
+    rt = runtime_mod.get_runtime()
     rt.create_project(project_id="test-mode-real", title="Mode Test", slug="mode-test")
     rt.set_active("test-mode-real")
     # Simulate what create_film_project stores
@@ -700,11 +699,11 @@ def test_wired_get_runtime_mode_after_project() -> None:
 
 
 def test_wired_get_runtime_mode_rejects_mismatch() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import get_runtime_mode
 
-    reset_runtime("real")
-    rt = gr()
+    runtime_mod.reset_runtime("real")
+    rt = runtime_mod.get_runtime()
     rt.create_project(project_id="test-mode-mismatch", title="Mismatch", slug="mismatch")
     rt.set_active("test-mode-mismatch")
     rt.projects["test-mode-mismatch"]["runtime_mode"] = "mock"
@@ -716,11 +715,11 @@ def test_wired_get_runtime_mode_rejects_mismatch() -> None:
 
 
 def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
 
-    reset_runtime("real")
-    rt = gr()
+    runtime_mod.reset_runtime("real")
+    rt = runtime_mod.get_runtime()
 
     # Create with mock provider in real mode — should reject
     result = asyncio.run(
@@ -742,11 +741,15 @@ def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
     assert rt.get_project("test-real-reject-provider") is None
 
 
-def test_wired_create_film_project_accepts_real_provider() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+def test_wired_create_film_project_accepts_real_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
 
-    reset_runtime("real")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
+    monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
+    runtime_mod.reset_runtime("real")
     # Create with real provider in real mode — should accept
     result = asyncio.run(
         create_film_project(
@@ -769,12 +772,16 @@ def test_wired_create_film_project_accepts_real_provider() -> None:
     pstack = cast(dict[str, str], state.get("profile_stack", {}))
     assert pstack.get("provider_profile") == "provider.seedance_primary"
 
-    rt = gr()
+    rt = runtime_mod.get_runtime()
     providers = rt.list_providers()
     assert "seedance-openrouter" in providers
+    assert "gemini-imagen-4" in providers
     health = rt.get_provider_health("seedance-openrouter")
     assert health is not None
     assert health["status"] == "healthy"
+    image_health = rt.get_provider_health("gemini-imagen-4")
+    assert image_health is not None
+    assert image_health["status"] == "healthy"
 
 
 def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
@@ -797,11 +804,11 @@ def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
 
 
 def test_wired_create_film_project_defaults_to_mock_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr, reset_runtime
+    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
 
-    reset_runtime("mock")
-    rt = gr()
+    runtime_mod.reset_runtime("mock")
+    rt = runtime_mod.get_runtime()
 
     result = asyncio.run(
         create_film_project(
@@ -820,10 +827,14 @@ def test_wired_create_film_project_defaults_to_mock_mode() -> None:
     rt.projects.pop("test-default-mock", None)
 
 
-def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real() -> None:
+def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
+    monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
     reset_runtime("real")
     result = asyncio.run(
         create_film_project(
@@ -841,6 +852,32 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real() -
     assert state["server_mode"] == "real"
     pstack = cast(dict[str, str], state.get("profile_stack", {}))
     assert pstack["provider_profile"] == "provider.seedance_primary"
+
+
+def test_wired_create_film_project_rejects_missing_google_key_for_real_image_provider() -> None:
+    from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.mcp.tools import create_film_project
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
+        monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+        reset_runtime("real")
+        result = asyncio.run(
+            create_film_project(
+                {
+                    "project_id": "test-missing-google-key",
+                    "title": "Test",
+                    "slug": "test-missing-google-key",
+                    "runtime_mode": "real",
+                    "provider_profile": "provider.seedance_primary",
+                }
+            )
+        )
+
+    assert result["ok"] is False
+    assert result["error"] == "Real-mode provider credentials are missing."
+    missing = cast(list[dict[str, str]], result["missing_credentials"])
+    assert {"provider_id": "gemini-imagen-4", "env_var": "GOOGLE_API_KEY"} in missing
 
 
 def test_wired_create_film_project_rejects_mode_mismatch() -> None:
@@ -902,8 +939,7 @@ def test_server_stdio_real_mode_requires_bootstrap() -> None:
     proc = subprocess.run(
         [sys.executable, "-m", "film_pipeline.mcp.server"],
         input=b"",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         env=env,
         check=False,
     )
@@ -913,7 +949,7 @@ def test_server_stdio_real_mode_requires_bootstrap() -> None:
 
 def _frame_message(payload: dict[str, object]) -> bytes:
     body = json.dumps(payload).encode("utf-8")
-    return f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8") + body
+    return f"Content-Length: {len(body)}\r\n\r\n".encode() + body
 
 
 def _read_framed_messages(data: bytes) -> list[dict[str, object]]:

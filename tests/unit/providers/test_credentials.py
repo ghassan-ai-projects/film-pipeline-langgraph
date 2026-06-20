@@ -21,6 +21,8 @@ class TestCredentials:
     def test_env_var_for_known_provider(self) -> None:
         assert _env_var_for("seedance-openrouter") == "OPENROUTER_API_KEY"
         assert _env_var_for("veo-fast") == "GOOGLE_API_KEY"
+        assert _env_var_for("gemini-imagen-4") == "GOOGLE_API_KEY"
+        assert _env_var_for("imagen-4") == "GOOGLE_API_KEY"
 
     def test_env_var_for_unknown_provider(self) -> None:
         assert _env_var_for("unknown") is None

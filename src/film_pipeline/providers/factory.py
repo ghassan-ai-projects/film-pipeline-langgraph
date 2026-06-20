@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from film_pipeline.providers.adapters.imagen4_gemini import Imagen4GeminiProvider
 from film_pipeline.providers.adapters.seedance_openrouter import SeedanceOpenRouterProvider
 from film_pipeline.providers.adapters.veo_fast import VeoFastProvider
 from film_pipeline.providers.mock_image_provider import MockImageProvider
@@ -33,6 +34,8 @@ def build_provider_adapter(
         return SeedanceOpenRouterProvider(entry=entry)
     if provider_id in {"veo-fast", "veo-3.1-fast"}:
         return VeoFastProvider(entry=entry)
+    if provider_id in {"gemini-imagen-4", "imagen-4"}:
+        return Imagen4GeminiProvider(entry=entry)
     if provider_id == "mock-video-provider":
         return MockVideoProvider(entry=entry)
     if provider_id == "mock-image-provider":
@@ -45,6 +48,8 @@ def _default_models(provider_id: str) -> list[str]:
         "seedance-openrouter": ["bytedance/seedance-2.0"],
         "veo-fast": ["veo-3.1-fast"],
         "veo-3.1-fast": ["veo-3.1-fast"],
+        "gemini-imagen-4": ["imagen-4"],
+        "imagen-4": ["imagen-4"],
         "mock-video-provider": ["mock-fast"],
         "mock-image-provider": ["mock-fast"],
     }.get(provider_id, [])
@@ -68,6 +73,15 @@ def _default_capabilities(provider_id: str, provider_type: str) -> ProviderCapab
             max_duration_seconds=15,
             aspect_ratios=["16:9", "9:16"],
             supported_resolutions=["720p", "1080p"],
+        )
+    if provider_id in {"gemini-imagen-4", "imagen-4"}:
+        return ProviderCapabilities(
+            text_to_image=True,
+            image_to_image=True,
+            supports_seed=True,
+            max_duration_seconds=1,
+            aspect_ratios=["16:9", "9:16", "1:1", "4:3", "3:4"],
+            supported_resolutions=["1024x1024", "1536x1024", "1024x1536", "2048x2048"],
         )
     if provider_type == "image":
         return ProviderCapabilities(
@@ -93,4 +107,6 @@ def _default_cost_profile(provider_id: str) -> CostProfile:
         return CostProfile(unit="second", estimated_rate_usd=0.18)
     if provider_id in {"veo-fast", "veo-3.1-fast"}:
         return CostProfile(unit="second", estimated_rate_usd=0.10)
+    if provider_id in {"gemini-imagen-4", "imagen-4"}:
+        return CostProfile(unit="image", estimated_rate_usd=0.0)
     return CostProfile(unit="second", estimated_rate_usd=0.0)

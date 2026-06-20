@@ -19,8 +19,8 @@ providers:
     - provider_id: seedance-openrouter
       models: [bytedance/seedance-2.0]
   image:
-    - provider_id: mock-image-provider
-      models: [mock-fast]
+    - provider_id: gemini-imagen-4
+      models: [imagen-4]
 
 models:
   default: openrouter-auto
