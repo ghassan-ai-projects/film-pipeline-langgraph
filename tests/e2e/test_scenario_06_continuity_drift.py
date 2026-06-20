@@ -9,6 +9,7 @@ import pytest
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.graph.router import compute_actions
 from film_pipeline.graph.services import GraphServices
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
 
 @pytest.mark.e2e
@@ -59,3 +60,53 @@ class TestContinuityDrift:
 
         result = compute_actions(project)
         assert result.blocked, "Router should report blocked state"
+
+    def test_continuity_validator_detects_drift(self) -> None:
+        """SceneContinuityValidator catches character state mismatch."""
+        validator = SceneContinuityValidator()
+        artifact = {
+            "shots": [
+                {
+                    "shot_id": "S001",
+                    "characters": [
+                        {"character_id": "alex", "state": "angry", "position": "doorway"}
+                    ],
+                    "lighting": "warm",
+                    "props": ["key"],
+                    "wardrobe": {"alex": "red_jacket"},
+                },
+                {
+                    "shot_id": "S002",
+                    "characters": [{"character_id": "alex", "state": "calm", "position": "desk"}],
+                    "lighting": "warm",
+                    "props": ["key"],
+                    "wardrobe": {"alex": "red_jacket"},
+                },
+            ]
+        }
+        report = validator.run(artifact)
+        assert any(i.code == "character_state_mismatch" for i in report.blocking_issues)
+
+    def test_clean_sequence_passes(self) -> None:
+        """A shot sequence with no drift passes validation."""
+        validator = SceneContinuityValidator()
+        artifact = {
+            "shots": [
+                {
+                    "shot_id": "S001",
+                    "characters": [],
+                    "lighting": "daylight",
+                    "props": ["cup"],
+                    "wardrobe": {},
+                },
+                {
+                    "shot_id": "S002",
+                    "characters": [],
+                    "lighting": "daylight",
+                    "props": ["cup"],
+                    "wardrobe": {},
+                },
+            ]
+        }
+        report = validator.run(artifact)
+        assert report.status.value == "pass"

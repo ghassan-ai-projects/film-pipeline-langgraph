@@ -19,11 +19,11 @@ This phase goes first because the product should not build more agent behavior o
 
 ## Current Gaps To Close
 
-- `src/film_pipeline/agents/model_adapter.py` contains hard-coded OpenRouter model defaults
-- `src/film_pipeline/agents/model_routing/__init__.py` contains baked model names and fallback values
-- `src/film_pipeline/agents/runner.py` builds generic RCTCO text, not phase-specific prompt packages
+- `src/film_pipeline/agents/runner.py` still builds generic RCTCO text in the real execution path, not dedicated phase-specific prompt packages
 - core agents are registered with `default_model_profile`, but real execution does not yet prove that profile resolution governs calls
-- prompt templates are not yet versioned and enforced per critical-path agent
+- dedicated prompt templates exist, but the runtime path does not yet require or consume them
+- several template `agent_id` values do not match the actual registered agent ids
+- `film-knowledge-base/promt.md` exists as reference material only and is not wired into runtime prompt execution
 
 ---
 
@@ -73,8 +73,10 @@ When this phase is complete:
   - KB packet
   - constraints
   - output schema contract
+- align dedicated template ids to the actual runtime agent ids
 - prevent generic fallback prompt usage on critical-path execution
 - version prompt packages so changes are inspectable and testable
+- document whether a KB prompt asset is runtime-governed, manual-reference-only, or obsolete
 
 ### 3. Secret Safety
 
@@ -132,23 +134,25 @@ When this phase is complete:
 - [x] no hard-coded provider model strings remain in core agent execution paths
 - [x] critical-path agents resolve models through config and routing policy
 - [x] dedicated prompt templates exist for all critical-path agents
-- [x] generic fallback prompts are forbidden for critical-path execution
-- [x] prompt template version and selected model profile are observable in runtime state, handoff, or audit evidence
+- [ ] real critical-path execution must use the dedicated prompt templates instead of generic `build_rctco()` assembly
+- [ ] template `agent_id` values must match the actual registered/runtime agent ids
+- [ ] generic fallback prompts must be forbidden in real critical-path execution
+- [ ] prompt template version and selected model profile must be observable in runtime state, handoff, or audit evidence
 - [x] secret-redaction tests prove keys are not leaked
-- [x] unit and integration tests prove the new behavior
+- [ ] unit and integration tests prove the runtime behavior above
 
 ---
 
 ## Exit Condition
 
-✅ This phase is done — model selection and prompt execution are governed by runtime policy, not hidden code defaults.
+This phase is done when model selection and prompt execution are both governed by runtime policy, not hidden code defaults or generic prompt assembly.
 
 ## Implementation Notes
 
 - `ModelAdapter.chat()` and `.chat_json()` no longer have default `model` values — `model` is required
 - `ModelRouter.select()` and `.resolve_or_raise()` raise `ModelResolutionError` for unknown profiles (no silent fallback)
 - `PromptRunner` now requires `model_router` when `model_adapter` is set; resolves model + params through router
-- 8 dedicated prompt templates created in `agents/prompt_templates/defaults.py` with v1 versioning
-- `PromptTemplateRegistry.get_required()` fails for unregistered agents — generic RCTCO disallowed for critical path
+- 8 dedicated prompt templates were created in `agents/prompt_templates/defaults.py` with v1 versioning
+- `PromptTemplateRegistry.get_required()` exists, but this is not yet enough because runtime execution still uses `PromptRunner.build_rctco()` directly
 - Secret redaction tests added for: HTTP error bodies, OpenRouter key patterns, Google key patterns, .env loading silence
 - Model router profiles renamed to qualified OpenRouter ids (e.g. `openrouter/gpt-4o-mini` vs old `gpt-5-mini`)

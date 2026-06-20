@@ -69,6 +69,7 @@ class ArtifactType(StrEnum):
     REVIEW_CUT = "review_cut"
     FINAL_CUT = "final_cut"
     DELIVERY_PACKAGE = "delivery_package"
+    SUBTITLE = "subtitle"
 
 
 class FilmPhase(StrEnum):

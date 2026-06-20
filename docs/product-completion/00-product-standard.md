@@ -6,7 +6,7 @@
 
 The project is done only when all of the following are true:
 
-- idea to delivery is possible on the supported path through MCP
+- idea to validated clips is possible on the supported path through MCP
 - no critical-path MCP tool returns stub output
 - no core graph phase is label-only
 - core agents produce schema-valid artifacts through the prompt framework
@@ -14,7 +14,7 @@ The project is done only when all of the following are true:
 - validators produce real findings and can block downstream work
 - approvals, checkpoints, rollback, and audit are real runtime behaviors
 - generation is idempotent and recoverable
-- review cut and delivery package are real outputs, not plans only
+- validated clip outputs and clip handoff evidence are real outputs, not plans only
 - all required E2E scenarios pass
 - an operator can install, run, inspect, recover, and release the system from the docs
 
@@ -30,6 +30,15 @@ surrounding runtime behavior must be real and behavior-tested:
 - duplicate-prevention
 - provider block handling
 - artifact ingestion
+
+The following are intentionally out of current completion scope:
+
+- final assembly and editorial
+- audio post
+- color grading
+- delivery packaging
+
+Those downstream steps may be done in DaVinci Resolve or another external finishing tool.
 
 ---
 

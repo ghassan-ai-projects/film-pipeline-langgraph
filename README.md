@@ -1,12 +1,15 @@
 # film-pipeline-langgraph
 
-LangGraph-based film creation pipeline — a human-supervised, MCP-first studio scaffold with typed contracts, runtime orchestration, and git-backed checkpoints.
+LangGraph-based film creation pipeline for taking a film idea through structured pre-production, generation planning, QC evidence, and validated handoff state.
 
-The current codebase includes 19 agent contracts, a curated knowledge base (12 items), validation and review infrastructure, git-backed checkpoints, and a runtime that advances projects phase-by-phase through human approval gates.
+The supported product target is:
 
-## Current Status
+- `idea -> approved artifacts -> generation planning -> QC-ready project state`
+- MCP-first operation
+- prompt-governed critical-path agents
+- git-backed checkpoints, rollback, audit, and validation visibility
 
-The project is in a strong scaffold state: the runtime, MCP surface, provider adapters, checkpoints, and tests are working, but the graph phases still do not invoke real creator/reviewer agents or produce a full film end-to-end automatically.
+The current target does not include in-repo final editorial finishing, audio, color, or delivery export.
 
 ## Quick Start
 
@@ -15,47 +18,15 @@ make setup      # uv sync --group dev
 make ci-check   # format + lint + mypy + test (90% coverage) + build
 ```
 
-## Architecture
+## Current Status
 
-```
-MCP Surface (tools/)
-       ↓
-LangGraph State Machine (graph/)
-       ↓
-19 Agents (agents/) ← KB Context Packets (kb/) ← KB Manifest (12 items)
-       ↓
-Review Packages (review/) ← Human Approval Gates
-       ↓
-Validation (validation/) ← 15 Validators ← Consensus
-       ↓
-Providers (providers/) ← Mock (0 cost) ← Real (requires API keys)
-       ↓
-Checkpoints (checkpoints/) ← Git-backed ← Resume ← Rollback
-       ↓
-Post-Production (post/) ← Assembly, Audio, Delivery, Subtitles
-```
+The repository is now centered on a clips-first workflow:
 
-## Phase Completion
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 00 | Scaffolding | ✅ |
-| 01 | Schemas & Registries | ✅ |
-| 02 | MCP Tool Contracts | ✅ |
-| 03 | Config & Profile System | ✅ |
-| 04 | Artifact Store | ✅ |
-| 05 | LangGraph Skeleton | ✅ |
-| 06 | KB Context Packet Builder | ✅ |
-| 07 | Agent Registry & Prompt Runner | ✅ |
-| 08 | Review Package Generator | ✅ |
-| 09 | Validation Registry | ✅ |
-| 10 | Mock Provider & Test Harness | ✅ |
-| 11 | Checkpoint/Resume & Rollback | ✅ |
-| 12 | E2E Happy Path | Partial |
-| 13 | Real Provider Adapter | ✅ |
-| 14 | Post-Production Assembly | ✅ |
-| 15 | Production Hardening | ✅ |
-| 16 | Productization | Partial |
+- critical-path agents execute through dedicated prompt templates
+- runtime approvals create checkpoints and audit events
+- artifacts, routing decisions, and validation reports are inspectable through MCP
+- non-video generation lifecycle is behavior-tested
+- manual finishing is expected to happen outside the repo
 
 ## Running
 
@@ -74,9 +45,19 @@ pytest -m integration  # integration
 make build
 ```
 
-## MCP Tools (28 wired/partially wired, 29 stubs, 57 total)
+## Documentation
 
-The MCP surface drives the runtime. Wired tools connect to the in-memory runtime, KB, checkpoint, provider-health, and post-production helpers; remaining tools still return placeholder responses pending deeper orchestration wiring.
+Practical docs live in [documentation/README.md](documentation/README.md).
+
+- Product overview: [documentation/product-overview.md](documentation/product-overview.md)
+- Getting started: [documentation/getting-started.md](documentation/getting-started.md)
+- Repository structure: [documentation/repository-structure.md](documentation/repository-structure.md)
+- Code onboarding: [documentation/onboarding.md](documentation/onboarding.md)
+- Manual 4-minute mock short: [documentation/manual-4min-mock-short.md](documentation/manual-4min-mock-short.md)
+
+Hard acceptance and product-completion docs remain in [docs/product-completion/README.md](docs/product-completion/README.md) and [docs/product-completion-plan/README.md](docs/product-completion-plan/README.md).
+
+## MCP Surface
 
 - **Project:** `create_film_project`, `list_projects`, `find_project`, `set_active_project`, `get_active_project`, `get_project_summary`
 - **Intake:** `submit_idea`, `get_intake_analysis`, `approve_intake`
@@ -91,22 +72,6 @@ The MCP surface drives the runtime. Wired tools connect to the in-memory runtime
 - **Provider:** `check_provider_health`, `resolve_provider_block`, `list_providers`
 - **Coverage:** `plan_coverage_group`, `list_coverage_groups`, `inspect_coverage_group`, `approve_coverage_generation`
 - **Assembly:** `assemble_review_cut`, `assemble_final_cut`, `export_delivery_package`
-
-## Key Conventions
-
-- **MCP-first:** All operations through MCP tools, no direct API
-- **Mock first:** No paid generation until E2E mock baseline passes
-- **RCTCO prompts:** All agent prompts follow Role/Core Task/Context/Constraints/Output
-- **Human gates:** Every phase pauses for human approval
-- **Authority hierarchy:** canonical > active_playbook > case_study > raw_archive
-- **Validation thresholds:** Pass ≥ 85, Review ≥ 75, Block < 60
-
-## Docs
-
-- [Architecture Blueprint](docs/architecture-blueprint.md)
-- [Implementation Plan](docs/implementation-plan/)
-- [Agent Architecture](docs/agent-architecture.md)
-- [KB Operating Model](docs/kb-operating-model.md)
 
 ## Requirements
 

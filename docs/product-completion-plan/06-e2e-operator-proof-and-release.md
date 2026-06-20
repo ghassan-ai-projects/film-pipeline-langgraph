@@ -24,7 +24,7 @@ When this phase is complete:
 
 ## Required E2E Scenarios
 
-- happy path: idea to review cut
+- happy path: idea to validated clips
 - script revision loop
 - reference validation failure
 - quota exhausted pause/resume
@@ -54,7 +54,7 @@ These must prove behavior, not just response shape.
   - run the mock-mode path
   - inspect failures
   - recover or rollback
-  - export outputs
+  - inspect validated clips and handoff evidence
 
 ---
 

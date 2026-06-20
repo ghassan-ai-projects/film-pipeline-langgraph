@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import (
@@ -82,3 +84,31 @@ class TestNetworkError:
 
         shot_count = len([r for r in ledger.rows if r.shot_id == "S002-01"])
         assert shot_count == 1, "Network failure should not create duplicate jobs"
+
+    def test_approve_spend_duplicate_prevention(self, tmp_path: Path) -> None:
+        """approve_spend skips already-SUBMITTED rows (no duplicate submit)."""
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        mgr.plan_batch("proj-dup", ["S001", "S002"], "mock-provider", "mock-model")
+        mgr.approve_spend("proj-dup")
+        # Add a new PREPARED row
+        mgr.plan_batch("proj-dup", ["S003"], "mock-provider", "mock-model")
+        ledger = mgr.approve_spend("proj-dup")
+        submitted = sum(1 for r in ledger.rows if r.status == GenerationStatus.SUBMITTED)
+        assert submitted == 3
+        s001 = next(r for r in ledger.rows if r.shot_id == "S001")
+        assert s001.status == GenerationStatus.SUBMITTED
+
+    def test_start_batch_skips_duplicate(self, tmp_path: Path) -> None:
+        """start_generation_batch skips rows with existing provider_job_id."""
+        store = ArtifactStore(root=tmp_path / "artifacts")
+        mgr = GenerationLedgerManager(store)
+        mgr.plan_batch("proj-dup2", ["S001"], "mock-provider", "mock-model")
+        mgr.approve_spend("proj-dup2")
+        # Manually set a provider_job_id (simulating network error after submit)
+        ledger = mgr.load("proj-dup2")
+        mgr.update_row("proj-dup2", ledger.rows[0].generation_id, provider_job_id="job-existing")
+        # Re-approving should skip the already-submitted row
+        ledger2 = mgr.approve_spend("proj-dup2")
+        row = next(r for r in ledger2.rows if r.shot_id == "S001")
+        assert row.provider_job_id == "job-existing"

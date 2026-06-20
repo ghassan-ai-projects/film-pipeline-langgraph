@@ -8,6 +8,8 @@ import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.graph.services import GraphServices
+from film_pipeline.providers.failure_classifier import FailureClassifier
+from film_pipeline.providers.health import ProviderHealth
 from film_pipeline.schemas._base import ProviderStatus
 from film_pipeline.schemas.provider_health import ProviderHealthState
 
@@ -57,3 +59,18 @@ class TestQuotaExhausted:
         active = rt.get_active()
         assert active is not None
         assert active["current_phase"] == "constitution"
+
+    def test_failure_classifier_quota(self) -> None:
+        """FailureClassifier maps 'quota exceeded' to BLOCKED_QUOTA."""
+        failure = FailureClassifier.classify("quota exceeded for this model (429)")
+        assert failure.status == ProviderStatus.BLOCKED_QUOTA
+        assert failure.is_transient is True
+
+    def test_health_updated_on_quota_failure(self) -> None:
+        """ProviderHealth transitions to BLOCKED_QUOTA on classified failure."""
+        health = ProviderHealth(provider_id="mock")
+        assert health.is_healthy()
+        FailureClassifier.update_health(health, "quota exceeded: too many requests")
+        assert not health.is_healthy()
+        assert health.status == ProviderStatus.BLOCKED_QUOTA
+        assert len(health.resume_requirements) > 0

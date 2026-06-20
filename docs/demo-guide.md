@@ -1,79 +1,15 @@
 # Demo Guide — film-pipeline-langgraph
 
-## 5-Minute Mock Demo
+For the maintained demo path, use:
 
-Run a complete film pipeline in mock mode (no API keys, no cost):
+- [documentation/manual-4min-mock-short.md](../documentation/manual-4min-mock-short.md)
+
+Fast commands:
 
 ```bash
 make demo-project
-```
-
-This executes:
-1. Creates a project with a sample idea
-2. Runs the LangGraph through intake → constitution → development → script
-3. Each phase invokes real agent code with mock model responses
-4. Artifacts are persisted to the artifact store
-5. Phase approvals create git-backed checkpoints
-
-## Inspect the Results
-
-After `make demo-project`, you can inspect:
-
-```bash
-# List projects
-# (via MCP: list_projects tool)
-
-# Check current phase
-# (via MCP: get_current_phase)
-
-# List artifacts created
-# (via MCP: list_artifacts)
-
-# Inspect a specific artifact
-# (via MCP: inspect_artifact --artifact_id film_constitution)
-
-# View validation report
-# (via MCP: get_validation_report)
-
-# View audit log
-# (via MCP: get_audit_log)
-```
-
-## What's Real vs Mock
-
-| Layer | Status |
-|-------|--------|
-| Graph execution | Real — LangGraph state machine |
-| Agent contracts | Real — 19 registered agents |
-| Agent implementations | Real — 9 spine agents with dedicated prompt templates |
-| Validator implementations | Real — 8 validators (script, reference, prompt, continuity, assembly, delivery) |
-| Prompt framework | Real — Dedicated versioned templates per agent (9 templates, v1) |
-| Artifact storage | Real — Pydantic models persisted to disk |
-| Checkpoints | Real — Git-backed with invalidation engine |
-| MCP tools | Real — 54 wired, 5 video-adjacent stubs |
-| Model calls | Mock — canned responses (swap `ModelAdapter` for real OpenRouter) |
-| Video generation | Mock — placeholder files (real generation requires provider API keys) |
-
-## Switching to Real LLM
-
-1. Set `OPENROUTER_API_KEY` in `.env`:
-   ```
-   OPENROUTER_API_KEY=sk-or-v1-...
-   ```
-
-2. The `PromptRunner` will auto-detect the key and call OpenRouter.
-   Or pass a `ModelAdapter` explicitly via `GraphServices`.
-
-## E2E Test Scenarios
-
-Run all 10 E2E scenarios:
-
-```bash
+uv run --python 3.12 --group dev pytest tests/smoke/test_manual_4min_mock_short.py -q -s --no-cov
 make test-e2e
 ```
 
-Or a specific scenario:
-
-```bash
-uv run pytest tests/e2e/test_scenario_02_script_revision.py -v
-```
+The manual 4-minute mock short is now the best single demo because it is both human-readable and executable.

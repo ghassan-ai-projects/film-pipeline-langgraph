@@ -60,12 +60,12 @@ Scores are on a `0-10` scale.
 
 ## What Still Blocks A Final Score
 
-- No full real `idea -> review cut -> delivery` product flow yet
+- No full real `idea -> validated clips` product flow yet
 - Core agents are not all executing real specialized artifact-producing work
 - Validation is not yet complete enough to govern all major downstream behavior
 - Critical non-video MCP workflows are still incomplete
 - Required E2E product scenarios are not yet passing
-- Post-production is still closer to planning than full rendered delivery
+- Downstream editorial and delivery are intentionally outside the current validated-clips target
 
 ---
 

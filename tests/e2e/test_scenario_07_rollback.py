@@ -50,3 +50,49 @@ class TestRollback:
         assert len(report.will_invalidate) >= 1, (
             "Rolling back constitution should invalidate downstream artifacts"
         )
+
+    def test_rollback_via_mcp_tool(
+        self,
+        studio_runtime: StudioRuntime,
+    ) -> None:
+        """Rollback to a checkpoint via MCP tool preserves state."""
+        rt = studio_runtime
+        from tests.e2e.conftest import invoke_tool
+
+        invoke_tool(rt, "create_film_project", project_id="e2e-rollback", title="Rollback Test")
+        invoke_tool(rt, "set_active_project", project_ref="e2e-rollback")
+        invoke_tool(rt, "submit_idea", idea="A story.")
+        invoke_tool(rt, "approve_intake")
+
+        # List checkpoints
+        result = invoke_tool(rt, "list_checkpoints")
+        assert result["ok"] is True
+        cps = result.get("checkpoints", [])
+        assert len(cps) >= 1
+
+        # Rollback to the first checkpoint
+        cp_id = cps[0]["checkpoint_id"]
+        result = invoke_tool(rt, "rollback_to_checkpoint", checkpoint_id=cp_id)
+        assert result["ok"] is True
+
+    def test_invalidation_report_via_mcp(
+        self,
+        studio_runtime: StudioRuntime,
+    ) -> None:
+        """Get invalidation report for a checkpoint."""
+        rt = studio_runtime
+        from tests.e2e.conftest import invoke_tool
+
+        invoke_tool(rt, "create_film_project", project_id="e2e-inval", title="Invalidation Test")
+        invoke_tool(rt, "set_active_project", project_ref="e2e-inval")
+        invoke_tool(rt, "submit_idea", idea="A short.")
+        invoke_tool(rt, "approve_intake")
+
+        result = invoke_tool(rt, "list_checkpoints")
+        cps = result.get("checkpoints", [])
+        if cps:
+            result = invoke_tool(
+                rt, "get_invalidation_report", checkpoint_id=cps[0]["checkpoint_id"]
+            )
+            assert result["ok"] is True
+            assert "will_revert" in result

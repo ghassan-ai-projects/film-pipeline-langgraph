@@ -51,6 +51,19 @@ class ArtifactStore:
         write_metadata(meta_path, meta)
         return content_path
 
+    def save_dict(self, artifact: dict[str, Any], meta: ArtifactMetadata) -> Path:
+        """Save a plain dict artifact (without Pydantic model wrapping)."""
+        import json
+
+        content_path = self._artifact_path(
+            meta.project_id, meta.phase.value, meta.artifact_id, meta.version
+        )
+        meta_path = _meta_sidecar(content_path)
+        content_path.parent.mkdir(parents=True, exist_ok=True)
+        content_path.write_text(json.dumps(artifact, indent=2))
+        write_metadata(meta_path, meta)
+        return content_path
+
     def load(
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> dict[str, Any]:
