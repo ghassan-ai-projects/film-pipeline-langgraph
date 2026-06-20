@@ -74,8 +74,15 @@ release-check: ## Run release validation (ci-check + smoke + docs)
 	@test -f profiles/local-real-provider.yaml || (echo "Missing profiles/local-real-provider.yaml" && exit 1)
 	@echo "Checking required docs..."
 	@test -f docs/acceptance-checklist.md || (echo "Missing docs/acceptance-checklist.md" && exit 1)
-	@echo "Checking smoke test..."
+	@test -f docs/product-completion-plan/acceptance-checklist.md || (echo "Missing docs/product-completion-plan/acceptance-checklist.md" && exit 1)
+	@test -f docs/operations-guide.md || (echo "Missing docs/operations-guide.md" && exit 1)
+	@test -f docs/runbook-first-film.md || (echo "Missing docs/runbook-first-film.md" && exit 1)
+	@test -f docs/release-process.md || (echo "Missing docs/release-process.md" && exit 1)
+	@test -f docs/demo-guide.md || (echo "Missing docs/demo-guide.md" && exit 1)
+	@echo "Checking app smoke test..."
 	@$(UV_RUN) python -m film_pipeline.app.smoke
+	@echo "Checking pytest smoke tests..."
+	@$(UV_RUN) pytest tests/smoke/ -q --no-cov
 	@echo "  Release check passed"
 
 product-gate: ## Enforce the working-product acceptance gate
