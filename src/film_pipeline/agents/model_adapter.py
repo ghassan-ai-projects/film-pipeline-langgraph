@@ -2,6 +2,9 @@
 
 Same pattern as ``SeedanceOpenRouterProvider``: constructor-injected HTTP opener
 so tests can mock the network without any test-only dependency.
+
+Model selection is ALWAYS explicit: no hardcoded defaults. Callers must resolve
+the model through the routing layer before invoking this adapter.
 """
 
 from __future__ import annotations
@@ -36,11 +39,15 @@ class ModelAdapter:
     def _request(
         self,
         messages: list[dict[str, str]],
-        model: str = "google/gemini-flash-1.1",
+        model: str,
         max_tokens: int = 4096,
         temperature: float = 0.7,
     ) -> dict[str, Any]:
-        """Post a chat-completion request to OpenRouter and return parsed JSON."""
+        """Post a chat-completion request to OpenRouter and return parsed JSON.
+
+        ``model`` is REQUIRED — no hardcoded default. The caller must resolve
+        the model through config/routing before invoking.
+        """
         url = f"{OPENROUTER_API}/chat/completions"
         body: dict[str, Any] = {
             "model": model,
@@ -74,12 +81,15 @@ class ModelAdapter:
         self,
         prompt: str,
         *,
-        model: str = "google/gemini-flash-1.1",
+        model: str,
         system: str = "",
         max_tokens: int = 4096,
         temperature: float = 0.7,
     ) -> str:
-        """Send a prompt and return the model's text response."""
+        """Send a prompt and return the model's text response.
+
+        ``model`` is REQUIRED — no hardcoded default.
+        """
         messages: list[dict[str, str]] = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -101,12 +111,15 @@ class ModelAdapter:
         self,
         prompt: str,
         *,
-        model: str = "google/gemini-flash-1.1",
+        model: str,
         system: str = "",
         max_tokens: int = 4096,
         temperature: float = 0.3,
     ) -> dict[str, Any]:
-        """Send a prompt, expect a JSON response, parse and return it."""
+        """Send a prompt, expect a JSON response, parse and return it.
+
+        ``model`` is REQUIRED — no hardcoded default.
+        """
         text = self.chat(
             prompt,
             model=model,

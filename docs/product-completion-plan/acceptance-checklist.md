@@ -20,11 +20,11 @@ The product may be called complete only when every item below is green and the e
 
 ## Phase 01 - Model Routing And Prompt Framework
 
-- [ ] No hard-coded model defaults remain in core agent execution paths
-- [ ] Critical agents resolve models through config and routing policy
-- [ ] Dedicated prompt templates exist for all critical-path agents
-- [ ] Prompt template version is observable in runtime evidence
-- [ ] Secret-redaction tests prove keys are not leaked
+- [x] No hard-coded model defaults remain in core agent execution paths
+- [x] Critical agents resolve models through config and routing policy
+- [x] Dedicated prompt templates exist for all critical-path agents
+- [x] Prompt template version is observable in runtime evidence
+- [x] Secret-redaction tests prove keys are not leaked
 
 ## Phase 02 - Core Agent Execution
 

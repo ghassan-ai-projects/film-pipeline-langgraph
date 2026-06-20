@@ -27,7 +27,7 @@ class TestModelAdapter:
             }
         )
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
-        result = adapter.chat("Say hello")
+        result = adapter.chat("Say hello", model="test-model")
         assert result == "Hello, world!"
 
     def test_chat_with_system_prompt(self) -> None:
@@ -46,7 +46,7 @@ class TestModelAdapter:
         opener = MagicMock()
         opener.open = _capture
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
-        adapter.chat("Do something", system="You are helpful.")
+        adapter.chat("Do something", model="test-model", system="You are helpful.")
         body = json.loads(captured[0])
         messages: list[dict[str, str]] = body["messages"]
         assert messages[0] == {"role": "system", "content": "You are helpful."}
@@ -59,7 +59,7 @@ class TestModelAdapter:
             }
         )
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
-        result = adapter.chat_json("Rate this")
+        result = adapter.chat_json("Rate this", model="test-model")
         assert result == {"score": 95, "status": "pass"}
 
     def test_chat_json_from_markdown_fence(self) -> None:
@@ -71,7 +71,7 @@ class TestModelAdapter:
             }
         )
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
-        result = adapter.chat_json("Give me JSON")
+        result = adapter.chat_json("Give me JSON", model="test-model")
         assert result == {"x": 1}
 
     def test_chat_json_from_plain_fence(self) -> None:
@@ -81,7 +81,7 @@ class TestModelAdapter:
             }
         )
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
-        result = adapter.chat_json("Give me JSON")
+        result = adapter.chat_json("Give me JSON", model="test-model")
         assert result == {"a": "b"}
 
     def test_chat_json_invalid_raises(self) -> None:
@@ -92,17 +92,17 @@ class TestModelAdapter:
         )
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
         with pytest.raises(ValueError, match="not valid JSON"):
-            adapter.chat_json("Give me JSON")
+            adapter.chat_json("Give me JSON", model="test-model")
 
     def test_chat_no_choices_raises(self) -> None:
         opener = _make_opener({"choices": []})
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
         with pytest.raises(RuntimeError, match="returned no choices"):
-            adapter.chat("Hello")
+            adapter.chat("Hello", model="test-model")
 
     def test_http_error_raises(self) -> None:
         opener = MagicMock()
         opener.open.side_effect = OSError("Connection refused")
         adapter = ModelAdapter(http_opener=opener, api_key="test-key")
         with pytest.raises(RuntimeError, match="OpenRouter chat completions failed"):
-            adapter.chat("Hello")
+            adapter.chat("Hello", model="test-model")
