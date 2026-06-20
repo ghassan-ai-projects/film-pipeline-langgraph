@@ -108,7 +108,19 @@ def _record_handoff(
     route_result: Any,
     agent_output: dict[str, Any],
 ) -> None:
-    """Store a handoff record so routing is explainable and queryable."""
+    """Store a handoff record so routing is explainable and queryable.
+
+    Idempotent: duplicates (same phase + task) on replay are skipped.
+    """
+    routes: list[dict[str, Any]] = state.setdefault("_routing_decisions", [])
+
+    # Guard against duplicates on LangGraph checkpoint replay
+    handoff_key = f"{phase}:{task}"
+    for existing in routes:
+        existing_key = f"{existing.get('phase', '')}:{existing.get('task', '')}"
+        if existing_key == handoff_key:
+            return
+
     handoff = {
         "agent_id": agent_id,
         "phase": phase,
@@ -119,7 +131,6 @@ def _record_handoff(
         "output_keys": list(agent_output.keys()),
         "project_id": state.get("project_id", ""),
     }
-    routes = state.setdefault("_routing_decisions", [])
     routes.append(handoff)
 
 

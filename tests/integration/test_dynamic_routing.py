@@ -82,6 +82,17 @@ class TestRouteAgent:
                 f"Phase '{phase}' should route to '{expected_agent}', got '{result.agent_id}'"
             )
 
+    def test_repair_without_registry_falls_back_to_default(self) -> None:
+        """Without a registry, repair/review return default create agent."""
+        result = route_agent({}, "script", task_type="repair")
+        assert result.agent_id == "screenwriter-agent"
+        assert result.fallback is False
+
+    def test_preferred_capability_maps_task_type_without_registry(self) -> None:
+        """preferred_capability infers task_type even when registry is None."""
+        result = route_agent({}, "script", preferred_capability="review")
+        assert result.agent_id == "screenwriter-agent"
+
 
 class TestRoutingDecisions:
     """Prove routing decisions are persisted in state."""
