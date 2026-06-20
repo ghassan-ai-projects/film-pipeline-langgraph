@@ -17,29 +17,38 @@ Purpose: Track program progress without weakening the acceptance standard.
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| 00 | **Complete** | Product-gate wired into `make ci-check`, dual-manifest loading, hard acceptance controls enforced |
-| 01 | **Complete** | Hardcoded model defaults removed, ModelRouter fail-fast, dedicated templates for 8 critical agents, secret redaction tests |
-| 02 | **Complete** | 9 agents produce real artifacts, AgentRegistry wired, services injection fixed, 7 integration tests pass |
-| 03 | **Complete** | Dynamic routing selects different agents for create/review/repair, handoffs persisted, explain tool wired, 12 routing tests pass |
-| 04 | Planned | Validation framework exists; runtime-control proof still incomplete |
-| 05 | Planned | Product gate improved, but important non-video product surfaces still incomplete |
-| 06 | Planned | E2E/operator proof remains the final proving phase |
+| 00 | Complete | Plan folder, acceptance manifest, checklist, and tracker are in place |
+| 01 | Complete | Model-routing and prompt-framework tests are green; core execution no longer depends on the old direct default path |
+| 02 | Complete | Core artifact-producing spine is implemented and was previously advanced to complete status |
+| 03 | Complete | Dynamic routing evidence is green: `tests/integration/test_dynamic_routing.py` passes |
+| 04 | Complete | All 4 validation-runtime integration tests pass; `_run_validators` loads upstream artifacts for QC phase; MCP tools read stored `_validation_reports` and `issues` |
+| 05 | Planned | Product gate is green, but important MCP/product-surface items still remain |
+| 06 | Planned | E2E/operator-proof phase still depends on finishing validation and MCP completion |
 
 ---
 
-## First Execution Slice
+## Current Verified Snapshot
 
-The first recommended implementation slice is:
+- `make product-gate` is green
+- `make ci-check` is green (format, lint, mypy, 644 tests, 92.42% coverage, build)
+- `tests/integration/test_validation_runtime.py` — 4/4 passing
+- `tests/integration/test_dynamic_routing.py` — green
+- Model-routing and prompt-runner unit tests — green
 
-1. Phase 01 model-routing refactor
-2. Phase 01 prompt-template enforcement
-3. Phase 01 secret-redaction tests
-4. Phase 02 constitution -> development -> script artifact spine
+Phase 04 was completed by:
 
-That slice is intentionally chosen because it fixes truthfulness first:
+1. Fixing `_run_validators()` in `src/film_pipeline/graph/nodes.py` to scan upstream phases (script, visual_dev, etc.) when running in the QC phase, instead of only the current phase
+2. Making `get_validation_report()` and `list_validation_issues()` in `src/film_pipeline/mcp/tools/__init__.py` serve stored data even when `current_phase` is not set, falling back to the phase check only for live validation
+3. Turning `tests/integration/test_validation_runtime.py` fully green
 
-- model policy becomes real
-- prompt framework becomes real
-- the first artifact-producing path becomes real
+---
 
-Only after that should the team widen the product surface further.
+## Immediate Next Slice
+
+Phase 05 — MCP Surface and Generation Runtime:
+
+- Replace remaining important MCP stubs with real behavior
+- Non-video generation lifecycle: real and behavior-tested
+- Resume/polling idempotency
+- Rollback behavior
+- Final-cut assembly operator-visible and non-placeholder
