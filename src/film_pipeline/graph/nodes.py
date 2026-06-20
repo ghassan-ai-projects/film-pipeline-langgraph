@@ -23,8 +23,14 @@ def _run_agent(
     agent_id: str,
     phase: str,
     task: str,
+    *,
+    task_type: str = "create",
 ) -> dict[str, Any]:
-    """Run an agent through the full lifecycle: prepare → prompt → model → execute.
+    """Run an agent through the full lifecycle: route → prepare → prompt → model → execute.
+
+    Uses ``route_agent()`` for dynamic agent selection when ``task_type`` is
+    ``"review"`` or ``"repair"``, falling back to the explicitly passed
+    ``agent_id`` for create paths.
 
     Returns the agent's result dict, or a fallback if services aren't available.
     """
@@ -32,15 +38,26 @@ def _run_agent(
     if services is None:
         return {"status": "no_services", "agent": agent_id}
 
+    # Dynamic routing: select agent based on task type
+    from film_pipeline.graph.router import route_agent
+
+    route_result = route_agent(
+        state,
+        phase=phase,
+        task_type=task_type,
+        registry=services.agent_registry,
+    )
+    resolved_agent_id = route_result.agent_id
+
     registry = services.agent_registry
-    contract = registry.lookup_by_id(agent_id) if registry else None
+    contract = registry.lookup_by_id(resolved_agent_id) if registry else None
     if contract is None:
-        return {"status": "agent_not_found", "agent": agent_id}
+        return {"status": "agent_not_found", "agent": resolved_agent_id}
 
     kb = services.kb_for(
         project_id=str(state.get("project_id", "")),
         phase=phase,
-        agent_id=agent_id,
+        agent_id=resolved_agent_id,
         task=task,
     )
 
@@ -70,13 +87,40 @@ def _run_agent(
         "clip-validator": QCSynthesisAgent,
         "failure-handling-agent": AssemblyAgent,
     }
-    agent_cls = agent_map.get(agent_id)
+    agent_cls = agent_map.get(resolved_agent_id)
     if agent_cls is None:
-        return {"status": "no_impl", "agent": agent_id, "model_output": model_output}
+        return {"status": "no_impl", "agent": resolved_agent_id, "model_output": model_output}
 
     instance: BaseAgent = agent_cls(contract)
-    # Call via run() so validate() is invoked (not execute() which skips validation)
-    return instance.run(state, kb, task, model_output)
+    result = instance.run(state, kb, task, model_output)
+
+    # Persist routing decision as a handoff record
+    _record_handoff(state, resolved_agent_id, phase, task, route_result, result)
+
+    return result
+
+
+def _record_handoff(
+    state: dict[str, Any],
+    agent_id: str,
+    phase: str,
+    task: str,
+    route_result: Any,
+    agent_output: dict[str, Any],
+) -> None:
+    """Store a handoff record so routing is explainable and queryable."""
+    handoff = {
+        "agent_id": agent_id,
+        "phase": phase,
+        "task": task,
+        "routing_reason": route_result.routing_reason,
+        "fallback": route_result.fallback,
+        "input_refs": list(state.get("artifact_refs", [])),
+        "output_keys": list(agent_output.keys()),
+        "project_id": state.get("project_id", ""),
+    }
+    routes = state.setdefault("_routing_decisions", [])
+    routes.append(handoff)
 
 
 def _save_artifact(
