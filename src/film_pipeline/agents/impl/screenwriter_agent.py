@@ -56,10 +56,17 @@ class ScreenwriterAgent(BaseAgent):
             )
         except Exception:
             logline = Logline(text=logline_text or "Untitled film project.")
-        premise = Premise(
-            text=str(bible_data.get("premise", "")),
-            dramatic_question=str(bible_data.get("dramatic_question", "")),
-        )
+        premise_data = bible_data.get("premise", {})
+        if isinstance(premise_data, dict):
+            premise = Premise(
+                text=str(premise_data.get("text", "")),
+                dramatic_question=str(premise_data.get("dramatic_question", "")),
+            )
+        else:
+            premise = Premise(
+                text=str(premise_data),
+                dramatic_question=str(bible_data.get("dramatic_question", "")),
+            )
         am = bible_data.get("act_map", {})
         act_map = ActMap(
             act1_setup=str(am.get("act1_setup", "")),

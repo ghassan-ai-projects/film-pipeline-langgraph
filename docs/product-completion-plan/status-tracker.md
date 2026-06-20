@@ -19,7 +19,7 @@ Purpose: Track program progress without weakening the acceptance standard.
 |-------|--------|-------|
 | 00 | **Complete** | Product-gate wired into `make ci-check`, dual-manifest loading, hard acceptance controls enforced |
 | 01 | **Complete** | Hardcoded model defaults removed, ModelRouter fail-fast, dedicated templates for 8 critical agents, secret redaction tests |
-| 02 | Planned | Core artifact-producing flow still incomplete |
+| 02 | **Complete** | 9 agents produce real artifacts, AgentRegistry wired, services injection fixed, 7 integration tests pass |
 | 03 | Planned | Dynamic routing exists as scaffold more than proven behavior |
 | 04 | Planned | Validation framework exists; runtime-control proof still incomplete |
 | 05 | Planned | Product gate improved, but important non-video product surfaces still incomplete |
