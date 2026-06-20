@@ -118,8 +118,12 @@ class TestSecretRedaction:
         opener.open = _error_open
         adapter = ModelAdapter(http_opener=opener, api_key="sk-test1234abcdef")
 
-        with pytest.raises(RuntimeError, match="OpenRouter chat completions failed"):
+        with pytest.raises(RuntimeError, match="OpenRouter chat completions failed") as exc_info:
             adapter.chat("Hello", model="test-model")
+
+        error_msg = str(exc_info.value)
+        assert "sk-test1234abcdef" not in error_msg
+        assert "[REDACTED]" in error_msg
 
     def test_redact_openrouter_key_pattern(self) -> None:
         """OpenRouter keys (sk-...) must be redacted."""
