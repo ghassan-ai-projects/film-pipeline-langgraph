@@ -38,8 +38,8 @@ class TestRollback:
 
     def test_invalidation_engine_reports_downstream_impact(
         self,
-        graph_services: GraphServices,  # noqa: ARG002
-        tmp_path: Path,  # noqa: ARG002
+        graph_services: GraphServices,
+        tmp_path: Path,
     ) -> None:
         engine = InvalidationEngine()
         report = engine.report(

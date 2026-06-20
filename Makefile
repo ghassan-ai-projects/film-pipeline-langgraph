@@ -88,7 +88,7 @@ precommit: ## Run all pre-commit hooks
 hooks: ## Install the pre-commit git hook
 	$(UV_RUN) pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push
 
-ci-check: format-check lint typecheck test build ## Run the full CI pipeline locally
+ci-check: format-check lint typecheck test build product-gate ## Run the full CI pipeline locally
 	@echo "  CI check passed"
 
 clean: ## Remove local caches and build artifacts

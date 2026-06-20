@@ -102,9 +102,7 @@ class TestGenerationLedgerManager:
     def test_plan_batch_respects_mode(self, tmp_path: Path) -> None:
         store = ArtifactStore(root=tmp_path / "artifacts")
         mgr = GenerationLedgerManager(store)
-        ledger = mgr.plan_batch(
-            "proj-10", ["S001"], "p", "m", mode=GenerationMode.PRODUCTION
-        )
+        ledger = mgr.plan_batch("proj-10", ["S001"], "p", "m", mode=GenerationMode.PRODUCTION)
         assert ledger.rows[0].mode == GenerationMode.PRODUCTION
 
     def test_update_row_found(self, tmp_path: Path) -> None:
