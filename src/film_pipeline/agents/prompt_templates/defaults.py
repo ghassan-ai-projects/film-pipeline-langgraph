@@ -46,8 +46,12 @@ def _intake_classifier() -> PromptTemplate:
         constraints=(
             "Genre classification must be specific (not just 'sci-fi' but "
             "'grounded sci-fi drama' or 'cyberpunk noir thriller'). "
-            "Runtime must be realistic for the story scope — estimate actual seconds. "
+            "Runtime must be realistic for the story scope — estimate actual seconds, "
+            "and never use 1 second unless the user explicitly asked for a 1-second film. "
+            "For a normal short film idea, target_runtime_seconds should usually be between 60 and 1800. "
             "Aspect ratio must fit the story's visual intent (e.g., 2.35:1 for epic, 1.85:1 for intimate). "
+            "You must provide at least one concrete genre tag. "
+            "risk_flags must be an empty array or a list of concrete risks. "
             "Flag risks explicitly — do not dismiss concerns. "
             "The output JSON MUST be valid and contain ALL fields shown in Output."
         ),
@@ -60,9 +64,13 @@ def _intake_classifier() -> PromptTemplate:
             '    "title": "...",\n'
             '    "aliases": []\n'
             "  },\n"
+            '  "film_type": "narrative | visual_poetry | experimental | short_drama | commercial",\n'
             '  "target_runtime_seconds": ...,\n'
             '  "aspect_ratio": "...",\n'
             '  "delivery_modes": ["..."],\n'
+            '  "budget_cap_usd": null,\n'
+            '  "provider_preferences": [],\n'
+            '  "human_owner": null,\n'
             '  "classified_input": "...",\n'
             '  "genre_tags": ["..."],\n'
             '  "risk_flags": []\n'

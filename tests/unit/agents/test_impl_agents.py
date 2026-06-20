@@ -6,7 +6,7 @@ from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
 from film_pipeline.agents.impl.development_agent import DevelopmentAgent
 from film_pipeline.agents.impl.intake_agent import IntakeAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas._base import AgentFamily, AgentRole, FilmType
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
@@ -330,6 +330,58 @@ class TestIntakeAgent:
         }
         result = agent.execute(output)
         assert not agent.validate(result)
+
+    def test_execute_normalizes_invalid_one_second_runtime(self) -> None:
+        agent = IntakeAgent(_make_contract("intake-classifier-agent"))
+        output = {
+            "intake": {
+                "project_id": "p1",
+                "title": "Signal Loss",
+                "slug": "signal-loss",
+                "target_runtime_seconds": 1,
+            }
+        }
+
+        result = agent.execute(output)
+
+        profile = result["profile"]
+        assert isinstance(profile, ProjectProfile)
+        assert profile.target_runtime_seconds == 300
+
+    def test_execute_uses_minutes_when_seconds_missing(self) -> None:
+        agent = IntakeAgent(_make_contract("intake-classifier-agent"))
+        output = {
+            "intake": {
+                "project_id": "p1",
+                "title": "Signal Loss",
+                "slug": "signal-loss",
+                "target_runtime_minutes": 7,
+            }
+        }
+
+        result = agent.execute(output)
+
+        profile = result["profile"]
+        assert isinstance(profile, ProjectProfile)
+        assert profile.target_runtime_seconds == 420
+
+    def test_execute_coerces_valid_film_type(self) -> None:
+        agent = IntakeAgent(_make_contract("intake-classifier-agent"))
+        output = {
+            "intake": {
+                "project_id": "p1",
+                "title": "Signal Loss",
+                "slug": "signal-loss",
+                "film_type": "short_drama",
+                "target_runtime_seconds": 300,
+            }
+        }
+
+        result = agent.execute(output)
+
+        profile = result["profile"]
+        assert isinstance(profile, ProjectProfile)
+        assert profile.film_type == FilmType.SHORT_DRAMA
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
