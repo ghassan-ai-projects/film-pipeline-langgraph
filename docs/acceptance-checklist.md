@@ -12,13 +12,14 @@ Current state: `Partially accepted`
 What this means:
 
 - code quality is strong
-- several core product pieces are real and tested
+- several core product pieces are now real and behavior-tested
 - the repository is not yet accepted as a working product
 
 The main blockers today are:
 
-- `make test` is not green because one unit test fails and coverage is below the required threshold
-- `make product-gate` is not green because critical MCP tools still return stubs
+- lint is not green
+- mypy is not green
+- the full test suite is functionally green, but the coverage gate still fails
 - the product still does not satisfy the hard completion standard in `docs/product-completion/`
 
 ---
@@ -27,14 +28,16 @@ The main blockers today are:
 
 ### Code Quality Gates
 
-- [x] `ruff check .` passes
-- [x] `mypy src tests` passes
+- [ ] `ruff check .` passes
+  Current evidence: fails on `tests/integration/test_generation_mcp.py` and `tests/unit/app/test_app_ops.py`
+- [ ] `mypy src tests` passes
+  Current evidence: fails on `tests/integration/test_generation_mcp.py` and `tests/unit/app/test_app_ops.py`
 - [ ] `make test` passes
-  Current evidence: one unit test currently fails in `tests/unit/app/test_product_gate.py`, and total coverage is `86.18%`, below the required `90%`.
+  Current evidence: full `pytest` behavior run is functionally green, but the coverage gate fails at `86.82%`, below the required `90%`.
 - [ ] Coverage ≥ 90%
-  Current evidence: `86.18%`
+  Current evidence: `86.82%`
 - [ ] `make build` re-verified locally
-  Current note: still not re-verified in this restricted environment
+  Current note: `uv build` could not be re-verified here because the build backend dependency resolution needed network access
 
 ### Runtime And Core Infrastructure
 
@@ -61,23 +64,33 @@ The main blockers today are:
 
 ## Product Gate
 
-- [ ] `make product-gate` passes
+- [x] `make product-gate` passes
 
-Current failing reason:
+Current evidence:
 
-Critical MCP tools still stubbed:
+- `UV_CACHE_DIR=.uv-cache make product-gate` returns `Product gate: PASS`
+- the acceptance manifest currently allows only `start_generation_batch` to remain stubbed on the critical list
 
-- `approve_generation_spend`
-- `cancel_generation_request`
-- `get_generation_status`
-- `list_active_generations`
-- `plan_generation_batch`
-- `resume_generation_polling`
+Remaining non-critical MCP stubs observed in `src/film_pipeline/mcp/tools/__init__.py`:
+
+- `find_project`
+- `get_project_summary`
+- `get_intake_analysis`
+- `approve_intake`
+- `start_generation_batch`
+- `promote_test_to_production`
+- `rollback_artifact`
+- `plan_coverage_group`
+- `list_coverage_groups`
+- `inspect_coverage_group`
+- `approve_coverage_generation`
+- `assemble_final_cut`
 
 Interpretation:
 
-- the gate is working correctly
-- the repo is not yet allowed to claim working-product status
+- the product gate is working and is now green
+- critical MCP gating is materially better than the prior review state
+- some product-surface gaps still remain even though they no longer fail the gate
 
 ---
 
@@ -97,11 +110,13 @@ Interpretation:
 
 ### Not Yet Accepted
 
-- [ ] Generation MCP path complete
+- [ ] All non-video generation MCP behavior is complete under the hard product standard
 - [ ] Validation MCP path complete
 - [ ] Artifact inspection path complete
 - [ ] Critical state inspection path complete
 - [ ] Rollback mutation path fully complete under the hard product standard
+- [ ] Coverage-group product surface complete
+- [ ] Final-cut assembly product surface complete
 
 ---
 
@@ -130,25 +145,26 @@ Interpretation:
 - [x] All 10 E2E scenario files exist
 - [x] E2E suite structure exists in `tests/e2e/`
 - [x] E2E tests execute within the full test run
-- [x] Product-gate critical stub count reduced from 12 to 6
+- [x] The full `pytest` run is functionally green (`488 passed`) before the coverage gate failure is applied
+- [x] Product-gate critical stub count reduced to `0` failing critical tools
 
 ### Not Yet Accepted As Product Proof
 
-- [ ] Happy path accepted as real product proof
-- [ ] Script revision accepted as real product proof
-- [ ] Reference failure accepted as real product proof
-- [ ] Quota exhausted accepted as real product proof
-- [ ] Network error / no duplicate submit accepted as real product proof
-- [ ] Continuity drift accepted as real product proof
-- [ ] Rollback accepted as real product proof
-- [ ] KB conflict accepted as real product proof
-- [ ] Project ambiguity accepted as real product proof
-- [ ] Dynamic flow accepted as real product proof
+- [ ] Happy path accepted as release-level product proof
+- [ ] Script revision accepted as release-level product proof
+- [ ] Reference failure accepted as release-level product proof
+- [ ] Quota exhausted accepted as release-level product proof
+- [ ] Network error / no duplicate submit accepted as release-level product proof
+- [ ] Continuity drift accepted as release-level product proof
+- [ ] Rollback accepted as release-level product proof
+- [ ] KB conflict accepted as release-level product proof
+- [ ] Project ambiguity accepted as release-level product proof
+- [ ] Dynamic flow accepted as release-level product proof
 
 Reason:
 
-- existence of scenario files is not enough by itself
-- final acceptance still depends on the harder product criteria and a passing product gate
+- test presence and passing status are necessary, but the hard product docs still require end-to-end artifact, audit, recovery, and operator-proof evidence
+- final acceptance still depends on the harder product criteria, green quality gates, and operator reproducibility from docs
 
 ---
 
@@ -182,11 +198,12 @@ Reason:
 
 These remain hard blockers to calling the project a working product:
 
-- critical MCP tools still stubbed
-- current unit suite is not fully green
+- lint is currently failing
+- mypy is currently failing
 - coverage gate below required threshold
 - full product completion criteria in `docs/product-completion/` still unmet
-- core artifact-producing workflow is not yet fully complete across all critical phases
+- several non-critical MCP surfaces still return stubs
+- core artifact-producing workflow is not yet fully complete across all claimed critical phases
 - full agent/prompt/dynamic-routing adoption is not yet complete
 - validation is not yet complete enough to certify the whole product
 

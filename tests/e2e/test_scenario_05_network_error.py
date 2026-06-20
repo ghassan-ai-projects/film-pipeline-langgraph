@@ -19,8 +19,8 @@ from film_pipeline.schemas.generation import (
 class TestNetworkError:
     def test_generation_ledger_prevents_duplicate_submit(
         self,
-        graph_services: GraphServices,  # noqa: ARG002
-        tmp_path: Path,  # noqa: ARG002
+        graph_services: GraphServices,
+        tmp_path: Path,
     ) -> None:
         GenerationRequest(
             generation_request_id="req-001",
@@ -51,8 +51,8 @@ class TestNetworkError:
 
     def test_ambiguous_network_failure_preserves_job_id(
         self,
-        graph_services: GraphServices,  # noqa: ARG002
-        tmp_path: Path,  # noqa: ARG002
+        graph_services: GraphServices,
+        tmp_path: Path,
     ) -> None:
         GenerationRequest(
             generation_request_id="req-002",

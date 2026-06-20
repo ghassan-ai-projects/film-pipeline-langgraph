@@ -1,0 +1,57 @@
+version: 1
+
+program:
+  name: product-completion-plan
+  updated: 2026-06-20
+
+allowed_stub_behaviors:
+  - costly_video_generation_execution_only
+
+forbidden_core_gaps:
+  - hard_coded_model_selection_in_core_agent_execution
+  - generic_prompt_fallback_for_critical_agents
+  - label_only_core_graph_phases
+  - validators_that_do_not_change_runtime_behavior
+  - important_mcp_operator_surfaces_returning_placeholders
+  - undocumented_operator_only_recovery_steps
+  - secret_leakage_in_logs_docs_artifacts_or_tests
+
+phase_order:
+  - 00-program-rules
+  - 01-model-routing-prompt-framework
+  - 02-core-agent-execution-and-artifacts
+  - 03-dynamic-routing-and-handoffs
+  - 04-validation-runtime-control
+  - 05-mcp-surface-and-generation-runtime
+  - 06-e2e-operator-proof-and-release
+
+required_validation_commands:
+  - UV_CACHE_DIR=.uv-cache uv run --python 3.12 --group dev ruff check .
+  - UV_CACHE_DIR=.uv-cache uv run --python 3.12 --group dev mypy src tests
+  - UV_CACHE_DIR=.uv-cache uv run --python 3.12 --group dev pytest -q
+  - UV_CACHE_DIR=.uv-cache make product-gate
+  - make ci-check
+
+required_docs:
+  - docs/product-completion-plan/README.md
+  - docs/product-completion-plan/00-program-rules.md
+  - docs/product-completion-plan/01-model-routing-prompt-framework.md
+  - docs/product-completion-plan/02-core-agent-execution-and-artifacts.md
+  - docs/product-completion-plan/03-dynamic-routing-and-handoffs.md
+  - docs/product-completion-plan/04-validation-runtime-control.md
+  - docs/product-completion-plan/05-mcp-surface-and-generation-runtime.md
+  - docs/product-completion-plan/06-e2e-operator-proof-and-release.md
+  - docs/product-completion-plan/acceptance-checklist.md
+  - docs/product-completion-plan/status-tracker.md
+
+required_e2e_scenarios:
+  - tests/e2e/test_scenario_01_happy_path.py
+  - tests/e2e/test_scenario_02_script_revision.py
+  - tests/e2e/test_scenario_03_reference_failure.py
+  - tests/e2e/test_scenario_04_quota_exhausted.py
+  - tests/e2e/test_scenario_05_network_error.py
+  - tests/e2e/test_scenario_06_continuity_drift.py
+  - tests/e2e/test_scenario_07_rollback.py
+  - tests/e2e/test_scenario_08_kb_conflict.py
+  - tests/e2e/test_scenario_09_project_ambiguity.py
+  - tests/e2e/test_scenario_10_dynamic_flow.py

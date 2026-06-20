@@ -1,7 +1,8 @@
 """Working-product gate enforcement.
 
-This module intentionally fails when the repository still claims product
-readiness without the required implementation and test evidence.
+Loads both the product-completion standard manifest and the product-completion
+plan manifest. Fails when the repository claims product readiness against
+either manifest without the required implementation and test evidence.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import yaml
 from film_pipeline.mcp.contract import make_registry
 
 MANIFEST_PATH = Path("docs/product-completion/acceptance-manifest.yaml")
+PLAN_MANIFEST_PATH = Path("docs/product-completion-plan/acceptance-manifest.yaml")
 
 
 @dataclass(frozen=True)
@@ -31,10 +33,15 @@ class ProductGateManifest:
 class ProductGateReport:
     missing_files: list[str] = field(default_factory=list)
     stubbed_critical_tools: list[str] = field(default_factory=list)
+    plan_manifest_missing: bool = False
 
     @property
     def ok(self) -> bool:
-        return not self.missing_files and not self.stubbed_critical_tools
+        return (
+            not self.missing_files
+            and not self.stubbed_critical_tools
+            and not self.plan_manifest_missing
+        )
 
     def lines(self) -> list[str]:
         lines = ["Product gate: PASS" if self.ok else "Product gate: FAIL"]
@@ -44,6 +51,11 @@ class ProductGateReport:
         if self.stubbed_critical_tools:
             lines.append("Critical MCP tools still stubbed:")
             lines.extend(f"- {tool}" for tool in self.stubbed_critical_tools)
+        if self.plan_manifest_missing:
+            lines.append(
+                "Product-completion plan manifest missing — "
+                "docs/product-completion-plan/acceptance-manifest.yaml"
+            )
         return lines
 
 
@@ -60,17 +72,43 @@ def load_manifest(path: Path = MANIFEST_PATH) -> ProductGateManifest:
     )
 
 
-def evaluate_product_gate(manifest: ProductGateManifest) -> ProductGateReport:
+def load_plan_manifest(path: Path = PLAN_MANIFEST_PATH) -> ProductGateManifest | None:
+    if not path.exists():
+        return None
+    raw = yaml.safe_load(path.read_text())
+    if not isinstance(raw, dict):
+        return None
+    return ProductGateManifest(
+        allowed_stub_tools=frozenset(_read_list(raw, "allowed_stub_behaviors")),
+        critical_mcp_tools=tuple(_read_list(raw, "critical_mcp_tools", [])),
+        required_docs=tuple(_read_list(raw, "required_docs", [])),
+        required_e2e_tests=tuple(_read_list(raw, "required_e2e_scenarios", [])),
+        required_behavior_tests=tuple(_read_list(raw, "required_behavior_tests", [])),
+    )
+
+
+def evaluate_product_gate(
+    manifest: ProductGateManifest,
+    plan_manifest: ProductGateManifest | None = None,
+) -> ProductGateReport:
     required_files = (
         *manifest.required_docs,
         *manifest.required_e2e_tests,
         *manifest.required_behavior_tests,
     )
+    if plan_manifest:
+        required_files = (
+            *required_files,
+            *plan_manifest.required_docs,
+            *plan_manifest.required_e2e_tests,
+            *plan_manifest.required_behavior_tests,
+        )
     missing_files = [path for path in required_files if not Path(path).exists()]
     stubbed_tools = detect_stubbed_critical_tools(manifest)
     return ProductGateReport(
         missing_files=sorted(set(missing_files)),
         stubbed_critical_tools=sorted(stubbed_tools),
+        plan_manifest_missing=plan_manifest is None,
     )
 
 
@@ -92,14 +130,15 @@ def detect_stubbed_critical_tools(manifest: ProductGateManifest) -> list[str]:
 
 def main() -> int:
     manifest = load_manifest()
-    report = evaluate_product_gate(manifest)
+    plan_manifest = load_plan_manifest()
+    report = evaluate_product_gate(manifest, plan_manifest)
     for line in report.lines():
         print(line)
     return 0 if report.ok else 1
 
 
-def _read_list(raw: dict[str, Any], key: str) -> list[str]:
-    value = raw.get(key, [])
+def _read_list(raw: dict[str, Any], key: str, default: object = None) -> list[str]:
+    value = raw.get(key, default or [])
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"Manifest key '{key}' must be a list of strings.")
     return list(value)

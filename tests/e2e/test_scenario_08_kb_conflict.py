@@ -16,8 +16,8 @@ from film_pipeline.schemas.kb import KBConflictRecord
 class TestKBConflict:
     def test_kb_conflict_record_creation(
         self,
-        graph_services: GraphServices,  # noqa: ARG002
-        tmp_path: Path,  # noqa: ARG002
+        graph_services: GraphServices,
+        tmp_path: Path,
     ) -> None:
         conflict = KBConflictRecord(
             conflict_id="kb-conflict:test:v1",
