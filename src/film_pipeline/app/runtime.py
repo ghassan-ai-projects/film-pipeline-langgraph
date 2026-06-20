@@ -35,7 +35,7 @@ class StudioRuntime:
     projects: dict[str, dict[str, Any]] = field(default_factory=dict)
     active_project_id: str = ""
     graph: Any = None  # CompiledStateGraph
-    services: GraphServices = field(default_factory=GraphServices)
+    services: GraphServices = field(default_factory=GraphServices.for_mock_runtime)
     checkpoints: dict[str, CheckpointMetadata] = field(default_factory=dict)
     audit_events: list[dict[str, Any]] = field(default_factory=list)
     block_entries: list[dict[str, str]] = field(default_factory=list)
@@ -327,6 +327,7 @@ class StudioRuntime:
             shot_bible_node,
             visual_dev_node,
         )
+        from film_pipeline.graph.services import SERVICES_KEY
 
         phase_nodes = {
             "intake": intake_node,
@@ -342,6 +343,9 @@ class StudioRuntime:
             "delivery": delivery_node,
         }
         node = phase_nodes[phase]
+        # Inject graph services so nodes can invoke agents and persist artifacts
+        state = dict(state)
+        state[SERVICES_KEY] = self.services
         return node(state)
 
 

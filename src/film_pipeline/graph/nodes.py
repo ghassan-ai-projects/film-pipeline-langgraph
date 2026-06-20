@@ -47,16 +47,26 @@ def _run_agent(
 
     # The agent instance parses and validates
     from film_pipeline.agents.base import BaseAgent
+    from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
     from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
     from film_pipeline.agents.impl.development_agent import DevelopmentAgent
+    from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
     from film_pipeline.agents.impl.intake_agent import IntakeAgent
+    from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
     from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
+    from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+    from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 
     agent_map: dict[str, type[BaseAgent]] = {
         "intake-classifier-agent": IntakeAgent,
         "film-constitution-agent": ConstitutionAgent,
         "treatment-agent": DevelopmentAgent,
         "screenwriter-agent": ScreenwriterAgent,
+        "shot-design-agent": ShotBibleAgent,
+        "reference-strategy-planner": VisualDevAgent,
+        "provider-planning-agent": GenPlannerAgent,
+        "clip-validator": QCSynthesisAgent,
+        "failure-handling-agent": AssemblyAgent,
     }
     agent_cls = agent_map.get(agent_id)
     if agent_cls is None:
@@ -228,6 +238,20 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "visual_bible"
+
+    result = _run_agent(
+        new_state,
+        agent_id="reference-strategy-planner",
+        phase="visual_dev",
+        task="Create visual development references from the script and constitution.",
+    )
+    entries = result.get("reference_entries")
+    if entries:
+        ref = _save_artifact(new_state, entries, "reference_entries", "visual_dev")
+        if ref:
+            new_state["visual_refs"] = ref
+            new_state.setdefault("artifact_refs", []).append(ref)
+
     return new_state
 
 
@@ -237,6 +261,20 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "shot_bible"
+
+    result = _run_agent(
+        new_state,
+        agent_id="shot-design-agent",
+        phase="shot_bible",
+        task="Create the detailed shot matrix from the script and visual references.",
+    )
+    shot_matrix = result.get("shot_matrix")
+    if shot_matrix is not None:
+        ref = _save_artifact(new_state, shot_matrix, "shot_matrix", "shot_bible")
+        if ref:
+            new_state["shot_matrix_ref"] = ref
+            new_state.setdefault("artifact_refs", []).append(ref)
+
     return new_state
 
 
@@ -246,6 +284,23 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "generation_spend"
+
+    result = _run_agent(
+        new_state,
+        agent_id="provider-planning-agent",
+        phase="gen_planning",
+        task="Create the generation plan from the shot matrix and budget constraints.",
+    )
+    cost_estimate = result.get("cost_estimate")
+    if cost_estimate is not None:
+        ref = _save_artifact(new_state, cost_estimate, "cost_estimate", "gen_planning")
+        if ref:
+            new_state["cost_estimate_ref"] = ref
+            new_state.setdefault("artifact_refs", []).append(ref)
+    gen_requests = result.get("generation_requests")
+    if gen_requests:
+        new_state["generation_requests"] = gen_requests
+
     return new_state
 
 
@@ -264,6 +319,20 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "qc"
+
+    result = _run_agent(
+        new_state,
+        agent_id="clip-validator",
+        phase="qc",
+        task="Synthesize validator reports into a unified QC report.",
+    )
+    report = result.get("consensus_report")
+    if report is not None:
+        ref = _save_artifact(new_state, report, "consensus_report", "qc")
+        if ref:
+            new_state["consensus_report_ref"] = ref
+            new_state.setdefault("artifact_refs", []).append(ref)
+
     return new_state
 
 
@@ -273,6 +342,20 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "assembly"
+
+    result = _run_agent(
+        new_state,
+        agent_id="failure-handling-agent",
+        phase="post",
+        task="Create the assembly manifest from generated media and the shot matrix.",
+    )
+    manifest = result.get("assembly_manifest")
+    if manifest is not None:
+        ref = _save_artifact(new_state, manifest, "assembly_manifest", "post")
+        if ref:
+            new_state["assembly_manifest_ref"] = ref
+            new_state.setdefault("artifact_refs", []).append(ref)
+
     return new_state
 
 

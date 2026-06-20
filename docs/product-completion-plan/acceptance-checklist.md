@@ -28,10 +28,10 @@ The product may be called complete only when every item below is green and the e
 
 ## Phase 02 - Core Agent Execution
 
-- [ ] Constitution, development, screenwriting, visual dev, shot bible, generation planning, QC, and assembly produce real artifacts
-- [ ] Downstream phases consume persisted upstream artifacts
-- [ ] Review packages reference real artifacts
-- [ ] Approval and checkpoint evidence references those artifacts
+- [x] Constitution, development, screenwriting, visual dev, shot bible, generation planning, QC, and assembly produce real artifacts
+- [x] Downstream phases consume persisted upstream artifacts
+- [x] Review packages reference real artifacts
+- [x] Approval and checkpoint evidence references those artifacts
 
 ## Phase 03 - Dynamic Routing
 
