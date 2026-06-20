@@ -131,8 +131,16 @@ class PromptRunner:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-        # Default mock response when nothing is configured
-        return {"status": "ok", "agent": "mock", "output": {}}
+        # No mock matched, no model adapter — return fallback with a warning
+        import logging
+
+        _logger = logging.getLogger(__name__)
+        _logger.warning(
+            "PromptRunner.call_model falling back to generic mock — "
+            "task '%s' not in mock_responses and no model_adapter configured.",
+            prompt.core_task[:80],
+        )
+        return {"status": "ok", "agent": "mock", "output": {"_warning": "generic_fallback"}}
 
     def run(
         self,

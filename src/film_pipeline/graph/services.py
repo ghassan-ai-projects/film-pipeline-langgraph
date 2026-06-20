@@ -86,7 +86,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
     """
     return {
         "Classify the user's film idea and produce a project profile.": {
-            "profile": {
+            "intake": {
                 "identity": {
                     "project_id": "demo",
                     "slug": "demo",
@@ -96,8 +96,8 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 "target_runtime_seconds": 300,
                 "aspect_ratio": "16:9",
                 "delivery_modes": ["mp4"],
-            },
-            "classified_input": "A demo film project.",
+                "classified_input": "A demo film project.",
+            }
         },
         "Create the film's creative constitution from the project idea.": {
             "constitution": {
@@ -223,6 +223,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
         },
         "Create visual development references from the script and constitution.": {
             "visual_dev": {
+                "project_id": "demo",
                 "reference_entries": [
                     {
                         "reference_id": "ref_001",

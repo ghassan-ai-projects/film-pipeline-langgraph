@@ -1,17 +1,17 @@
-"""VisualDevAgent — produces visual reference plans from script and constitution."""
+"""VisualDevAgent — produces a ReferenceIndex from script and constitution."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.schemas.reference import ReferenceIndexEntry
+from film_pipeline.schemas.reference import ReferenceIndex, ReferenceIndexEntry
 
 
 class VisualDevAgent(BaseAgent):
     """Creates visual development references from the script and constitution.
 
-    Output artifact: list of ``ReferenceIndexEntry``
+    Output artifact: ``ReferenceIndex``
     """
 
     def prepare(
@@ -47,10 +47,14 @@ class VisualDevAgent(BaseAgent):
             )
             for i, e in enumerate(entries_data)
         ]
-        return {"reference_entries": entries}
+        reference_index = ReferenceIndex(
+            project_id=str(data.get("project_id", "")),
+            entries=entries,
+        )
+        return {"reference_index": reference_index}
 
     def validate(self, result: dict[str, Any]) -> bool:
-        entries = result.get("reference_entries")
-        if not isinstance(entries, list):
+        index = result.get("reference_index")
+        if not isinstance(index, ReferenceIndex):
             return False
-        return len(entries) > 0
+        return len(index.entries) > 0
