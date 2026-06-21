@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
@@ -34,6 +34,12 @@ def _ok(**extra: object) -> dict[str, object]:
 def _error(message: str, **extra: object) -> dict[str, object]:
     """Build an error response."""
     return {"ok": False, "error": message, **extra}
+
+
+def _services(rt: object) -> Any:
+    """Assert services are initialized and return them."""
+    assert hasattr(rt, "services") and rt.services is not None
+    return rt.services
 
 
 # --- Project tools -------------------------------------------------------
@@ -77,7 +83,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = _canonicalize_profile_stack(args)
         resolved_config = _resolve_project_config(profile_stack)
-        conflicts = list(resolved_config.get("conflicts", []))
+        conflicts = list(cast(list[Any], resolved_config.get("conflicts", [])))
         if conflicts:
             blocking = [c for c in conflicts if c.get("severity") == "blocking"]
             if blocking:
@@ -87,7 +93,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
                 )
         if runtime_mode == "real":
             missing_credentials = _missing_provider_credentials(
-                profile_stack, resolved_config["raw"]
+                profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
             )
             if missing_credentials:
                 return _error(
@@ -104,10 +110,12 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         state["runtime_mode"] = runtime_mode
         state["profile_stack"] = profile_stack
         state["server_mode"] = server_mode
-        state["resolved_config"] = resolved_config["raw"]
+        state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
         state["resolved_config_sources"] = resolved_config["sources"]
         state["config_conflicts"] = conflicts
-        _register_project_providers(rt, profile_stack, resolved_config["raw"])
+        _register_project_providers(
+            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        )
         rt._record_audit(
             "system",
             "create_film_project",
@@ -215,7 +223,7 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     # Gather all artifacts across phases
     from film_pipeline.schemas._base import FilmPhase
 
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
     artifact_summary: list[dict[str, object]] = []
     for phase in FilmPhase:
         try:
@@ -282,7 +290,7 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.schemas._base import FilmPhase
 
     try:
-        data = rt.services.artifact_store.load(
+        data = _services(rt).artifact_store.load(
             project_id, FilmPhase("intake"), "intake_analysis", 1
         )
         return _ok(analysis=data)
@@ -391,7 +399,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
         fp = FilmPhase(phase)
     except ValueError:
         return _error(f"Unknown phase: {phase}")
-    artifacts = rt.services.artifact_store.list_artifacts(project_id, fp)
+    artifacts = _services(rt).artifact_store.list_artifacts(project_id, fp)
     return _ok(
         artifacts=[
             {
@@ -447,7 +455,7 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
             fp = FilmPhase(str(phase_str))
         except ValueError:
             return _error(f"Unknown phase: {phase_str}")
-    artifacts = rt.services.artifact_store.list_artifacts(project_id, fp)
+    artifacts = _services(rt).artifact_store.list_artifacts(project_id, fp)
     return _ok(
         artifacts=[
             {
@@ -482,7 +490,7 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     except ValueError:
         return _error(f"Unknown phase: {phase_str}")
     try:
-        content = rt.services.artifact_store.load(project_id, fp, artifact_id, version)
+        content = _services(rt).artifact_store.load(project_id, fp, artifact_id, version)
         return _ok(content=content)
     except FileNotFoundError:
         return _error(f"Artifact '{artifact_id}' not found in phase '{phase_str}'.")
@@ -498,7 +506,9 @@ async def list_shots(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.schemas._base import FilmPhase
 
     try:
-        data = rt.services.artifact_store.load(project_id, FilmPhase("shot_bible"), "shot_bible", 1)
+        data = _services(rt).artifact_store.load(
+            project_id, FilmPhase("shot_bible"), "shot_bible", 1
+        )
         shots = data.get("shots", data.get("scenes", []))
         return _ok(shots=shots)
     except (FileNotFoundError, ValueError):
@@ -518,7 +528,9 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.schemas._base import FilmPhase
 
     try:
-        data = rt.services.artifact_store.load(project_id, FilmPhase("shot_bible"), "shot_bible", 1)
+        data = _services(rt).artifact_store.load(
+            project_id, FilmPhase("shot_bible"), "shot_bible", 1
+        )
         shots = data.get("shots", data.get("scenes", []))
         match = next(
             (s for s in shots if str(s.get("shot_id", s.get("scene_id", ""))) == shot_id), None
@@ -543,7 +555,7 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.schemas._base import FilmPhase
 
     try:
-        data = rt.services.artifact_store.load(project_id, FilmPhase("script"), "script", 1)
+        data = _services(rt).artifact_store.load(project_id, FilmPhase("script"), "script", 1)
         scenes = data.get("scenes", [])
         match = next((s for s in scenes if str(s.get("scene_id", "")) == scene_id), None)
         if match is None:
@@ -566,7 +578,7 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     data = _load_latest_reference_index(rt, project_id, active)
     if data is None:
         return _error("Reference index not yet generated.")
-    refs = data.get("entries", data.get("references", data.get("items", [])))
+    refs = cast(list[Any], data.get("entries", data.get("references", data.get("items", []))))
     match = next(
         (r for r in refs if str(r.get("reference_id", r.get("id", ""))) == reference_id),
         None,
@@ -594,7 +606,7 @@ async def generate_character_bible(args: dict[str, object]) -> dict[str, object]
         return _error("character_id is required.")
     character_name = str(args.get("character_name", character_id)).strip()
 
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     # Load Script artifact
     try:
@@ -692,12 +704,12 @@ Return ONLY valid JSON. No markdown fences, no commentary.
             )
         )
 
-        runner = rt.services.prompt_runner
+        runner = _services(rt).prompt_runner
 
         # Use PromptRunner with model_adapter if available
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(prompt)
+            raw = runner.model_adapter.chat(prompt, model="google/gemini-3-flash-preview")
             model_output = raw if isinstance(raw, dict) else {}
         else:
             # Mock mode: return a minimal valid response
@@ -785,13 +797,18 @@ def _extract_script_text(script_data: dict[str, object] | None) -> str:
                     heading = scene.get("heading", scene.get("scene_heading", ""))
                     if heading:
                         lines.append(str(heading))
-                    for action in scene.get("action_lines", scene.get("actions", [])):
-                        lines.append(str(action))
-                    for dialogue in scene.get("dialogue_lines", scene.get("dialogue", [])):
-                        if isinstance(dialogue, dict):
-                            char = dialogue.get("character_id", dialogue.get("character", ""))
-                            line = dialogue.get("line", dialogue.get("text", ""))
-                            lines.append(f"{char}: {line}")
+                    if scene is not None:
+                        for action in cast(
+                            list[Any], scene.get("action_lines", scene.get("actions", []))
+                        ):
+                            lines.append(str(action))
+                        for dialogue in cast(
+                            list[Any], scene.get("dialogue_lines", scene.get("dialogue", []))
+                        ):
+                            if isinstance(dialogue, dict):
+                                char = dialogue.get("character_id", dialogue.get("character", ""))
+                                line = dialogue.get("line", dialogue.get("text", ""))
+                                lines.append(f"{char}: {line}")
             return "\n".join(lines)
     return str(script_data)
 
@@ -814,7 +831,7 @@ async def generate_environment_bible(args: dict[str, object]) -> dict[str, objec
         return _error("environment_id is required.")
     environment_name = str(args.get("environment_name", environment_id)).strip()
 
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -903,10 +920,10 @@ Return ONLY valid JSON:
             )
         )
 
-        runner = rt.services.prompt_runner
+        runner = _services(rt).prompt_runner
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(prompt)
+            raw = runner.model_adapter.chat(prompt, model="google/gemini-3-flash-preview")
             model_output = raw if isinstance(raw, dict) else {}
         else:
             model_output = {
@@ -971,7 +988,7 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -999,7 +1016,7 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
                 output_artifacts=["camera_language_bible"],
             )
         )
-        runner = rt.services.prompt_runner
+        runner = _services(rt).prompt_runner
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
             raw = runner.model_adapter.chat(
@@ -1007,7 +1024,8 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
                 f"{camera_philosophy}. "
                 "Return JSON with 'profiles' array (profile_id, use_case, lens, "
                 "framing, movement, depth_of_field, composition_rules, "
-                "transition_rules, emotional_meaning) and 'default_profile_id'."
+                "transition_rules, emotional_meaning) and 'default_profile_id'.",
+                model="google/gemini-3-flash-preview",
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1067,7 +1085,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -1103,7 +1121,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
                 output_artifacts=["style_bible"],
             )
         )
-        runner = rt.services.prompt_runner
+        runner = _services(rt).prompt_runner
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
             raw = runner.model_adapter.chat(
@@ -1111,7 +1129,8 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
                 f"Tone: {tone}. Palette hints: {palette_hint}. "
                 "Return JSON with 'color_palette' (4-8 hex codes), "
                 "'texture', 'grain', 'visual_mood', 'reference_stills', "
-                "and 'must_not_change'."
+                "and 'must_not_change'.",
+                model="google/gemini-3-flash-preview",
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1168,7 +1187,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -1203,7 +1222,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
                 output_artifacts=["master_film_matrix"],
             )
         )
-        runner = rt.services.prompt_runner
+        runner = _services(rt).prompt_runner
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
             raw = runner.model_adapter.chat(
@@ -1212,7 +1231,8 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
                 f"Visual references available:\n{ref_summary}\n\n"
                 "Return JSON with 'shot_matrix' containing 'rows' array of shot rows "
                 "(shot_id, act_id, scene_id, duration_seconds, characters, environment, "
-                "camera_profile, priority, risk_level) and 'coverage_groups' array."
+                "camera_profile, priority, risk_level) and 'coverage_groups' array.",
+                model="google/gemini-3-flash-preview",
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1293,29 +1313,37 @@ def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str
         prev_chars: list[str] = []
         prev_env = ""
 
-        for i, row in enumerate(matrix.rows):
+        for _i, row in enumerate(matrix.rows):
             current_chars = [str(c) for c in row.characters]
             current_env = str(row.environment)
             entries.append(
                 ContinuityLedgerEntry(
                     shot_id=row.shot_id,
-                    state_in=StateRecord(
-                        characters=prev_chars,
-                        environment=prev_env,
-                        props=[],
-                        wardrobe={},
-                        lighting="",
-                        camera_profile="",
-                    ),
-                    state_out=StateRecord(
-                        characters=current_chars,
-                        environment=current_env,
-                        props=[],
-                        wardrobe={},
-                        lighting="",
-                        camera_profile=str(row.camera_profile),
-                    ),
-                    entry_index=i,
+                    state_in=[
+                        StateRecord(
+                            label="characters",
+                            description=", ".join(prev_chars) if prev_chars else "none",
+                            refs=prev_chars,
+                        ),
+                        StateRecord(
+                            label="environment",
+                            description=prev_env,
+                            refs=[prev_env] if prev_env else [],
+                        ),
+                    ],
+                    action="",
+                    state_out=[
+                        StateRecord(
+                            label="characters",
+                            description=", ".join(current_chars) if current_chars else "none",
+                            refs=current_chars,
+                        ),
+                        StateRecord(
+                            label="environment",
+                            description=current_env,
+                            refs=[current_env] if current_env else [],
+                        ),
+                    ],
                 )
             )
             prev_chars = current_chars
@@ -1336,7 +1364,7 @@ def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str
             created_by="mcp.generate_shot_bible",
             created_at=datetime.now(UTC),
         )
-        return store.save(ledger, meta)
+        return cast(str, store.save(ledger, meta))
     except Exception:
         return None
 
@@ -1348,8 +1376,8 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    cap = float(args.get("cap_usd", 100.0))
-    store = rt.services.artifact_store
+    cap = float(cast(float, args.get("cap_usd", 100.0)))
+    store = _services(rt).artifact_store
 
     try:
         from datetime import UTC, datetime
@@ -1399,7 +1427,7 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -1470,7 +1498,7 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
         return _error("No active project.")
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     try:
         from film_pipeline.schemas._base import FilmPhase
@@ -1521,7 +1549,7 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
                 from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
                 for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
-                    validator = vcls()
+                    validator = vcls()  # type: ignore[assignment]
                     report = validator.run(art_data)
                     reports.append(_report_summary(report))
                     meta = ArtifactMetadata(
@@ -1566,7 +1594,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
     requested_ids = {
         str(item)
-        for item in args.get("reference_ids", [])
+        for item in cast(list[Any], args.get("reference_ids", []))
         if isinstance(item, str) and str(item).strip()
     }
     force = bool(args.get("force", False))
@@ -1590,7 +1618,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
     # Pre-load CharacterBibles from artifact store for structured prompts
     char_bibles: dict[str, dict[str, object]] = {}
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
     for raw in grouped_entries:
         if raw.get("_skip"):
             continue
@@ -1756,12 +1784,14 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         if is_anchor and "anchor_seed" in ist and "target_path" in dir():
             ist["anchor_frame_path"] = target_path
         if frame_review_result is not None and not frame_review_result.passed:
-            subject_score = float(frame_review_result.scores.get("subject", {}).get("score", 10))
+            subject_score = float(
+                cast(float, frame_review_result.scores.get("subject", {}).get("score", 10))
+            )
             if subject_score < 7 and not is_anchor:
                 if not ist.get("i2i_active"):
                     ist["i2i_active"] = True
                     ist["i2i_strength"] = 0.5
-                elif float(ist.get("i2i_strength", 0.5)) > 0.3:
+                elif float(cast(float, ist.get("i2i_strength", 0.5))) > 0.3:
                     ist["i2i_strength"] = 0.3
 
         if best_attempt == 0:
@@ -1848,16 +1878,16 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
                 provider_id=str(raw.get("provider", "")),
                 model_id="",
                 tier=tier,
-                seed=provider_kwargs.get("seed"),
+                seed=cast(int | None, provider_kwargs.get("seed")),
                 prompt_text=prompt_text,
                 frame_role=str(raw.get("frame_role", "")),
                 expression=str(raw.get("expression", "")) or None,
                 lighting=str(raw.get("lighting", "")) or None,
                 aspect_ratio=aspect_ratio,
                 generation_status=str(raw.get("generation_status", "generated")),
-                quality_score=float(raw.get("quality_score", 0)),
-                retry_count=int(raw.get("retry_count", 0)),
-                best_score=float(raw.get("best_score", 0)),
+                quality_score=float(cast(float, raw.get("quality_score", 0))),
+                retry_count=int(cast(int, raw.get("retry_count", 0))),
+                best_score=float(cast(float, raw.get("best_score", 0))),
                 heuristic_checks_passed=True,
                 mime_type=str(raw.get("normalized_mime_type", "image/png")),
                 created_at="",
@@ -1888,7 +1918,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         "project_id": project_id,
         "entries": [dict(r) for r in grouped_entries],  # use modified copies
     }
-    ref = _save_reference_index_artifact(rt, active, updated)
+    ref = _save_reference_index_artifact(rt, active, cast(dict[str, object], updated))
     if ref:
         active["visual_refs"] = ref
         active.setdefault("artifact_refs", []).append(ref)
@@ -1904,10 +1934,10 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
     )
 
     # Phase 7 — Build composite sheets for characters with generated frames
-    _build_composites(project_root, project_id, grouped_entries, rt.services.artifact_store)
+    _build_composites(project_root, project_id, grouped_entries, _services(rt).artifact_store)
 
     # Phase 11 — Write human-readable index files
-    _write_reference_index_files(project_root, updated["entries"])
+    _write_reference_index_files(project_root, cast(list[dict[str, object]], updated["entries"]))
 
     return _ok(
         generated=generated,
@@ -1957,7 +1987,7 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
         return _error(f"Unknown phase: {phase_str}")
 
     reports: list[dict[str, object]] = []
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
 
     # --- Phase-specific validator dispatch ---
 
@@ -2086,7 +2116,7 @@ def _load_latest_reference_index(
 ) -> dict[str, object] | None:
     from film_pipeline.schemas._base import FilmPhase
 
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
     version = 0
     if state is not None:
         visual_ref = str(state.get("visual_refs", ""))
@@ -2385,7 +2415,9 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
     (idx_dir / "reference-index.json").write_text(json.dumps(index_data, indent=2, default=str))
 
     # reference-validation-summary.json
-    scores = [float(e.get("quality_score", 0)) for e in entries if e.get("quality_score")]
+    scores = [
+        float(cast(float, e.get("quality_score", 0))) for e in entries if e.get("quality_score")
+    ]
     validated = sum(1 for e in entries if e.get("generation_status") == "validated")
     summary = {
         "project_id": "",
@@ -2417,7 +2449,7 @@ def _save_reference_index_artifact(
     from film_pipeline.schemas.artifact import ArtifactMetadata
 
     project_id = str(state.get("project_id", ""))
-    store = rt.services.artifact_store
+    store = _services(rt).artifact_store
     version = (
         _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "reference_index") + 1
     )
@@ -2463,7 +2495,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
     provider = str(args.get("provider", "mock-video-provider"))
     model = str(args.get("model", "mock-fast"))
@@ -2485,7 +2517,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
         try:
             from film_pipeline.schemas._base import FilmPhase
 
-            data = rt.services.artifact_store.load(
+            data = _services(rt).artifact_store.load(
                 project_id, FilmPhase("shot_bible"), "shot_bible", 1
             )
             shot_ids = [
@@ -2530,7 +2562,7 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
     # Budget gate: reject if max_cost_usd set and cost exceeds it
     max_cost_raw = args.get("max_cost_usd", -1)
@@ -2562,7 +2594,7 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
     if row is None:
         return _error(f"Generation '{generation_id}' not found.")
@@ -2588,7 +2620,7 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas._base import GenerationStatus
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
     terminal = {
         GenerationStatus.COMPLETED,
         GenerationStatus.FAILED,
@@ -2626,7 +2658,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas._base import GenerationStatus
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
     submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
 
     if not submitted_rows:
@@ -2729,7 +2761,7 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
     if row is None:
         return _error(f"Generation '{generation_id}' not found.")
@@ -2798,7 +2830,7 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas._base import GenerationStatus
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
     if row is None:
         return _error(f"Generation '{generation_id}' not found.")
@@ -2852,7 +2884,7 @@ async def promote_test_to_production(args: dict[str, object]) -> dict[str, objec
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
     raw_shot_ids = args.get("shot_ids")
     shot_ids: list[str] | None = None
@@ -3838,7 +3870,7 @@ def _register_project_providers(
     for spec in provider_ids:
         provider_id = str(spec["provider_id"])
         provider_type = str(spec.get("provider_type", "video"))
-        models = [str(model) for model in spec.get("models", []) if str(model)]
+        models = [str(model) for model in cast(list[Any], spec.get("models", [])) if str(model)]
         adapter = build_provider_adapter(
             provider_id,
             provider_type=provider_type,
@@ -3938,7 +3970,12 @@ def _missing_provider_credentials(
 def _load_profile_flex(
     profile_id: str,
     prefixes: tuple[str, ...],
-) -> tuple[object, object]:
+) -> tuple[Any, Any]:
+    """Load a profile spec, trying prefixed variants.
+
+    Returns ``(loader, source)`` where *source* is a ``ProfileSource``
+    (with ``.raw``, ``.path``, ``.name`` attributes).
+    """
     from film_pipeline.config.loader import ProfileLoader
 
     loader = ProfileLoader()

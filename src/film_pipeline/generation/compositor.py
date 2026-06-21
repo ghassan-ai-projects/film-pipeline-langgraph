@@ -187,7 +187,7 @@ def _crop_center(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
         top = (ih - new_h) // 2
         img = img.crop((0, top, iw, top + new_h))
 
-    return img.resize((target_w, target_h), Image.LANCZOS)
+    return img.resize((target_w, target_h), Image.Resampling.LANCZOS)
 
 
 def _paste_placeholder(

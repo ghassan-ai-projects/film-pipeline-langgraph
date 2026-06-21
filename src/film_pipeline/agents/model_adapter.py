@@ -164,7 +164,7 @@ class ModelAdapter:
         if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
             candidate = text[brace_start : brace_end + 1]
             try:
-                result: Any = json.loads(candidate)
+                result = json.loads(candidate)
                 return dict(result)
             except json.JSONDecodeError:
                 pass
@@ -175,7 +175,7 @@ class ModelAdapter:
         if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
             candidate = text[bracket_start : bracket_end + 1]
             try:
-                result: Any = json.loads(candidate)
+                result = json.loads(candidate)
                 return dict(result)
             except (json.JSONDecodeError, TypeError):
                 pass
