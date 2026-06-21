@@ -1,8 +1,8 @@
 # Phase 7 — Character Identity Sheet Compositor
 
-**Status:** Not started  
-**Depends on:** Phase 0 (organized directories) + Phase 4 (identity-consistent frames) + Phase 2 (structured prompts)  
-**Blocks:** Phase 8 (composite validation needs a sheet to review)  
+**Status:** Not started
+**Depends on:** Phase 0 (organized directories) + Phase 4 (identity-consistent frames) + Phase 2 (structured prompts)
+**Blocks:** Phase 8 (composite validation needs a sheet to review)
 
 ---
 

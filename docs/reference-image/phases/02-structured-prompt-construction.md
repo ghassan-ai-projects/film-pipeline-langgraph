@@ -1,8 +1,8 @@
 # Phase 2 — Structured Prompt Construction (Block-Based)
 
-**Status:** Not started  
-**Depends on:** Phase 0 (directories, for output context)  
-**Blocks:** Phase 3 (Gemini review needs structured prompts to validate against), Phase 4 (identity consistency needs CHAR_DESC block)  
+**Status:** Not started
+**Depends on:** Phase 0 (directories, for output context)
+**Blocks:** Phase 3 (Gemini review needs structured prompts to validate against), Phase 4 (identity consistency needs CHAR_DESC block)
 
 ---
 

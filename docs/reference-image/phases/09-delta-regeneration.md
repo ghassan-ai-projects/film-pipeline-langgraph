@@ -1,8 +1,8 @@
 # Phase 9 — Delta Regeneration
 
-**Status:** Not started  
-**Depends on:** Phase 8 (composite validation returns failing_tiles)  
-**Blocks:** Phase 10 (entry update needs final state after delta fix)  
+**Status:** Not started
+**Depends on:** Phase 8 (composite validation returns failing_tiles)
+**Blocks:** Phase 10 (entry update needs final state after delta fix)
 
 ---
 

@@ -1,8 +1,8 @@
 # Phase 5 — Retry Logic
 
-**Status:** Not started  
-**Depends on:** Phase 3 (Gemini review) + Phase 4 (identity/geometry consistency state)  
-**Blocks:** Phase 7 (compositor needs finalized frames)  
+**Status:** Not started
+**Depends on:** Phase 3 (Gemini review) + Phase 4 (identity/geometry consistency state)
+**Blocks:** Phase 7 (compositor needs finalized frames)
 
 ---
 

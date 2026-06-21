@@ -1,8 +1,8 @@
 # Phase 3 — Gemini Per-Frame AI Review (Per-Frame Validation Stage 2)
 
-**Status:** Not started  
-**Depends on:** Phase 1 (heuristics) + Phase 2 (structured prompts)  
-**Blocks:** Phase 4 (drift detection needs Gemini scores), Phase 5 (retry needs review results)  
+**Status:** Not started
+**Depends on:** Phase 1 (heuristics) + Phase 2 (structured prompts)
+**Blocks:** Phase 4 (drift detection needs Gemini scores), Phase 5 (retry needs review results)
 
 ---
 

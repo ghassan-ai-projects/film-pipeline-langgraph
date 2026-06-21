@@ -1,8 +1,8 @@
 # Phase 0 — Organize Output Directories
 
-**Status:** Not started  
-**Depends on:** Nothing  
-**Blocks:** Phase 7 (Compositor needs organized frame directories)  
+**Status:** Not started
+**Depends on:** Nothing
+**Blocks:** Phase 7 (Compositor needs organized frame directories)
 
 ---
 

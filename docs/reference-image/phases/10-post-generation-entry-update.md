@@ -1,8 +1,8 @@
 # Phase 10 — Post-Generation Entry Update
 
-**Status:** Not started  
-**Depends on:** Phase 1–9 (all previous phases must have run)  
-**Blocks:** Phase 11 (index persistence needs final entry data)  
+**Status:** Not started
+**Depends on:** Phase 1–9 (all previous phases must have run)
+**Blocks:** Phase 11 (index persistence needs final entry data)
 
 ---
 

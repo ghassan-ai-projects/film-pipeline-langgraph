@@ -1,8 +1,8 @@
 # Phase 8 — Composite Validation (Sheet-Level Rubrics)
 
-**Status:** Not started  
-**Depends on:** Phase 7 (composite sheets exist) + Phase 7b (environment boards exist)  
-**Blocks:** Phase 9 (delta regeneration needs failing tiles), Phase 10 (entry update needs final status)  
+**Status:** Not started
+**Depends on:** Phase 7 (composite sheets exist) + Phase 7b (environment boards exist)
+**Blocks:** Phase 9 (delta regeneration needs failing tiles), Phase 10 (entry update needs final status)
 
 ---
 

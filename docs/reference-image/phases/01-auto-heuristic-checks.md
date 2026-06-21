@@ -1,8 +1,8 @@
 # Phase 1 — Auto-Heuristic Checks (Per-Frame Validation Stage 1)
 
-**Status:** Not started  
-**Depends on:** Nothing  
-**Blocks:** Phase 3 (Gemini review runs after heuristics pass)  
+**Status:** Not started
+**Depends on:** Nothing
+**Blocks:** Phase 3 (Gemini review runs after heuristics pass)
 
 ---
 
