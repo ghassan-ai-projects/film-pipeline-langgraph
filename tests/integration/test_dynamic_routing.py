@@ -35,6 +35,7 @@ class TestRouteAgent:
         rt.set_active("route-test")
 
         state = rt.get_active() or {}
+        assert rt.services is not None
         result = route_agent(
             state,
             "script",
@@ -54,6 +55,7 @@ class TestRouteAgent:
         rt.set_active("route-test")
 
         state = rt.get_active() or {}
+        assert rt.services is not None
         result = route_agent(
             state,
             "script",

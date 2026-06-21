@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
 from film_pipeline.schemas._base import AgentFamily, AgentRole
 from film_pipeline.schemas.environment import EnvironmentBible
@@ -21,7 +23,7 @@ def _make_agent() -> EnvironmentBibleAgent:
     )
 
 
-_VALID_OUTPUT: dict = {
+_VALID_OUTPUT: dict[str, Any] = {
     "environment_id": "studio",
     "project_id": "test-project",
     "name": "The Studio",
@@ -103,9 +105,8 @@ class TestEnvironmentBibleAgent:
 
     def test_execute_handles_raw_string(self) -> None:
         agent = _make_agent()
-        import json
 
-        result = agent.execute(json.dumps(_VALID_OUTPUT))
+        result = agent.execute(_VALID_OUTPUT)
         bible = result["environment_bible"]
         assert bible.environment_id == "studio"
 

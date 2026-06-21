@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from film_pipeline.generation.prompt_builder import build_structured_prompt
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 
-def _char_bible() -> dict:
+def _char_bible() -> dict[str, Any]:
     return {
         "visual_identity": {
             "character_id": "leo",
@@ -21,7 +23,7 @@ def _char_bible() -> dict:
     }
 
 
-def _constitution() -> dict:
+def _constitution() -> dict[str, Any]:
     return {
         "visual_language": "painterly natural light, soft key from above-left",
         "camera_philosophy": "observational, intimate close-up distance",
@@ -32,7 +34,7 @@ def _constitution() -> dict:
     }
 
 
-def _char_entry(frame_role: str = "front-face", expression: str = "neutral") -> dict:
+def _char_entry(frame_role: str = "front-face", expression: str = "neutral") -> dict[str, Any]:
     return {
         "subject_type": "character",
         "subject_id": "leo",
@@ -42,7 +44,7 @@ def _char_entry(frame_role: str = "front-face", expression: str = "neutral") -> 
     }
 
 
-def _env_entry(frame_role: str = "wide-establishing") -> dict:
+def _env_entry(frame_role: str = "wide-establishing") -> dict[str, Any]:
     return {
         "subject_type": "environment",
         "subject_id": "studio",

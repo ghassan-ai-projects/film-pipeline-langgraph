@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock
 
 from film_pipeline.generation.frame_reviewer import (
@@ -12,7 +13,7 @@ from film_pipeline.generation.frame_reviewer import (
 )
 
 
-def _mock_opener(response_body: dict) -> Mock:
+def _mock_opener(response_body: dict[str, Any]) -> Mock:
     """Return a mock HTTP opener that returns *response_body* as JSON."""
     resp = Mock()
     resp.read.return_value = json.dumps(response_body).encode("utf-8")

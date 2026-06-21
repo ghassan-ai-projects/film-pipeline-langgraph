@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from film_pipeline.generation.delta_regenerator import regenerate_failing_tiles
 from film_pipeline.generation.sheet_reviewer import SheetReviewResult
@@ -33,7 +34,7 @@ class TestRegenerateFailingTiles:
 
         regenerated: list[str] = []
 
-        def regen_fn(entry, feedback):
+        def regen_fn(entry: dict[str, Any], feedback: str) -> Path:
             regenerated.append(entry["frame_role"])
             new_p = tmp_path / f"new_{entry['frame_role']}.png"
             img.save(new_p)

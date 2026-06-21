@@ -33,6 +33,7 @@ class TestArtifactSpine:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("spine-test", "Spine Test")
         rt.set_active("spine-test")
+        assert rt.services is not None
 
         state = rt._run_phase_node(rt.get_active() or {}, "intake")
         result = rt._run_phase_node(state, "constitution")
@@ -59,6 +60,7 @@ class TestArtifactSpine:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("spine-test", "Spine Test")
         rt.set_active("spine-test")
+        assert rt.services is not None
 
         state = rt._run_phase_node(rt.get_active() or {}, "intake")
         state = rt._run_phase_node(state, "constitution")
@@ -83,6 +85,7 @@ class TestArtifactSpine:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("spine-test", "Spine Test")
         rt.set_active("spine-test")
+        assert rt.services is not None
 
         state = rt._run_phase_node(rt.get_active() or {}, "intake")
         state = rt._run_phase_node(state, "constitution")
@@ -130,6 +133,7 @@ class TestArtifactSpine:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("spine-test", "Spine Test")
         rt.set_active("spine-test")
+        assert rt.services is not None
 
         state = rt._run_phase_node(rt.get_active() or {}, "intake")
         state = rt._run_phase_node(state, "constitution")
@@ -191,6 +195,7 @@ class TestArtifactSpine:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("spine-test", "Spine Test")
         rt.set_active("spine-test")
+        assert rt.services is not None
 
         state = rt._run_phase_node(rt.get_active() or {}, "intake")
         state = rt._run_phase_node(state, "constitution")
