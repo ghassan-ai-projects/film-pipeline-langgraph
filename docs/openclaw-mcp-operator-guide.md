@@ -345,14 +345,74 @@ through:
 
 ## Step 6. Continue With The Film Workflow
 
-After project creation, the normal MCP flow is unchanged:
+After reference images are generated, continue through the remaining phases:
+
+### 6a. Shot Bible
+
+```json
+{ "tool": "generate_shot_bible" }
+```
+
+Produces `MasterFilmMatrix` (every shot as a row) and `ContinuityLedger`
+(state_in/state_out chain). Approve at the shot_bible phase gate.
+
+### 6b. Generation Plan + Budget
+
+```json
+{ "tool": "initialize_budget", "cap_usd": 100.0 }
+{ "tool": "generate_plan" }
+```
+
+Produces `BudgetState` (spend tracker) and `GenerationPlan` (ordered shot list
+with provider routing and cost estimates). Approve at the gen_planning gate.
+
+### 6c. Validation
+
+```json
+{ "tool": "run_validation" }
+```
+
+Runs phase-appropriate validators and persists `ValidationReport` to the
+artifact store. Available for `visual_dev` and `script` phases.
+
+### 6d. Generation
+
+```json
+{ "tool": "plan_generation_batch" }
+{ "tool": "approve_generation_spend" }
+{ "tool": "start_generation_batch" }
+```
+
+### 6e. Review Cut Assembly
+
+```json
+{ "tool": "assemble_review_cut" }
+```
+
+Concatenates generated clips into `09-post/review_cut.v1.mp4` (requires ffmpeg).
+
+### 6f. Checkpoints
+
+```json
+{ "tool": "create_checkpoint", "label": "pre-generation" }
+```
+
+Snapshots artifact versions for rollback safety.
+
+The full sequential workflow is:
 
 1. `set_active_project`
 2. `submit_idea`
-3. `approve_intake`
-4. `approve_phase`
-5. `generate_reference_images` once `visual_dev` is reached
-6. inspect artifacts and validation as needed
+3. `approve_intake` → `approve_phase` (constitution) → `approve_phase` (development) → `approve_phase` (script)
+4. `generate_character_bible` + `generate_environment_bible` + `generate_camera_bible` + `generate_style_bible`
+5. `approve_phase` (visual_dev)
+6. `generate_reference_images`
+7. `approve_phase` (visual_dev — post-generation review)
+8. `generate_shot_bible` → `approve_phase` (shot_bible)
+9. `initialize_budget` + `generate_plan` → `approve_phase` (gen_planning)
+10. `create_checkpoint` → `plan_generation_batch` → `approve_generation_spend` → `start_generation_batch`
+11. `run_validation` → `approve_phase` (generation)
+12. `assemble_review_cut` → `approve_phase` (post) → `approve_phase` (delivery)
 
 Useful follow-up tools:
 
@@ -364,13 +424,6 @@ Useful follow-up tools:
 - `request_revision`
 - `list_providers`
 - `check_provider_health`
-
-Key files on disk after reference generation (for direct inspection):
-
-- `references/index/reference-index.json` — all entries with paths, scores, lock status
-- `references/index/reference-validation-summary.json` — counts and averages
-- `references/characters/{id}/identity-sheet.png` — composite Character Identity Sheet
-- `references/environments/{id}/environment-board.png` — composite Environment Board
 
 ## What Is Aligned Now
 
@@ -385,6 +438,11 @@ These behaviors are aligned:
 - real-mode provider stacks reject missing credentials before the project is created
 - the real profile image lane uses `gemini-imagen-4`, not `mock-image-provider`
 - visual-dev references can now be generated and persisted through MCP
+- bible generation: `generate_character_bible`, `generate_environment_bible`, `generate_camera_bible`, `generate_style_bible`
+- shot bible: `generate_shot_bible` produces MasterFilmMatrix + ContinuityLedger
+- generation planning: `initialize_budget`, `generate_plan`
+- validation: `run_validation` persists ValidationReport to artifact store
+- checkpoints: `create_checkpoint` snapshots artifact versions
 
 ## What Is Still Missing
 

@@ -857,10 +857,17 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
 
 
 def test_wired_create_film_project_rejects_missing_google_key_for_real_image_provider() -> None:
+    from unittest import mock
+
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
-    with pytest.MonkeyPatch.context() as monkeypatch:
+    with (
+        mock.patch("film_pipeline.providers.credentials.lookup", return_value=""),
+        mock.patch("film_pipeline.providers.credentials.is_configured", return_value=False),
+        mock.patch("film_pipeline.providers.adapters.imagen4_gemini.lookup", return_value=""),
+        pytest.MonkeyPatch.context() as monkeypatch,
+    ):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         reset_runtime("real")
