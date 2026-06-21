@@ -117,6 +117,15 @@ def build_character_identity_sheet(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path, "PNG")
+    _write_sheet_manifest(
+        output_path,
+        subject_id,
+        "character_identity_sheet",
+        _SHEET_SIZE,
+        frames,
+        _CHAR_TILES,
+        _CHAR_LABELS,
+    )
     return output_path
 
 
@@ -300,6 +309,15 @@ def build_environment_board(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path, "PNG")
+    _write_sheet_manifest(
+        output_path,
+        subject_id,
+        "environment_board",
+        _ENV_SHEET_SIZE,
+        frames,
+        _ENV_TILES,
+        _ENV_LABELS,
+    )
     return output_path
 
 
@@ -356,3 +374,47 @@ def _render_color_palette(
             fill=text_color,
             font=font,
         )
+
+
+def _write_sheet_manifest(
+    sheet_path: Path,
+    sheet_id: str,
+    sheet_type: str,
+    dimensions: tuple[int, int],
+    frames: dict[str, Path],
+    tiles: dict[str, tuple[int, int, int, int]],
+    labels: dict[str, str],
+) -> None:
+    """Write a .sheet.json manifest alongside the composite PNG."""
+    import json
+
+    from film_pipeline.schemas.reference import CompositeSheetManifest, TileEntry
+
+    tile_entries: list[TileEntry] = []
+    placeholders: list[str] = []
+
+    for role, pos in tiles.items():
+        fp = frames.get(role)
+        if fp and fp.exists():
+            tile_entries.append(
+                TileEntry(
+                    tile_name=role,
+                    frame_reference_id=fp.stem,
+                    frame_path=str(fp),
+                    position=pos,
+                )
+            )
+        else:
+            placeholders.append(role)
+
+    manifest = CompositeSheetManifest(
+        sheet_id=sheet_id,
+        sheet_type=sheet_type,
+        sheet_path=str(sheet_path),
+        dimensions=dimensions,
+        tiles=tile_entries,
+        placeholder_tiles=placeholders,
+    )
+    manifest_path = Path(str(sheet_path) + ".sheet.json")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest_path.write_text(manifest.model_dump_json(indent=2))
