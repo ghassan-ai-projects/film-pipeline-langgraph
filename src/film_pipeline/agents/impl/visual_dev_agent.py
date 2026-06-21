@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
@@ -37,8 +38,26 @@ class VisualDevAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
-        data = model_output.get("visual_dev", model_output)
-        entries_data = data.get("reference_entries", data.get("entries", []))
+        # --- Normalize model output ---
+        if isinstance(model_output, str):
+            # Model returned raw text — attempt JSON parse
+            try:
+                model_output = json.loads(model_output)
+            except (json.JSONDecodeError, TypeError):
+                model_output = {}
+
+        # Try extracting the nested "visual_dev" key first, then check for
+        # top-level "reference_entries" or "entries" keys, and finally
+        # treat the whole dict as the data container.
+        data = model_output.get("visual_dev")
+        if not isinstance(data, dict):
+            data = model_output
+
+        entries_data = data.get("reference_entries") or data.get("entries")
+        if not isinstance(entries_data, list):
+            # Model may have returned an array at top level (strategy 4 in chat_json)
+            entries_data = []
+
         entries = [
             ReferenceIndexEntry(
                 reference_id=str(e.get("reference_id", f"ref_{i:03d}")),
@@ -49,10 +68,12 @@ class VisualDevAgent(BaseAgent):
                 approved_for=[str(a) for a in e.get("approved_for", ["prompt_anchor"])],
                 quality_score=float(e.get("quality_score", 80.0)),
                 provider=str(e.get("provider", "")),
+                tier=str(e.get("tier", "fast")),
                 prompt_text=str(e.get("prompt_text", e.get("notes", ""))),
                 prompt_refs=[str(p) for p in e.get("prompt_refs", []) if str(p)],
                 source_frames=[str(p) for p in e.get("source_frames", []) if str(p)],
                 notes=str(e.get("notes", "")),
+                moderation_risk=str(e.get("moderation_risk", "low")),
                 validation=ReferenceValidationSummary(
                     status=str(e.get("validation", {}).get("status", "pending")),
                     score=float(e.get("validation", {}).get("score", 0.0)),

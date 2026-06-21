@@ -46,6 +46,10 @@ class ReferenceIndexEntry(SchemaBase):
     )
     quality_score: float = Field(ge=0, le=100)
     provider: str = ""
+    tier: str = Field(
+        default="fast",
+        description="Provider quality tier: 'fast' | 'standard' | 'ultra'.",
+    )
     prompt_text: str = ""
     prompt_refs: list[str] = Field(default_factory=list)
     source_frames: list[str] = Field(default_factory=list)
