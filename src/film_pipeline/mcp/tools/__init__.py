@@ -1904,6 +1904,57 @@ def _build_composites(
         except Exception:
             pass
 
+    # Phase 05 — Additional composite templates
+    _build_optional_sheets(project_root, project_id, char_frames, env_palettes)
+
+
+def _build_optional_sheets(
+    project_root: Path,
+    project_id: str,
+    char_frames: dict[str, dict[str, Path]],
+    env_palettes: dict[str, list[str]],
+) -> None:
+    """Build expression sheets, scale sheet, and style board (non-blocking)."""
+    from film_pipeline.generation.compositor import (
+        build_expression_sheet,
+        build_scale_sheet,
+        build_style_board,
+    )
+
+    # Expression sheet per character
+    for subject_id, frames in char_frames.items():
+        try:
+            sheet_path = (
+                project_root / "references" / "characters" / subject_id / "expression-sheet.png"
+            )
+            build_expression_sheet(subject_id, subject_id, frames, sheet_path)
+        except Exception:
+            pass
+
+    # Scale sheet — all characters' full-body frames
+    full_body_frames: dict[str, Path] = {}
+    for subject_id, frames in char_frames.items():
+        fb = frames.get("full-body")
+        if fb and fb.exists():
+            full_body_frames[subject_id] = fb
+    if full_body_frames:
+        try:
+            sheet_path = project_root / "references" / "scale" / "scale-sheet.png"
+            build_scale_sheet(project_id, full_body_frames, sheet_path)
+        except Exception:
+            pass
+
+    # Style board — use first environment's palette or defaults
+    palette: list[str] = []
+    for p in env_palettes.values():
+        palette = p
+        break
+    try:
+        sheet_path = project_root / "references" / "style" / "style-board.png"
+        build_style_board(project_id, palette, "", "", "", sheet_path)
+    except Exception:
+        pass
+
 
 def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
     """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""

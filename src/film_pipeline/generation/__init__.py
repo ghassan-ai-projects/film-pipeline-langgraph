@@ -3,6 +3,9 @@
 from film_pipeline.generation.compositor import (
     build_character_identity_sheet,
     build_environment_board,
+    build_expression_sheet,
+    build_scale_sheet,
+    build_style_board,
     replace_tile,
 )
 from film_pipeline.generation.delta_regenerator import regenerate_failing_tiles
