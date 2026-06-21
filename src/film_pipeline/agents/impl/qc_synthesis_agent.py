@@ -33,7 +33,37 @@ class QCSynthesisAgent(BaseAgent):
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         data = model_output.get("consensus", model_output)
 
-        reviewers_data = data.get("reviewers", [])
+        # Handle the case where the LLM returns the reviewers as a direct
+        # list (e.g. {"consensus": [{"model_id": ...}]}) instead of a dict
+        # with separate "reviewers", "shared_findings", etc. keys.
+        if isinstance(data, list):
+            reviewers_data = data
+            artifact_refs: list[str] = []
+            shared_findings: list[str] = []
+            disagreements: list[str] = []
+            review_id = "qc-001"
+            agreement_level = "medium"
+            consensus_status = ValidationStatus("pass")
+            orchestrator_recommendation = ""
+        elif isinstance(data, dict):
+            reviewers_data = data.get("reviewers", [])
+            artifact_refs = [str(a) for a in data.get("artifact_refs", [])]
+            shared_findings = [str(f) for f in data.get("shared_findings", [])]
+            disagreements = [str(d) for d in data.get("disagreements", [])]
+            review_id = str(data.get("review_id", "qc-001"))
+            agreement_level = str(data.get("agreement_level", "medium"))
+            consensus_status = ValidationStatus(str(data.get("consensus_status", "pass")))
+            orchestrator_recommendation = str(data.get("orchestrator_recommendation", ""))
+        else:
+            reviewers_data = []
+            artifact_refs = []
+            shared_findings = []
+            disagreements = []
+            review_id = "qc-001"
+            agreement_level = "medium"
+            consensus_status = ValidationStatus("pass")
+            orchestrator_recommendation = ""
+
         reviewers = [
             ReviewerScore(
                 model_id=str(r.get("model_id", f"model_{i}")),
@@ -45,14 +75,14 @@ class QCSynthesisAgent(BaseAgent):
         ]
 
         report = ConsensusReport(
-            review_id=str(data.get("review_id", "qc-001")),
-            artifact_refs=[str(a) for a in data.get("artifact_refs", [])],
+            review_id=review_id,
+            artifact_refs=artifact_refs,
             reviewers=reviewers,
-            agreement_level=str(data.get("agreement_level", "medium")),
-            consensus_status=ValidationStatus(str(data.get("consensus_status", "pass"))),
-            shared_findings=[str(f) for f in data.get("shared_findings", [])],
-            disagreements=[str(d) for d in data.get("disagreements", [])],
-            orchestrator_recommendation=str(data.get("orchestrator_recommendation", "")),
+            agreement_level=agreement_level,
+            consensus_status=consensus_status,
+            shared_findings=shared_findings,
+            disagreements=disagreements,
+            orchestrator_recommendation=orchestrator_recommendation,
         )
         return {"consensus_report": report}
 

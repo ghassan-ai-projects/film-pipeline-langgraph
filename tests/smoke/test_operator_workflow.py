@@ -58,7 +58,7 @@ class TestOperatorWorkflow:
         # Step 3: Get current phase
         r = invoke_tool(rt, "get_current_phase")
         assert r["ok"] is True
-        assert r.get("phase")
+        assert r.get("current_phase")
 
     def test_approval_cycle_and_artifacts(
         self,
@@ -86,7 +86,9 @@ class TestOperatorWorkflow:
 
         # We're now at script phase — verify artifacts exist
         r = invoke_tool(rt, "get_current_phase")
-        assert r.get("phase") == "script", f"Expected script phase, got {r.get('phase')}"
+        assert r.get("current_phase") == "script", (
+            f"Expected script phase, got {r.get('current_phase')}"
+        )
 
         # Step 6: Inspect artifacts
         r = invoke_tool(rt, "list_artifacts")

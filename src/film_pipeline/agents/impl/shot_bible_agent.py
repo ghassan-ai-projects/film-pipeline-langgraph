@@ -38,7 +38,21 @@ class ShotBibleAgent(BaseAgent):
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         data = model_output.get("shot_matrix", model_output)
-        rows_data = data.get("rows", data.get("matrix_rows", []))
+
+        # Handle the case where the LLM returns the rows as a direct list
+        # (e.g. {"shot_matrix": [{"shot_id": ...}]}) instead of a dict
+        # with separate "rows" and "coverage_groups" keys.
+        if isinstance(data, list):
+            rows_data = data
+            groups_data = []
+        elif isinstance(data, dict):
+            rows_candidate = data.get("rows", data.get("matrix_rows", data.get("shots")))
+            rows_data = rows_candidate if isinstance(rows_candidate, list) else []
+            groups_candidate = data.get("coverage_groups")
+            groups_data = groups_candidate if isinstance(groups_candidate, list) else []
+        else:
+            rows_data = []
+            groups_data = []
 
         rows = []
         for i, r in enumerate(rows_data):
@@ -66,7 +80,6 @@ class ShotBibleAgent(BaseAgent):
             )
             rows.append(row)
 
-        groups_data = data.get("coverage_groups", [])
         coverage_groups = [
             CoverageGroup(
                 coverage_group_id=str(g.get("coverage_group_id", f"cg_{j:03d}")),
@@ -81,7 +94,7 @@ class ShotBibleAgent(BaseAgent):
         ]
 
         shot_matrix = MasterFilmMatrix(
-            project_id=str(data.get("project_id", "")),
+            project_id=str(data.get("project_id", "")) if isinstance(data, dict) else "",
             rows=rows,
             coverage_groups=coverage_groups,
         )

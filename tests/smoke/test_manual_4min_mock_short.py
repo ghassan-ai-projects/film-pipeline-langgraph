@@ -58,7 +58,7 @@ class TestManualFourMinuteMockShort:
             assert result["ok"] is True, f"approve_phase failed before {expected_phase}: {result}"
             phase_result = invoke_tool(rt, "get_current_phase")
             assert phase_result["ok"] is True
-            assert phase_result["phase"] == expected_phase
+            assert phase_result["current_phase"] == expected_phase
 
         result = invoke_tool(
             rt, "inspect_artifact", artifact_id="cost_estimate", phase="gen_planning"
@@ -83,13 +83,13 @@ class TestManualFourMinuteMockShort:
         result = invoke_tool(rt, "approve_phase")
         assert result["ok"] is True, f"approve_phase gen_planning->generation failed: {result}"
         phase_result = invoke_tool(rt, "get_current_phase")
-        assert phase_result["phase"] == "generation"
+        assert phase_result["current_phase"] == "generation"
 
         # Stop before actual clip execution, but still advance into QC-ready state.
         result = invoke_tool(rt, "approve_phase")
         assert result["ok"] is True, f"approve_phase generation->qc failed: {result}"
         phase_result = invoke_tool(rt, "get_current_phase")
-        assert phase_result["phase"] == "qc"
+        assert phase_result["current_phase"] == "qc"
 
         summary = invoke_tool(rt, "get_project_summary")
         assert summary["ok"] is True
