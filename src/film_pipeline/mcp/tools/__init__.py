@@ -1537,90 +1537,6 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
     return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
 
 
-async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    """Snapshot current artifact versions as a checkpoint."""
-    rt = get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
-    project_id = str(active["project_id"])
-    project_root = rt.project_roots.get(project_id)
-    if project_root is None:
-        return _error(f"Project root for '{project_id}' not found.")
-    phase_str = str(active.get("current_phase", ""))
-    label = str(args.get("label", phase_str))
-
-    import json
-    from datetime import UTC, datetime
-
-    checkpoint_dir = project_root / "versions" / "checkpoints"
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint = {
-        "project_id": project_id,
-        "phase": phase_str,
-        "label": label,
-        "artifact_refs": active.get("artifact_refs", []),
-        "created_at": datetime.now(UTC).isoformat(),
-    }
-    path = checkpoint_dir / f"checkpoint_{label}.v1.json"
-    path.write_text(json.dumps(checkpoint, indent=2, default=str))
-    return _ok(checkpoint_path=str(path), phase=phase_str, label=label)
-
-
-async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
-    """Assemble generated clips into a review cut MP4 (requires ffmpeg)."""
-    _ = args
-    rt = get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
-    project_id = str(active["project_id"])
-    project_root = rt.project_roots.get(project_id)
-    if project_root is None:
-        return _error(f"Project root for '{project_id}' not found.")
-
-    import shutil
-
-    if not shutil.which("ffmpeg"):
-        return _ok(status="ffmpeg_not_found", message="ffmpeg is required for clip assembly.")
-
-    clips_dir = project_root / "07-generated-assets" / "shots"
-    if not clips_dir.exists():
-        return _error("No generated clips found.")
-    clips = sorted(clips_dir.glob("**/*.mp4"))
-    if not clips:
-        return _error("No MP4 clips found.")
-
-    output_dir = project_root / "09-post"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    filelist = output_dir / "filelist.txt"
-    filelist.write_text("\n".join(f"file '{c.resolve()}'" for c in clips))
-
-    import subprocess
-
-    output_path = output_dir / "review_cut.v1.mp4"
-    result = subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(filelist),
-            "-c",
-            "copy",
-            str(output_path),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return _error(f"ffmpeg failed: {result.stderr[:300]}")
-    return _ok(review_cut_path=str(output_path), clip_count=len(clips))
-
-
 async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
     """Generate persisted reference images from the visual-dev reference index."""
     rt = get_runtime()
@@ -3664,14 +3580,6 @@ def register_all_tools(registry: ToolRegistry) -> None:
     registry.register(
         _make("run_validation", ToolGroup.VALIDATION, run_validation, mutates=True),
         run_validation,
-    )
-    registry.register(
-        _make("create_checkpoint", ToolGroup.ARTIFACT, create_checkpoint, mutates=True),
-        create_checkpoint,
-    )
-    registry.register(
-        _make("assemble_review_cut", ToolGroup.GENERATION, assemble_review_cut, mutates=True),
-        assemble_review_cut,
     )
     registry.register(
         _make(
