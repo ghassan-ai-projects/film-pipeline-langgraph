@@ -859,6 +859,9 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
     # Phase 7 — Build composite sheets for characters with generated frames
     _build_composites(project_root, grouped_entries)
 
+    # Phase 11 — Write human-readable index files
+    _write_reference_index_files(project_root, updated["entries"])
+
     return _ok(
         generated=generated,
         skipped=skipped,
@@ -1189,8 +1192,10 @@ def _build_composites(
         sheet_path = project_root / "references" / "characters" / subject_id / "identity-sheet.png"
         try:
             build_character_identity_sheet(subject_id, subject_id, frames, sheet_path)
+            # Phase 8 — Composite validation
+            _validate_composite(sheet_path, "character_identity_sheet", subject_id)
         except Exception:
-            pass  # compositor failure shouldn't block the pipeline
+            pass
 
     # Group entries by environment subject
     env_frames: dict[str, dict[str, Path]] = {}
@@ -1214,8 +1219,57 @@ def _build_composites(
         sheet_path = project_root / "references" / "environments" / subject_id / "environment-board.png"
         try:
             build_environment_board(subject_id, subject_id, frames, sheet_path)
+            # Phase 8 — Composite validation
+            _validate_composite(sheet_path, "environment_board", subject_id)
         except Exception:
             pass
+
+
+def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
+    """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""
+    try:
+        from film_pipeline.generation.sheet_reviewer import review_composite_sheet
+
+        review_composite_sheet(sheet_path, sheet_type, subject_id)
+    except Exception:
+        pass  # validation failure doesn't block
+
+
+def _write_reference_index_files(project_root: Path, entries: list[dict[str, object]]) -> None:
+    """Write human-readable reference index files (Phase 11)."""
+    idx_dir = project_root / "references" / "index"
+    idx_dir.mkdir(parents=True, exist_ok=True)
+
+    # reference-index.json
+    index_data = {
+        "project_id": "",
+        "generated_at": "",
+        "entries": [
+            {
+                "reference_id": str(e.get("reference_id", "")),
+                "asset_type": str(e.get("asset_type", "")),
+                "subject_id": str(e.get("subject_id", "")),
+                "asset_path": str(e.get("asset_path", "")),
+                "provider": str(e.get("provider", "")),
+                "validation": e.get("validation", {}),
+                "locked": bool(e.get("locked", False)),
+            }
+            for e in entries
+        ],
+    }
+    (idx_dir / "reference-index.json").write_text(json.dumps(index_data, indent=2, default=str))
+
+    # reference-validation-summary.json
+    scores = [float(e.get("quality_score", 0)) for e in entries if e.get("quality_score")]
+    validated = sum(1 for e in entries if e.get("generation_status") == "validated")
+    summary = {
+        "project_id": "",
+        "total_entries": len(entries),
+        "validated": validated,
+        "failed": sum(1 for e in entries if e.get("generation_status") == "failed"),
+        "average_score": sum(scores) / len(scores) if scores else 0.0,
+    }
+    (idx_dir / "reference-validation-summary.json").write_text(json.dumps(summary, indent=2))
 
 
 def _select_image_provider(rt: Any) -> Any | None:
