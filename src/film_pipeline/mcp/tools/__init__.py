@@ -611,36 +611,51 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
     skipped = 0
     failed = 0
 
-    for raw in entries:
-        if not isinstance(raw, dict):
-            continue
+    # Phase 4 — Identity/geometry consistency: group entries by subject,
+    # generate anchor frame first, propagate seed + identity state.
+    grouped_entries = _group_and_sort_entries(entries, requested_ids, force, project_root, results)
+    identity_states: dict[str, dict[str, object]] = {}  # keyed by group_key
+
+    for raw in grouped_entries:
         reference_id = str(raw.get("reference_id", "")).strip()
         if not reference_id:
             continue
-        if requested_ids and reference_id not in requested_ids:
+        if raw.get("_skip"):
+            skipped += 1
+            results.append({"reference_id": reference_id, "status": "skipped"})
             continue
-        if raw.get("asset_path") and not force:
-            existing_path = project_root / str(raw.get("asset_path", ""))
-            if existing_path.exists():
-                skipped += 1
-                results.append({"reference_id": reference_id, "status": "skipped"})
-                continue
 
-        prompt_text = _reference_prompt(raw)
+        prompt_text = _reference_prompt(
+            raw,
+            identity_state=identity_states.get(_group_key(raw)),
+        )
         aspect_ratio = _reference_aspect_ratio(raw)
         shot_id = _reference_job_id(reference_id)
         output_dir = str(_reference_output_dir(raw, project_root).resolve())
         # Ensure the directory tree exists
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        # Provider tier routing (Phase 6) — adjust quality parameters
+        # Provider tier routing (Phase 6) + Identity consistency (Phase 4)
         tier = str(raw.get("tier", "fast"))
         provider_kwargs: dict[str, object] = {
             "duration": 0.0,
             "aspect_ratio": aspect_ratio,
         }
         if tier in ("standard", "ultra"):
-            provider_kwargs["seed"] = hash(shot_id) % (2**31)
+            group_key = _group_key(raw)
+            identity_state = identity_states.get(group_key, {})
+            anchor_seed = identity_state.get("anchor_seed")
+            if anchor_seed is not None:
+                provider_kwargs["seed"] = anchor_seed
+            else:
+                provider_kwargs["seed"] = hash(shot_id) % (2**31)
+                identity_states.setdefault(group_key, {})["anchor_seed"] = provider_kwargs["seed"]
+        # I2I fallback: pass anchor frame as reference image
+        group_key = _group_key(raw)
+        if group_key in identity_states:
+            ist = identity_states[group_key]
+            if ist.get("anchor_frame_path") and ist.get("i2i_active"):
+                provider_kwargs["reference_images"] = [str(ist["anchor_frame_path"])]
 
         try:
             payload = provider.build_payload(prompt_text, **provider_kwargs)
@@ -724,6 +739,21 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             except Exception:
                 # Never block on review failure — accept the frame
                 pass
+
+        # Phase 4 — track anchor + detect identity/geometry drift
+        gk = _group_key(raw)
+        ist = identity_states.setdefault(gk, {})
+        is_anchor = str(raw.get("frame_role", "")).strip().lower() in ("front-face", "wide-establishing")
+        if is_anchor and "anchor_seed" in ist:
+            ist["anchor_frame_path"] = target_path
+        if frame_review_result is not None and not frame_review_result.passed:
+            subject_score = float(frame_review_result.scores.get("subject", {}).get("score", 10))
+            if subject_score < 7 and not is_anchor:
+                if not ist.get("i2i_active"):
+                    ist["i2i_active"] = True
+                    ist["i2i_strength"] = 0.5
+                elif float(ist.get("i2i_strength", 0.5)) > 0.3:
+                    ist["i2i_strength"] = 0.3
 
         rel_path = target_path.resolve().relative_to(project_root.resolve())
         provider_entry = getattr(provider, "entry", None)
@@ -809,7 +839,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
     updated = {
         "project_id": project_id,
-        "entries": entries,
+        "entries": [dict(r) for r in grouped_entries],  # use modified copies
     }
     ref = _save_reference_index_artifact(rt, active, updated)
     if ref:
@@ -1016,6 +1046,55 @@ def _load_latest_reference_index(
     if version <= 0:
         return None
     return _load_artifact(store, project_id, FilmPhase("visual_dev"), "reference_index", version)
+
+
+def _group_key(entry: dict[str, object]) -> str:
+    """Deterministic group key for identity/geometry consistency."""
+    subject_type = str(entry.get("subject_type", "")).strip().lower()
+    subject_id = str(entry.get("subject_id", "")).strip().lower()
+    return f"{subject_type}:{subject_id}"
+
+
+def _group_and_sort_entries(
+    entries: list[object],
+    requested_ids: set[str],
+    force: bool,
+    project_root: Path,
+    skip_results: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Filter, group, and sort entries — anchor frame first per group.
+
+    Character anchors: 'front-face'. Environment anchors: 'wide-establishing'.
+    Entries already generated (asset_path present, not force) are tagged _skip.
+    """
+    ANCHOR_PRIORITY = {"front-face": 0, "wide-establishing": 0}
+
+    filtered: list[dict[str, object]] = []
+    for raw in entries:
+        if not isinstance(raw, dict):
+            continue
+        ref_id = str(raw.get("reference_id", "")).strip()
+        if not ref_id:
+            continue
+        if requested_ids and ref_id not in requested_ids:
+            continue
+        r = dict(raw)
+        r["_reference_id"] = ref_id
+        if r.get("asset_path") and not force:
+            existing_path = project_root / str(r.get("asset_path", ""))
+            if existing_path.exists():
+                r["_skip"] = True
+        filtered.append(r)
+
+    # Sort: group by key, anchor first within each group
+    def sort_key(r: dict[str, object]) -> tuple[str, int, str]:
+        gk = _group_key(r)
+        role = str(r.get("frame_role", "")).strip().lower()
+        anchor_prio = ANCHOR_PRIORITY.get(role, 50)
+        return (gk, anchor_prio, str(r.get("reference_id", "")))
+
+    filtered.sort(key=sort_key)
+    return filtered
 
 
 def _reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
