@@ -655,7 +655,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         if group_key in identity_states:
             ist = identity_states[group_key]
             if ist.get("anchor_frame_path") and ist.get("i2i_active"):
-                provider_kwargs["reference_images"] = [str(ist["anchor_frame_path"])]
+                provider_kwargs["references"] = [str(ist["anchor_frame_path"])]
 
         # Phase 5 — Retry loop: max 3 attempts (initial + 2 retries)
         best_score = 0.0
