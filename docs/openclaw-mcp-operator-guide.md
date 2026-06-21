@@ -45,23 +45,133 @@ OpenClaw can now:
 - create a project with explicit `runtime_mode`
 - verify mode alignment with `get_runtime_mode`
 - inspect registered providers after project creation with `list_providers`
-- generate persisted reference images with `generate_reference_images` — a full 12-phase pipeline:
-  - structured prompts from CharacterBible + FilmConstitution
-  - per-frame heuristic checks (5 Pillow checks, $0)
-  - per-frame Gemini review (40-pt rubric, selective to control cost)
-  - identity consistency via seed locking + I2I drift detection
-  - retry loop (3 attempts with feedback injection)
-  - provider tier routing (fast / standard / ultra)
-  - Pillow-based composite sheets (Character Identity 2048×2048, Environment Board 3840×2160)
-  - Gemini composite validation (50pt character, 50pt environment)
-  - delta regeneration for failing composite tiles
-  - index persistence (`references/index/reference-index.json`)
+- generate persisted reference images with `generate_reference_images` — a full 12-phase pipeline (see Step 5 below)
+- inspect the orchestrator's decision state with `get_orchestrator_summary` (see Orchestrator Decision Loop below)
+- get structured review packages with orchestrator recommendations via `review_phase_artifacts`
+- see why approvals are blocked with `get_blockers` and `get_next_actions`
 
 Real-mode project creation now aligns with the actual server mode:
 
 - real server mode + real project mode: allowed
 - mock server mode + mock project mode: allowed
 - any mismatch: rejected
+
+---
+
+## Orchestrator Decision Loop
+
+The orchestrator is now **state-driven**, not phase-script-driven. It inspects
+provider health, budget state, failure decisions, pending revisions, and
+candidate vs approved artifact baselines before selecting the next action.
+
+### Priority Order
+
+When computing the next action, the orchestrator checks in this order:
+
+| # | Check | Action if triggered |
+|---|-------|---------------------|
+| 1 | Human approval required | `wait_for_human` |
+| 2 | Blocking failure decision | `escalate_to_failure_handler` or `continue_unrelated_work` |
+| 3 | Provider blocked (generation phase) | `continue_unrelated_work` |
+| 4 | Budget threshold exceeded | `escalate_to_human` |
+| 5 | Blocking validation issues | `handle_blockers` |
+| 6 | Pending revision request | `revise` (force repair before approval) |
+| 7 | Phase not yet approved | `present_review_package` |
+| 8 | Approved, no blockers | `advance_to_<next_phase>` |
+
+### Key Concepts
+
+**Provider-Aware Routing**: If a video provider is blocked (quota, credit, auth,
+outage), generation stops but planning, writing, and validation phases continue
+normally. The orchestrator returns `continue_unrelated_work` instead of blocking
+the entire pipeline.
+
+**Budget Gates**: When `BudgetState.threshold_exceeded` is true, the orchestrator
+routes to `escalate_to_human` — no phase can advance until the human resolves the
+budget situation.
+
+**Failure Classification**: Provider errors are triaged by the
+`failure-handling-agent`. Its structured `FailureDecision` is persisted in
+orchestrator state. If `safe_to_continue_other_work` is true, non-generation
+phases proceed. Otherwise, the orchestrator escalates to the operator.
+
+**Durable Revisions**: When a human requests revision (`request_revision`), the
+request is stored as durable state. Approval is blocked until the revision is
+resolved. Revision requests do not disappear into warnings.
+
+**Candidate vs Approved Baselines**: Every artifact save records a candidate ref.
+When a phase is approved (`approve_phase`), all candidate refs are promoted to
+approved. Downstream phases resolve the latest approved version, never a stale
+candidate.
+
+**Multi-Model Consensus**: When multiple validators run against the same phase
+(e.g., QC phase), the `ConsensusBuilder` produces a unified `ConsensusReport`
+with agreement levels and surfaced disagreements — scores are never silently
+averaged.
+
+**Convergence Tracking**: If a phase goes through 5 revision rounds without
+converging (e.g., validator score frozen), the orchestrator marks the phase as
+stalled and escalates.
+
+### Orchestrator Summary Tool
+
+`get_orchestrator_summary` now returns a comprehensive state snapshot:
+
+```json
+{
+  "ok": true,
+  "project_id": "after-the-fall-001",
+  "current_phase": "script",
+  "approved": false,
+  "human_approval_required": false,
+  "issues": [...],
+  "next_action": "present_review_package",
+  "route_reason": "script phase needs creator",
+  "eligible_actions": ["present_review_package", "approve_phase"],
+  "blocked_actions": [],
+  "candidate_refs": {"script": "artifact:script:v3", "scene_list": "artifact:scene_list:v2"},
+  "approved_refs": {"script": "artifact:script:v2"},
+  "pending_revisions": [],
+  "active_review_cycle": {"phase": "script", "round_count": 0, "status": "active", "strategy": "single"},
+  "provider_blocked": [],
+  "budget_snapshot": {"cap_usd": 100.0, "spent_usd": 0.0, "remaining_usd": 100.0, "threshold_exceeded": false},
+  "has_blocking_failures": false
+}
+```
+
+### Review Package Tool
+
+`review_phase_artifacts` now returns a structured `ReviewPackage` with
+orchestrator recommendations:
+
+```json
+{
+  "ok": true,
+  "review_package": {
+    "review_package_id": "review:...",
+    "project_id": "after-the-fall-001",
+    "phase": "script",
+    "type": "script_review",
+    "summary": "Review package for script phase",
+    "artifacts": [...],
+    "diff_from_approved": {"added": [...], "changed": [...], "removed": []},
+    "validation_results": [...],
+    "open_issues": [...],
+    "risks": [],
+    "cost_impact": {},
+    "orchestrator_recommendation": "Review the candidate artifacts and approve or request revision.",
+    "available_actions": ["approve_phase", "request_revision"],
+    "blocked_actions": []
+  },
+  "router": {
+    "next_action": "present_review_package",
+    "eligible": ["present_review_package", "approve_phase"],
+    "blocked": []
+  }
+}
+```
+
+---
 
 ## Profile Naming
 
@@ -416,14 +526,17 @@ The full sequential workflow is:
 
 Useful follow-up tools:
 
-- `review_phase_artifacts`
+- `get_orchestrator_summary` — full orchestrator state (route reason, candidate/approved refs, pending revisions, provider health, budget, failures)
+- `get_next_actions` — what the orchestrator wants to do next and why
+- `review_phase_artifacts` — structured review package with orchestrator recommendation
 - `inspect_artifact`
 - `inspect_reference` — per-entry metadata including `validation`, `ai_usability`, `quality_score`
 - `get_validation_report` — phase-level aggregate validation
 - `list_validation_issues`
-- `request_revision`
+- `request_revision` — creates durable revision state; blocks approval until resolved
 - `list_providers`
 - `check_provider_health`
+- `get_blockers` — see why approval is blocked
 
 ## What Is Aligned Now
 
@@ -443,11 +556,32 @@ These behaviors are aligned:
 - generation planning: `initialize_budget`, `generate_plan`
 - validation: `run_validation` persists ValidationReport to artifact store
 - checkpoints: `create_checkpoint` snapshots artifact versions
+- **orchestrator routing**: `get_next_actions` returns state-driven priority-based routing with provider health, budget, and failure awareness
+- **orchestrator summary**: `get_orchestrator_summary` includes candidate/approved refs, pending revisions, review cycles, provider health, budget snapshot, and failure status
+- **review packages**: `review_phase_artifacts` returns structured `ReviewPackage` with orchestrator recommendations
+- **durable revisions**: `request_revision` persists revision requests that block approval until resolved
+- **candidate→approved promotion**: `approve_phase` promotes all candidate refs to approved baselines
+- **consensus reports**: QC phase produces `ConsensusReport` artifacts with agreement levels
+
+## What Is Resolved (as of 2026-06-21)
+
+These previously-missing items are now implemented:
+
+- **Orchestrator decision loop**: State-driven routing with 8-tier priority (human gate → failure decisions → provider health → budget → blocking issues → pending revisions → review packages → phase advance)
+- **Provider-aware routing**: `continue_unrelated_work` when generation is blocked but planning/writing can proceed
+- **Budget gates**: `escalate_to_human` on threshold exceeded
+- **Failure classification**: `escalate_to_failure_handler` routes to `failure-handling-agent` with structured `FailureDecision` persistence
+- **Durable revision state**: `request_revision` creates persistent `RevisionRequest` that blocks approval until resolved
+- **Candidate vs approved baselines**: `approve_phase` promotes candidates to approved; downstream phases resolve approved versions
+- **Multi-model consensus**: `ConsensusBuilder` produces `ConsensusReport` with agreement levels and surfaced disagreements
+- **Convergence tracking**: 5-round stall detection with escalation
+- **Review packages**: `review_phase_artifacts` returns structured `ReviewPackage` with orchestrator recommendations
+- **Expanded orchestrator summary**: `get_orchestrator_summary` includes route reason, candidate/approved refs, pending revisions, review cycles, provider health, budget, and failure status
 
 ## What Is Still Missing
 
-- resolved config is stored in project state, but not yet exposed as a dedicated first-class MCP artifact
-- live-provider readiness and provider health are still lighter than the full target plan
+- resolved config not yet exposed as a dedicated first-class MCP artifact
+- live-provider health polling is manual (operator must call tools); no automated health-check loop
 - audit proof for live model/provider execution is still limited
 - delta regeneration has no dedicated MCP tool — it runs internally during `generate_reference_images` but OpenClaw cannot request targeted tile-level retries independently
 - composite validation results (failing tiles, bad reference tags) are computed during generation but not surfaced as a callable MCP artifact — they only appear in the Gemini response logged to the console
@@ -455,6 +589,7 @@ These behaviors are aligned:
 - bible generation tools (CharacterBible, EnvironmentBible, CameraLanguageBible, StyleBible) are planned but not yet implemented — see `docs/data-storage/implementation-plan/` phases 00-02
 - shot bible, generation plan, QC, post, and delivery nodes are all flag-only — see implementation plan phases 06-10
 - frame metadata sidecars, sheet manifests, and additional composite templates are planned — see implementation plan phases 03-05
+- multi-model parallel dispatch (running validators simultaneously on different models) is wired at the profile/strategy level but actual parallel model execution requires provider-level work
 
 **For the complete artifact storage plan**, see:
 - `docs/data-storage/artifact-map.md` — Current vs target state

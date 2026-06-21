@@ -245,3 +245,4 @@ __marimo__/
 /.qwen
 # Test artifacts (temp dirs used in tests)
 projects/
+.DS_Store

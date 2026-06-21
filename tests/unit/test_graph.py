@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.graph import build_graph
 from film_pipeline.graph.interrupts import (
@@ -62,6 +63,128 @@ class TestRouter:
     def test_gates_mapped(self) -> None:
         for p in PHASE_ORDER:
             assert p in APPROVAL_GATES
+
+    # --- Orchestrator-aware router tests ---------------------------------
+
+    def test_provider_blocked_offers_continue_unrelated(self) -> None:
+        """When a provider is blocked in generation phase, offer continue_unrelated_work."""
+        state: dict[str, object] = {
+            "current_phase": "generation",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.update_provider_health(state, "seedance", {"status": "blocked_quota"})
+        r = compute_actions(state)
+        assert r.next_action == "continue_unrelated_work"
+        assert "continue_unrelated_work" in r.eligible
+
+    def test_provider_healthy_in_non_gen_phase_advances(self) -> None:
+        """When provider is blocked but we're in a non-gen phase, still advance."""
+        state: dict[str, object] = {
+            "current_phase": "script",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.update_provider_health(state, "seedance", {"status": "blocked_quota"})
+        r = compute_actions(state)
+        assert r.next_action == "advance_to_visual_dev"
+
+    def test_budget_blocked_escalates_to_human(self) -> None:
+        """When budget threshold is exceeded, escalate to human."""
+        state: dict[str, object] = {
+            "current_phase": "gen_planning",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.update_budget_snapshot(state, cap_usd=50.0, spent_usd=50.0, threshold_exceeded=True)
+        r = compute_actions(state)
+        assert r.next_action == "escalate_to_human"
+
+    def test_blocking_failure_routes_to_failure_handler(self) -> None:
+        """Blocking failure decision should route to failure handler."""
+        state: dict[str, object] = {
+            "current_phase": "generation",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.add_failure_decision(
+            state,
+            {
+                "decision_id": "fd1",
+                "severity": "blocking",
+                "safe_to_retry": False,
+                "safe_to_continue_other_work": False,
+                "human_message": "quota exhausted",
+            },
+        )
+        r = compute_actions(state)
+        assert r.next_action == "escalate_to_failure_handler"
+
+    def test_blocking_failure_with_safe_continuation(self) -> None:
+        """Blocking failure in non-gen phase with safe_to_continue_other_work."""
+        state: dict[str, object] = {
+            "current_phase": "script",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.add_failure_decision(
+            state,
+            {
+                "decision_id": "fd1",
+                "severity": "blocking",
+                "safe_to_retry": False,
+                "safe_to_continue_other_work": True,
+                "human_message": "generation blocked but planning can continue",
+            },
+        )
+        r = compute_actions(state)
+        assert r.next_action == "continue_unrelated_work"
+
+    def test_pending_revision_forces_revise(self) -> None:
+        """Pending revision must be resolved before approval."""
+        state: dict[str, object] = {
+            "current_phase": "script",
+            "approved": False,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        ostate.ensure_orchestrator_state(state)
+        ostate.add_revision_request(state, ["artifact:script:v1"])
+        r = compute_actions(state)
+        assert r.next_action == "revise"
+        assert "approve_phase" not in r.eligible
+
+    def test_blocking_issues_offer_escalate_to_human(self) -> None:
+        """Blocking issues should offer escalate_to_human as option."""
+        state: dict[str, object] = {
+            "current_phase": "script",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [{"severity": "blocking", "code": "IDENTITY_DRIFT"}],
+        }
+        r = compute_actions(state)
+        assert "escalate_to_human" in r.eligible
+
+    def test_happy_path_unchanged(self) -> None:
+        """Straight-line phase progression still works when no blockers exist."""
+        state: dict[str, object] = {
+            "current_phase": "intake",
+            "approved": True,
+            "human_approval_required": False,
+            "issues": [],
+        }
+        r = compute_actions(state)
+        assert r.next_action == "advance_to_constitution"
 
 
 class TestNodes:

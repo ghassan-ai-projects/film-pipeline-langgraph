@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -342,8 +343,15 @@ def studio_runtime(
     graph_services: GraphServices,
     mock_provider: MockVideoProvider,
     tmp_path: Path,
-) -> StudioRuntime:
-    """A fully wired StudioRuntime for E2E MCP-driven tests."""
+) -> Generator[StudioRuntime, None, None]:
+    """A fully wired StudioRuntime for E2E MCP-driven tests.
+
+    Sets the global ``_RUNTIME`` singleton so MCP tools resolve to this
+    runtime, and restores the previous value on teardown so tests do not
+    bleed into each other.
+    """
+    import film_pipeline.app.runtime as rt_mod
+
     rt = StudioRuntime(runtime_root=tmp_path / "e2e-runtime")
     rt.services = graph_services
     rt.register_provider("mock-video-provider", mock_provider)
@@ -351,7 +359,14 @@ def studio_runtime(
         "status": "healthy",
         "reason": "",
     }
-    return rt
+
+    # Save and replace the global singleton so MCP tools see this runtime
+    previous_runtime = rt_mod._RUNTIME
+    rt_mod._RUNTIME = rt
+    try:
+        yield rt
+    finally:
+        rt_mod._RUNTIME = previous_runtime
 
 
 def invoke_tool(
