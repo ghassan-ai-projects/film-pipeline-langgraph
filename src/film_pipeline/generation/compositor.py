@@ -23,12 +23,12 @@ _PLACEHOLDER_COLOR = (200, 200, 210)
 
 # Tile positions for Character Identity Sheet (x, y, w, h)
 _CHAR_TILES: dict[str, tuple[int, int, int, int]] = {
-    "front-face": (_MARGIN, 60, 640, 640),           # 2× scale, top-left
-    "3-4-left": (656, 60, 312, 312),                  # column 2
-    "3-4-right": (976, 60, 312, 312),                 # column 3
-    "profile-right": (656, 380, 312, 312),            # column 2, row 2
-    "profile-left": (976, 380, 312, 312),             # column 3, row 2
-    "full-body": (_MARGIN, 708, 720, 400),            # wide, row 2
+    "front-face": (_MARGIN, 60, 640, 640),  # 2× scale, top-left
+    "3-4-left": (656, 60, 312, 312),  # column 2
+    "3-4-right": (976, 60, 312, 312),  # column 3
+    "profile-right": (656, 380, 312, 312),  # column 2, row 2
+    "profile-left": (976, 380, 312, 312),  # column 3, row 2
+    "full-body": (_MARGIN, 708, 720, 400),  # wide, row 2
     "expression-neutral": (_MARGIN, 1116, 312, 312),  # row 3
     "expression-frustrated": (328, 1116, 312, 312),
     "expression-tired": (656, 1116, 312, 312),
@@ -36,7 +36,7 @@ _CHAR_TILES: dict[str, tuple[int, int, int, int]] = {
     # Detail insets — right column
     "detail-eyes": (1304, 60, 312, 312),
     "detail-hands": (1304, 380, 312, 312),
-    "wardrobe-baseline": (1304, 708, 480, 312),       # after body
+    "wardrobe-baseline": (1304, 708, 480, 312),  # after body
 }
 
 # Labels shown below/above tiles (in margins)
@@ -94,7 +94,9 @@ def build_character_identity_sheet(
     # Paste each frame tile
     for role, (x, y, w, h) in _CHAR_TILES.items():
         # Draw border
-        draw.rectangle([x - 1, y - 1, x + w + 1, y + h + 1], outline=_BORDER_COLOR, width=_BORDER_WIDTH)
+        draw.rectangle(
+            [x - 1, y - 1, x + w + 1, y + h + 1], outline=_BORDER_COLOR, width=_BORDER_WIDTH
+        )
 
         frame_path = frames.get(role)
         if frame_path and frame_path.exists():
@@ -208,11 +210,11 @@ def _load_font(size: int = 14) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load a TrueType font, falling back to default."""
     try:
         return ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", size)
-    except (OSError, IOError):
+    except OSError:
         pass
     try:
         return ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size)
-    except (OSError, IOError):
+    except OSError:
         pass
     return ImageFont.load_default()
 
@@ -249,11 +251,18 @@ def build_environment_board(
     environment_name: str,
     frames: dict[str, Path],
     output_path: Path,
+    *,
+    palette_colors: list[str] | None = None,
 ) -> Path:
     """Build an Environment Board composite.
 
     Same architecture as Character Identity Sheet — different template dimensions
     and tile layout.
+
+    Args:
+        palette_colors: Optional hex color strings (e.g. ``["#1a1a2e", "#e94560"]``)
+                        from the EnvironmentBible. Rendered as swatches in the
+                        ``color-palette`` tile area.
     """
     canvas = Image.new("RGB", _ENV_SHEET_SIZE, _BG_COLOR)
     draw = ImageDraw.Draw(canvas)
@@ -269,16 +278,20 @@ def build_environment_board(
             outline=_BORDER_COLOR,
             width=_BORDER_WIDTH,
         )
-        frame_path = frames.get(role)
-        if frame_path and frame_path.exists():
-            try:
-                tile = Image.open(frame_path).convert("RGB")
-                tile = _crop_center(tile, w, h)
-                canvas.paste(tile, (x, y))
-            except Exception:
-                _paste_placeholder(canvas, x, y, w, h, role)
+
+        if role == "color-palette":
+            _render_color_palette(canvas, x, y, w, h, palette_colors, draw, font)
         else:
-            _paste_placeholder(canvas, x, y, w, h, role)
+            frame_path = frames.get(role)
+            if frame_path and frame_path.exists():
+                try:
+                    tile = Image.open(frame_path).convert("RGB")
+                    tile = _crop_center(tile, w, h)
+                    canvas.paste(tile, (x, y))
+                except Exception:
+                    _paste_placeholder(canvas, x, y, w, h, role)
+            else:
+                _paste_placeholder(canvas, x, y, w, h, role)
 
         label = _ENV_LABELS.get(role, role.upper().replace("-", " "))
         label_y = y + h + 2
@@ -288,3 +301,58 @@ def build_environment_board(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path, "PNG")
     return output_path
+
+
+def _render_color_palette(
+    canvas: Image.Image,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+    palette_colors: list[str] | None,
+    draw: ImageDraw.ImageDraw,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> None:
+    """Render hex color swatches in the palette tile area.
+
+    When *palette_colors* is empty or None, renders a placeholder.
+    """
+    if not palette_colors:
+        _paste_placeholder(canvas, x, y, w, h, "color-palette")
+        return
+
+    # Parse hex colors, skip invalid entries
+    rgb_colors: list[tuple[int, int, int]] = []
+    for c in palette_colors:
+        try:
+            hex_str = c.strip().lstrip("#")
+            if len(hex_str) == 6:
+                rgb_colors.append(
+                    (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+                )
+        except (ValueError, IndexError):
+            continue
+
+    if not rgb_colors:
+        _paste_placeholder(canvas, x, y, w, h, "color-palette")
+        return
+
+    # Render equal-width swatches
+    swatch_w = w // len(rgb_colors)
+    for i, color in enumerate(rgb_colors):
+        sx = x + i * swatch_w
+        swatch = Image.new("RGB", (swatch_w, h), color)
+        canvas.paste(swatch, (sx, y))
+        # Draw hex label centered in swatch (white text on dark, dark on light)
+        hex_label = f"#{palette_colors[i].strip().lstrip('#')}"
+        luminance = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
+        text_color = (255, 255, 255) if luminance < 128 else (30, 30, 30)
+        bbox = draw.textbbox((0, 0), hex_label, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        draw.text(
+            (sx + (swatch_w - tw) // 2, y + (h - th) // 2),
+            hex_label,
+            fill=text_color,
+            font=font,
+        )

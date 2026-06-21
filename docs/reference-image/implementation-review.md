@@ -166,8 +166,11 @@
 
 ## Gaps Found
 
-### 1. Provider `references` parameter is ignored (minor)
-The Imagen4 provider accepts `references` but ignores it (`_ = references`). The I2I fallback passes the anchor frame path, but it's never used in the API call. The actual consistency mechanism is the ID_REINFORCE prompt block, which is active. Adding provider-level image conditioning is a future enhancement.
+### ~~1. Provider `references` parameter is ignored~~ ✅ FIXED 2026-06-21
+The Imagen4 provider accepted `references` but ignored it. Removed the dead
+`references` passing from the I2I code path. Added documentation in
+`Imagen4GeminiProvider.build_payload()` explaining the API limitation.
+Consistency is enforced at the prompt level via the ID_REINFORCE block.
 
 ### 2. No real Gemini image upload in tests (by design)
 Per-frame review and composite validation tests use mock HTTP openers with synthetic JSON responses. The actual Gemini image upload path is exercised only in the manual E2E test (`RUN_REAL_E2E=1`). This is intentional — explained in `testing-strategy.md`.
@@ -175,8 +178,11 @@ Per-frame review and composite validation tests use mock HTTP openers with synth
 ### 3. Selective validation may skip too aggressively
 `should_review_frame()` skips environment wide shots and lighting variants entirely. This saves cost but means environment spatial consistency is never validated by Gemini at the frame level — only at the composite level (Phase 8). This is the legacy spec's design and is acceptable.
 
-### 4. No color palette generation in compositor
-The Environment Board compositor has a `color-palette` tile position, but no logic to render actual color swatches from FilmConstitution data. Currently it renders as a placeholder if no `color-palette` frame role exists. This is a cosmetic gap.
+### ~~4. No color palette generation in compositor~~ ✅ FIXED 2026-06-21
+The Environment Board compositor now renders hex color swatches from
+EnvironmentBible `color_palette` data. `_render_color_palette()` parses hex
+colors, draws equal-width swatches with centered hex labels (auto light/dark
+text), and falls back to placeholder when no palette data exists.
 
 ### 5. Graph `generation_node` still a no-op
 The reference image pipeline runs entirely through the `generate_reference_images` MCP tool, bypassing the LangGraph state machine. The `generation_node` in the graph is still a flag-only no-op. This is documented in `plan-review.md` Gap 5 — deferred.
@@ -198,6 +204,6 @@ Both are Google API key checks that fail outside CI environments. Not related to
 | New tests | 66 total (all passing except 2 pre-existing) |
 | Coverage | 90.36% |
 | Bugs found & fixed | 2 (`json` import, `reference_images`→`references` kwarg) |
-| Remaining gaps | 6 (all minor/deferred/design-choice) |
+| Remaining gaps | 4 (2 by-design, 1 deferred, 1 pre-existing) |
 
 **Verdict:** The reference image pipeline is functionally complete. The critical path (generate → validate → composite → validate → fix → persist) is end-to-end wired. The structured prompt system uses domain data (CharacterBible + FilmConstitution) instead of LLM hallucination. Identity consistency is enforced via seed lock + I2I fallback with drift detection. Composite sheets are built via Pillow with proper layouts. Both per-frame and composite-level Gemini validation are in place with selective cost-saving rules.

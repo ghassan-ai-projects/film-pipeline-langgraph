@@ -69,6 +69,9 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         seed: int | None = None,
     ) -> dict[str, Any]:
         _ = duration
+        # The standalone Imagen API does not support reference-image
+        # conditioning (image-to-image).  Identity consistency is enforced
+        # at the prompt level via the ID_REINFORCE block instead.
         _ = references
         parameters: dict[str, Any] = {
             "sampleCount": 1,
