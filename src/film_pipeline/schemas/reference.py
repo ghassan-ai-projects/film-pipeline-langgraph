@@ -71,6 +71,9 @@ class ReferenceIndexEntry(SchemaBase):
         default="planned",
         description="'planned' | 'generated' | 'failed' | 'validated'.",
     )
+    retry_count: int = Field(default=0, ge=0, description="Number of generation attempts.")
+    best_score: float = Field(default=0.0, ge=0, description="Best Gemini score across retries.")
+    best_attempt: int = Field(default=0, ge=0, description="Attempt number with best score.")
     original_mime_type: str = ""
     normalized_mime_type: str = "image/png"
     status: ArtifactStatus = ArtifactStatus.CANDIDATE

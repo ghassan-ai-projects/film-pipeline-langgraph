@@ -657,94 +657,89 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             if ist.get("anchor_frame_path") and ist.get("i2i_active"):
                 provider_kwargs["reference_images"] = [str(ist["anchor_frame_path"])]
 
-        try:
-            payload = provider.build_payload(prompt_text, **provider_kwargs)
-            job = provider.submit(payload, shot_id)
-            job = provider.poll(job)
-            downloaded_path = provider.download(job, output_dir)
-            metadata = provider.extract_metadata(downloaded_path)
-        except Exception as exc:
-            raw["generation_status"] = "failed"
-            raw["issues"] = [
-                {
-                    "code": "generation_failed",
-                    "message": str(exc)[:300],
-                    "severity": "blocking",
-                }
-            ]
-            raw["validation"] = {
-                "status": "needs_regeneration",
-                "score": 0.0,
-                "reports": [],
-            }
-            failed += 1
-            results.append(
-                {
-                    "reference_id": reference_id,
-                    "status": "failed",
-                    "error": str(exc)[:200],
-                }
-            )
-            continue
-
-        # Rename downloaded file to use reference_id as stem
-        ext = Path(downloaded_path).suffix or ".png"
-        target_name = f"{_reference_job_id(reference_id)}{ext}"
-        target_path = Path(output_dir) / target_name
-        Path(downloaded_path).rename(target_path)
-
-        # Auto-heuristic checks (Phase 1) — catch corrupt/blank/too-small images
-        from film_pipeline.generation.frame_heuristics import run_heuristic_checks
-
-        heuristic_result = run_heuristic_checks(
-            target_path,
-            subject_type=str(raw.get("subject_type", "character")),
-        )
-        if not heuristic_result.passed:
-            raw["generation_status"] = "failed"
-            raw["issues"] = [
-                {
-                    "code": "heuristic_check_failed",
-                    "message": f"Heuristics failed: {', '.join(heuristic_result.failures)}",
-                    "severity": "blocking",
-                }
-            ]
-            raw["validation"] = {
-                "status": "needs_regeneration",
-                "score": 0.0,
-                "reports": [],
-            }
-            failed += 1
-            results.append(
-                {
-                    "reference_id": reference_id,
-                    "status": "failed",
-                    "error": f"Heuristics: {', '.join(heuristic_result.failures)}",
-                }
-            )
-            continue
-
-        # Per-frame Gemini review (Phase 3) — AI-based validation
-        from film_pipeline.generation.frame_reviewer import review_frame, should_review_frame
-
+        # Phase 5 — Retry loop: max 3 attempts (initial + 2 retries)
+        best_score = 0.0
+        best_attempt = 0
+        retry_prompt = prompt_text
         frame_review_result = None
-        if should_review_frame(raw):
+        last_heuristic_failures: list[str] = []
+
+        for attempt in range(3):
+            if attempt > 0:
+                # Inject actionable feedback into prompt for retry
+                feedback = frame_review_result.actionable_feedback if frame_review_result else ""
+                if feedback:
+                    retry_prompt = f"{prompt_text} Fix the following: {feedback}"
+
             try:
-                frame_review_result = review_frame(
-                    target_path,
-                    prompt_text,
-                    subject_type=str(raw.get("subject_type", "character")),
-                    frame_id=reference_id,
-                )
-            except Exception:
-                # Never block on review failure — accept the frame
-                pass
+                payload = provider.build_payload(retry_prompt, **provider_kwargs)
+                job = provider.submit(payload, shot_id)
+                job = provider.poll(job)
+                downloaded_path = provider.download(job, output_dir)
+                metadata = provider.extract_metadata(downloaded_path)
+            except Exception as exc:
+                if attempt < 2:
+                    continue
+                raw["generation_status"] = "failed"
+                raw["issues"] = [{"code": "generation_failed", "message": str(exc)[:300], "severity": "blocking"}]
+                raw["validation"] = {"status": "needs_regeneration", "score": 0.0, "reports": []}
+                failed += 1
+                results.append({"reference_id": reference_id, "status": "failed", "error": str(exc)[:200]})
+                break
+
+            # Rename
+            ext = Path(downloaded_path).suffix or ".png"
+            target_name = f"{_reference_job_id(reference_id)}{ext}"
+            target_path = Path(output_dir) / target_name
+            Path(downloaded_path).rename(target_path)
+
+            # Heuristics
+            from film_pipeline.generation.frame_heuristics import run_heuristic_checks
+            heuristic_result = run_heuristic_checks(target_path, subject_type=str(raw.get("subject_type", "character")))
+            if not heuristic_result.passed:
+                last_heuristic_failures = heuristic_result.failures
+                if attempt < 2:
+                    continue
+                raw["generation_status"] = "failed"
+                raw["issues"] = [{"code": "heuristic_check_failed", "message": f"Heuristics failed: {', '.join(heuristic_result.failures)}", "severity": "blocking"}]
+                raw["validation"] = {"status": "needs_regeneration", "score": 0.0, "reports": []}
+                failed += 1
+                results.append({"reference_id": reference_id, "status": "failed", "error": f"Heuristics: {', '.join(heuristic_result.failures)}"})
+                break
+
+            # Gemini review
+            from film_pipeline.generation.frame_reviewer import review_frame, should_review_frame
+            frame_review_result = None
+            if should_review_frame(raw):
+                try:
+                    frame_review_result = review_frame(target_path, retry_prompt, subject_type=str(raw.get("subject_type", "character")), frame_id=reference_id)
+                except Exception:
+                    pass
+
+            if frame_review_result is not None and frame_review_result.passed:
+                best_score = frame_review_result.total
+                best_attempt = attempt + 1
+                break
+            if frame_review_result is not None:
+                if frame_review_result.total > best_score:
+                    best_score = frame_review_result.total
+                    best_attempt = attempt + 1
+                if attempt < 2:
+                    continue
+            # Review skipped or unavailable — accept on first attempt
+            if frame_review_result is None:
+                best_attempt = attempt + 1
+                break
+
+        # --- Post-retry: update metadata ---
+        raw["retry_count"] = best_attempt  # 0 if all attempts failed
+        raw["best_score"] = best_score
 
         # Phase 4 — track anchor + detect identity/geometry drift
         gk = _group_key(raw)
         ist = identity_states.setdefault(gk, {})
         is_anchor = str(raw.get("frame_role", "")).strip().lower() in ("front-face", "wide-establishing")
-        if is_anchor and "anchor_seed" in ist:
+        if is_anchor and "anchor_seed" in ist and "target_path" in dir():
             ist["anchor_frame_path"] = target_path
         if frame_review_result is not None and not frame_review_result.passed:
             subject_score = float(frame_review_result.scores.get("subject", {}).get("score", 10))
@@ -754,6 +749,11 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
                     ist["i2i_strength"] = 0.5
                 elif float(ist.get("i2i_strength", 0.5)) > 0.3:
                     ist["i2i_strength"] = 0.3
+
+        if best_attempt == 0:
+            # All attempts failed — error already recorded in retry loop
+            generated += 0  # counted as failed above
+            continue
 
         rel_path = target_path.resolve().relative_to(project_root.resolve())
         provider_entry = getattr(provider, "entry", None)
