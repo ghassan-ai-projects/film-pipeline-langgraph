@@ -650,12 +650,11 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             else:
                 provider_kwargs["seed"] = hash(shot_id) % (2**31)
                 identity_states.setdefault(group_key, {})["anchor_seed"] = provider_kwargs["seed"]
-        # I2I fallback: pass anchor frame as reference image
-        group_key = _group_key(raw)
-        if group_key in identity_states:
-            ist = identity_states[group_key]
-            if ist.get("anchor_frame_path") and ist.get("i2i_active"):
-                provider_kwargs["references"] = [str(ist["anchor_frame_path"])]
+        # Identity consistency is enforced via the ID_REINFORCE prompt block
+        # (the Imagen API does not support reference-image conditioning).
+        # anchor_frame_path and i2i_active in identity_states are consumed by
+        # _reference_prompt() → build_structured_prompt() to strengthen the
+        # ID_REINFORCE instruction when Gemini detects subject drift.
 
         # Phase 5 — Retry loop: max 3 attempts (initial + 2 retries)
         best_score = 0.0
@@ -681,10 +680,14 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
                 if attempt < 2:
                     continue
                 raw["generation_status"] = "failed"
-                raw["issues"] = [{"code": "generation_failed", "message": str(exc)[:300], "severity": "blocking"}]
+                raw["issues"] = [
+                    {"code": "generation_failed", "message": str(exc)[:300], "severity": "blocking"}
+                ]
                 raw["validation"] = {"status": "needs_regeneration", "score": 0.0, "reports": []}
                 failed += 1
-                results.append({"reference_id": reference_id, "status": "failed", "error": str(exc)[:200]})
+                results.append(
+                    {"reference_id": reference_id, "status": "failed", "error": str(exc)[:200]}
+                )
                 break
 
             # Rename
@@ -695,24 +698,45 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
             # Heuristics
             from film_pipeline.generation.frame_heuristics import run_heuristic_checks
-            heuristic_result = run_heuristic_checks(target_path, subject_type=str(raw.get("subject_type", "character")))
+
+            heuristic_result = run_heuristic_checks(
+                target_path, subject_type=str(raw.get("subject_type", "character"))
+            )
             if not heuristic_result.passed:
                 last_heuristic_failures = heuristic_result.failures
                 if attempt < 2:
                     continue
                 raw["generation_status"] = "failed"
-                raw["issues"] = [{"code": "heuristic_check_failed", "message": f"Heuristics failed: {', '.join(heuristic_result.failures)}", "severity": "blocking"}]
+                raw["issues"] = [
+                    {
+                        "code": "heuristic_check_failed",
+                        "message": f"Heuristics failed: {', '.join(heuristic_result.failures)}",
+                        "severity": "blocking",
+                    }
+                ]
                 raw["validation"] = {"status": "needs_regeneration", "score": 0.0, "reports": []}
                 failed += 1
-                results.append({"reference_id": reference_id, "status": "failed", "error": f"Heuristics: {', '.join(heuristic_result.failures)}"})
+                results.append(
+                    {
+                        "reference_id": reference_id,
+                        "status": "failed",
+                        "error": f"Heuristics: {', '.join(heuristic_result.failures)}",
+                    }
+                )
                 break
 
             # Gemini review
             from film_pipeline.generation.frame_reviewer import review_frame, should_review_frame
+
             frame_review_result = None
             if should_review_frame(raw):
                 try:
-                    frame_review_result = review_frame(target_path, retry_prompt, subject_type=str(raw.get("subject_type", "character")), frame_id=reference_id)
+                    frame_review_result = review_frame(
+                        target_path,
+                        retry_prompt,
+                        subject_type=str(raw.get("subject_type", "character")),
+                        frame_id=reference_id,
+                    )
                 except Exception:
                     pass
 
@@ -738,7 +762,10 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         # Phase 4 — track anchor + detect identity/geometry drift
         gk = _group_key(raw)
         ist = identity_states.setdefault(gk, {})
-        is_anchor = str(raw.get("frame_role", "")).strip().lower() in ("front-face", "wide-establishing")
+        is_anchor = str(raw.get("frame_role", "")).strip().lower() in (
+            "front-face",
+            "wide-establishing",
+        )
         if is_anchor and "anchor_seed" in ist and "target_path" in dir():
             ist["anchor_frame_path"] = target_path
         if frame_review_result is not None and not frame_review_result.passed:
@@ -798,7 +825,8 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             raw["issues"] = [
                 {
                     "code": "gemini_review_failed",
-                    "message": frame_review_result.actionable_feedback or "Gemini review below threshold.",
+                    "message": frame_review_result.actionable_feedback
+                    or "Gemini review below threshold.",
                     "severity": "warning",
                 }
             ]
@@ -857,7 +885,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
     )
 
     # Phase 7 — Build composite sheets for characters with generated frames
-    _build_composites(project_root, grouped_entries)
+    _build_composites(project_root, project_id, grouped_entries, rt.services.artifact_store)
 
     # Phase 11 — Write human-readable index files
     _write_reference_index_files(project_root, updated["entries"])
@@ -1162,13 +1190,33 @@ def _reference_job_id(reference_id: str) -> str:
 
 def _build_composites(
     project_root: Path,
+    project_id: str,
     entries: list[dict[str, object]],
+    artifact_store: Any,
 ) -> None:
     """Build composite sheets from generated frames (Phase 7)."""
     from film_pipeline.generation.compositor import (
         build_character_identity_sheet,
         build_environment_board,
     )
+    from film_pipeline.schemas._base import FilmPhase
+
+    # Resolve color palettes from EnvironmentBible artifacts
+    env_palettes: dict[str, list[str]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "environment":
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id or subject_id in env_palettes:
+            continue
+        try:
+            bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
+            if isinstance(bible, dict):
+                palette = bible.get("color_palette", [])
+                if isinstance(palette, list) and palette:
+                    env_palettes[subject_id] = [str(c) for c in palette]
+        except (FileNotFoundError, ValueError):
+            pass
 
     # Group entries by character subject
     char_frames: dict[str, dict[str, Path]] = {}
@@ -1216,9 +1264,17 @@ def _build_composites(
             env_frames.setdefault(subject_id, {})[role] = frame_path
 
     for subject_id, frames in env_frames.items():
-        sheet_path = project_root / "references" / "environments" / subject_id / "environment-board.png"
+        sheet_path = (
+            project_root / "references" / "environments" / subject_id / "environment-board.png"
+        )
         try:
-            build_environment_board(subject_id, subject_id, frames, sheet_path)
+            build_environment_board(
+                subject_id,
+                subject_id,
+                frames,
+                sheet_path,
+                palette_colors=env_palettes.get(subject_id),
+            )
             # Phase 8 — Composite validation
             _validate_composite(sheet_path, "environment_board", subject_id)
         except Exception:

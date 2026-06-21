@@ -9,6 +9,7 @@ from PIL import Image
 
 from film_pipeline.generation.compositor import (
     build_character_identity_sheet,
+    build_environment_board,
     replace_tile,
 )
 
@@ -89,3 +90,80 @@ class TestReplaceTile:
         build_character_identity_sheet("x", "X", frames, sheet)
         with pytest.raises(ValueError, match="Unknown tile"):
             replace_tile(sheet, "nonexistent", _make_frame(tmp_path, "n.png"))
+
+
+class TestEnvironmentBoard:
+    def test_builds_board_with_palette(self, tmp_path: Path) -> None:
+        frames = {
+            "wide-establishing": _make_frame(tmp_path, "wide.png"),
+        }
+        output = tmp_path / "env-board.png"
+        palette = ["#1a1a2e", "#e94560", "#0f3460", "#16213e"]
+        result = build_environment_board(
+            "studio",
+            "Studio",
+            frames,
+            output,
+            palette_colors=palette,
+        )
+        assert result == output
+        assert output.exists()
+        img = Image.open(output)
+        assert img.size == (3840, 2160)
+        # Palette area should NOT be solid placeholder gray — check a pixel
+        # that falls inside the palette tile area
+        px, py = 10, 1700  # inside color-palette region
+        pixel = img.getpixel((px, py))
+        # Should not be placeholder color (200, 200, 210)
+        assert pixel != (200, 200, 210)
+
+    def test_builds_board_without_palette(self, tmp_path: Path) -> None:
+        frames = {
+            "wide-establishing": _make_frame(tmp_path, "wide.png"),
+        }
+        output = tmp_path / "env-board.png"
+        build_environment_board(
+            "studio",
+            "Studio",
+            frames,
+            output,
+            palette_colors=None,
+        )
+        assert output.exists()
+        img = Image.open(output)
+        assert img.size == (3840, 2160)
+        # Palette area should be placeholder
+        px, py = 10, 1700
+        pixel = img.getpixel((px, py))
+        assert pixel == (200, 200, 210)
+
+    def test_builds_board_with_empty_palette(self, tmp_path: Path) -> None:
+        frames = {
+            "wide-establishing": _make_frame(tmp_path, "wide.png"),
+        }
+        output = tmp_path / "env-board.png"
+        build_environment_board(
+            "studio",
+            "Studio",
+            frames,
+            output,
+            palette_colors=[],
+        )
+        assert output.exists()
+        # Should not crash — renders placeholder
+
+    def test_builds_board_with_invalid_hex(self, tmp_path: Path) -> None:
+        frames = {
+            "wide-establishing": _make_frame(tmp_path, "wide.png"),
+        }
+        output = tmp_path / "env-board.png"
+        palette = ["not-a-color", "#GGHHII", "  ", "#123456"]
+        build_environment_board(
+            "studio",
+            "Studio",
+            frames,
+            output,
+            palette_colors=palette,
+        )
+        assert output.exists()
+        # Only the valid hex should render; no crash
