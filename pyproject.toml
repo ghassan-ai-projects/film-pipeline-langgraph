@@ -67,6 +67,7 @@ addopts = [
   "--import-mode=importlib",
   "--strict-config",
   "--strict-markers",
+  "-W", "ignore::langchain_core._api.deprecation.LangChainPendingDeprecationWarning",
   "--cov=film_pipeline",
   "--cov-report=term-missing",
   "--cov-fail-under=90",

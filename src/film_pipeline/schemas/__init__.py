@@ -76,6 +76,7 @@ from film_pipeline.schemas.environment import (
     LightingState,
     Viewpoint,
 )
+from film_pipeline.schemas.failure import FailureDecision, FailureRecoveryRecord
 from film_pipeline.schemas.film_constitution import CharacterTruth, FilmConstitution
 from film_pipeline.schemas.generation import (
     GenerationLedger,
@@ -188,6 +189,8 @@ __all__ = [
     "EnvironmentFingerprint",
     "EnvironmentZone",
     "FailureClass",
+    "FailureDecision",
+    "FailureRecoveryRecord",
     "FilmConstitution",
     "FilmPhase",
     "FilmType",

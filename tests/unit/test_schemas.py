@@ -46,6 +46,9 @@ from film_pipeline.schemas import (
     EnvironmentBible,
     EnvironmentFingerprint,
     EnvironmentZone,
+    FailureClass,
+    FailureDecision,
+    FailureRecoveryRecord,
     FilmConstitution,
     FilmPhase,
     FilmType,
@@ -645,6 +648,56 @@ def test_provider_health_blocked() -> None:
         blocked_reason="quota_exhausted",
     )
     assert s.status == ProviderStatus.BLOCKED_QUOTA
+
+
+# --- Failure decisions ---------------------------------------------------
+
+
+def test_failure_decision_blocking() -> None:
+    d = FailureDecision(
+        decision_id="fd1",
+        project_id="p",
+        phase="generation",
+        error_class=FailureClass.PROVIDER_ACCOUNT,
+        severity="blocking",
+        safe_to_retry=False,
+        safe_to_continue_other_work=True,
+        next_graph_action="human_escalation",
+        human_message="Provider has no remaining credit.",
+    )
+    assert d.error_class == FailureClass.PROVIDER_ACCOUNT
+    assert d.severity == "blocking"
+    assert d.safe_to_retry is False
+    assert d.safe_to_continue_other_work is True
+
+
+def test_failure_decision_recoverable() -> None:
+    d = FailureDecision(
+        decision_id="fd2",
+        project_id="p",
+        phase="generation",
+        error_class=FailureClass.RECOVERABLE_EXECUTION,
+        severity="non_blocking",
+        safe_to_retry=True,
+        next_graph_action="retry",
+        human_message="Timeout — safe to retry.",
+    )
+    assert d.severity == "non_blocking"
+    assert d.safe_to_retry is True
+    assert d.next_graph_action == "retry"
+
+
+def test_failure_recovery_record() -> None:
+    r = FailureRecoveryRecord(
+        recovery_id="rec1",
+        failure_decision_id="fd1",
+        project_id="p",
+        phase="generation",
+        attempt_count=1,
+    )
+    assert r.attempt_count == 1
+    assert r.resolved is False
+    assert r.max_attempts == 3
 
 
 # --- Issue ---------------------------------------------------------------

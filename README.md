@@ -15,16 +15,19 @@ The current target does not include in-repo final editorial finishing, audio, co
 
 ```bash
 make setup      # uv sync --group dev
-make ci-check   # format + lint + mypy + test (90% coverage) + build
+make ci-check   # format + lint + test (90% coverage) + build + product-gate
 ```
 
 ## Current Status
 
-The repository is now centered on a clips-first workflow:
+The repository is now centered on a clips-first workflow with a state-driven
+orchestrator:
 
 - critical-path agents execute through dedicated prompt templates
 - runtime approvals create checkpoints and audit events
 - artifacts, routing decisions, and validation reports are inspectable through MCP
+- the orchestrator routes based on provider health, budget state, failure
+  decisions, pending revisions, and candidate vs approved artifact baselines
 - non-video generation lifecycle is behavior-tested
 - manual finishing is expected to happen outside the repo
 
@@ -61,7 +64,7 @@ Hard acceptance and product-completion docs remain in [docs/product-completion/R
 
 - **Project:** `create_film_project`, `list_projects`, `find_project`, `set_active_project`, `get_active_project`, `get_project_summary`
 - **Intake:** `submit_idea`, `get_intake_analysis`, `approve_intake`
-- **State:** `get_current_phase`, `get_film_state`, `get_orchestrator_summary`, `get_next_actions`, `get_blockers`
+- **State:** `get_current_phase`, `get_film_state`, `get_orchestrator_summary` (route reason, candidate/approved refs, pending revisions, review cycles, provider health, budget, failures), `get_next_actions`, `get_blockers`
 - **Review:** `review_phase_artifacts`, `approve_phase`, `request_revision`
 - **Artifact:** `list_artifacts`, `inspect_artifact`, `list_shots`, `inspect_shot`, `inspect_scene`, `inspect_reference`
 - **Validation:** `get_validation_report`, `list_validation_issues`

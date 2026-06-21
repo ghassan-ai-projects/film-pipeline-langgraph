@@ -248,7 +248,15 @@ def _save_artifact(
         created_at=datetime.now(UTC),
     )
     services.artifact_store.save(artifact, meta)
-    return f"artifact:{artifact_id}:v1"
+    ref = f"artifact:{artifact_id}:v1"
+
+    # Record candidate ref for orchestrator state
+    from film_pipeline.graph.orchestrator_state import ensure_orchestrator_state, set_candidate_ref
+
+    ensure_orchestrator_state(state)
+    set_candidate_ref(state, artifact_id, ref)
+
+    return ref
 
 
 _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
@@ -662,6 +670,31 @@ def _run_validators(state: dict[str, Any]) -> None:
 
     state["issues"] = issues
 
+    # --- Build consensus report when multiple validators ran ----------
+    _build_consensus_if_needed(state, phase)
+
+
+def _build_consensus_if_needed(state: dict[str, Any], phase: str) -> None:
+    """Build a consensus report when multiple validators produced reports."""
+    reports = state.get("_validation_reports", [])
+    if len(reports) < 2:
+        return
+
+    from film_pipeline.validation.consensus import ConsensusBuilder
+
+    artifact_refs: list[str] = state.get("artifact_refs", [])
+
+    try:
+        consensus = ConsensusBuilder().build(reports, artifact_refs)
+    except Exception:
+        return
+
+    # Save consensus report as an artifact
+    ref = _save_artifact(state, consensus, "consensus_report", phase)
+    if ref:
+        state["consensus_report_ref"] = ref
+        state.setdefault("artifact_refs", []).append(ref)
+
 
 def _run_script_validators(
     artifact_data: dict[str, Any],
@@ -843,6 +876,18 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     new_state["approved"] = True
     new_state["human_approval_required"] = False
+
+    # Promote all candidate refs to approved
+    from film_pipeline.graph.orchestrator_state import (
+        ensure_orchestrator_state,
+        get_candidate_refs,
+        set_approved_ref,
+    )
+
+    ensure_orchestrator_state(new_state)
+    for family, ref in get_candidate_refs(new_state).items():
+        set_approved_ref(new_state, family, ref)
+
     return new_state
 
 
@@ -860,4 +905,13 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
             "message": "Human requested revision.",
         },
     ]
+    # Record durable revision request via orchestrator state helpers
+    from film_pipeline.graph.orchestrator_state import (
+        add_revision_request,
+        ensure_orchestrator_state,
+    )
+
+    ensure_orchestrator_state(new_state)
+    artifact_refs = new_state.get("artifact_refs", [])
+    add_revision_request(new_state, artifact_refs, note="Human requested revision.")
     return new_state

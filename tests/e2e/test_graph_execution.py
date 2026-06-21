@@ -137,7 +137,7 @@ class TestGraphExecution:
         assert after_repair({}) == "await_approval"
 
     def test_edge_routing_with_blocking_issues(self) -> None:
-        """Blocking issues prevent phase advancement."""
+        """Blocking issues pause at the human approval gate."""
         result = after_phase(
             {
                 "current_phase": "script",
@@ -146,7 +146,7 @@ class TestGraphExecution:
                 "issues": [{"severity": "blocking", "code": "BAD_SCRIPT"}],
             }
         )
-        assert result != "await_approval"
+        assert result == "await_approval"
 
     def test_edge_routing_approved_advances(self) -> None:
         """Approved phase without issues advances to next phase."""
