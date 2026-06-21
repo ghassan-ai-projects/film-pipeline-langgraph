@@ -172,6 +172,33 @@ Expected real-mode shape:
 
 If project mode and server mode differ, the tool returns an error.
 
+## Step 4.5. Generate Visual Development Bibles (Pre-Generation)
+
+Before `generate_reference_images`, the pipeline needs locked character and
+environment descriptions for structured prompt construction. Generate them
+with the bible tools:
+
+```json
+{ "tool": "generate_character_bible" }
+{ "tool": "generate_environment_bible" }
+{ "tool": "generate_camera_bible" }
+{ "tool": "generate_style_bible" }
+```
+
+These produce `CharacterBible`, `EnvironmentBible`, `CameraLanguageBible`,
+and `StyleBible` artifacts in the artifact store under `04-visual-dev/`.
+The reference image pipeline reads them for:
+
+- **CHAR_DESC block** — `CharacterBible.identity_block` (locked character description)
+- **ENV_BASE block** — `EnvironmentBible.locked_prompt_block` (locked environment description)
+- **Color palette** — `EnvironmentBible.color_palette` rendered in environment board
+- **Camera language** — `CameraLanguageBible` profiles for shot bible prompts
+- **Style reference** — `StyleBible` for style boards
+
+> **Status:** 🟡 Planned — bibles are documented in `docs/data-storage/implementation-plan/`
+> phases 00-02. Without them, the reference image pipeline falls back to LLM-generated
+> prompt text, losing the locked, invariant descriptions.
+
 ## Step 5. Generate Reference Images In Visual Dev
 
 After the script phase reaches `visual_dev`, the `generate_reference_images`
@@ -367,6 +394,13 @@ These behaviors are aligned:
 - delta regeneration has no dedicated MCP tool — it runs internally during `generate_reference_images` but OpenClaw cannot request targeted tile-level retries independently
 - composite validation results (failing tiles, bad reference tags) are computed during generation but not surfaced as a callable MCP artifact — they only appear in the Gemini response logged to the console
 - `get_validation_report` for `visual_dev` uses the pre-existing ReferenceUsabilityValidator (macro-level checks) rather than the Gemini per-frame and composite review scores; individual frame scores are accessible via `inspect_reference` per-entry
+- bible generation tools (CharacterBible, EnvironmentBible, CameraLanguageBible, StyleBible) are planned but not yet implemented — see `docs/data-storage/implementation-plan/` phases 00-02
+- shot bible, generation plan, QC, post, and delivery nodes are all flag-only — see implementation plan phases 06-10
+- frame metadata sidecars, sheet manifests, and additional composite templates are planned — see implementation plan phases 03-05
+
+**For the complete artifact storage plan**, see:
+- `docs/data-storage/artifact-map.md` — Current vs target state
+- `docs/data-storage/implementation-plan/README.md` — Phased implementation plan
 
 ## Decision Rule
 
