@@ -1452,6 +1452,175 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
         return _error(f"Plan generation failed: {exc}")
 
 
+async def run_validation(args: dict[str, object]) -> dict[str, object]:
+    """Run validators for the current phase and persist ValidationReport."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    phase_str = str(active.get("current_phase", "visual_dev"))
+    store = rt.services.artifact_store
+
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        fp = FilmPhase(phase_str)
+    except ValueError:
+        return _error(f"Unknown phase: {phase_str}")
+
+    reports: list[dict[str, object]] = []
+    saved_refs: list[str] = []
+
+    try:
+        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from datetime import UTC, datetime
+
+        if phase_str == "visual_dev":
+            art_data = _load_latest_reference_index(rt, project_id, active)
+            if art_data is not None:
+                from film_pipeline.validation.impl.reference_usability import (
+                    ReferenceUsabilityValidator,
+                )
+
+                validator = ReferenceUsabilityValidator()
+                report = validator.run(art_data)
+                reports.append(_report_summary(report))
+                meta = ArtifactMetadata(
+                    artifact_id="validation_report",
+                    artifact_type=ArtifactType.VALIDATION_REPORT,
+                    project_id=project_id,
+                    phase=fp,
+                    version=1,
+                    status=ArtifactStatus.CANDIDATE,
+                    created_by="mcp.run_validation",
+                    created_at=datetime.now(UTC),
+                )
+                ref = store.save(report, meta)
+                saved_refs.append(ref)
+
+        elif phase_str == "script":
+            try:
+                art_data = store.load(project_id, fp, "script", 1)
+            except (FileNotFoundError, ValueError):
+                art_data = None
+            if art_data is not None:
+                from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
+                from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+
+                for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
+                    validator = vcls()
+                    report = validator.run(art_data)
+                    reports.append(_report_summary(report))
+                    meta = ArtifactMetadata(
+                        artifact_id="validation_report",
+                        artifact_type=ArtifactType.VALIDATION_REPORT,
+                        project_id=project_id,
+                        phase=fp,
+                        version=1,
+                        status=ArtifactStatus.CANDIDATE,
+                        created_by="mcp.run_validation",
+                        created_at=datetime.now(UTC),
+                    )
+                    ref = store.save(report, meta)
+                    saved_refs.append(ref)
+    except Exception as exc:
+        return _error(f"Validation run failed: {exc}")
+
+    if not reports:
+        return _ok(message="No validators found for this phase.")
+    active["_validation_reports"] = reports
+    active.setdefault("validation_refs", []).extend(saved_refs)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
+    return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
+
+
+async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
+    """Snapshot current artifact versions as a checkpoint."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    project_root = rt.project_roots.get(project_id)
+    if project_root is None:
+        return _error(f"Project root for '{project_id}' not found.")
+    phase_str = str(active.get("current_phase", ""))
+    label = str(args.get("label", phase_str))
+
+    import json
+    from datetime import UTC, datetime
+
+    checkpoint_dir = project_root / "versions" / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint = {
+        "project_id": project_id,
+        "phase": phase_str,
+        "label": label,
+        "artifact_refs": active.get("artifact_refs", []),
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    path = checkpoint_dir / f"checkpoint_{label}.v1.json"
+    path.write_text(json.dumps(checkpoint, indent=2, default=str))
+    return _ok(checkpoint_path=str(path), phase=phase_str, label=label)
+
+
+async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
+    """Assemble generated clips into a review cut MP4 (requires ffmpeg)."""
+    _ = args
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    project_root = rt.project_roots.get(project_id)
+    if project_root is None:
+        return _error(f"Project root for '{project_id}' not found.")
+
+    import shutil
+
+    if not shutil.which("ffmpeg"):
+        return _ok(status="ffmpeg_not_found", message="ffmpeg is required for clip assembly.")
+
+    clips_dir = project_root / "07-generated-assets" / "shots"
+    if not clips_dir.exists():
+        return _error("No generated clips found.")
+    clips = sorted(clips_dir.glob("**/*.mp4"))
+    if not clips:
+        return _error("No MP4 clips found.")
+
+    output_dir = project_root / "09-post"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filelist = output_dir / "filelist.txt"
+    filelist.write_text("\n".join(f"file '{c.resolve()}'" for c in clips))
+
+    import subprocess
+
+    output_path = output_dir / "review_cut.v1.mp4"
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(filelist),
+            "-c",
+            "copy",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return _error(f"ffmpeg failed: {result.stderr[:300]}")
+    return _ok(review_cut_path=str(output_path), clip_count=len(clips))
+
+
 async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
     """Generate persisted reference images from the visual-dev reference index."""
     rt = get_runtime()
@@ -3491,6 +3660,18 @@ def register_all_tools(registry: ToolRegistry) -> None:
             mutates=True,
         ),
         generate_plan,
+    )
+    registry.register(
+        _make("run_validation", ToolGroup.VALIDATION, run_validation, mutates=True),
+        run_validation,
+    )
+    registry.register(
+        _make("create_checkpoint", ToolGroup.ARTIFACT, create_checkpoint, mutates=True),
+        create_checkpoint,
+    )
+    registry.register(
+        _make("assemble_review_cut", ToolGroup.GENERATION, assemble_review_cut, mutates=True),
+        assemble_review_cut,
     )
     registry.register(
         _make(
