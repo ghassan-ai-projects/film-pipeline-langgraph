@@ -1439,6 +1439,38 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             }
             raw["issues"] = []
         generated += 1
+
+        # Phase 03 — Write frame metadata sidecar alongside the PNG
+        try:
+            from film_pipeline.generation.frame_sidecar import write_frame_sidecar
+            from film_pipeline.schemas.reference import ReferenceFrame
+
+            frame = ReferenceFrame(
+                frame_path=rel_path.as_posix(),
+                reference_id=reference_id,
+                subject_type=str(raw.get("subject_type", "")),
+                subject_id=str(raw.get("subject_id", "")),
+                provider_id=str(raw.get("provider", "")),
+                model_id="",
+                tier=tier,
+                seed=provider_kwargs.get("seed"),
+                prompt_text=prompt_text,
+                frame_role=str(raw.get("frame_role", "")),
+                expression=str(raw.get("expression", "")) or None,
+                lighting=str(raw.get("lighting", "")) or None,
+                aspect_ratio=aspect_ratio,
+                generation_status=str(raw.get("generation_status", "generated")),
+                quality_score=float(raw.get("quality_score", 0)),
+                retry_count=int(raw.get("retry_count", 0)),
+                best_score=float(raw.get("best_score", 0)),
+                heuristic_checks_passed=True,
+                mime_type=str(raw.get("normalized_mime_type", "image/png")),
+                created_at="",
+            )
+            write_frame_sidecar(target_path, frame)
+        except Exception:
+            pass  # sidecar failure is non-blocking
+
         results.append(
             {
                 "reference_id": reference_id,
