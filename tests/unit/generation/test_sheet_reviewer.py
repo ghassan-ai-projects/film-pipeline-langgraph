@@ -21,6 +21,7 @@ def _mock_opener(response_body: dict) -> Mock:
 
 def _make_png(tmp_path: Path) -> Path:
     from PIL import Image
+
     p = tmp_path / "sheet.png"
     img = Image.new("RGB", (256, 256), (100, 150, 200))
     for x in range(0, 256, 64):
@@ -33,37 +34,110 @@ def _make_png(tmp_path: Path) -> Path:
 class TestReviewCompositeSheet:
     def test_passing_character_sheet(self, tmp_path: Path) -> None:
         png = _make_png(tmp_path)
-        response = {"candidates": [{"content": {"parts": [{"text": json.dumps({
-            "sheet_id": "leo", "sheet_type": "character_identity_sheet",
-            "scores": {
-                "identity_accuracy": {"score": 13, "max": 15, "notes": ""},
-                "expression_fidelity": {"score": 8, "max": 10, "notes": ""},
-                "composition_quality": {"score": 8, "max": 10, "notes": ""},
-                "technical_quality": {"score": 8, "max": 10, "notes": ""},
-                "usability": {"score": 4, "max": 5, "notes": ""},
-            },
-            "total": 41, "passed": True, "actionable_feedback": "", "failing_tiles": [], "bad_reference_tags": []
-        })}]}}]}
-        result = review_composite_sheet(png, "character_identity_sheet", "leo", http_opener=_mock_opener(response), api_key="test")
+        response = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps(
+                                    {
+                                        "sheet_id": "leo",
+                                        "sheet_type": "character_identity_sheet",
+                                        "scores": {
+                                            "identity_accuracy": {
+                                                "score": 13,
+                                                "max": 15,
+                                                "notes": "",
+                                            },
+                                            "expression_fidelity": {
+                                                "score": 8,
+                                                "max": 10,
+                                                "notes": "",
+                                            },
+                                            "composition_quality": {
+                                                "score": 8,
+                                                "max": 10,
+                                                "notes": "",
+                                            },
+                                            "technical_quality": {
+                                                "score": 8,
+                                                "max": 10,
+                                                "notes": "",
+                                            },
+                                            "usability": {"score": 4, "max": 5, "notes": ""},
+                                        },
+                                        "total": 41,
+                                        "passed": True,
+                                        "actionable_feedback": "",
+                                        "failing_tiles": [],
+                                        "bad_reference_tags": [],
+                                    }
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        result = review_composite_sheet(
+            png,
+            "character_identity_sheet",
+            "leo",
+            http_opener=_mock_opener(response),
+            api_key="test",
+        )
         assert result.passed is True
         assert result.total == 41.0
         assert result.status == "approved"
 
     def test_failing_environment_board(self, tmp_path: Path) -> None:
         png = _make_png(tmp_path)
-        response = {"candidates": [{"content": {"parts": [{"text": json.dumps({
-            "sheet_id": "studio", "sheet_type": "environment_board",
-            "scores": {
-                "spatial_consistency": {"score": 5, "max": 15, "notes": "geometry changed"},
-                "lighting_accuracy": {"score": 6, "max": 10, "notes": ""},
-                "mood_encoding": {"score": 5, "max": 10, "notes": ""},
-                "technical_quality": {"score": 5, "max": 10, "notes": ""},
-                "usability": {"score": 2, "max": 5, "notes": ""},
-            },
-            "total": 23, "passed": False, "actionable_feedback": "Room layout inconsistent",
-            "failing_tiles": ["alt-angle-corner"], "bad_reference_tags": ["geometry_unclear"]
-        })}]}}]}
-        result = review_composite_sheet(png, "environment_board", "studio", http_opener=_mock_opener(response), api_key="test")
+        response = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": json.dumps(
+                                    {
+                                        "sheet_id": "studio",
+                                        "sheet_type": "environment_board",
+                                        "scores": {
+                                            "spatial_consistency": {
+                                                "score": 5,
+                                                "max": 15,
+                                                "notes": "geometry changed",
+                                            },
+                                            "lighting_accuracy": {
+                                                "score": 6,
+                                                "max": 10,
+                                                "notes": "",
+                                            },
+                                            "mood_encoding": {"score": 5, "max": 10, "notes": ""},
+                                            "technical_quality": {
+                                                "score": 5,
+                                                "max": 10,
+                                                "notes": "",
+                                            },
+                                            "usability": {"score": 2, "max": 5, "notes": ""},
+                                        },
+                                        "total": 23,
+                                        "passed": False,
+                                        "actionable_feedback": "Room layout inconsistent",
+                                        "failing_tiles": ["alt-angle-corner"],
+                                        "bad_reference_tags": ["geometry_unclear"],
+                                    }
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+        result = review_composite_sheet(
+            png, "environment_board", "studio", http_opener=_mock_opener(response), api_key="test"
+        )
         assert result.passed is False
         assert result.status == "needs_delta_fix"
         assert result.failing_tiles == ["alt-angle-corner"]

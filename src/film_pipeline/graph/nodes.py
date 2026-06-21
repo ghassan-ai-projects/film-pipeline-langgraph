@@ -84,6 +84,7 @@ def _run_agent(
         "screenwriter-agent": ScreenwriterAgent,
         "shot-design-agent": ShotBibleAgent,
         "reference-strategy-planner": VisualDevAgent,
+        "visual-dev-agent": VisualDevAgent,
         "provider-planning-agent": GenPlannerAgent,
         "clip-validator": QCSynthesisAgent,
         "failure-handling-agent": AssemblyAgent,

@@ -47,13 +47,13 @@ class TestCharacterIdentitySheet:
             # 3-4-left, profile, full-body all missing
         }
         output = tmp_path / "identity-sheet.png"
-        result = build_character_identity_sheet("leo", "Leo", frames, output)
+        build_character_identity_sheet("leo", "Leo", frames, output)
         assert output.exists()
         # Should not crash — missing frames render as placeholders
 
     def test_builds_sheet_with_no_frames(self, tmp_path: Path) -> None:
         output = tmp_path / "identity-sheet.png"
-        result = build_character_identity_sheet("leo", "Leo", {}, output)
+        build_character_identity_sheet("leo", "Leo", {}, output)
         assert output.exists()
         # All tiles are placeholders
 

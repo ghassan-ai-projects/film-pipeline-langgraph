@@ -54,8 +54,13 @@ class TestReferenceGenerationMCP:
         reference = cast(dict[str, object], inspect_result["reference"])
         # Provider may be empty if entry was skipped (already generated)
         assert reference.get("provider", "") in ("mock-image-provider", "")
-        assert reference["generation_status"] in ("validated", "generated", "needs_regeneration", "planned")
-        asset_path = Path(rt.project_roots["ref-mcp"]) / cast(str, reference["asset_path"])
+        assert reference["generation_status"] in (
+            "validated",
+            "generated",
+            "needs_regeneration",
+            "planned",
+        )
+        _asset_path = Path(rt.project_roots["ref-mcp"]) / cast(str, reference["asset_path"])
         # File may not exist if entry was skipped (mock VisualDevAgent sets legacy paths)
 
         validation_result = asyncio.run(get_validation_report({}))

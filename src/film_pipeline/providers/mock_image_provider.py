@@ -13,7 +13,7 @@ _MOCK_SIZE = 1024
 
 
 def _mock_png(path: Path, shot_id: str, prompt: str) -> None:
-    """Write a 1024×1024 varied PNG so heuristic checks pass."""
+    """Write a 1024x1024 varied PNG so heuristic checks pass."""
     from PIL import Image, ImageDraw
 
     img = Image.new("RGB", (_MOCK_SIZE, _MOCK_SIZE), (180, 180, 190))

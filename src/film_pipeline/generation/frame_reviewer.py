@@ -44,6 +44,7 @@ _PASS_THRESHOLD = 28.0
 
 # ── Selective validation ──────────────────────────────────────────────────
 
+
 def should_review_frame(entry: dict[str, Any], *, frame_index: int = 0) -> bool:
     """Decide whether a frame warrants a paid Gemini review.
 
@@ -61,9 +62,7 @@ def should_review_frame(entry: dict[str, Any], *, frame_index: int = 0) -> bool:
             # Spot-check 30% of environment alt angles
             return (hash(frame_role + str(frame_index)) % 10) < 3
         # Detail insets: skip
-        if frame_role.startswith("detail-") or frame_role == "color-palette":
-            return False
-        return True
+        return not (frame_role.startswith("detail-") or frame_role == "color-palette")
 
     # Skip: detail insets for characters
     if frame_role.startswith("detail-"):
@@ -185,8 +184,7 @@ def _call_gemini(
         raise RuntimeError("GOOGLE_API_KEY is not set.")
 
     url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={key}"
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
     )
 
     body = {
@@ -226,7 +224,9 @@ def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameRev
     try:
         candidates = response.get("candidates", [])
         if not candidates:
-            return FrameReviewResult(frame_id=frame_id, passed=False, error="No candidates in response")
+            return FrameReviewResult(
+                frame_id=frame_id, passed=False, error="No candidates in response"
+            )
 
         text = str(candidates[0].get("content", {}).get("parts", [{}])[0].get("text", ""))
         # Strip markdown fences if present

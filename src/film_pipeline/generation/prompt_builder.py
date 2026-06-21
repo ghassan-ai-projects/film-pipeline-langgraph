@@ -22,17 +22,17 @@ _ENV_NEGATIVES_ADDITION = " No characters visible. No people."
 # ── Frame-role → block text mappings ─────────────────────────────────────
 
 _CHARACTER_FRAME_ROLE_TEXT: dict[str, str] = {
-    "front-face": "Front face, looking directly at camera. Face centered, well-lit, dominant in frame.",
+    "front-face": "Front face, looking at camera. Face centered, well-lit, dominant in frame.",
     "3-4-left": "Three-quarter angle facing left. Face clearly visible, features recognizable.",
     "3-4-right": "Three-quarter angle facing right. Face clearly visible, features recognizable.",
     "profile-right": "Right profile. Clean silhouette, ear and jawline clearly visible.",
     "profile-left": "Left profile. Clean silhouette, ear and jawline clearly visible.",
     "full-body": "Full body standing. Entire figure from head to feet visible. Neutral stance.",
     "expression-neutral": "Neutral expression. Relaxed face, mouth closed, eyes open naturally.",
-    "expression-frustrated": "Frustrated expression. Furrowed brow, tightened jaw, slight tension in mouth.",
-    "expression-tired": "Tired expression. Slightly drooped eyelids, relaxed mouth, subtle exhaustion.",
-    "expression-peaceful": "Peaceful expression. Soft eyes, slight relaxed smile, calm demeanor.",
-    "detail-eyes": "Extreme close-up of eyes. Sharp focus on iris and eyelashes. Both eyes visible.",
+    "expression-frustrated": "Frustrated expression. Furrowed brow, tightened jaw, mouth tension.",
+    "expression-tired": "Tired expression. Drooped eyelids, relaxed mouth, subtle exhaustion.",
+    "expression-peaceful": "Peaceful expression. Soft eyes, slight smile, calm demeanor.",
+    "detail-eyes": "Extreme close-up of eyes. Sharp focus on iris and lashes. Both eyes visible.",
     "detail-hands": "Close-up of hands. Fingers clearly visible, natural resting position.",
     "wardrobe-baseline": "Full body showing default costume. Clean, unworn state.",
 }
@@ -223,7 +223,9 @@ def _build_generic_prompt(
     if prompt_text:
         blocks.append(prompt_text)
     else:
-        blocks.append(f"Create a production-ready {asset_type} for the {subject_type} '{subject_id}'.")
+        blocks.append(
+            f"Create a production-ready {asset_type} for the {subject_type} '{subject_id}'."
+        )
 
     lighting = _resolve_lighting(entry, constitution)
     if lighting:
@@ -346,7 +348,7 @@ def _resolve_id_reinforce(identity_state: dict[str, Any] | None) -> str:
 def _expression_text(expression: str) -> str:
     mapping = {
         "neutral": "Neutral expression. Relaxed face, mouth closed, eyes open naturally.",
-        "frustrated": "Frustrated expression. Furrowed brow, tightened jaw, slight tension in mouth.",
+        "frustrated": "Frustrated expression. Furrowed brow, tightened jaw, mouth tension.",
         "tired": "Tired expression. Slightly drooped eyelids, relaxed mouth, subtle exhaustion.",
         "peaceful": "Peaceful expression. Soft eyes, slight relaxed smile, calm demeanor.",
         "angry": "Angry expression. Tightened jaw, flared nostrils, intense eyes.",

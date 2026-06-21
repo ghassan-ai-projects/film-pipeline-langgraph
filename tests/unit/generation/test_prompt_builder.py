@@ -65,7 +65,7 @@ class TestCharacterPrompt:
         assert "Mediterranean features" in prompt
         assert "scar across his left eyebrow" in prompt
         assert "1.78m" in prompt
-        assert "Front face, looking directly at camera" in prompt
+        assert "Front face, looking at camera" in prompt
         assert "painterly natural light" in prompt
         assert "observational" in prompt
         assert "intimate close-up" in prompt
@@ -86,21 +86,15 @@ class TestCharacterPrompt:
         assert "A tall figure in shadow" in prompt
 
     def test_falls_back_to_subject_id_as_last_resort(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry(), character_bible=None, constitution=None
-        )
+        prompt = build_structured_prompt(_char_entry(), character_bible=None, constitution=None)
         assert "leo" in prompt.lower()
 
     def test_frame_role_front_face(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry("front-face"), character_bible=_char_bible()
-        )
-        assert "Front face, looking directly at camera" in prompt
+        prompt = build_structured_prompt(_char_entry("front-face"), character_bible=_char_bible())
+        assert "Front face, looking at camera" in prompt
 
     def test_frame_role_3_4_left(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry("3-4-left"), character_bible=_char_bible()
-        )
+        prompt = build_structured_prompt(_char_entry("3-4-left"), character_bible=_char_bible())
         assert "Three-quarter angle facing left" in prompt
 
     def test_frame_role_profile_right(self) -> None:
@@ -110,9 +104,7 @@ class TestCharacterPrompt:
         assert "Right profile" in prompt
 
     def test_unknown_frame_role_uses_title_case(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry("dutch-angle"), character_bible=_char_bible()
-        )
+        prompt = build_structured_prompt(_char_entry("dutch-angle"), character_bible=_char_bible())
         assert "Dutch Angle." in prompt
 
     def test_expression_neutral_is_omitted_from_blocks(self) -> None:
@@ -132,9 +124,7 @@ class TestCharacterPrompt:
         assert "Furrowed brow" in prompt
 
     def test_identity_reinforcement_standard(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry("3-4-left"), character_bible=_char_bible()
-        )
+        prompt = build_structured_prompt(_char_entry("3-4-left"), character_bible=_char_bible())
         assert "Same person as in all other frames" in prompt
 
     def test_identity_reinforcement_i2i_active(self) -> None:
@@ -148,18 +138,14 @@ class TestCharacterPrompt:
         assert "No variation in identity" in prompt
 
     def test_global_negatives_appended(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry(), character_bible=_char_bible()
-        )
+        prompt = build_structured_prompt(_char_entry(), character_bible=_char_bible())
         assert "No text. No logos. No 2D animation" in prompt
         assert "No cartoon" in prompt
         assert "Photorealistic only" in prompt
         assert "No watermarks. No grain" in prompt
 
     def test_character_prompt_does_not_contain_no_people(self) -> None:
-        prompt = build_structured_prompt(
-            _char_entry(), character_bible=_char_bible()
-        )
+        prompt = build_structured_prompt(_char_entry(), character_bible=_char_bible())
         assert "No people" not in prompt
         assert "No other characters visible" in prompt
 
@@ -207,9 +193,7 @@ class TestEnvironmentPrompt:
         assert "long shadows" in prompt
 
     def test_environment_negatives_include_no_people(self) -> None:
-        prompt = build_structured_prompt(
-            _env_entry(), constitution=_constitution()
-        )
+        prompt = build_structured_prompt(_env_entry(), constitution=_constitution())
         assert "No characters visible" in prompt
         assert "No people" in prompt
 
@@ -227,9 +211,7 @@ class TestEnvironmentPrompt:
         assert "canonical view" in prompt
 
     def test_environment_frame_role_detail_texture(self) -> None:
-        prompt = build_structured_prompt(
-            _env_entry("detail-texture"), constitution=_constitution()
-        )
+        prompt = build_structured_prompt(_env_entry("detail-texture"), constitution=_constitution())
         assert "Extreme close-up" in prompt
         assert "Sharp focus on material detail" in prompt
 

@@ -186,3 +186,39 @@ class TestArtifactSpine:
 
         result = rt.approve_phase()
         assert result["current_phase"] == "script"
+
+    def test_visual_dev_produces_reference_index(self, tmp_path: Path) -> None:
+        rt = StudioRuntime(runtime_root=tmp_path / "runtime")
+        rt.create_project("spine-test", "Spine Test")
+        rt.set_active("spine-test")
+
+        state = rt._run_phase_node(rt.get_active() or {}, "intake")
+        state = rt._run_phase_node(state, "constitution")
+        state = rt._run_phase_node(state, "development")
+        state = rt._run_phase_node(state, "script")
+        result = rt._run_phase_node(state, "visual_dev")
+
+        assert result["current_phase"] == "visual_dev"
+        assert result["human_approval_required"] is True
+
+        visual_refs = result.get("visual_refs", "")
+        assert visual_refs.startswith("artifact:reference_index:v")
+
+        # Verify artifact was persisted
+        parts = visual_refs.split(":")
+        artifact_id = parts[1]
+        version_str = parts[2]
+        version = int(version_str.lstrip("v"))
+
+        from film_pipeline.schemas._base import FilmPhase
+
+        raw = rt.services.artifact_store.load(
+            "spine-test",
+            FilmPhase("visual_dev"),
+            artifact_id,
+            version,
+        )
+        assert raw.get("project_id")
+        entries = raw.get("entries", [])
+        assert len(entries) >= 1
+        assert entries[0].get("reference_id", "").startswith("ref_")

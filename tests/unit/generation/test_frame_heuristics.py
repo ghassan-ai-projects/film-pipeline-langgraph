@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from film_pipeline.generation.frame_heuristics import HeuristicResult, run_heuristic_checks
+from film_pipeline.generation.frame_heuristics import run_heuristic_checks
 
 
 @pytest.fixture
 def valid_png(tmp_path: Path) -> Path:
-    """A valid 512×512 RGB PNG with varied content."""
+    """A valid 512x512 RGB PNG with varied content."""
     path = tmp_path / "valid.png"
     img = Image.new("RGB", (512, 512), color=(100, 150, 200))
     # Add some variation so it's not flagged as solid color
@@ -25,7 +25,7 @@ def valid_png(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def small_png(tmp_path: Path) -> Path:
-    """A 64×64 PNG — too small for reference use."""
+    """A 64x64 PNG - too small for reference use."""
     path = tmp_path / "small.png"
     img = Image.new("RGB", (64, 64), color=(100, 150, 200))
     img.save(path)
