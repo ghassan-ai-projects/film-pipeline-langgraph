@@ -80,7 +80,9 @@ from film_pipeline.schemas.film_constitution import CharacterTruth, FilmConstitu
 from film_pipeline.schemas.generation import (
     GenerationLedger,
     GenerationLedgerRow,
+    GenerationPlan,
     GenerationRequest,
+    ShotPlan,
     ResumeToken,
 )
 from film_pipeline.schemas.handoff import (

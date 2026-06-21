@@ -85,3 +85,29 @@ class GenerationLedger(SchemaBase):
 
     project_id: str
     rows: list[GenerationLedgerRow] = Field(default_factory=list)
+
+
+class ShotPlan(SchemaBase):
+    """One shot in the generation plan with provider routing."""
+
+    shot_id: str
+    priority: int = Field(default=3, ge=1, le=5)
+    risk: str = "medium"
+    provider_id: str = ""
+    model_id: str = ""
+    tier: str = "fast"
+    estimated_duration: float = Field(default=5.0, ge=0)
+    estimated_cost: float = Field(default=0.0, ge=0)
+    prompt_ref: str = ""
+    generation_order: int = 0
+    dependencies: list[str] = Field(default_factory=list)
+
+
+class GenerationPlan(SchemaBase):
+    """Ordered shot execution plan with provider routing and cost estimates."""
+
+    project_id: str
+    shots: list[ShotPlan] = Field(default_factory=list)
+    total_estimated_cost: float = Field(default=0.0, ge=0)
+    provider_utilization: dict[str, int] = Field(default_factory=dict)
+    created_at: str = ""
