@@ -9,11 +9,26 @@ from uuid import uuid4
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
-_MINIMAL_PNG = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
-    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f"
-    b"\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82"
-)
+_MOCK_SIZE = 1024
+
+
+def _mock_png(path: Path, shot_id: str, prompt: str) -> None:
+    """Write a 1024×1024 varied PNG so heuristic checks pass."""
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (_MOCK_SIZE, _MOCK_SIZE), (180, 180, 190))
+    draw = ImageDraw.Draw(img)
+    # Add color variation so it's not flagged as solid color
+    for i in range(0, _MOCK_SIZE, 128):
+        for j in range(0, _MOCK_SIZE, 128):
+            draw.rectangle(
+                [i, j, i + 64, j + 64],
+                fill=((i * 3) % 256, (j * 5) % 256, ((i + j) * 7) % 256),
+            )
+    # Draw reference info in top-left corner
+    draw.text((16, 16), f"MOCK IMAGE\n{shot_id}", fill=(255, 255, 255))
+    draw.text((16, 56), prompt[:120], fill=(200, 200, 200))
+    img.save(path, "PNG")
 
 
 class MockImageProvider(BaseProviderAdapter):
@@ -58,7 +73,8 @@ class MockImageProvider(BaseProviderAdapter):
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
         path = out / f"{job.shot_id}.png"
-        path.write_bytes(_MINIMAL_PNG)
+        prompt = str(job.payload.get("prompt", ""))
+        _mock_png(path, job.shot_id, prompt)
         return str(path)
 
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
