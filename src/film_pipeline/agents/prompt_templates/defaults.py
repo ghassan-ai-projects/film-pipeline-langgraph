@@ -56,7 +56,10 @@ def _intake_classifier() -> PromptTemplate:
             "You must provide at least one concrete genre tag. "
             "risk_flags must be an empty array or a list of concrete risks. "
             "Flag risks explicitly — do not dismiss concerns. "
-            "The output JSON MUST be valid and contain ALL fields shown in Output."
+            "The output JSON MUST be valid and contain ALL fields shown in Output. "
+            "delivery_modes must contain only these values: mp4, webm, mov, gif. "
+            "film_type must be one of: "
+            "narrative, visual_poetry, experimental, short_drama, commercial."
         ),
         output_format=(
             "Respond with valid JSON matching the ProjectProfile schema:\n"
@@ -71,7 +74,7 @@ def _intake_classifier() -> PromptTemplate:
             ' | short_drama | commercial",\n'
             '  "target_runtime_seconds": ...,\n'
             '  "aspect_ratio": "...",\n'
-            '  "delivery_modes": ["..."],\n'
+            '  "delivery_modes": ["mp4"],\n'
             '  "budget_cap_usd": null,\n'
             '  "provider_preferences": [],\n'
             '  "human_owner": null,\n'
@@ -237,7 +240,11 @@ def _visual_development_creator() -> PromptTemplate:
         core_task=(
             "Create visual development references from the script and constitution. "
             "Define the color palette, lighting approach, camera style, "
-            "and create shot-by-shot visual references."
+            "and create shot-by-shot visual references. "
+            "Assign a provider tier to each entry: 'fast' for bulk frames "
+            "(environments, expressions, body shots), 'standard' for critical "
+            "anchors (hero face, key poses), 'ultra' for detail insets "
+            "(eyes, hands, textures)."
         ),
         context_template=(
             "Script ref: {script_ref}\n"
@@ -254,8 +261,35 @@ def _visual_development_creator() -> PromptTemplate:
             "Every shot must reference specific camera and lighting choices. "
             "The visual language must be consistent with the constitution."
         ),
-        output_format=("Respond with valid JSON matching the visual development schema."),
-        output_schema_ref="reference.VisualReference",
+        output_format=(
+            "Respond with valid JSON containing visual development references.\n"
+            "{\n"
+            '  "visual_dev": {\n'
+            '    "project_id": "...",\n'
+            '    "reference_entries": [\n'
+            "      {\n"
+            '        "reference_id": "ref_001",\n'
+            '        "asset_path": "",\n'
+            '        "asset_type": "character_identity_sheet",\n'
+            '        "subject_type": "character",\n'
+            '        "subject_id": "char_001",\n'
+            '        "approved_for": ["prompt_anchor"],\n'
+            '        "quality_score": 80.0,\n'
+            '        "provider": "",\n'
+            '        "tier": "fast",\n'
+            '        "prompt_text": "Create a production-ready character sheet...",\n'
+            '        "prompt_refs": [],\n'
+            '        "source_frames": [],\n'
+            '        "notes": "",\n'
+            '        "moderation_risk": "low",\n'
+            '        "validation": {"status": "pending", "score": 0.0, "reports": []},\n'
+            '        "ai_usability": {"score": 0.0, "risks": [], "notes": ""}\n'
+            "      }\n"
+            "    ]\n"
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="reference.ReferenceIndex",
     )
 
 

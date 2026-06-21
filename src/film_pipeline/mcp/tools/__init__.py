@@ -632,12 +632,17 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         # Ensure the directory tree exists
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
+        # Provider tier routing (Phase 6) — adjust quality parameters
+        tier = str(raw.get("tier", "fast"))
+        provider_kwargs: dict[str, object] = {
+            "duration": 0.0,
+            "aspect_ratio": aspect_ratio,
+        }
+        if tier in ("standard", "ultra"):
+            provider_kwargs["seed"] = hash(shot_id) % (2**31)
+
         try:
-            payload = provider.build_payload(
-                prompt_text,
-                duration=0.0,
-                aspect_ratio=aspect_ratio,
-            )
+            payload = provider.build_payload(prompt_text, **provider_kwargs)
             job = provider.submit(payload, shot_id)
             job = provider.poll(job)
             downloaded_path = provider.download(job, output_dir)
@@ -708,6 +713,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         provider_id = str(getattr(provider_entry, "provider_id", ""))
         raw["asset_path"] = rel_path.as_posix()
         raw["provider"] = provider_id
+        raw["tier"] = tier
         raw["prompt_text"] = prompt_text
         raw["source_frames"] = [rel_path.as_posix()]
         raw["original_mime_type"] = str(metadata.get("mime_type", "image/png"))
