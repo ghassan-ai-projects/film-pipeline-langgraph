@@ -50,6 +50,18 @@ class ReferenceIndexEntry(SchemaBase):
         default="fast",
         description="Provider quality tier: 'fast' | 'standard' | 'ultra'.",
     )
+    frame_role: str = Field(
+        default="",
+        description="e.g. 'front-face', '3-4-left', 'wide-establishing', 'detail-texture'.",
+    )
+    expression: str = Field(
+        default="",
+        description="e.g. 'neutral', 'frustrated', 'tired' — for character expression entries.",
+    )
+    lighting: str = Field(
+        default="",
+        description="e.g. 'cool night', 'golden afternoon' — for environment lighting variants.",
+    )
     prompt_text: str = ""
     prompt_refs: list[str] = Field(default_factory=list)
     source_frames: list[str] = Field(default_factory=list)

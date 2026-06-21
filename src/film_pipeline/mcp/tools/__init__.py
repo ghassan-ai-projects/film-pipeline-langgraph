@@ -980,22 +980,27 @@ def _reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
     return project_root / "references" / subject_type
 
 
-def _reference_prompt(entry: dict[str, object]) -> str:
-    prompt_text = str(entry.get("prompt_text", "")).strip()
-    if prompt_text:
-        return prompt_text
+def _reference_prompt(
+    entry: dict[str, object],
+    *,
+    character_bible: dict[str, object] | None = None,
+    constitution: dict[str, object] | None = None,
+    identity_state: dict[str, object] | None = None,
+) -> str:
+    """Build a structured generation prompt from domain data blocks.
 
-    asset_type = str(entry.get("asset_type", "reference_sheet")).replace("_", " ")
-    subject_type = str(entry.get("subject_type", "subject"))
-    subject_id = str(entry.get("subject_id", "subject"))
-    notes = str(entry.get("notes", "")).strip()
-    prompt = (
-        f"Create a production-ready {asset_type} for the {subject_type} '{subject_id}'. "
-        "Photorealistic. No text. No logos. No watermark. Stable identity. "
-        "Useful as a film generation reference anchor."
+    Delegates to ``build_structured_prompt()`` which assembles character or
+    environment prompts from locked blocks (CharacterBible, FilmConstitution).
+    Falls back to the entry's ``prompt_text`` when no structured sources exist.
+    """
+    from film_pipeline.generation.prompt_builder import build_structured_prompt
+
+    prompt = build_structured_prompt(
+        dict(entry),
+        character_bible=dict(character_bible) if character_bible else None,
+        constitution=dict(constitution) if constitution else None,
+        identity_state=dict(identity_state) if identity_state else None,
     )
-    if notes:
-        prompt = f"{prompt} {notes}"
     return prompt
 
 
