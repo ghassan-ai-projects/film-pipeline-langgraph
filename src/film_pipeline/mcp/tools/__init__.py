@@ -672,6 +672,37 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         target_path = Path(output_dir) / target_name
         Path(downloaded_path).rename(target_path)
 
+        # Auto-heuristic checks (Phase 1) — catch corrupt/blank/too-small images
+        from film_pipeline.generation.frame_heuristics import run_heuristic_checks
+
+        heuristic_result = run_heuristic_checks(
+            target_path,
+            subject_type=str(raw.get("subject_type", "character")),
+        )
+        if not heuristic_result.passed:
+            raw["generation_status"] = "failed"
+            raw["issues"] = [
+                {
+                    "code": "heuristic_check_failed",
+                    "message": f"Heuristics failed: {', '.join(heuristic_result.failures)}",
+                    "severity": "blocking",
+                }
+            ]
+            raw["validation"] = {
+                "status": "needs_regeneration",
+                "score": 0.0,
+                "reports": [],
+            }
+            failed += 1
+            results.append(
+                {
+                    "reference_id": reference_id,
+                    "status": "failed",
+                    "error": f"Heuristics: {', '.join(heuristic_result.failures)}",
+                }
+            )
+            continue
+
         rel_path = target_path.resolve().relative_to(project_root.resolve())
         provider_entry = getattr(provider, "entry", None)
         provider_id = str(getattr(provider_entry, "provider_id", ""))
