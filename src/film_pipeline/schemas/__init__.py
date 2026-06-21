@@ -131,6 +131,7 @@ from film_pipeline.schemas.story_bible import (
     StoryBible,
     Treatment,
 )
+from film_pipeline.schemas.style import StyleBible
 from film_pipeline.schemas.validation import (
     ConsensusReport,
     ReviewerScore,
@@ -232,6 +233,7 @@ __all__ = [
     "SpendRecord",
     "StateRecord",
     "StoryBible",
+    "StyleBible",
     "TransitionPlan",
     "Treatment",
     "ValidationIssue",
