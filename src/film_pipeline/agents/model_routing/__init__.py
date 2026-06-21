@@ -13,38 +13,38 @@ from dataclasses import dataclass, field
 # These use logical model names that providers map to real model ids.
 _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
     "creative_writer": {
-        "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "primary": "deepseek/deepseek-chat",
+        "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 8192,
         "temperature": 0.7,
     },
     "strict_validator": {
-        "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "primary": "deepseek/deepseek-chat",
+        "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 4096,
         "temperature": 0.1,
     },
     "visual_reasoner": {
         "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "fallback": "deepseek/deepseek-chat",
         "max_tokens": 4096,
         "temperature": 0.3,
     },
     "schema_enforcer": {
-        "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "primary": "deepseek/deepseek-chat",
+        "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 4096,
         "temperature": 0.0,
     },
     "cheap_draft": {
         "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "fallback": "deepseek/deepseek-chat",
         "max_tokens": 4096,
         "temperature": 0.8,
     },
     "operations_triage": {
         "primary": "google/gemini-3-flash-preview",
-        "fallback": "deepseek/deepseek-v4-flash",
+        "fallback": "deepseek/deepseek-chat",
         "max_tokens": 4096,
         "temperature": 0.2,
     },

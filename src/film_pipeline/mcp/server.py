@@ -81,11 +81,53 @@ class MCPServer:
                     ),
                 )
             except KeyError as exc:
-                return MCPResponse(
-                    success=False,
-                    request_id=envelope.request_id,
-                    error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
+                # Fall back: if the project exists in the runtime but not in
+                # the server's registry, auto-register it. This fixes the gap
+                # where create_film_project registers with the runtime but the
+                # server's ProjectRegistry is a separate in-memory structure.
+                from film_pipeline.app.runtime import get_runtime
+
+                project_ref = envelope.project_ref
+                if not project_ref:
+                    return MCPResponse(
+                        success=False,
+                        request_id=envelope.request_id,
+                        error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
+                    )
+                rt = get_runtime()
+                rt_project = rt.get_project(project_ref) or (
+                    # Also try resolving by exact match across all runtime projects
+                    next(
+                        (p for pid, p in rt.projects.items() if pid == envelope.project_ref),
+                        None,
+                    )
                 )
+                if rt_project is not None:
+                    pid = str(rt_project.get("project_id", envelope.project_ref))
+                    record = ProjectRecord(
+                        project_id=pid,
+                        slug=str(rt_project.get("slug", pid)),
+                        title=str(rt_project.get("title", pid)),
+                    )
+                    self.projects.register(record)
+                    self.active_project_id = pid
+                    envelope = RequestEnvelope(
+                        request_id=envelope.request_id,
+                        project_ref=envelope.project_ref,
+                        resolved_project_id=pid,
+                        active_phase=envelope.active_phase,
+                        user_intent=envelope.user_intent,
+                        requires_confirmation=envelope.requires_confirmation,
+                        actor_id=envelope.actor_id,
+                        actor_type=envelope.actor_type,
+                        received_at=envelope.received_at,
+                    )
+                else:
+                    return MCPResponse(
+                        success=False,
+                        request_id=envelope.request_id,
+                        error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
+                    )
 
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
         handler = reg.handler

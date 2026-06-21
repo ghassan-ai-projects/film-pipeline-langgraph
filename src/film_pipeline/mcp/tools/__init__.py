@@ -325,7 +325,7 @@ async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
     active = rt.get_active()
     if active is None:
         return _error("No active project.")
-    return _ok(phase=active.get("current_phase", ""))
+    return _ok(current_phase=active.get("current_phase", ""))
 
 
 async def get_film_state(args: dict[str, object]) -> dict[str, object]:

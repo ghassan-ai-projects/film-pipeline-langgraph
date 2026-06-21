@@ -134,7 +134,7 @@ class TestMCPFlow:
             loop.run_until_complete(submit_idea({"idea": "Test."}))
 
             result = loop.run_until_complete(get_current_phase({}))
-            assert result["phase"] == "intake"
+            assert result["current_phase"] == "intake"
         finally:
             loop.close()
 

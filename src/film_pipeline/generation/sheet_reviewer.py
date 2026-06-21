@@ -84,7 +84,7 @@ def review_composite_sheet(
     *,
     http_opener: object = None,
     api_key: str | None = None,
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-3-flash-preview",
 ) -> SheetReviewResult:
     """Run Gemini review on a composite reference sheet.
 
