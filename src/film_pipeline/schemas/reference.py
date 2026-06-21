@@ -130,3 +130,31 @@ class ReferenceFrame(SchemaBase):
     heuristic_checks_passed: bool = False
     mime_type: str = "image/png"
     created_at: str = ""
+
+
+class TileEntry(SchemaBase):
+    """One tile in a composite sheet — which frame went where."""
+
+    tile_name: str
+    frame_reference_id: str
+    frame_path: str
+    position: tuple[int, int, int, int]  # x, y, w, h in sheet coordinates
+
+
+class CompositeSheetManifest(SchemaBase):
+    """Layout manifest written alongside each composite sheet.
+
+    Records which frame went into each tile position so that delta
+    regeneration and validation consumers can reconstruct provenance.
+    """
+
+    sheet_id: str
+    sheet_type: str
+    sheet_path: str
+    dimensions: tuple[int, int]
+    template_version: str = "1.0"
+    tiles: list[TileEntry] = Field(default_factory=list)
+    placeholder_tiles: list[str] = Field(default_factory=list)
+    created_at: str = ""
+    validation_status: str = "pending"
+    validation_score: float = 0.0
