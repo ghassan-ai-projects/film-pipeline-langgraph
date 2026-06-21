@@ -628,7 +628,9 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         prompt_text = _reference_prompt(raw)
         aspect_ratio = _reference_aspect_ratio(raw)
         shot_id = _reference_job_id(reference_id)
-        output_dir = str((project_root / "references" / "sheets").resolve())
+        output_dir = str(_reference_output_dir(raw, project_root).resolve())
+        # Ensure the directory tree exists
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         try:
             payload = provider.build_payload(
@@ -664,7 +666,13 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             )
             continue
 
-        rel_path = Path(downloaded_path).resolve().relative_to(project_root.resolve())
+        # Rename downloaded file to use reference_id as stem
+        ext = Path(downloaded_path).suffix or ".png"
+        target_name = f"{_reference_job_id(reference_id)}{ext}"
+        target_path = Path(output_dir) / target_name
+        Path(downloaded_path).rename(target_path)
+
+        rel_path = target_path.resolve().relative_to(project_root.resolve())
         provider_entry = getattr(provider, "entry", None)
         provider_id = str(getattr(provider_entry, "provider_id", ""))
         raw["asset_path"] = rel_path.as_posix()
@@ -915,6 +923,24 @@ def _load_latest_reference_index(
     if version <= 0:
         return None
     return _load_artifact(store, project_id, FilmPhase("visual_dev"), "reference_index", version)
+
+
+def _reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
+    """Compute organized output directory for a reference entry.
+
+    Produces paths like:
+        references/characters/leo/master-frames/
+        references/environments/studio/master-frames/
+        references/props/paintbrush/
+        references/style/
+        references/scale/
+    """
+    subject_type = str(entry.get("subject_type", "misc")).strip().lower()
+    subject_id = str(entry.get("subject_id", "unknown")).strip().lower()
+
+    if subject_type in ("character", "environment", "prop"):
+        return project_root / "references" / f"{subject_type}s" / subject_id / "master-frames"
+    return project_root / "references" / subject_type
 
 
 def _reference_prompt(entry: dict[str, object]) -> str:
