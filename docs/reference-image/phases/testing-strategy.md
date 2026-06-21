@@ -1,8 +1,8 @@
 # Testing Strategy — Reference Image Pipeline
 
-**Status:** Not started  
-**Depends on:** Phase 2 (structured prompts), Phase 7 (compositor)  
-**Covers:** Prompt correctness, composite layout, end-to-end validation with real provider  
+**Status:** Not started
+**Depends on:** Phase 2 (structured prompts), Phase 7 (compositor)
+**Covers:** Prompt correctness, composite layout, end-to-end validation with real provider
 
 ---
 

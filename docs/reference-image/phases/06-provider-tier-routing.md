@@ -1,8 +1,8 @@
 # Phase 6 — Provider Tier Routing
 
-**Status:** Not started  
-**Depends on:** Nothing  
-**Blocks:** Phase 2 (prompt builder needs tier to set quality params)  
+**Status:** Not started
+**Depends on:** Nothing
+**Blocks:** Phase 2 (prompt builder needs tier to set quality params)
 
 ---
 

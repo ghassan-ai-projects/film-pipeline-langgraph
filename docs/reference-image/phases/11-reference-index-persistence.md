@@ -1,8 +1,8 @@
 # Phase 11 — Reference Index Persistence
 
-**Status:** Not started  
-**Depends on:** Phase 10 (entry data must be finalized)  
-**Blocks:** Nothing (final phase)  
+**Status:** Not started
+**Depends on:** Phase 10 (entry data must be finalized)
+**Blocks:** Nothing (final phase)
 
 ---
 

@@ -30,7 +30,7 @@ repos:
 
       - id: mypy
         name: mypy
-        entry: uv run --python 3.12 --group dev mypy src tests
+        entry: uv run --python 3.12 --group dev mypy --strict src tests
         language: system
         types: [python]
         pass_filenames: false

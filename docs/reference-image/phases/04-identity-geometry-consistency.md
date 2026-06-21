@@ -1,8 +1,8 @@
 # Phase 4 — Identity & Geometry Consistency (Seed Lock + I2I)
 
-**Status:** Not started  
-**Depends on:** Phase 3 (Gemini review needed for drift detection)  
-**Blocks:** Phase 5 (retry needs consistency state), Phase 7 (compositor needs consistent frames)  
+**Status:** Not started
+**Depends on:** Phase 3 (Gemini review needed for drift detection)
+**Blocks:** Phase 5 (retry needs consistency state), Phase 7 (compositor needs consistent frames)
 
 ---
 

@@ -1,7 +1,7 @@
 # Film Pipeline LangGraph — Analysis, Status & Plan
 
-**Author:** OpenClaw-orch  
-**Date:** 2026-06-19  
+**Author:** OpenClaw-orch
+**Date:** 2026-06-19
 **Project:** `~/my-projects/film-pipeline-langgraph/`
 
 ---

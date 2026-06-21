@@ -1,8 +1,8 @@
 # Phase 7b — Environment Board Compositor
 
-**Status:** Not started  
-**Depends on:** Phase 7 (same compositor architecture), Phase 4 (geometry-consistent environment frames)  
-**Blocks:** Phase 8 (composite validation covers environment rubric)  
+**Status:** Not started
+**Depends on:** Phase 7 (same compositor architecture), Phase 4 (geometry-consistent environment frames)
+**Blocks:** Phase 8 (composite validation covers environment rubric)
 
 ---
 
