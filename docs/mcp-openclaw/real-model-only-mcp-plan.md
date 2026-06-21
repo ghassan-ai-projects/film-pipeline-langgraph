@@ -33,7 +33,7 @@ Status update on June 20, 2026:
 - prompt continuity between phases is fixed
 - the local real provider profile now uses `gemini-imagen-4` for the image lane instead of `mock-image-provider`
 - real project creation rejects missing provider credentials up front
-- MCP now has a real `generate_reference_images` path that persists visual-dev reference assets and updates the `reference_index`
+- MCP now has a real `generate_reference_images` path that runs a full 12-phase pipeline: structured prompt construction from CharacterBible + FilmConstitution, per-frame heuristic checks (5 Pillow checks), per-frame Gemini review (40-pt rubric with selective validation), identity consistency via seed locking + I2I drift detection, retry loop (3 attempts with feedback injection), provider tier routing (fast/standard/ultra), Pillow composite sheets (Character Identity 2048×2048, Environment Board 3840×2160), Gemini composite validation (50pt rubric), delta regeneration for failing tiles, and human-readable index persistence (`references/index/reference-index.json`)
 
 ## Root Causes
 
