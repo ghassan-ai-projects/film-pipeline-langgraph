@@ -961,6 +961,194 @@ Return ONLY valid JSON:
         return _error(f"EnvironmentBible generation failed: {exc}")
 
 
+async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
+    """Generate a CameraLanguageBible from FilmConstitution."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    store = rt.services.artifact_store
+
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
+    except (FileNotFoundError, ValueError):
+        return _error("FilmConstitution not found.")
+
+    camera_philosophy = (
+        str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
+    )
+
+    try:
+        from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
+        from film_pipeline.schemas.handoff import AgentRegistration
+        from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
+
+        agent = CameraBibleAgent(
+            AgentRegistration(
+                agent_id="camera-bible-agent",
+                family=AgentFamily.DEVELOPMENT,
+                role=AgentRole.CREATOR,
+                capabilities=["camera_design"],
+                input_artifacts=["film_constitution"],
+                output_artifacts=["camera_language_bible"],
+            )
+        )
+        runner = rt.services.prompt_runner
+        model_output: dict[str, Any]
+        if runner.model_adapter is not None:
+            raw = runner.model_adapter.chat(
+                f"Create a CameraLanguageBible for a film with camera philosophy: {camera_philosophy}. "
+                "Return JSON with 'profiles' array of camera profiles (profile_id, use_case, lens, "
+                "framing, movement, depth_of_field, composition_rules, transition_rules, emotional_meaning) "
+                "and 'default_profile_id'."
+            )
+            model_output = raw if isinstance(raw, dict) else {}
+        else:
+            model_output = {
+                "project_id": project_id,
+                "profiles": [
+                    {
+                        "profile_id": "default",
+                        "use_case": "General shots",
+                        "lens": "35mm prime",
+                        "framing": "Rule of thirds",
+                        "movement": "Static or slow push-in",
+                        "depth_of_field": "Shallow, f/2.0",
+                        "composition_rules": ["Rule of thirds"],
+                        "transition_rules": ["Cut on action"],
+                        "emotional_meaning": "Observational, intimate",
+                    }
+                ],
+                "default_profile_id": "default",
+            }
+
+        result = agent.execute(model_output)
+        if not agent.validate(result):
+            return _error("CameraBible agent produced invalid output.")
+        bible = result["camera_bible"]
+
+        from datetime import UTC, datetime
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+
+        meta = ArtifactMetadata(
+            artifact_id="camera_language_bible",
+            artifact_type=ArtifactType.CAMERA_LANGUAGE_BIBLE,
+            project_id=project_id,
+            phase=FilmPhase("visual_dev"),
+            version=1,
+            status=ArtifactStatus.CANDIDATE,
+            parents=[],
+            created_by="mcp.generate_camera_bible",
+            created_at=datetime.now(UTC),
+        )
+        ref = store.save(bible, meta)
+        active["camera_bible_ref"] = ref
+        active.setdefault("artifact_refs", []).append(ref)
+        rt.projects[project_id] = active
+        rt._persist_project_state(project_id)
+
+        return _ok(camera_bible_ref=ref, profiles=len(bible.profiles))
+    except Exception as exc:
+        return _error(f"CameraBible generation failed: {exc}")
+
+
+async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
+    """Generate a StyleBible from FilmConstitution + EnvironmentBible palettes."""
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    project_id = str(active["project_id"])
+    store = rt.services.artifact_store
+
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
+    except (FileNotFoundError, ValueError):
+        return _error("FilmConstitution not found.")
+
+    visual_language = (
+        str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
+    )
+    tone = str(constitution.get("tone", "")) if isinstance(constitution, dict) else ""
+    palette_hint = ""
+    try:
+        env_bible = store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
+        if isinstance(env_bible, dict):
+            palette_hint = ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
+    except (FileNotFoundError, ValueError):
+        pass
+
+    try:
+        from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
+        from film_pipeline.schemas.handoff import AgentRegistration
+        from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
+
+        agent = StyleBibleAgent(
+            AgentRegistration(
+                agent_id="style-bible-agent",
+                family=AgentFamily.DEVELOPMENT,
+                role=AgentRole.CREATOR,
+                capabilities=["style_definition"],
+                input_artifacts=["film_constitution", "environment_bible"],
+                output_artifacts=["style_bible"],
+            )
+        )
+        runner = rt.services.prompt_runner
+        model_output: dict[str, Any]
+        if runner.model_adapter is not None:
+            raw = runner.model_adapter.chat(
+                f"Create a StyleBible. Visual language: {visual_language}. Tone: {tone}. "
+                f"Environment palette hints: {palette_hint}. "
+                "Return JSON with 'color_palette' (4-8 hex codes), 'texture', 'grain', 'visual_mood', "
+                "'reference_stills', and 'must_not_change'."
+            )
+            model_output = raw if isinstance(raw, dict) else {}
+        else:
+            model_output = {
+                "project_id": project_id,
+                "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
+                "texture": "gritty, painterly",
+                "grain": "subtle 16mm grain",
+                "visual_mood": "melancholic, high-contrast",
+                "reference_stills": [],
+                "must_not_change": ["color_palette"],
+            }
+
+        result = agent.execute(model_output)
+        if not agent.validate(result):
+            return _error("StyleBible agent produced invalid output.")
+        bible = result["style_bible"]
+
+        from datetime import UTC, datetime
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+
+        meta = ArtifactMetadata(
+            artifact_id="style_bible",
+            artifact_type=ArtifactType.STYLE_BIBLE,
+            project_id=project_id,
+            phase=FilmPhase("visual_dev"),
+            version=1,
+            status=ArtifactStatus.CANDIDATE,
+            parents=[],
+            created_by="mcp.generate_style_bible",
+            created_at=datetime.now(UTC),
+        )
+        ref = store.save(bible, meta)
+        active["style_bible_ref"] = ref
+        active.setdefault("artifact_refs", []).append(ref)
+        rt.projects[project_id] = active
+        rt._persist_project_state(project_id)
+
+        return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
+    except Exception as exc:
+        return _error(f"StyleBible generation failed: {exc}")
+
+
 async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
     """Generate persisted reference images from the visual-dev reference index."""
     rt = get_runtime()
@@ -2872,6 +3060,24 @@ def register_all_tools(registry: ToolRegistry) -> None:
             mutates=True,
         ),
         generate_environment_bible,
+    )
+    registry.register(
+        _make(
+            "generate_camera_bible",
+            ToolGroup.GENERATION,
+            generate_camera_bible,
+            mutates=True,
+        ),
+        generate_camera_bible,
+    )
+    registry.register(
+        _make(
+            "generate_style_bible",
+            ToolGroup.GENERATION,
+            generate_style_bible,
+            mutates=True,
+        ),
+        generate_style_bible,
     )
     registry.register(
         _make(
