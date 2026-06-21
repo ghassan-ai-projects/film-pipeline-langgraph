@@ -576,6 +576,229 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     return _ok(reference=match)
 
 
+async def generate_character_bible(args: dict[str, object]) -> dict[str, object]:
+    """Generate a CharacterBible from Script + FilmConstitution.
+
+    Produces a locked character description (identity_block, voice, wardrobe,
+    emotional arc, relationships) used by generate_reference_images for
+    structured prompt construction.
+    """
+    rt = get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+
+    project_id = str(active["project_id"])
+    character_id = str(args.get("character_id", "")).strip()
+    if not character_id:
+        return _error("character_id is required.")
+    character_name = str(args.get("character_name", character_id)).strip()
+
+    store = rt.services.artifact_store
+
+    # Load Script artifact
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        script_data = store.load(project_id, FilmPhase("script"), "script", 1)
+        script_text = _extract_script_text(script_data)
+    except (FileNotFoundError, ValueError):
+        return _error("Script artifact not found. Run script phase first.")
+
+    # Load FilmConstitution artifact
+    try:
+        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
+    except (FileNotFoundError, ValueError):
+        return _error("FilmConstitution not found. Run constitution phase first.")
+
+    constitution_text = str(constitution.get("theme", "")) if isinstance(constitution, dict) else ""
+
+    # Build prompt and call model
+    prompt = f"""# Role
+You are a character development specialist. Given a script and film constitution,
+produce a detailed CharacterBible for a single character.
+
+# Core Task
+Create a CharacterBible for character '{character_name}' (id: {character_id}).
+
+# Context
+Film Constitution:
+{constitution_text}
+
+Script:
+{script_text[:8000]}
+
+# Constraints
+- The identity_block must be a locked, invariant one-paragraph description
+  of the character's visual appearance. This block is injected verbatim into
+  every reference-image and video prompt — it must be specific and durable.
+- voice_rules must capture cadence, vocabulary patterns, forbidden phrasings,
+  and signature speech moves.
+- wardrobe_rules must include a baseline description and act-specific variants.
+- emotional_arc must have start_state, midpoint_state, end_state, and at least 2
+  key_turning_points.
+- relationship_map must list every meaningful relationship with other characters.
+- must_not_change must list 3-5 identity invariants the agents must never alter.
+
+# Output Format
+Return ONLY valid JSON. No markdown fences, no commentary.
+{{
+  "character_id": "{character_id}",
+  "project_id": "{project_id}",
+  "visual_identity": {{
+    "character_id": "{character_id}",
+    "name": "{character_name}",
+    "role": "protagonist | antagonist | supporting | foil",
+    "age": "e.g. mid-40s",
+    "physical_description": "Detailed physical description",
+    "identity_block": "Locked one-paragraph visual description for prompts"
+  }},
+  "voice_rules": {{
+    "cadence": "e.g. staccato, breathless",
+    "vocabulary": ["signature", "words"],
+    "forbidden_phrasings": ["never says X"],
+    "signature_moves": ["repeating questions", "cutting people off"]
+  }},
+  "wardrobe_rules": {{
+    "baseline": "Default costume description",
+    "act_variants": {{"act_1": "description", "act_2": "description"}}
+  }},
+  "emotional_arc": {{
+    "start_state": "e.g. guarded and distant",
+    "midpoint_state": "e.g. vulnerable, beginning to trust",
+    "end_state": "e.g. open, at peace",
+    "key_turning_points": ["moment 1", "moment 2"]
+  }},
+  "relationship_map": [
+    {{"other_character_id": "char_002", "relation": "description", "evolution": "how it changes"}}
+  ],
+  "reference_assets": [],
+  "must_not_change": ["invariant 1", "invariant 2", "invariant 3"]
+}}"""
+
+    try:
+        from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
+        from film_pipeline.schemas.handoff import AgentRegistration
+        from film_pipeline.schemas._base import AgentFamily, AgentRole
+
+        agent = CharacterBibleAgent(
+            AgentRegistration(
+                agent_id="character-bible-agent",
+                family=AgentFamily.DEVELOPMENT,
+                role=AgentRole.CREATOR,
+                capabilities=["character_development"],
+                input_artifacts=["script", "film_constitution"],
+                output_artifacts=["character_bible"],
+            )
+        )
+
+        runner = rt.services.prompt_runner
+        state = {
+            "project_id": project_id,
+            "character_id": character_id,
+            "character_name": character_name,
+            "script_content": script_text,
+            "constitution_content": constitution_text,
+        }
+
+        # Use PromptRunner with model_adapter if available
+        model_output: dict[str, Any]
+        if runner.model_adapter is not None:
+            raw = runner.model_adapter.chat(prompt)
+            model_output = raw if isinstance(raw, dict) else {}
+        else:
+            # Mock mode: return a minimal valid response
+            model_output = {
+                "character_id": character_id,
+                "project_id": project_id,
+                "visual_identity": {
+                    "character_id": character_id,
+                    "name": character_name,
+                    "role": "protagonist",
+                    "age": "unknown",
+                    "physical_description": "Generated in mock mode.",
+                    "identity_block": f"A {character_name} — generated in mock mode. Replace with real model output.",
+                },
+                "voice_rules": {
+                    "cadence": "measured",
+                    "vocabulary": [],
+                    "forbidden_phrasings": [],
+                    "signature_moves": [],
+                },
+                "wardrobe_rules": {"baseline": "", "act_variants": {}},
+                "emotional_arc": {
+                    "start_state": "unknown",
+                    "midpoint_state": "unknown",
+                    "end_state": "unknown",
+                    "key_turning_points": [],
+                },
+                "relationship_map": [],
+                "reference_assets": [],
+                "must_not_change": ["identity_block"],
+            }
+
+        result = agent.execute(model_output)
+        if not agent.validate(result):
+            return _error("CharacterBible agent produced invalid output.")
+
+        bible = result["character_bible"]
+
+        from datetime import UTC, datetime
+        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+
+        meta = ArtifactMetadata(
+            artifact_id="character_bible",
+            artifact_type=ArtifactType.CHARACTER_BIBLE,
+            project_id=project_id,
+            phase=FilmPhase("visual_dev"),
+            version=1,
+            status=ArtifactStatus.CANDIDATE,
+            parents=[],
+            created_by="mcp.generate_character_bible",
+            created_at=datetime.now(UTC),
+        )
+        ref = store.save(bible, meta)
+
+        active["character_bible_ref"] = ref
+        active.setdefault("artifact_refs", []).append(ref)
+        rt.projects[project_id] = active
+        rt._persist_project_state(project_id)
+
+        return _ok(
+            character_bible_ref=ref,
+            character_id=character_id,
+            identity_block=bible.visual_identity.identity_block,
+        )
+
+    except Exception as exc:
+        return _error(f"CharacterBible generation failed: {exc}")
+
+
+def _extract_script_text(script_data: dict[str, object] | None) -> str:
+    """Extract readable text from the Script artifact."""
+    if script_data is None:
+        return ""
+    if isinstance(script_data, dict):
+        scenes = script_data.get("scenes", script_data.get("content", []))
+        if isinstance(scenes, list):
+            lines: list[str] = []
+            for scene in scenes:
+                if isinstance(scene, dict):
+                    heading = scene.get("heading", scene.get("scene_heading", ""))
+                    if heading:
+                        lines.append(str(heading))
+                    for action in scene.get("action_lines", scene.get("actions", [])):
+                        lines.append(str(action))
+                    for dialogue in scene.get("dialogue_lines", scene.get("dialogue", [])):
+                        if isinstance(dialogue, dict):
+                            char = dialogue.get("character_id", dialogue.get("character", ""))
+                            line = dialogue.get("line", dialogue.get("text", ""))
+                            lines.append(f"{char}: {line}")
+            return "\n".join(lines)
+    return str(script_data)
+
+
 async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
     """Generate persisted reference images from the visual-dev reference index."""
     rt = get_runtime()
@@ -616,6 +839,24 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
     grouped_entries = _group_and_sort_entries(entries, requested_ids, force, project_root, results)
     identity_states: dict[str, dict[str, object]] = {}  # keyed by group_key
 
+    # Pre-load CharacterBibles from artifact store for structured prompts
+    char_bibles: dict[str, dict[str, object]] = {}
+    store = rt.services.artifact_store
+    for raw in grouped_entries:
+        if raw.get("_skip"):
+            continue
+        subject_type = str(raw.get("subject_type", ""))
+        subject_id = str(raw.get("subject_id", "")).strip()
+        if subject_type == "character" and subject_id and subject_id not in char_bibles:
+            try:
+                from film_pipeline.schemas._base import FilmPhase
+
+                bible = store.load(project_id, FilmPhase("visual_dev"), "character_bible", 1)
+                if isinstance(bible, dict) and bible.get("character_id") == subject_id:
+                    char_bibles[subject_id] = bible
+            except (FileNotFoundError, ValueError):
+                pass  # CharacterBible not yet generated — fall back to prompt_text
+
     for raw in grouped_entries:
         reference_id = str(raw.get("reference_id", "")).strip()
         if not reference_id:
@@ -627,6 +868,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
         prompt_text = _reference_prompt(
             raw,
+            character_bible=char_bibles.get(str(raw.get("subject_id", "")).strip()),
             identity_state=identity_states.get(_group_key(raw)),
         )
         aspect_ratio = _reference_aspect_ratio(raw)
@@ -2450,6 +2692,15 @@ def register_all_tools(registry: ToolRegistry) -> None:
     registry.register(
         _make("plan_generation_batch", ToolGroup.GENERATION, plan_generation_batch),
         plan_generation_batch,
+    )
+    registry.register(
+        _make(
+            "generate_character_bible",
+            ToolGroup.GENERATION,
+            generate_character_bible,
+            mutates=True,
+        ),
+        generate_character_bible,
     )
     registry.register(
         _make(
