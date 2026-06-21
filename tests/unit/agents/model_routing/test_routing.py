@@ -11,33 +11,34 @@ class TestModelRouter:
     def test_select_creative_writer(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer")
-        assert model == "openrouter/gpt-4o-mini"
+        assert model == "google/gemini-3-flash-preview"
 
     def test_select_strict_validator(self) -> None:
         router = ModelRouter()
         model = router.select("strict_validator")
-        assert model == "openrouter/gemini-flash-1.1"
+        assert model == "google/gemini-3-flash-preview"
 
     def test_select_prefer_cheap(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer", prefer_cheap=True)
-        assert model == "openrouter/gemini-flash-1.1"  # fallback
+        assert model == "deepseek/deepseek-v4-flash"  # fallback
 
     def test_fallback(self) -> None:
         router = ModelRouter()
         model = router.fallback("creative_writer")
-        assert model in ("openrouter/gemini-flash-1.1", "openrouter/gpt-4o-mini")
+        assert model in ("deepseek/deepseek-v4-flash", "google/gemini-3-flash-preview")
 
     def test_cost_ranked(self) -> None:
         router = ModelRouter()
         ranked = router.cost_ranked("creative_writer")
         assert len(ranked) == 2
-        assert ranked[0] == "openrouter/gemini-flash-1.1"  # cheaper first
+        assert "google/gemini-3-flash-preview" in ranked
+        assert "deepseek/deepseek-v4-flash" in ranked
 
     def test_cost_ranked_single(self) -> None:
         router = ModelRouter()
         ranked = router.cost_ranked("cheap_draft")
-        assert len(ranked) == 1
+        assert len(ranked) == 2
 
     def test_list_profiles(self) -> None:
         router = ModelRouter()
@@ -59,13 +60,13 @@ class TestModelRouter:
     def test_resolve_or_raise_success(self) -> None:
         router = ModelRouter()
         model = router.resolve_or_raise("creative_writer")
-        assert model == "openrouter/gpt-4o-mini"
+        assert model == "google/gemini-3-flash-preview"
 
     def test_resolve_model_params(self) -> None:
         router = ModelRouter()
         model_id, max_tokens, temperature = router.resolve_model_params("strict_validator")
-        assert model_id == "openrouter/gemini-flash-1.1"
-        assert max_tokens == 2048
+        assert model_id == "google/gemini-3-flash-preview"
+        assert max_tokens == 4096
         assert temperature == 0.1
 
     def test_custom_profiles(self) -> None:

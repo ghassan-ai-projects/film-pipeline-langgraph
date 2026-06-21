@@ -51,9 +51,12 @@ class TestImagen4GeminiProvider:
         assert payload["parameters"]["seed"] == 7
 
     def test_submit_requires_google_api_key(self, entry: ProviderRegistryEntry) -> None:
-        provider = Imagen4GeminiProvider(entry=entry)
-        with pytest.raises(RuntimeError, match="GOOGLE_API_KEY is not set"):
-            provider.submit(provider.build_payload("test"), "REF-001")
+        from unittest import mock
+
+        with mock.patch("film_pipeline.providers.adapters.imagen4_gemini.lookup", return_value=""):
+            provider = Imagen4GeminiProvider(entry=entry)
+            with pytest.raises(RuntimeError, match="GOOGLE_API_KEY"):
+                provider.submit(provider.build_payload("test"), "REF-001")
 
     def test_submit_poll_download_and_metadata(self, entry: ProviderRegistryEntry) -> None:
         provider = _make_provider(
