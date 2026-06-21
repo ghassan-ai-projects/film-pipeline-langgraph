@@ -8,6 +8,7 @@ backend; remaining tools return stubs pending full Phase 05+ wiring.
 from __future__ import annotations
 
 import contextlib
+import json
 from pathlib import Path
 from typing import Any
 
@@ -708,6 +709,22 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
             )
             continue
 
+        # Per-frame Gemini review (Phase 3) — AI-based validation
+        from film_pipeline.generation.frame_reviewer import review_frame, should_review_frame
+
+        frame_review_result = None
+        if should_review_frame(raw):
+            try:
+                frame_review_result = review_frame(
+                    target_path,
+                    prompt_text,
+                    subject_type=str(raw.get("subject_type", "character")),
+                    frame_id=reference_id,
+                )
+            except Exception:
+                # Never block on review failure — accept the frame
+                pass
+
         rel_path = target_path.resolve().relative_to(project_root.resolve())
         provider_entry = getattr(provider, "entry", None)
         provider_id = str(getattr(provider_entry, "provider_id", ""))
@@ -718,20 +735,59 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         raw["source_frames"] = [rel_path.as_posix()]
         raw["original_mime_type"] = str(metadata.get("mime_type", "image/png"))
         raw["normalized_mime_type"] = str(metadata.get("mime_type", "image/png"))
-        raw["generation_status"] = "validated"
-        raw["quality_score"] = 85.0
-        raw["locked"] = True
-        raw["validation"] = {
-            "status": "approved",
-            "score": 85.0,
-            "reports": [],
-        }
-        raw["ai_usability"] = {
-            "score": 85.0,
-            "risks": [],
-            "notes": "Generated through MCP image provider path.",
-        }
-        raw["issues"] = []
+
+        if frame_review_result is not None and frame_review_result.passed:
+            raw["generation_status"] = "validated"
+            raw["quality_score"] = frame_review_result.total / 40.0 * 100.0
+            raw["locked"] = True
+            raw["validation"] = {
+                "status": "approved",
+                "score": frame_review_result.total,
+                "reports": [json.dumps(frame_review_result.scores, default=str)],
+            }
+            raw["ai_usability"] = {
+                "score": frame_review_result.total / 40.0 * 100.0,
+                "risks": [],
+                "notes": "Gemini per-frame review passed.",
+            }
+            raw["issues"] = []
+        elif frame_review_result is not None and not frame_review_result.passed:
+            raw["generation_status"] = "needs_regeneration"
+            raw["quality_score"] = frame_review_result.total / 40.0 * 100.0
+            raw["locked"] = False
+            raw["validation"] = {
+                "status": "needs_regeneration",
+                "score": frame_review_result.total,
+                "reports": [json.dumps(frame_review_result.scores, default=str)],
+            }
+            raw["ai_usability"] = {
+                "score": frame_review_result.total / 40.0 * 100.0,
+                "risks": [],
+                "notes": frame_review_result.actionable_feedback or "Gemini review failed.",
+            }
+            raw["issues"] = [
+                {
+                    "code": "gemini_review_failed",
+                    "message": frame_review_result.actionable_feedback or "Gemini review below threshold.",
+                    "severity": "warning",
+                }
+            ]
+        # else: review was skipped (selective validation) or failed — keep defaults
+        else:
+            raw["generation_status"] = "generated"
+            raw["quality_score"] = 80.0
+            raw["locked"] = False
+            raw["validation"] = {
+                "status": "pending",
+                "score": 0.0,
+                "reports": [],
+            }
+            raw["ai_usability"] = {
+                "score": 0.0,
+                "risks": [],
+                "notes": "Gemini review skipped (selective validation or API unavailable).",
+            }
+            raw["issues"] = []
         generated += 1
         results.append(
             {
