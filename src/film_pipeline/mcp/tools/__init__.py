@@ -855,6 +855,10 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         skipped=str(skipped),
         failed=str(failed),
     )
+
+    # Phase 7 — Build composite sheets for characters with generated frames
+    _build_composites(project_root, grouped_entries)
+
     return _ok(
         generated=generated,
         skipped=skipped,
@@ -1151,6 +1155,67 @@ def _reference_aspect_ratio(entry: dict[str, object]) -> str:
 
 def _reference_job_id(reference_id: str) -> str:
     return reference_id.replace(":", "-").replace("/", "-")
+
+
+def _build_composites(
+    project_root: Path,
+    entries: list[dict[str, object]],
+) -> None:
+    """Build composite sheets from generated frames (Phase 7)."""
+    from film_pipeline.generation.compositor import (
+        build_character_identity_sheet,
+        build_environment_board,
+    )
+
+    # Group entries by character subject
+    char_frames: dict[str, dict[str, Path]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "character":
+            continue
+        if entry.get("generation_status") not in ("validated", "generated"):
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id:
+            continue
+        role = str(entry.get("frame_role", "")).strip()
+        asset = str(entry.get("asset_path", "")).strip()
+        if not role or not asset:
+            continue
+        frame_path = project_root / asset
+        if frame_path.exists():
+            char_frames.setdefault(subject_id, {})[role] = frame_path
+
+    for subject_id, frames in char_frames.items():
+        sheet_path = project_root / "references" / "characters" / subject_id / "identity-sheet.png"
+        try:
+            build_character_identity_sheet(subject_id, subject_id, frames, sheet_path)
+        except Exception:
+            pass  # compositor failure shouldn't block the pipeline
+
+    # Group entries by environment subject
+    env_frames: dict[str, dict[str, Path]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "environment":
+            continue
+        if entry.get("generation_status") not in ("validated", "generated"):
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id:
+            continue
+        role = str(entry.get("frame_role", "")).strip()
+        asset = str(entry.get("asset_path", "")).strip()
+        if not role or not asset:
+            continue
+        frame_path = project_root / asset
+        if frame_path.exists():
+            env_frames.setdefault(subject_id, {})[role] = frame_path
+
+    for subject_id, frames in env_frames.items():
+        sheet_path = project_root / "references" / "environments" / subject_id / "environment-board.png"
+        try:
+            build_environment_board(subject_id, subject_id, frames, sheet_path)
+        except Exception:
+            pass
 
 
 def _select_image_provider(rt: Any) -> Any | None:
