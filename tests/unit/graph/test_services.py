@@ -198,7 +198,7 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     registry = AgentRegistry()
     registry.register(contract)
     adapter = CaptureAdapter()
-    runner = PromptRunner(model_adapter=adapter, model_router=ModelRouter())
+    runner = PromptRunner(model_adapter=adapter, model_router=ModelRouter())  # type: ignore[arg-type]
     store = ArtifactStore(root=tmp_path / "artifacts")
     constitution = FilmConstitution(
         project_id="p1",

@@ -459,7 +459,7 @@ class TestVisualDevAgent:
             '"subject_id": "style_001"'
             "}]}}"
         )
-        result = agent.execute(output)  # type: ignore[arg-type]
+        result = agent.execute(output)
         index = result["reference_index"]
         assert isinstance(index, ReferenceIndex)
         assert len(index.entries) == 1
@@ -468,7 +468,7 @@ class TestVisualDevAgent:
     def test_execute_handles_invalid_string_input(self) -> None:
         """Model returned unparseable text — should produce empty index."""
         agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
-        result = agent.execute("not valid json at all")  # type: ignore[arg-type]
+        result = agent.execute("not valid json at all")
         index = result["reference_index"]
         assert isinstance(index, ReferenceIndex)
         assert len(index.entries) == 0

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import Mock
 
 from film_pipeline.generation.sheet_reviewer import review_composite_sheet
 
 
-def _mock_opener(response_body: dict) -> Mock:
+def _mock_opener(response_body: dict[str, Any]) -> Mock:
     resp = Mock()
     resp.read.return_value = json.dumps(response_body).encode("utf-8")
     resp.__enter__ = Mock(return_value=resp)

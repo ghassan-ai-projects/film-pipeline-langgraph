@@ -15,7 +15,6 @@ import pytest
 from film_pipeline.mcp import (
     AmbiguousProjectError,
     MCPError,
-    MCPServer,
     ProjectRecord,
     ProjectRegistry,
     ResolutionResult,
@@ -25,6 +24,7 @@ from film_pipeline.mcp import (
     new_envelope,
 )
 from film_pipeline.mcp.errors import MCPErrorCode, MCPResponse
+from film_pipeline.mcp.server import MCPServer
 
 # --- Tool registry -------------------------------------------------------
 
@@ -767,7 +767,7 @@ def test_wired_create_film_project_accepts_real_provider(
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
     assert state["runtime_mode"] == "real"
-    assert state["resolved_config"]  # type: ignore[truthy-function]
+    assert state["resolved_config"]
     assert "base.studio" in cast(list[str], state["resolved_config_sources"])
 
     # Verify profile_stack persisted

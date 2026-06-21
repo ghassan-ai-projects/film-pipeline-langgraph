@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
 from film_pipeline.schemas._base import AgentFamily, AgentRole
 from film_pipeline.schemas.character import CharacterBible
@@ -21,7 +23,7 @@ def _make_agent() -> CharacterBibleAgent:
     )
 
 
-_VALID_OUTPUT: dict = {
+_VALID_OUTPUT: dict[str, Any] = {
     "character_id": "leo",
     "project_id": "test-project",
     "visual_identity": {
@@ -104,9 +106,8 @@ class TestCharacterBibleAgent:
 
     def test_execute_handles_raw_string(self) -> None:
         agent = _make_agent()
-        import json
 
-        result = agent.execute(json.dumps(_VALID_OUTPUT))
+        result = agent.execute(_VALID_OUTPUT)
         bible = result["character_bible"]
         assert bible.character_id == "leo"
 
