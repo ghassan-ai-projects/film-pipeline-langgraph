@@ -678,8 +678,8 @@ Return ONLY valid JSON. No markdown fences, no commentary.
 
     try:
         from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
-        from film_pipeline.schemas.handoff import AgentRegistration
         from film_pipeline.schemas._base import AgentFamily, AgentRole
+        from film_pipeline.schemas.handoff import AgentRegistration
 
         agent = CharacterBibleAgent(
             AgentRegistration(
@@ -693,13 +693,6 @@ Return ONLY valid JSON. No markdown fences, no commentary.
         )
 
         runner = rt.services.prompt_runner
-        state = {
-            "project_id": project_id,
-            "character_id": character_id,
-            "character_name": character_name,
-            "script_content": script_text,
-            "constitution_content": constitution_text,
-        }
 
         # Use PromptRunner with model_adapter if available
         model_output: dict[str, Any]
@@ -717,7 +710,10 @@ Return ONLY valid JSON. No markdown fences, no commentary.
                     "role": "protagonist",
                     "age": "unknown",
                     "physical_description": "Generated in mock mode.",
-                    "identity_block": f"A {character_name} — generated in mock mode. Replace with real model output.",
+                    "identity_block": (
+                        f"A {character_name} — generated in mock mode. "
+                        "Replace with real model output."
+                    ),
                 },
                 "voice_rules": {
                     "cadence": "measured",
@@ -744,6 +740,7 @@ Return ONLY valid JSON. No markdown fences, no commentary.
         bible = result["character_bible"]
 
         from datetime import UTC, datetime
+
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
@@ -875,10 +872,14 @@ Return ONLY valid JSON:
     {{"zone_id": "main_area", "description": "...", "allowed_viewpoints": ["vp_wide", "vp_close"]}}
   ],
   "viewpoints": [
-    {{"viewpoint_id": "vp_wide", "description": "Wide establishing shot", "lens": "24mm", "framing": "full room"}}
+    {{"viewpoint_id": "vp_wide", "description": "Wide establishing shot",
+      "lens": "24mm", "framing": "full room"}}
   ],
   "lighting_states": [
-    {{"state_id": "golden_afternoon", "description": "Warm afternoon light through windows", "shadow_direction": "long, eastward", "color_temperature": "3200K", "primary_source": "window"}}
+    {{"state_id": "golden_afternoon",
+      "description": "Warm afternoon light through windows",
+      "shadow_direction": "long, eastward", "color_temperature": "3200K",
+      "primary_source": "window"}}
   ],
   "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
   "fingerprint": {{"text": "Compressed invariant block"}},
@@ -888,8 +889,8 @@ Return ONLY valid JSON:
 
     try:
         from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
-        from film_pipeline.schemas.handoff import AgentRegistration
         from film_pipeline.schemas._base import AgentFamily, AgentRole
+        from film_pipeline.schemas.handoff import AgentRegistration
 
         agent = EnvironmentBibleAgent(
             AgentRegistration(
@@ -930,7 +931,9 @@ Return ONLY valid JSON:
         bible = result["environment_bible"]
 
         from datetime import UTC, datetime
+
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.artifact import ArtifactMetadata
 
         meta = ArtifactMetadata(
             artifact_id="environment_bible",
@@ -983,8 +986,8 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
 
     try:
         from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
-        from film_pipeline.schemas.handoff import AgentRegistration
         from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.handoff import AgentRegistration
 
         agent = CameraBibleAgent(
             AgentRegistration(
@@ -1000,10 +1003,11 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
             raw = runner.model_adapter.chat(
-                f"Create a CameraLanguageBible for a film with camera philosophy: {camera_philosophy}. "
-                "Return JSON with 'profiles' array of camera profiles (profile_id, use_case, lens, "
-                "framing, movement, depth_of_field, composition_rules, transition_rules, emotional_meaning) "
-                "and 'default_profile_id'."
+                f"Create a CameraLanguageBible for a film with camera philosophy: "
+                f"{camera_philosophy}. "
+                "Return JSON with 'profiles' array (profile_id, use_case, lens, "
+                "framing, movement, depth_of_field, composition_rules, "
+                "transition_rules, emotional_meaning) and 'default_profile_id'."
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1031,6 +1035,7 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
         bible = result["camera_bible"]
 
         from datetime import UTC, datetime
+
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
         meta = ArtifactMetadata(
@@ -1085,8 +1090,8 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
 
     try:
         from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
-        from film_pipeline.schemas.handoff import AgentRegistration
         from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.handoff import AgentRegistration
 
         agent = StyleBibleAgent(
             AgentRegistration(
@@ -1102,10 +1107,11 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
             raw = runner.model_adapter.chat(
-                f"Create a StyleBible. Visual language: {visual_language}. Tone: {tone}. "
-                f"Environment palette hints: {palette_hint}. "
-                "Return JSON with 'color_palette' (4-8 hex codes), 'texture', 'grain', 'visual_mood', "
-                "'reference_stills', and 'must_not_change'."
+                f"Create a StyleBible. Visual language: {visual_language}. "
+                f"Tone: {tone}. Palette hints: {palette_hint}. "
+                "Return JSON with 'color_palette' (4-8 hex codes), "
+                "'texture', 'grain', 'visual_mood', 'reference_stills', "
+                "and 'must_not_change'."
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1125,6 +1131,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
         bible = result["style_bible"]
 
         from datetime import UTC, datetime
+
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
         meta = ArtifactMetadata(
@@ -1167,7 +1174,6 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
         from film_pipeline.schemas._base import FilmPhase
 
         script_data = store.load(project_id, FilmPhase("script"), "script", 1)
-        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
         ref_data = store.load(project_id, FilmPhase("visual_dev"), "reference_index", 1)
     except (FileNotFoundError, ValueError) as e:
         return _error(f"Required artifacts not found: {e}")
@@ -1184,8 +1190,8 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
 
     try:
         from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
-        from film_pipeline.schemas.handoff import AgentRegistration
         from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
+        from film_pipeline.schemas.handoff import AgentRegistration
 
         agent = ShotBibleAgent(
             AgentRegistration(
@@ -1237,6 +1243,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
         matrix = result["shot_matrix"]
 
         from datetime import UTC, datetime
+
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
         meta = ArtifactMetadata(
@@ -1272,14 +1279,15 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
 def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str | None:
     """Generate a basic continuity ledger from the shot matrix."""
     try:
+        from datetime import UTC, datetime
+
+        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+        from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.continuity import (
             ContinuityLedger,
             ContinuityLedgerEntry,
             StateRecord,
         )
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
-        from datetime import UTC, datetime
 
         entries: list[ContinuityLedgerEntry] = []
         prev_chars: list[str] = []
@@ -1344,10 +1352,11 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     store = rt.services.artifact_store
 
     try:
-        from film_pipeline.schemas.budget import BudgetState
+        from datetime import UTC, datetime
+
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
-        from datetime import UTC, datetime
+        from film_pipeline.schemas.budget import BudgetState
 
         budget = BudgetState(
             project_id=project_id,
@@ -1422,9 +1431,10 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     )
 
     try:
+        from datetime import UTC, datetime
+
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
-        from datetime import UTC, datetime
 
         meta = ArtifactMetadata(
             artifact_id="generation_plan",
@@ -1473,9 +1483,10 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
     saved_refs: list[str] = []
 
     try:
+        from datetime import UTC, datetime
+
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
-        from datetime import UTC, datetime
 
         if phase_str == "visual_dev":
             art_data = _load_latest_reference_index(rt, project_id, active)
@@ -1506,8 +1517,8 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
             except (FileNotFoundError, ValueError):
                 art_data = None
             if art_data is not None:
-                from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
                 from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+                from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
                 for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
                     validator = vcls()
@@ -1641,7 +1652,6 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
         best_attempt = 0
         retry_prompt = prompt_text
         frame_review_result = None
-        last_heuristic_failures: list[str] = []
 
         for attempt in range(3):
             if attempt > 0:
@@ -1683,7 +1693,6 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
                 target_path, subject_type=str(raw.get("subject_type", "character"))
             )
             if not heuristic_result.passed:
-                last_heuristic_failures = heuristic_result.failures
                 if attempt < 2:
                     continue
                 raw["generation_status"] = "failed"
@@ -1710,15 +1719,13 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
             frame_review_result = None
             if should_review_frame(raw):
-                try:
+                with contextlib.suppress(Exception):
                     frame_review_result = review_frame(
                         target_path,
                         retry_prompt,
                         subject_type=str(raw.get("subject_type", "character")),
                         frame_id=reference_id,
                     )
-                except Exception:
-                    pass
 
             if frame_review_result is not None and frame_review_result.passed:
                 best_score = frame_review_result.total
@@ -2177,13 +2184,12 @@ def _reference_prompt(
     """
     from film_pipeline.generation.prompt_builder import build_structured_prompt
 
-    prompt = build_structured_prompt(
+    return build_structured_prompt(
         dict(entry),
         character_bible=dict(character_bible) if character_bible else None,
         constitution=dict(constitution) if constitution else None,
         identity_state=dict(identity_state) if identity_state else None,
     )
-    return prompt
 
 
 def _reference_aspect_ratio(entry: dict[str, object]) -> str:

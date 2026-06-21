@@ -23,7 +23,7 @@ _PLACEHOLDER_COLOR = (200, 200, 210)
 
 # Tile positions for Character Identity Sheet (x, y, w, h)
 _CHAR_TILES: dict[str, tuple[int, int, int, int]] = {
-    "front-face": (_MARGIN, 60, 640, 640),  # 2× scale, top-left
+    "front-face": (_MARGIN, 60, 640, 640),  # 2x scale, top-left
     "3-4-left": (656, 60, 312, 312),  # column 2
     "3-4-right": (976, 60, 312, 312),  # column 3
     "profile-right": (656, 380, 312, 312),  # column 2, row 2
@@ -172,7 +172,7 @@ def replace_tile(
 
 
 def _crop_center(img: Image.Image, target_w: int, target_h: int) -> Image.Image:
-    """Center-crop *img* to *target_w* × *target_h*, then resize."""
+    """Center-crop *img* to *target_w* x *target_h*, then resize."""
     iw, ih = img.size
     # Crop to target aspect ratio
     target_aspect = target_w / target_h
@@ -383,10 +383,9 @@ def _write_sheet_manifest(
     dimensions: tuple[int, int],
     frames: dict[str, Path],
     tiles: dict[str, tuple[int, int, int, int]],
-    labels: dict[str, str],
+    labels: dict[str, str],  # noqa: ARG001
 ) -> None:
     """Write a .sheet.json manifest alongside the composite PNG."""
-    import json
 
     from film_pipeline.schemas.reference import CompositeSheetManifest, TileEntry
 
@@ -437,9 +436,7 @@ def build_expression_sheet(
         "expression-tired": (8, 572, 504, 504),
         "expression-peaceful": (520, 572, 504, 504),
     }
-    _EXPR_LABELS = {
-        k: v for k, v in _CHAR_LABELS.items() if k.startswith("expression-")
-    }
+    _EXPR_LABELS = {k: v for k, v in _CHAR_LABELS.items() if k.startswith("expression-")}
 
     canvas = Image.new("RGB", _EXPR_SIZE, _BG_COLOR)
     draw = ImageDraw.Draw(canvas)

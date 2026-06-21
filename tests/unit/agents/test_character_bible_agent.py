@@ -30,7 +30,11 @@ _VALID_OUTPUT: dict = {
         "role": "protagonist",
         "age": "mid-40s",
         "physical_description": "Tall, weathered face, sharp eyes.",
-        "identity_block": "A tall man in his mid-40s with a weathered face and sharp, observant eyes. Dark hair graying at the temples. Dresses in worn but well-tailored suits. Carries himself with the quiet confidence of someone who has seen too much.",
+        "identity_block": (
+            "A tall man in his mid-40s with a weathered face and sharp, observant eyes. "
+            "Dark hair graying at the temples. Dresses in worn but well-tailored suits. "
+            "Carries himself with the quiet confidence of someone who has seen too much."
+        ),
     },
     "voice_rules": {
         "cadence": "measured, deliberate",

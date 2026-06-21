@@ -41,20 +41,20 @@ lint-fix: ## Auto-fix Ruff lint findings
 typecheck: ## Run mypy in strict mode
 	$(UV_RUN) mypy src tests
 
-test: ## Run all tests with coverage
-	$(UV_RUN) pytest
+test: ## Run all tests (fast, no coverage)
+	$(UV_RUN) pytest --no-cov
 
-test-unit: ## Run unit tests only
-	$(UV_RUN) pytest tests/unit tests/test_smoke.py
+test-unit: ## Run unit tests only (fast, no coverage)
+	$(UV_RUN) pytest tests/unit tests/test_smoke.py --no-cov
 
 test-integration: ## Run integration tests
-	$(UV_RUN) pytest -m integration
+	$(UV_RUN) pytest -m integration --no-cov
 
 test-e2e: ## Run end-to-end tests
-	$(UV_RUN) pytest -m e2e
+	$(UV_RUN) pytest -m e2e --no-cov
 
-test-cov: ## Run pytest and generate HTML coverage output
-	$(UV_RUN) pytest --cov-report=html
+test-cov: ## Run pytest with coverage enforcement (90% threshold)
+	$(UV_RUN) pytest --cov-report=term-missing
 
 build: ## Build sdist and wheel
 	uv build
@@ -101,7 +101,7 @@ precommit: ## Run all pre-commit hooks
 hooks: ## Install the pre-commit git hook
 	$(UV_RUN) pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push
 
-ci-check: format-check lint typecheck test build product-gate ## Run the full CI pipeline locally
+ci-check: format-check lint typecheck test-cov build product-gate ## Run the full CI pipeline locally
 	@echo "  CI check passed"
 
 clean: ## Remove local caches and build artifacts

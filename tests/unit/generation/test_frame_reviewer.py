@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 import json
-from io import BytesIO
 from pathlib import Path
 from unittest.mock import Mock
 
-import pytest
-
 from film_pipeline.generation.frame_reviewer import (
-    FrameReviewResult,
     review_frame,
     should_review_frame,
 )
@@ -43,20 +39,37 @@ def _make_png(tmp_path: Path, name: str = "test.png") -> Path:
 
 class TestShouldReviewFrame:
     def test_front_face_always_reviewed(self) -> None:
-        assert should_review_frame({"subject_type": "character", "frame_role": "front-face"}) is True
+        assert (
+            should_review_frame({"subject_type": "character", "frame_role": "front-face"}) is True
+        )
 
     def test_environment_wide_establishing_skipped(self) -> None:
-        assert should_review_frame({"subject_type": "environment", "frame_role": "wide-establishing"}) is False
+        assert (
+            should_review_frame({"subject_type": "environment", "frame_role": "wide-establishing"})
+            is False
+        )
 
     def test_environment_lighting_variant_skipped(self) -> None:
-        assert should_review_frame({"subject_type": "environment", "frame_role": "lighting-cool-night"}) is False
+        assert (
+            should_review_frame(
+                {"subject_type": "environment", "frame_role": "lighting-cool-night"}
+            )
+            is False
+        )
 
     def test_character_detail_insets_skipped(self) -> None:
-        assert should_review_frame({"subject_type": "character", "frame_role": "detail-eyes"}) is False
+        assert (
+            should_review_frame({"subject_type": "character", "frame_role": "detail-eyes"}) is False
+        )
 
     def test_character_expression_first_three_reviewed(self) -> None:
         for i in range(3):
-            assert should_review_frame({"subject_type": "character", "frame_role": "expression-tired"}, frame_index=i) is True
+            assert (
+                should_review_frame(
+                    {"subject_type": "character", "frame_role": "expression-tired"}, frame_index=i
+                )
+                is True
+            )
 
     def test_scale_sheet_reviewed_once(self) -> None:
         entry = {"subject_type": "character", "asset_type": "scale_sheet"}
@@ -72,18 +85,20 @@ class TestReviewFrame:
                     "content": {
                         "parts": [
                             {
-                                "text": json.dumps({
-                                    "frame_id": "ref-001",
-                                    "scores": {
-                                        "subject": {"score": 9, "max": 10, "notes": "clear"},
-                                        "prompt_match": {"score": 8, "max": 10, "notes": ""},
-                                        "artifacts": {"score": 9, "max": 10, "notes": ""},
-                                        "technical": {"score": 8, "max": 10, "notes": ""},
-                                    },
-                                    "total": 34,
-                                    "passed": True,
-                                    "actionable_feedback": "",
-                                })
+                                "text": json.dumps(
+                                    {
+                                        "frame_id": "ref-001",
+                                        "scores": {
+                                            "subject": {"score": 9, "max": 10, "notes": "clear"},
+                                            "prompt_match": {"score": 8, "max": 10, "notes": ""},
+                                            "artifacts": {"score": 9, "max": 10, "notes": ""},
+                                            "technical": {"score": 8, "max": 10, "notes": ""},
+                                        },
+                                        "total": 34,
+                                        "passed": True,
+                                        "actionable_feedback": "",
+                                    }
+                                )
                             }
                         ]
                     }
@@ -108,18 +123,24 @@ class TestReviewFrame:
                     "content": {
                         "parts": [
                             {
-                                "text": json.dumps({
-                                    "frame_id": "ref-002",
-                                    "scores": {
-                                        "subject": {"score": 3, "max": 10, "notes": "face not visible"},
-                                        "prompt_match": {"score": 4, "max": 10, "notes": ""},
-                                        "artifacts": {"score": 5, "max": 10, "notes": ""},
-                                        "technical": {"score": 5, "max": 10, "notes": ""},
-                                    },
-                                    "total": 17,
-                                    "passed": False,
-                                    "actionable_feedback": "Face is obscured.",
-                                })
+                                "text": json.dumps(
+                                    {
+                                        "frame_id": "ref-002",
+                                        "scores": {
+                                            "subject": {
+                                                "score": 3,
+                                                "max": 10,
+                                                "notes": "face not visible",
+                                            },
+                                            "prompt_match": {"score": 4, "max": 10, "notes": ""},
+                                            "artifacts": {"score": 5, "max": 10, "notes": ""},
+                                            "technical": {"score": 5, "max": 10, "notes": ""},
+                                        },
+                                        "total": 17,
+                                        "passed": False,
+                                        "actionable_feedback": "Face is obscured.",
+                                    }
+                                )
                             }
                         ]
                     }
@@ -138,22 +159,22 @@ class TestReviewFrame:
 
     def test_markdown_fence_stripped(self, tmp_path: Path) -> None:
         png = _make_png(tmp_path)
-        json_text = json.dumps({
-            "frame_id": "ref-003",
-            "scores": {
-                "subject": {"score": 8, "max": 10, "notes": ""},
-                "prompt_match": {"score": 7, "max": 10, "notes": ""},
-                "artifacts": {"score": 8, "max": 10, "notes": ""},
-                "technical": {"score": 7, "max": 10, "notes": ""},
-            },
-            "total": 30,
-            "passed": True,
-            "actionable_feedback": "",
-        })
+        json_text = json.dumps(
+            {
+                "frame_id": "ref-003",
+                "scores": {
+                    "subject": {"score": 8, "max": 10, "notes": ""},
+                    "prompt_match": {"score": 7, "max": 10, "notes": ""},
+                    "artifacts": {"score": 8, "max": 10, "notes": ""},
+                    "technical": {"score": 7, "max": 10, "notes": ""},
+                },
+                "total": 30,
+                "passed": True,
+                "actionable_feedback": "",
+            }
+        )
         response = {
-            "candidates": [
-                {"content": {"parts": [{"text": f"```json\n{json_text}\n```"}]}}
-            ]
+            "candidates": [{"content": {"parts": [{"text": f"```json\n{json_text}\n```"}]}}]
         }
         result = review_frame(
             png,

@@ -25,7 +25,10 @@ _VALID_OUTPUT: dict = {
     "environment_id": "studio",
     "project_id": "test-project",
     "name": "The Studio",
-    "locked_prompt_block": "A dimly lit artist's studio with tall windows, paint-splattered floors, and canvases stacked against exposed brick walls.",
+    "locked_prompt_block": (
+        "A dimly lit artist's studio with tall windows, paint-splattered floors, "
+        "and canvases stacked against exposed brick walls."
+    ),
     "invariants": ["Tall windows on north wall", "Exposed brick"],
     "zones": [
         {

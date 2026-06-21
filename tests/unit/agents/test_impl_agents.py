@@ -6,11 +6,13 @@ from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
 from film_pipeline.agents.impl.development_agent import DevelopmentAgent
 from film_pipeline.agents.impl.intake_agent import IntakeAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
+from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 from film_pipeline.schemas._base import AgentFamily, AgentRole, FilmType
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 from film_pipeline.schemas.project import ProjectProfile
+from film_pipeline.schemas.reference import ReferenceIndex
 from film_pipeline.schemas.script import Script
 from film_pipeline.schemas.story_bible import SceneList, StoryBible, Treatment
 
@@ -382,6 +384,171 @@ class TestIntakeAgent:
         profile = result["profile"]
         assert isinstance(profile, ProjectProfile)
         assert profile.film_type == FilmType.SHORT_DRAMA
+
+
+# ── VisualDevAgent ───────────────────────────────────────────────────────────
+
+
+class TestVisualDevAgent:
+    def test_execute_produces_reference_index(self) -> None:
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        output = _make_visual_dev_output()
+        result = agent.execute(output)
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 2
+        assert index.entries[0].reference_id == "ref_001"
+        assert index.entries[0].subject_type == "character"
+        assert index.entries[0].subject_id == "char_001"
+        assert index.entries[0].approved_for == ["prompt_anchor"]
+        assert index.entries[0].validation.status == "pending"
+        assert index.entries[1].reference_id == "ref_002"
+        assert index.entries[1].subject_type == "environment"
+        assert index.entries[1].subject_id == "env_001"
+
+    def test_execute_flat_keys_no_wrapper(self) -> None:
+        """Reference entries at top level without 'visual_dev' wrapper."""
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        output: dict[str, object] = {
+            "project_id": "p1",
+            "reference_entries": [
+                {
+                    "reference_id": "ref_003",
+                    "asset_type": "environment_sheet",
+                    "subject_type": "environment",
+                    "subject_id": "env_002",
+                }
+            ],
+        }
+        result = agent.execute(output)
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 1
+        assert index.entries[0].reference_id == "ref_003"
+
+    def test_execute_entries_key_at_top_level(self) -> None:
+        """Model returns 'entries' instead of 'reference_entries'."""
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        output: dict[str, object] = {
+            "project_id": "p2",
+            "entries": [
+                {
+                    "reference_id": "ref_004",
+                    "asset_type": "prop_sheet",
+                    "subject_type": "prop",
+                    "subject_id": "prop_001",
+                }
+            ],
+        }
+        result = agent.execute(output)
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 1
+        assert index.entries[0].reference_id == "ref_004"
+
+    def test_execute_handles_string_input(self) -> None:
+        """Model returned raw JSON text instead of parsed dict."""
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        output = (
+            '{"visual_dev": {'
+            '"project_id": "p1", '
+            '"reference_entries": [{'
+            '"reference_id": "ref_005", '
+            '"asset_type": "style_sheet", '
+            '"subject_type": "style", '
+            '"subject_id": "style_001"'
+            "}]}}"
+        )
+        result = agent.execute(output)  # type: ignore[arg-type]
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 1
+        assert index.entries[0].reference_id == "ref_005"
+
+    def test_execute_handles_invalid_string_input(self) -> None:
+        """Model returned unparseable text — should produce empty index."""
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        result = agent.execute("not valid json at all")  # type: ignore[arg-type]
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 0
+
+    def test_execute_empty_dict_produces_empty_index(self) -> None:
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        result = agent.execute({})
+        index = result["reference_index"]
+        assert isinstance(index, ReferenceIndex)
+        assert len(index.entries) == 0
+
+    def test_validate_rejects_empty_entries(self) -> None:
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        output: dict[str, object] = {"visual_dev": {"project_id": "p1", "reference_entries": []}}
+        result = agent.execute(output)
+        assert not agent.validate(result)
+
+    def test_validate_rejects_no_reference_index(self) -> None:
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        assert not agent.validate({})
+
+    def test_prepare_extracts_script_and_constitution_refs(self) -> None:
+        agent = VisualDevAgent(_make_contract("reference-strategy-planner"))
+        inputs = agent.prepare(
+            {
+                "project_id": "p1",
+                "script_ref": "artifact:script:v1",
+                "constitution_ref": "artifact:film_constitution:v1",
+            },
+            _make_kb(),
+            "Create visual dev references",
+        )
+        assert inputs["project_id"] == "p1"
+        assert inputs["script_ref"] == "artifact:script:v1"
+        assert inputs["constitution_ref"] == "artifact:film_constitution:v1"
+        assert inputs["task"] == "Create visual dev references"
+
+
+def _make_visual_dev_output() -> dict[str, object]:
+    return {
+        "visual_dev": {
+            "project_id": "p1",
+            "reference_entries": [
+                {
+                    "reference_id": "ref_001",
+                    "asset_path": "",
+                    "asset_type": "character_identity_sheet",
+                    "subject_type": "character",
+                    "subject_id": "char_001",
+                    "approved_for": ["prompt_anchor"],
+                    "quality_score": 85.0,
+                    "provider": "",
+                    "prompt_text": "Create a character sheet for the protagonist.",
+                    "prompt_refs": [],
+                    "source_frames": [],
+                    "notes": "Neutral expression, full body, three angles.",
+                    "moderation_risk": "low",
+                    "validation": {"status": "pending", "score": 0.0, "reports": []},
+                    "ai_usability": {"score": 0.0, "risks": [], "notes": ""},
+                },
+                {
+                    "reference_id": "ref_002",
+                    "asset_path": "",
+                    "asset_type": "environment_sheet",
+                    "subject_type": "environment",
+                    "subject_id": "env_001",
+                    "approved_for": ["prompt_anchor"],
+                    "quality_score": 80.0,
+                    "provider": "",
+                    "prompt_text": "Create an environment sheet for the main location.",
+                    "prompt_refs": [],
+                    "source_frames": [],
+                    "notes": "Wide establishing shot, golden hour lighting.",
+                    "moderation_risk": "low",
+                    "validation": {"status": "pending", "score": 0.0, "reports": []},
+                    "ai_usability": {"score": 0.0, "risks": [], "notes": ""},
+                },
+            ],
+        }
+    }
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

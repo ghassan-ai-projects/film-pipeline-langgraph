@@ -162,7 +162,8 @@ def _build_sheet_review_prompt(
         f"Return ONLY valid JSON (no markdown, no backticks):\n"
         f'{{"sheet_id":"","sheet_type":"","scores":{{'
         + ",".join(f'"{d}":{{"score":0,"max":{m},"notes":""}}' for d, (m, _) in domains.items())
-        + f'}},"total":0,"passed":false,"actionable_feedback":"","failing_tiles":[],"bad_reference_tags":[]}}'
+        + '},"total":0,"passed":false,"actionable_feedback":"",'
+        + '"failing_tiles":[],"bad_reference_tags":[]}'
     )
 
 
@@ -180,15 +181,23 @@ def _call_gemini(
         raise RuntimeError("GOOGLE_API_KEY is not set.")
 
     url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{model}:generateContent?key={key}"
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
     )
     body = {
-        "contents": [{"parts": [{"text": prompt}, {"inline_data": {"mime_type": "image/png", "data": image_b64}}]}],
+        "contents": [
+            {
+                "parts": [
+                    {"text": prompt},
+                    {"inline_data": {"mime_type": "image/png", "data": image_b64}},
+                ]
+            }
+        ],
         "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
     }
     data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+    )
     opener = http_opener if http_opener is not None else urllib.request.build_opener()
     with opener.open(req) as resp:
         return json.loads(resp.read().decode("utf-8"))
@@ -203,7 +212,9 @@ def _parse_sheet_response(
     try:
         candidates = response.get("candidates", [])
         if not candidates:
-            return SheetReviewResult(sheet_id=subject_id, sheet_type=sheet_type, passed=False, error="No candidates")
+            return SheetReviewResult(
+                sheet_id=subject_id, sheet_type=sheet_type, passed=False, error="No candidates"
+            )
         text = str(candidates[0].get("content", {}).get("parts", [{}])[0].get("text", ""))
         text = text.strip()
         if text.startswith("```"):
@@ -213,19 +224,31 @@ def _parse_sheet_response(
             text = text.strip()
         data = json.loads(text)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        return SheetReviewResult(sheet_id=subject_id, sheet_type=sheet_type, passed=False, error=f"Parse error: {exc}")
+        return SheetReviewResult(
+            sheet_id=subject_id, sheet_type=sheet_type, passed=False, error=f"Parse error: {exc}"
+        )
 
     scores: dict[str, dict[str, object]] = {}
     total = 0.0
     for domain in data.get("scores", {}):
         d = data["scores"][domain]
-        scores[domain] = {"score": float(d.get("score", 0)), "max": float(d.get("max", 0)), "notes": str(d.get("notes", ""))}
+        scores[domain] = {
+            "score": float(d.get("score", 0)),
+            "max": float(d.get("max", 0)),
+            "notes": str(d.get("notes", "")),
+        }
         total += scores[domain]["score"]
 
     threshold = _pass_threshold(max_score)
     passed = total >= threshold
 
-    status = "approved" if passed else "needs_delta_fix" if data.get("failing_tiles") else "needs_regeneration"
+    status = (
+        "approved"
+        if passed
+        else "needs_delta_fix"
+        if data.get("failing_tiles")
+        else "needs_regeneration"
+    )
 
     return SheetReviewResult(
         sheet_id=str(data.get("sheet_id", subject_id)),

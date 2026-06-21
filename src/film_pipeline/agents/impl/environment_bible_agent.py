@@ -107,13 +107,7 @@ class EnvironmentBibleAgent(BaseAgent):
         bible = result.get("environment_bible")
         if not isinstance(bible, EnvironmentBible):
             return False
-        if not bible.environment_id:
-            return False
-        if not bible.locked_prompt_block:
-            return False
-        if not bible.fingerprint.text:
-            return False
-        return True
+        return bool(bible.environment_id and bible.locked_prompt_block and bible.fingerprint.text)
 
 
 def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:

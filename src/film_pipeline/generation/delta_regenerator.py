@@ -17,7 +17,7 @@ def regenerate_failing_tiles(
     sheet_review: SheetReviewResult,
     entries: list[dict[str, Any]],
     sheet_path: Path,
-    project_root: Path,
+    project_root: Path,  # noqa: ARG001
     *,
     regenerate_fn: Any,
     max_iterations: int = 3,
@@ -52,7 +52,6 @@ def regenerate_failing_tiles(
             asset_path = str(entry.get("asset_path", ""))
             if not asset_path:
                 continue
-            old_path = project_root / asset_path
             feedback = sheet_review.actionable_feedback or f"Fix {tile_name}"
             try:
                 new_path = regenerate_fn(entry, feedback)

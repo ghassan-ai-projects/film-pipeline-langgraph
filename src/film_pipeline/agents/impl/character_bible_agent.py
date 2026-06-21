@@ -107,11 +107,7 @@ class CharacterBibleAgent(BaseAgent):
         bible = result.get("character_bible")
         if not isinstance(bible, CharacterBible):
             return False
-        if not bible.character_id:
-            return False
-        if not bible.visual_identity.identity_block:
-            return False
-        return True
+        return bool(bible.character_id and bible.visual_identity.identity_block)
 
 
 def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
