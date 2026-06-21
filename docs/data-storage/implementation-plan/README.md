@@ -36,17 +36,17 @@
 
 | # | Phase | File | Depends On | Status |
 |---|-------|------|-----------|--------|
-| 00 | CharacterBible Writer | `00-character-bible-writer.md` | — | 🟢 |
-| 01 | EnvironmentBible Writer | `01-environment-bible-writer.md` | — | 🟢 |
-| 02 | Camera + Style Bible Writers | `02-camera-and-style-bibles.md` | — | 🟢 |
-| 03 | Frame Metadata Sidecars | `03-frame-metadata-sidecars.md` | 00, 01 | 🟡 |
-| 04 | Sheet Manifests | `04-sheet-manifests.md` | 03 | 🟡 |
-| 05 | Additional Composite Templates | `05-additional-composite-templates.md` | 00, 01, 02 | 🟡 |
-| 06 | Shot Bible Writers | `06-shot-bible-writers.md` | — | 🟢 |
-| 07 | Generation Plan + Budget | `07-generation-plan-and-budget.md` | 06 | 🟡 |
-| 08 | QC Node + Validation Writers | `08-qc-node-and-validation.md` | 07 | 🟡 |
-| 09 | Post + Delivery Writers | `09-post-and-delivery.md` | 08 | 🟡 |
-| 10 | Cross-Cutting Artifacts | `10-cross-cutting-artifacts.md` | — | 🟢 |
+| 00 | CharacterBible Writer | `00-character-bible-writer.md` | — | ✅ Complete (`8b6b446`) |
+| 01 | EnvironmentBible Writer | `01-environment-bible-writer.md` | — | ✅ Complete (`ebba251`) |
+| 02 | Camera + Style Bible Writers | `02-camera-and-style-bibles.md` | — | ✅ Complete (`857b904`) |
+| 03 | Frame Metadata Sidecars | `03-frame-metadata-sidecars.md` | 00, 01 | ✅ Complete (`dcdbf01`) |
+| 04 | Sheet Manifests | `04-sheet-manifests.md` | 03 | ✅ Complete (`34139e4`) |
+| 05 | Additional Composite Templates | `05-additional-composite-templates.md` | 00, 01, 02 | ✅ Complete (`108c2c2`) |
+| 06 | Shot Bible Writers | `06-shot-bible-writers.md` | — | ✅ Complete (`a781f45`) |
+| 07 | Generation Plan + Budget | `07-generation-plan-and-budget.md` | 06 | ✅ Complete (`4b7ef7b`) |
+| 08 | QC Node + Validation Writers | `08-qc-node-and-validation.md` | 07 | ✅ Partial (`992b18e`) — `run_validation` MCP tool added; `qc_node` wiring deferred |
+| 09 | Post + Delivery Writers | `09-post-and-delivery.md` | 08 | ⚠️ Deferred — `assemble_review_cut` already exists in registry; `post_node`/`delivery_node` wiring deferred |
+| 10 | Cross-Cutting Artifacts | `10-cross-cutting-artifacts.md` | — | ⚠️ Deferred — `create_checkpoint` already exists in registry; `rollback_to_checkpoint` deferred |
 
 ---
 
