@@ -45,7 +45,7 @@ class IntakeAgent(BaseAgent):
             film_type=_coerce_film_type(data.get("film_type")),
             target_runtime_seconds=_coerce_runtime_seconds(data),
             aspect_ratio=str(data.get("aspect_ratio", "16:9") or "16:9"),
-            delivery_modes=_coerce_delivery_modes(data.get("delivery_modes")),
+            delivery_modes=_coerce_delivery_modes(data.get("delivery_modes")),  # type: ignore[arg-type]
             budget_cap_usd=_coerce_budget_cap(data.get("budget_cap_usd")),
             provider_preferences=[str(p) for p in data.get("provider_preferences", []) if str(p)],
             human_owner=_coerce_human_owner(data.get("human_owner")),

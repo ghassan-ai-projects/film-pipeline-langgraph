@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -171,9 +171,10 @@ def _call_gemini(
     prompt: str,
     image_b64: str,
     model: str,
-    http_opener: object = None,
+    http_opener: Any = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
+
     from film_pipeline.providers.credentials import lookup
 
     key = api_key or lookup("gemini-imagen-4")
@@ -200,7 +201,7 @@ def _call_gemini(
     )
     opener = http_opener if http_opener is not None else urllib.request.build_opener()
     with opener.open(req) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
 
 
 def _parse_sheet_response(
@@ -237,7 +238,7 @@ def _parse_sheet_response(
             "max": float(d.get("max", 0)),
             "notes": str(d.get("notes", "")),
         }
-        total += scores[domain]["score"]
+        total += float(cast(float, scores[domain]["score"]))
 
     threshold = _pass_threshold(max_score)
     passed = total >= threshold

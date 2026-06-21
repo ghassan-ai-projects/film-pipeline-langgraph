@@ -73,7 +73,7 @@ class MockImageProvider(BaseProviderAdapter):
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
         path = out / f"{job.shot_id}.png"
-        prompt = str(job.payload.get("prompt", ""))
+        prompt = str(job.payload.get("prompt", "")) if job.payload else ""
         _mock_png(path, job.shot_id, prompt)
         return str(path)
 

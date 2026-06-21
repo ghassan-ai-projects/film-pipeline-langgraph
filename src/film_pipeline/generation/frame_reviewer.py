@@ -12,7 +12,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ def review_frame(
     *,
     subject_type: str = "character",
     frame_id: str = "",
-    http_opener: object = None,
+    http_opener: Any = None,
     api_key: str | None = None,
     model: str = "gemini-2.0-flash",
 ) -> FrameReviewResult:
@@ -174,7 +174,7 @@ def _call_gemini(
     prompt: str,
     image_b64: str,
     model: str,
-    http_opener: object = None,
+    http_opener: Any = None,
     api_key: str | None = None,
 ) -> dict[str, Any]:
     from film_pipeline.providers.credentials import lookup
@@ -217,7 +217,7 @@ def _call_gemini(
 
     opener = http_opener if http_opener is not None else urllib.request.build_opener()
     with opener.open(req) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
 
 
 def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameReviewResult:
@@ -253,7 +253,7 @@ def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameRev
                 "max": float(domain_data.get("max", 10)),
                 "notes": str(domain_data.get("notes", "")),
             }
-            total += scores[domain]["score"]
+            total += float(cast(float, scores[domain]["score"]))
 
     return FrameReviewResult(
         frame_id=str(data.get("frame_id", frame_id)),

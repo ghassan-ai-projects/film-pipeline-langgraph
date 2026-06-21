@@ -37,7 +37,7 @@ class VisualDevAgent(BaseAgent):
             "task": task,
         }
 
-    def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
+    def execute(self, model_output: Any) -> dict[str, Any]:
         # --- Normalize model output ---
         if isinstance(model_output, str):
             # Model returned raw text — attempt JSON parse
