@@ -105,9 +105,12 @@ from film_pipeline.schemas.project import ProjectConfig, ProjectIdentity, Projec
 from film_pipeline.schemas.prompt import PromptRegistry, PromptRegistryEntry, RCTCOPrompt
 from film_pipeline.schemas.provider_health import ProviderHealthState
 from film_pipeline.schemas.reference import (
+    ReferenceAIUsability,
+    ReferenceFrame,
     ReferenceIndex,
     ReferenceIndexEntry,
     ReferenceStrategy,
+    ReferenceValidationSummary,
 )
 from film_pipeline.schemas.registries import (
     AgentRegistryEntry,

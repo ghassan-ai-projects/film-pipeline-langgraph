@@ -101,3 +101,32 @@ class ReferenceStrategy(SchemaBase):
     provider_plan: list[str] = Field(default_factory=list)
     cost_estimate_usd: float = Field(default=0.0, ge=0)
     notes: str = ""
+
+
+class ReferenceFrame(SchemaBase):
+    """Per-frame metadata sidecar written alongside each generated PNG.
+
+    Captures the full provenance of a single frame: provider, model, seed,
+    prompt, validation scores, and retry history.
+    """
+
+    frame_path: str = Field(description="Relative path from project root to the PNG.")
+    reference_id: str
+    subject_type: str
+    subject_id: str
+    provider_id: str = ""
+    model_id: str = ""
+    tier: str = "fast"
+    seed: int | None = None
+    prompt_text: str = ""
+    frame_role: str = ""
+    expression: str | None = None
+    lighting: str | None = None
+    aspect_ratio: str = "1:1"
+    generation_status: str = "generated"
+    quality_score: float = 0.0
+    retry_count: int = 0
+    best_score: float = 0.0
+    heuristic_checks_passed: bool = False
+    mime_type: str = "image/png"
+    created_at: str = ""
