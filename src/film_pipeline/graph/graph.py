@@ -20,7 +20,6 @@ from film_pipeline.graph.nodes import (
     generation_node,
     intake_node,
     post_node,
-    qc_node,
     repair_phase_node,
     request_revision_node,
     script_node,
@@ -29,6 +28,7 @@ from film_pipeline.graph.nodes import (
 )
 from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.state_schema import StudioGraphState
+from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
 
 
 def build_graph() -> CompiledStateGraph:
@@ -46,7 +46,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("shot_bible_node", shot_bible_node)
     builder.add_node("gen_planning_node", gen_planning_node)
     builder.add_node("generation_node", generation_node)
-    builder.add_node("qc_node", qc_node)
+    builder.add_node("qc_node", build_qc_subgraph())  # Phase 7: parallel subgraph
     builder.add_node("post_node", post_node)
     builder.add_node("delivery_node", delivery_node)
 
