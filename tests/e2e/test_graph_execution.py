@@ -31,44 +31,41 @@ class TestGraphExecution:
     """End-to-end: run the graph through multiple phases."""
 
     def test_graph_invokes_all_phase_nodes(self) -> None:
-        """Verify the graph invokes nodes — cycles without human (expected)."""
+        """Verify the graph runs and pauses at the human approval gate.
+
+        With ``MemorySaver`` + ``interrupt()`` (replacing the old
+        recursion-limit hack), the graph executes the first phase, passes
+        through consistency check, and pauses at ``await_approval``.
+        """
         graph = build_graph()
         state: dict[str, Any] = {"project_id": "e2e-graph-test"}
 
-        # Graph will cycle through approval gate without human intervention.
-        # This verifies the graph compiles and executes node functions.
-        from langgraph.errors import GraphRecursionError
-
-        with pytest.raises(GraphRecursionError):
-            graph.invoke(
-                state,
-                config={"configurable": {"thread_id": "e2e-1"}, "recursion_limit": 5},
-            )
+        # Graph runs through first phase then pauses at interrupt
+        result = graph.invoke(
+            state,
+            config={"configurable": {"thread_id": "e2e-1"}},
+        )
+        assert result.get("current_phase") == "intake"
+        assert result.get("human_approval_required") is True
 
     def test_graph_interrupts_at_approval_gate(self) -> None:
         """Verify the graph pauses at human approval gates."""
         graph = build_graph()
         state: dict[str, Any] = {"project_id": "test-interrupt"}
 
-        from langgraph.errors import GraphRecursionError
-
-        # Stream values to see state after intake_node
         events: list[dict[str, Any]] = []
-        try:
-            for event in graph.stream(
-                state,
-                config={"configurable": {"thread_id": "e2e-2"}, "recursion_limit": 3},
-                stream_mode="values",
-            ):
-                events.append(event)
-        except GraphRecursionError:
-            pass
+        for event in graph.stream(
+            state,
+            config={"configurable": {"thread_id": "e2e-2"}},
+            stream_mode="values",
+        ):
+            events.append(event)
 
         assert len(events) > 1
         assert any(event.get("current_phase") == "intake" for event in events)
 
     def test_approval_triggers_phase_transition(self) -> None:
-        """Verify that the graph compiles with approved state."""
+        """Verify the graph compiles and executes with pre-approved state."""
         graph = build_graph()
         state: dict[str, Any] = {
             "project_id": "test-transition",
@@ -77,14 +74,13 @@ class TestGraphExecution:
             "human_approval_required": False,
         }
 
-        from langgraph.errors import GraphRecursionError
-
-        # Graph should still compile and execute
-        with pytest.raises(GraphRecursionError):
-            graph.invoke(
-                state,
-                config={"configurable": {"thread_id": "e2e-3"}, "recursion_limit": 5},
-            )
+        # Graph runs the current phase (intake), which resets approval state,
+        # then pauses at the human gate
+        result = graph.invoke(
+            state,
+            config={"configurable": {"thread_id": "e2e-3"}},
+        )
+        assert result.get("current_phase") == "intake"
 
     def test_all_phases_sequence_state(self) -> None:
         """Verify each phase node sets correct state fields."""
@@ -137,7 +133,7 @@ class TestGraphExecution:
         assert after_repair({}) == "await_approval"
 
     def test_edge_routing_with_blocking_issues(self) -> None:
-        """Blocking issues pause at the human approval gate."""
+        """Blocking issues route to the repair node for automatic retry."""
         result = after_phase(
             {
                 "current_phase": "script",
@@ -146,7 +142,7 @@ class TestGraphExecution:
                 "issues": [{"severity": "blocking", "code": "BAD_SCRIPT"}],
             }
         )
-        assert result == "await_approval"
+        assert result == "repair"
 
     def test_edge_routing_approved_advances(self) -> None:
         """Approved phase without issues advances to next phase."""

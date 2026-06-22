@@ -22,9 +22,7 @@ def build_constitution_context(state: dict[str, Any]) -> str:
     )
 
 
-def build_development_context(
-    state: dict[str, Any], services: Any
-) -> str:
+def build_development_context(state: dict[str, Any], services: Any) -> str:
     """Development phase: constitution summary + target runtime."""
     parts: list[str] = []
     constitution_ref = state.get("constitution_ref", "")
@@ -32,8 +30,7 @@ def build_development_context(
         data = _load_ref(state, services, constitution_ref)
         if data:
             parts.append(
-                f"Constitution theme: {data.get('theme', '')}\n"
-                f"Tone: {data.get('tone', '')}"
+                f"Constitution theme: {data.get('theme', '')}\nTone: {data.get('tone', '')}"
             )
     target = state.get("target_runtime_seconds", 0)
     film_type = str(state.get("film_type", ""))
@@ -41,9 +38,7 @@ def build_development_context(
     return "\n\n".join(parts)
 
 
-def build_script_context(
-    state: dict[str, Any], services: Any
-) -> str:
+def build_script_context(state: dict[str, Any], services: Any) -> str:
     """Script phase: treatment summary + scene list count + constitution style."""
     parts: list[str] = []
     treatment_ref = state.get("treatment_ref", "")
@@ -53,8 +48,7 @@ def build_script_context(
             themes = data.get("themes", [])
             act_map = data.get("act_map", {})
             parts.append(
-                f"Treatment themes: {', '.join(themes)}\n"
-                f"Act structure: {list(act_map.keys())}"
+                f"Treatment themes: {', '.join(themes)}\nAct structure: {list(act_map.keys())}"
             )
     scene_list_ref = state.get("scene_list_ref", "")
     if scene_list_ref:
@@ -65,9 +59,7 @@ def build_script_context(
     return "\n\n".join(parts)
 
 
-def build_visual_dev_context(
-    state: dict[str, Any], services: Any
-) -> str:
+def build_visual_dev_context(state: dict[str, Any], services: Any) -> str:
     """Visual dev phase: script scene count + constitution style."""
     parts: list[str] = []
     constitution_ref = state.get("constitution_ref", "")
@@ -90,9 +82,7 @@ def build_visual_dev_context(
     return "\n\n".join(parts)
 
 
-def build_shot_bible_context(
-    state: dict[str, Any], services: Any
-) -> str:
+def build_shot_bible_context(state: dict[str, Any], services: Any) -> str:
     """Shot bible phase: execution brief summary + script scene list.
 
     Does NOT load the full matrix (it doesn't exist yet in this phase).
@@ -123,9 +113,7 @@ def build_shot_bible_context(
     return "\n\n".join(parts)
 
 
-def build_gen_planning_context(
-    state: dict[str, Any], services: Any
-) -> str:
+def build_gen_planning_context(state: dict[str, Any], services: Any) -> str:
     """Gen planning phase: row count summary + budget + provider policy."""
     parts: list[str] = []
     matrix_ref = state.get("shot_matrix_ref", "")
@@ -147,9 +135,7 @@ def build_gen_planning_context(
     return "\n\n".join(parts)
 
 
-def _load_ref(
-    state: dict[str, Any], services: Any, ref: str
-) -> dict[str, Any] | None:
+def _load_ref(state: dict[str, Any], services: Any, ref: str) -> dict[str, Any] | None:
     """Load an artifact's content by ref string. Returns None on failure."""
     parts = ref.split(":")
     if len(parts) < 3:

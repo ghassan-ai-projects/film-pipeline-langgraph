@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -29,6 +31,32 @@ from film_pipeline.graph.nodes import (
 from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
+
+
+class _ServicesFilteringSerializer(JsonPlusSerializer):
+    """Serializer that replaces non-serializable objects with ``None``.
+
+    ``GraphServices`` (injected as ``_services`` into state) contains
+    runtime dependencies that cannot be msgpack-serialized. This filter
+    silently replaces them so ``MemorySaver.put()`` succeeds.  Nodes
+    reading ``_services`` after a checkpoint-resume cycle will get
+    ``None``; the runtime re-injects fresh services on every invocation.
+    """
+
+    def dumps_typed(self, obj: object) -> tuple[str, bytes]:
+        try:
+            return super().dumps_typed(obj)
+        except (TypeError, ValueError):
+            return (
+                "json",
+                json.dumps({"__non_serializable_type__": type(obj).__qualname__}).encode(),
+            )
+
+    def loads_typed(self, data: tuple[str, bytes]) -> object:
+        result = super().loads_typed(data)
+        if isinstance(result, dict) and "__non_serializable_type__" in result:
+            return None
+        return result
 
 
 def build_graph() -> CompiledStateGraph:
@@ -80,9 +108,17 @@ def build_graph() -> CompiledStateGraph:
 
     # Phase → consistency_check (non-blocking staleness detection)
     for phase_node in [
-        "intake_node", "constitution_node", "development_node", "script_node",
-        "visual_dev_node", "shot_bible_node", "gen_planning_node",
-        "generation_node", "qc_node", "post_node", "delivery_node",
+        "intake_node",
+        "constitution_node",
+        "development_node",
+        "script_node",
+        "visual_dev_node",
+        "shot_bible_node",
+        "gen_planning_node",
+        "generation_node",
+        "qc_node",
+        "post_node",
+        "delivery_node",
     ]:
         builder.add_edge(phase_node, "consistency_check")
 
@@ -116,7 +152,9 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("repair", "await_approval")
     builder.add_edge("end", END)
 
-    return builder.compile(checkpointer=MemorySaver())
+    return builder.compile(
+        checkpointer=MemorySaver(serde=_ServicesFilteringSerializer()),
+    )
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:

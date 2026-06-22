@@ -110,6 +110,7 @@ disallow_untyped_decorators = false
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+exclude = ["scripts/"]
 
 [tool.ruff.format]
 docstring-code-format = true

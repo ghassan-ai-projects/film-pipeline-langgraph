@@ -102,11 +102,30 @@ class PromptRunner:
             output_format=output_format,
         )
 
+    def _find_mock_response(
+        self, core_task: str, *, agent_id: str | None = None
+    ) -> dict[str, Any] | None:
+        """Match a mock response by ``agent_id``, falling back to exact task match.
+
+        Mock responses are keyed by agent_id (e.g. ``"intake-classifier-agent"``)
+        so routing is unambiguous regardless of how task strings are worded.
+        Exact ``core_task`` match is kept as a secondary fallback for backward
+        compatibility.
+        """
+        if not self.mock_responses:
+            return None
+        if agent_id is not None and agent_id in self.mock_responses:
+            return self.mock_responses[agent_id]
+        if core_task in self.mock_responses:
+            return self.mock_responses[core_task]
+        return None
+
     def call_model(
         self,
         prompt: RCTCOPrompt,
         *,
         model_profile: str = "operations_triage",
+        agent_id: str | None = None,
     ) -> dict[str, Any]:
         """Call the model. Uses mock if a canned response is registered.
 
@@ -119,8 +138,9 @@ class PromptRunner:
         3. Retry with fallback model.
         After 3 failures, returns an error dict (never crashes).
         """
-        if prompt.core_task in self.mock_responses:
-            return self.mock_responses[prompt.core_task]
+        mock_response = self._find_mock_response(prompt.core_task, agent_id=agent_id)
+        if mock_response is not None:
+            return mock_response
         if self.model_adapter is None:
             import logging
 
@@ -243,7 +263,7 @@ class PromptRunner:
     ) -> dict[str, Any]:
         """Full run: build RCTCO → call model → parse output."""
         prompt = self.build_rctco(contract, kb_context, task)
-        raw = self.call_model(prompt, model_profile=model_profile)
+        raw = self.call_model(prompt, model_profile=model_profile, agent_id=contract.agent_id)
         # Validate it's a dict (basic)
         if not isinstance(raw, dict):
             raise ValueError(f"Model output is not a dict: {type(raw)}")
@@ -257,6 +277,7 @@ class PromptRunner:
         *,
         model_profile: str = "operations_triage",
         context_vars: dict[str, str] | None = None,
+        agent_id: str | None = None,
     ) -> tuple[dict[str, Any], str, str]:
         """Run using a dedicated prompt template. Returns (output, template_id, model_profile).
 
@@ -276,7 +297,7 @@ class PromptRunner:
         )
         prompt.rendered = rendered_text
 
-        raw = self.call_model(prompt, model_profile=model_profile)
+        raw = self.call_model(prompt, model_profile=model_profile, agent_id=agent_id)
         if not isinstance(raw, dict):
             raise ValueError(f"Model output is not a dict: {type(raw)}")
         return raw, template.template_id, model_profile

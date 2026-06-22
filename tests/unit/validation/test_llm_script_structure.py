@@ -210,7 +210,7 @@ def test_stub_vs_llm_catches_semantic_issues() -> None:
     # Stub path
     validator_stub = ScriptStructureValidator()
     validator_stub.llm_enabled = False
-    stub_result = validator_stub.validate(artifact)
+    validator_stub.validate(artifact)
     # Stub may or may not flag — depends on conflict keyword matching logic
 
     # LLM path (simulated — LLM correctly identifies zero tension)
