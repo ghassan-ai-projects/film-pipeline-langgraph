@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from typing import Any
+
+from pydantic import ValidationError
 
 from film_pipeline.agents.base import BaseAgent
 from film_pipeline.schemas.film_constitution import CharacterTruth, FilmConstitution
+
+_logger = logging.getLogger(__name__)
 
 
 class ConstitutionAgent(BaseAgent):
@@ -35,24 +41,32 @@ class ConstitutionAgent(BaseAgent):
         Handles both flat keys and a nested ``constitution`` wrapper.
         """
         data = model_output.get("constitution", model_output)
-        character_truths = [
-            CharacterTruth(
-                character_id=str(ct.get("character_id", f"char_{i}")),
-                truth=str(ct.get("truth", "")),
+        try:
+            character_truths = [
+                CharacterTruth(
+                    character_id=str(ct.get("character_id", f"char_{i}")),
+                    truth=str(ct.get("truth", "")),
+                )
+                for i, ct in enumerate(data.get("character_truths", []))
+            ]
+            constitution = FilmConstitution(
+                project_id=str(data.get("project_id", "")),
+                theme=str(data.get("theme", "")),
+                tone=str(data.get("tone", "")),
+                emotional_promise=str(data.get("emotional_promise", "")),
+                visual_language=str(data.get("visual_language", "")),
+                camera_philosophy=str(data.get("camera_philosophy", "")),
+                quality_bar=str(data.get("quality_bar", "")),
+                character_truths=character_truths,
+                taboo_mistakes=[str(m) for m in data.get("taboo_mistakes", [])],
             )
-            for i, ct in enumerate(data.get("character_truths", []))
-        ]
-        constitution = FilmConstitution(
-            project_id=str(data.get("project_id", "")),
-            theme=str(data.get("theme", "")),
-            tone=str(data.get("tone", "")),
-            emotional_promise=str(data.get("emotional_promise", "")),
-            visual_language=str(data.get("visual_language", "")),
-            camera_philosophy=str(data.get("camera_philosophy", "")),
-            quality_bar=str(data.get("quality_bar", "")),
-            character_truths=character_truths,
-            taboo_mistakes=[str(m) for m in data.get("taboo_mistakes", [])],
-        )
+        except ValidationError as exc:
+            _logger.error(
+                "ConstitutionAgent: Pydantic validation failed. Errors: %s | Model output: %s",
+                exc.errors(),
+                json.dumps(model_output, indent=2, default=str)[:2000],
+            )
+            raise ValueError(f"ConstitutionAgent produced invalid output: {exc.errors()}") from exc
         return {"constitution": constitution}
 
     def validate(self, result: dict[str, Any]) -> bool:

@@ -10,9 +10,6 @@ import json
 from datetime import UTC, datetime
 from typing import TypeVar
 
-import pytest
-from pydantic import ValidationError
-
 from film_pipeline.schemas import (
     ActMap,
     AgentHandoff,
@@ -909,11 +906,13 @@ def test_schema_version_default() -> None:
     assert identity.schema_version == "v1"
 
 
-def test_schema_base_extra_forbidden() -> None:
-    with pytest.raises(ValidationError):
-        ProjectIdentity.model_validate(
-            {"project_id": "p", "slug": "s", "title": "T", "extra_field": "nope"}
-        )
+def test_schema_base_extra_ignored() -> None:
+    """Extra fields are silently dropped so LLM output with commentary fields works."""
+    result = ProjectIdentity.model_validate(
+        {"project_id": "p", "slug": "s", "title": "T", "extra_field": "nope"}
+    )
+    assert result.project_id == "p"
+    assert not hasattr(result, "extra_field")
 
 
 def test_quality_level_enum() -> None:
