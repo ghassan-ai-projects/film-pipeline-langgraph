@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class TestGraphWithCheckpointer:
     def test_graph_compiles_with_checkpointer(self) -> None:
@@ -171,3 +173,85 @@ def _get_actions(payload: dict[str, object]) -> list[str]:
 
     actions: object = payload.get("allowed_actions", [])
     return cast(list[str], actions) if isinstance(actions, list) else []
+
+
+class TestAutoApprove:
+    """Phase nodes and await_approval_node behavior when require_human_approval is off."""
+
+    def test_require_human_approval_defaults_true(self) -> None:
+        """Missing config → gates stay ON (safe default)."""
+        from film_pipeline.graph.nodes import _require_human_approval
+
+        assert _require_human_approval({}) is True
+        assert _require_human_approval({"resolved_config": {}}) is True
+
+    def test_require_human_approval_reads_config_false(self) -> None:
+        """require_human_approval: false → gates OFF."""
+        from film_pipeline.graph.nodes import _require_human_approval
+
+        state: dict[str, Any] = {
+            "resolved_config": {
+                "studio": {"require_human_approval": False},
+            }
+        }
+        assert _require_human_approval(state) is False
+
+    def test_require_human_approval_reads_config_true(self) -> None:
+        """require_human_approval: true → gates ON."""
+        from film_pipeline.graph.nodes import _require_human_approval
+
+        state: dict[str, Any] = {
+            "resolved_config": {
+                "studio": {"require_human_approval": True},
+            }
+        }
+        assert _require_human_approval(state) is True
+
+    def test_await_approval_passes_through_when_approved(self) -> None:
+        """await_approval_node returns state unchanged when already approved."""
+        from film_pipeline.graph.nodes import await_approval_node
+
+        state: dict[str, Any] = {
+            "approved": True,
+            "current_phase": "script",
+            "human_approval_phase": "script",
+            "project_id": "test",
+            "artifact_refs": [],
+            "issues": [],
+        }
+        result = await_approval_node(state)
+        assert result is state
+        assert result.get("approved") is True
+
+    def test_phase_node_auto_approves_when_config_false(self) -> None:
+        """Phase node sets approved=True when require_human_approval is off."""
+        from film_pipeline.graph.nodes import _require_human_approval, intake_node
+
+        state: dict[str, Any] = {
+            "project_id": "test-auto",
+            "idea": "A test idea.",
+            "resolved_config": {
+                "studio": {"require_human_approval": False},
+            },
+            "artifact_refs": [],
+        }
+        assert _require_human_approval(state) is False
+        updates = intake_node(state)
+        assert updates.get("approved") is True
+        assert updates.get("human_approval_required") is False
+
+    def test_phase_node_requires_approval_when_config_true(self) -> None:
+        """Phase node sets approved=False when require_human_approval is on."""
+        from film_pipeline.graph.nodes import intake_node
+
+        state: dict[str, Any] = {
+            "project_id": "test-manual",
+            "idea": "A test idea.",
+            "resolved_config": {
+                "studio": {"require_human_approval": True},
+            },
+            "artifact_refs": [],
+        }
+        updates = intake_node(state)
+        assert updates.get("approved") is False
+        assert updates.get("human_approval_required") is True

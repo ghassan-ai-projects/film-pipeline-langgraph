@@ -68,6 +68,21 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
+def _require_human_approval(state: dict[str, Any]) -> bool:
+    """Read ``require_human_approval`` from resolved config.
+
+    Defaults to ``True`` (gates ON) when the key is missing or the config
+    is unpopulated — safe-by-default for production. Set to ``False`` in
+    a profile (e.g. ``auto-approve.yaml``) for headless/automated runs.
+    """
+    cfg = state.get("resolved_config", {})
+    if isinstance(cfg, dict):
+        studio = cfg.get("studio", {})
+        if isinstance(studio, dict):
+            return bool(studio.get("require_human_approval", True))
+    return True
+
+
 def _propagate_side_effects(source: dict[str, Any], dest: dict[str, Any]) -> None:
     """Copy known side-effect keys from ``source`` to ``dest``.
 
@@ -527,10 +542,11 @@ def _compact_json_context(data: dict[str, Any], max_chars: int = 6000) -> str:
 def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     """Intake: classify input, infer config, present for approval."""
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "intake",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "config",
     }
     new_refs: list[str] = []
@@ -567,10 +583,11 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "constitution",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "constitution",
     }
     new_refs: list[str] = []
@@ -603,10 +620,11 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def development_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "development",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "treatment",
     }
     new_refs: list[str] = []
@@ -645,10 +663,11 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def script_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "script",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "script",
     }
     new_refs: list[str] = []
@@ -687,10 +706,11 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "visual_dev",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "visual_bible",
     }
     new_refs: list[str] = []
@@ -722,9 +742,10 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
 def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state  # keep reference for diff computation
+    auto = not _require_human_approval(new_state)
     new_state["current_phase"] = "shot_bible"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
+    new_state["approved"] = auto
+    new_state["human_approval_required"] = not auto
     new_state["human_approval_phase"] = "shot_bible"
 
     # ── Pre-step: extract structural metadata if not already present ──────
@@ -786,8 +807,8 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     # Compute partial update from before/after diff
     updates: dict[str, Any] = {
         "current_phase": "shot_bible",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "shot_bible",
     }
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
@@ -807,9 +828,10 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
 def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state
+    auto = not _require_human_approval(new_state)
     new_state["current_phase"] = "gen_planning"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
+    new_state["approved"] = auto
+    new_state["human_approval_required"] = not auto
     new_state["human_approval_phase"] = "generation_spend"
 
     result = _run_agent(
@@ -902,8 +924,8 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     # Compute partial update from before/after diff
     updates: dict[str, Any] = {
         "current_phase": "gen_planning",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "generation_spend",
     }
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
@@ -923,9 +945,10 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
 def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state
+    auto = not _require_human_approval(new_state)
     new_state["current_phase"] = "generation"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
+    new_state["approved"] = auto
+    new_state["human_approval_required"] = not auto
     new_state["human_approval_phase"] = "generation_batch"
 
     # ── Gate C: validate dispatch readiness ──────────────────────────────
@@ -978,8 +1001,8 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     # Compute partial update from before/after diff
     updates: dict[str, Any] = {
         "current_phase": "generation",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "generation_batch",
     }
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
@@ -992,9 +1015,10 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
 def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state
+    auto = not _require_human_approval(new_state)
     new_state["current_phase"] = "qc"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
+    new_state["approved"] = auto
+    new_state["human_approval_required"] = not auto
     new_state["human_approval_phase"] = "qc"
 
     # Run validators against upstream artifacts FIRST
@@ -1046,8 +1070,8 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     # Compute partial update from before/after diff
     updates: dict[str, Any] = {
         "current_phase": "qc",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "qc",
     }
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
@@ -1362,10 +1386,11 @@ def _append_validator_report(
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    auto = not _require_human_approval(new_state)
     updates: dict[str, Any] = {
         "current_phase": "post",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "assembly",
     }
     new_refs: list[str] = []
@@ -1389,11 +1414,12 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
-def delivery_node(_state: dict[str, Any]) -> dict[str, Any]:
+def delivery_node(state: dict[str, Any]) -> dict[str, Any]:
+    auto = not _require_human_approval(state)
     return {
         "current_phase": "delivery",
-        "approved": False,
-        "human_approval_required": True,
+        "approved": auto,
+        "human_approval_required": not auto,
         "human_approval_phase": "final_delivery",
     }
 
@@ -1420,7 +1446,14 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     LangGraph constraint: all code before ``interrupt()`` re-executes on
     resume. The payload is built from state reads only — no mutations —
     so it is naturally idempotent.
+
+    Short-circuits when ``approved`` is already ``True`` — the phase node
+    auto-approved (e.g. headless/auto-approve profile). The downstream
+    ``after_approval`` routing will advance to the next phase.
     """
+    if state.get("approved"):
+        return state
+
     from langgraph.types import interrupt
 
     from film_pipeline.graph.orchestrator_state import is_stalled

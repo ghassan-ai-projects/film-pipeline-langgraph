@@ -34,6 +34,7 @@ Use one of these startup commands:
 ```bash
 make run-mcp-mock
 make run-mcp-real
+make run-mcp-headless   # real mode, tip: include auto-approve profile for headless runs
 ```
 
 Notes:
@@ -42,6 +43,7 @@ Notes:
 - `FILM_PIPELINE_MCP_MODE=real` now drives the runtime construction
 - real mode uses the real prompt-runner path, not canned mock responses
 - the server now speaks stdio MCP directly for `initialize`, `tools/list`, and `tools/call`
+- `run-mcp-headless` is identical to `run-mcp-real` — the headless behavior comes from the `auto-approve` profile at project creation time, not the server
 
 ## Before Starting Real Mode
 
@@ -69,12 +71,81 @@ OpenClaw can now:
 - inspect the orchestrator's decision state with `get_orchestrator_summary` (see Orchestrator Decision Loop below)
 - get structured review packages with orchestrator recommendations via `review_phase_artifacts`
 - see why approvals are blocked with `get_blockers` and `get_next_actions`
+- run fully headless with the `auto-approve` profile (see Headless Mode below)
 
 Real-mode project creation now aligns with the actual server mode:
 
 - real server mode + real project mode: allowed
 - mock server mode + mock project mode: allowed
 - any mismatch: rejected
+
+---
+
+## Headless Mode (Auto-Approve)
+
+For automated/headless runs (e.g., OpenClaw driving the pipeline end-to-end without
+human intervention), layer the `auto-approve` profile on top of your provider stack.
+
+### Profile
+
+`profiles/auto-approve.yaml` — a thin, stackable layer:
+
+```yaml
+studio:
+  require_human_approval: false
+```
+
+This sets `approved=True` and `human_approval_required=False` after every phase
+node completes. The `await_approval_node` short-circuits (skips `interrupt()`),
+and the graph advances through all 10 phases without pausing.
+
+### How to use
+
+Include `auto-approve` in the `approval_profile` or `auto_approve_profile` field
+when creating a project:
+
+```json
+{
+  "project_id": "auto-run-001",
+  "title": "The Field Message",
+  "slug": "the-field-message",
+  "runtime_mode": "real",
+  "provider_profile": "provider.seedance_primary",
+  "quality_profile": "quality.studio",
+  "film_type_profile": "film-type.narrative",
+  "auto_approve_profile": "auto-approve"
+}
+```
+
+The pipeline will run intake → constitution → development → … → delivery without
+any `interrupt()` calls. The graph still passes through `consistency_check` and
+`await_approval` nodes, but approval is pre-granted.
+
+### Verification
+
+After project creation, check `get_runtime_mode`:
+
+```json
+{
+  "ok": true,
+  "aligned": true,
+  "profile_stack": {
+    "...": "...",
+    "auto_approve_profile": "auto-approve"
+  }
+}
+```
+
+When `require_human_approval: false` is active:
+- `compute_actions()` returns `advance_to_<next_phase>` instead of `wait_for_human`
+- `after_phase()` routes directly to the next phase node
+- No `interrupt()` is called — the graph never pauses
+
+### Safety
+
+If the `auto-approve` key is missing or malformed, the helper defaults to `True`
+(gates ON). Removing the profile from the stack restores normal human gates
+without any code changes.
 
 ---
 
@@ -237,6 +308,7 @@ Use actual file stems:
 - `review.strict_continuity`
 - `mock-demo`
 - `local-real-provider`
+- `auto-approve` — headless mode: skip all human approval gates
 
 ## Step 1. Start The Correct Server Mode
 
@@ -244,6 +316,12 @@ For OpenClaw production use:
 
 ```bash
 make run-mcp-real
+```
+
+For fully automated/headless runs (no human approval pauses):
+
+```bash
+make run-mcp-headless
 ```
 
 Do not use `make run-mcp-mock` for real operator work.

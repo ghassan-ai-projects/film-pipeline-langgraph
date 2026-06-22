@@ -68,6 +68,10 @@ run-mcp-mock: ## Start the MCP server in explicit mock mode
 run-mcp-real: ## Start the MCP server in explicit real mode
 	FILM_PIPELINE_MCP_MODE=real $(UV_RUN) python -m film_pipeline.mcp.server
 
+run-mcp-headless: ## Start MCP server in real mode (use auto-approve profile for headless runs)
+	@echo "Tip: When creating projects, include 'auto-approve' in your profile stack to skip human gates."
+	FILM_PIPELINE_MCP_MODE=real $(UV_RUN) python -m film_pipeline.mcp.server
+
 demo-project: ## Create and run a demo project in mock mode
 	$(UV_RUN) python -m film_pipeline.app.smoke
 	@echo "Demo project created and smoke test passed."
