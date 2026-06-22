@@ -282,8 +282,15 @@ def _save_artifact(
     artifact_id: str,
     phase: str,
     artifact_type: str | None = None,
+    *,
+    change_summary: str = "",
+    built_from: dict[str, str] | None = None,
 ) -> str | None:
     """Persist an artifact via ArtifactStore and return its ref string.
+
+    Auto-increments the version so repairs (v2, v3, …) never overwrite the
+    original. Populates ``built_from`` with current upstream artifact refs
+    for dependency tracking.
 
     ``artifact_type`` is an optional ArtifactType enum value. When omitted,
     inferred from the class name via mapping.
@@ -304,22 +311,30 @@ def _save_artifact(
     else:
         atype = _infer_artifact_type(artifact)
 
+    project_id = str(state.get("project_id", ""))
+    version = services.artifact_store.next_version(project_id, phase, artifact_id)
+
     parent_refs = state.get("artifact_refs", [])
     parents = [_parse_ref(r) for r in parent_refs]
+
+    if built_from is None:
+        built_from = _build_dependency_map(state)
 
     meta = ArtifactMetadata(
         artifact_id=artifact_id,
         artifact_type=atype,
-        project_id=str(state.get("project_id", "")),
+        project_id=project_id,
         phase=FilmPhase(phase),
-        version=1,
+        version=version,
         status=ArtifactStatus.CANDIDATE,
         parents=parents,
         created_by="graph_node",
         created_at=datetime.now(UTC),
+        built_from=built_from,
+        change_summary=change_summary,
     )
     services.artifact_store.save(artifact, meta)
-    ref = f"artifact:{artifact_id}:v1"
+    ref = f"artifact:{artifact_id}:v{version}"
 
     # Record candidate ref for orchestrator state
     from film_pipeline.graph.orchestrator_state import ensure_orchestrator_state, set_candidate_ref
@@ -328,6 +343,30 @@ def _save_artifact(
     set_candidate_ref(state, artifact_id, ref)
 
     return ref
+
+
+def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
+    """Build built_from map from current state artifact refs."""
+    ref_keys = [
+        "profile_ref",
+        "constitution_ref",
+        "treatment_ref",
+        "scene_list_ref",
+        "script_ref",
+        "story_bible_ref",
+        "shot_matrix_ref",
+        "visual_refs",
+        "execution_brief_ref",
+        "cost_estimate_ref",
+    ]
+    built_from: dict[str, str] = {}
+    for key in ref_keys:
+        ref = state.get(key)
+        if ref and isinstance(ref, str) and ":" in ref:
+            parts = ref.split(":")
+            if len(parts) >= 3:
+                built_from[parts[1]] = ref
+    return built_from
 
 
 _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
@@ -1178,6 +1217,22 @@ def delivery_node(_state: dict[str, Any]) -> dict[str, Any]:
         "human_approval_required": True,
         "human_approval_phase": "final_delivery",
     }
+
+
+def consistency_check_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Post-phase consistency check: are our outputs still valid?
+
+    Runs staleness detection on all artifacts created in the current phase.
+    Warnings are informational (non-blocking) in Phase 3.
+    """
+    services = _get_services(state)
+    if services is None:
+        return {}
+
+    from film_pipeline.graph.consistency import check_phase_consistency
+
+    warnings = check_phase_consistency(state, services)
+    return {"consistency_warnings": warnings} if warnings else {}
 
 
 def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
