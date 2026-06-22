@@ -1535,11 +1535,19 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
 
     Checks convergence tracking — after 3 repair rounds without resolution,
     marks the phase as stalled and returns to human.
+
+    Builds structured ``RepairFeedback`` (saved as artifact) so agents
+    know exactly which rows to fix/preserve instead of guessing from text.
     """
     from film_pipeline.graph.orchestrator_state import (
         increment_convergence_round,
         is_stalled,
         mark_stalled,
+    )
+    from film_pipeline.schemas.repair import (
+        GlobalRepairIssue,
+        RepairFeedback,
+        RowRepairInstruction,
     )
 
     _init_phase_nodes()
@@ -1563,18 +1571,76 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
         mark_stalled(state, phase, f"Repair failed after {round_num} rounds.")
         return state
 
-    # Inject feedback so the agent knows what to fix
-    blocking = [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
-    if blocking:
-        feedback_parts = []
-        for i in blocking:
-            code = i.get("code", "?")
-            msg = i.get("message", "")
-            feedback_parts.append(f"[{code}] {msg}")
-        state["_repair_feedback"] = (
-            f"REPAIR ROUND {round_num}: Your previous output was REJECTED. "
-            f"Issues to fix:\n" + "\n".join(feedback_parts)
+    # ── Build structured repair feedback ──────────────────────────────
+    issues: list[dict[str, Any]] = state.get("issues", [])
+    blocking = [i for i in issues if i.get("severity") == "blocking"]
+    all_findings = blocking + [i for i in issues if i.get("severity") == "warning"]
+
+    # Separate row-level from global issues
+    row_issues: dict[str, list[dict[str, str]]] = {}
+    global_issues: list[GlobalRepairIssue] = []
+    passed_ids: list[str] = []
+
+    for finding in all_findings:
+        shot_id = str(finding.get("shot_id", finding.get("affected_shot", "")))
+        if shot_id:
+            row_issues.setdefault(shot_id, []).append(
+                {
+                    "code": str(finding.get("code", "?")),
+                    "field": str(finding.get("field", finding.get("affected_field", ""))),
+                    "message": str(finding.get("message", "")),
+                    "recommended_action": str(
+                        finding.get("suggestion", finding.get("recommended_action", ""))
+                    ),
+                }
+            )
+        else:
+            global_issues.append(
+                GlobalRepairIssue(
+                    code=str(finding.get("code", "?")),
+                    message=str(finding.get("message", "")),
+                    recommended_action=str(finding.get("suggestion", "")),
+                )
+            )
+
+    # Build row instructions
+    failed_rows: list[Any] = []
+    for sid, issue_list in row_issues.items():
+        failed_rows.append(
+            RowRepairInstruction(
+                shot_id=sid,
+                issues=issue_list,
+                preserve_other_fields=True,
+            )
         )
+
+    # Determine passed rows from patch history
+    previous_artifact = str(state.get("shot_matrix_ref", ""))
+    feedback = RepairFeedback(
+        repair_id=f"repair:{phase}:r{round_num}",
+        phase=phase,
+        round=round_num,
+        project_id=str(state.get("project_id", "")),
+        failed_rows=failed_rows,
+        passed_row_ids=passed_ids,
+        global_issues=global_issues,
+        previous_artifact_ref=previous_artifact,
+        convergence_round=round_num,
+    )
+
+    # Persist as artifact so the agent can load structured data
+    feedback_ref = _save_artifact(
+        state,
+        feedback,
+        f"repair_feedback_{phase}",
+        phase,
+        artifact_type="script",
+    )
+    if feedback_ref:
+        state["repair_feedback_ref"] = feedback_ref
+
+    # Also inject the rendered context for direct use (backward compat)
+    state["_repair_feedback"] = feedback.to_agent_context()
 
     # Re-run the phase node — gates will re-validate
     return cast(dict[str, Any], phase_fn(state))
