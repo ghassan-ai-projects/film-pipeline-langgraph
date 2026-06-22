@@ -129,6 +129,7 @@ class StudioRuntime:
         try:
             config: dict[str, Any] = {
                 "configurable": {"thread_id": state.get("project_id", "default")},
+                "recursion_limit": 50,  # 10 phases x ~3 steps each + repair headroom
             }
             result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
         finally:
@@ -181,6 +182,11 @@ class StudioRuntime:
             "configurable": {"thread_id": active["project_id"]},
         }
 
+        # Set the services context variable so graph nodes can find
+        # GraphServices even when the TypedDict channel drops _services.
+        import film_pipeline.graph.nodes as _gn
+
+        token = _gn._SERVICES_CTX.set(self.services)
         try:
             state = graph.invoke(
                 Command(resume={"action": "approve"}),
@@ -189,6 +195,8 @@ class StudioRuntime:
         except Exception:
             # No checkpoint exists — advance manually via phase nodes
             state = self._advance_to_next_phase(dict(active))
+        finally:
+            _gn._SERVICES_CTX.reset(token)
         state = cast(dict[str, Any], state)
 
         self.projects[active["project_id"]] = state
