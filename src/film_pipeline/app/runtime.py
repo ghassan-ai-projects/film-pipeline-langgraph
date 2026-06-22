@@ -113,6 +113,8 @@ class StudioRuntime:
         With LangGraph ``interrupt()`` + checkpointer, the graph pauses at
         human gates and resumes via ``graph.invoke(Command(...), config)``.
         No recursion-limit workaround needed.
+
+        Persists graph state to disk for crash recovery (Phase 7+ P0).
         """
         graph = self.ensure_graph()
 
@@ -123,7 +125,35 @@ class StudioRuntime:
             "configurable": {"thread_id": state.get("project_id", "default")},
         }
 
-        return graph.invoke(state, config)  # type: ignore[no-any-return]
+        result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
+        pid = str(result.get("project_id", ""))
+        if pid:
+            self._save_graph_state(dict(result), pid)
+        return result
+
+    def _save_graph_state(self, state: dict[str, Any], project_id: str) -> None:
+        """Persist graph state to disk for crash recovery."""
+        root = self.project_roots.get(project_id)
+        if root is None:
+            return
+        root.mkdir(parents=True, exist_ok=True)
+        state_path = root / ".graph_state.json"
+        safe = {
+            k: v
+            for k, v in state.items()
+            if not k.startswith("_services")
+        }
+        state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
+
+    def _load_graph_state(self, project_id: str) -> dict[str, Any] | None:
+        """Load persisted graph state from disk, if it exists."""
+        root = self.project_roots.get(project_id)
+        if root is None:
+            return None
+        state_path = root / ".graph_state.json"
+        if not state_path.exists():
+            return None
+        return cast(dict[str, Any], json.loads(state_path.read_text()))
 
     def approve_phase(self) -> dict[str, Any]:
         """Approve the current phase and advance.
@@ -155,6 +185,7 @@ class StudioRuntime:
 
         self.projects[active["project_id"]] = state
         self._persist_project_state(active["project_id"])
+        self._save_graph_state(dict(state), active["project_id"])
 
         checkpoint = self.create_checkpoint(
             project_id=active["project_id"],
@@ -197,6 +228,7 @@ class StudioRuntime:
 
         self.projects[active["project_id"]] = state
         self._persist_project_state(active["project_id"])
+        self._save_graph_state(dict(state), active["project_id"])
 
         self._record_audit(
             "human",
