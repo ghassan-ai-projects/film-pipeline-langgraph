@@ -121,11 +121,18 @@ class StudioRuntime:
         state = dict(state)
         state[SERVICES_KEY] = self.services
 
-        config: dict[str, Any] = {
-            "configurable": {"thread_id": state.get("project_id", "default")},
-        }
+        # Set context-var fallback so nodes can find services even when
+        # LangGraph TypedDict channels drop the _services key.
+        import film_pipeline.graph.nodes as _gn
 
-        result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
+        token = _gn._SERVICES_CTX.set(self.services)
+        try:
+            config: dict[str, Any] = {
+                "configurable": {"thread_id": state.get("project_id", "default")},
+            }
+            result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
+        finally:
+            _gn._SERVICES_CTX.reset(token)
         pid = str(result.get("project_id", ""))
         if pid:
             self._save_graph_state(dict(result), pid)
@@ -138,11 +145,7 @@ class StudioRuntime:
             return
         root.mkdir(parents=True, exist_ok=True)
         state_path = root / ".graph_state.json"
-        safe = {
-            k: v
-            for k, v in state.items()
-            if not k.startswith("_services")
-        }
+        safe = {k: v for k, v in state.items() if not k.startswith("_services")}
         state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
 
     def _load_graph_state(self, project_id: str) -> dict[str, Any] | None:
@@ -158,9 +161,10 @@ class StudioRuntime:
     def approve_phase(self) -> dict[str, Any]:
         """Approve the current phase and advance.
 
-        Resumes the graph via ``Command(resume={"action": "approve"})``.
-        The graph handles phase transitions automatically — no manual
-        node invocation needed.
+        Resumes the graph via ``Command(resume={"action": "approve"})``
+        when a checkpoint exists. Falls back to manual phase advance
+        when no graph checkpoint has been created (e.g. after direct
+        ``_run_phase_node`` calls).
         """
         from langgraph.types import Command
 
@@ -177,10 +181,14 @@ class StudioRuntime:
             "configurable": {"thread_id": active["project_id"]},
         }
 
-        state = graph.invoke(
-            Command(resume={"action": "approve"}),
-            config,
-        )
+        try:
+            state = graph.invoke(
+                Command(resume={"action": "approve"}),
+                config,
+            )
+        except Exception:
+            # No checkpoint exists — advance manually via phase nodes
+            state = self._advance_to_next_phase(dict(active))
         state = cast(dict[str, Any], state)
 
         self.projects[active["project_id"]] = state
@@ -410,7 +418,27 @@ class StudioRuntime:
         # Inject graph services so nodes can invoke agents and persist artifacts
         state = dict(state)
         state[SERVICES_KEY] = self.services
-        return node(state)
+        node_result = node(state)
+        # Merge node result back into state (graph would do this via reducers,
+        # but direct node calls bypass the graph's state accumulation)
+        merged = dict(state)
+        merged.update(node_result)
+        # Append-only channels: merge lists manually (graph uses Annotated[list, add])
+        for key in (
+            "artifact_refs",
+            "issues",
+            "validation_report_refs",
+            "generation_requests",
+            "_routing_decisions",
+            "_validation_reports",
+        ):
+            prev = state.get(key, [])
+            new = node_result.get(key, [])
+            if new:
+                merged[key] = list(prev) + list(new)
+        # Strip runtime-only keys that must not leak into persisted state
+        merged.pop(SERVICES_KEY, None)
+        return merged
 
 
 def create_runtime(server_mode: str | None = None) -> StudioRuntime:

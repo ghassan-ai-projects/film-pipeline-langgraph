@@ -17,20 +17,26 @@ from film_pipeline.graph.state_schema import StudioGraphState
 
 # ── Worker nodes ───────────────────────────────────────────────────────
 
+
 def script_structure(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("script-structure", "ScriptStructureValidator", state)
+
 
 def dialogue_voice(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("dialogue-voice", "DialogueVoiceValidator", state)
 
+
 def reference_usability(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("reference-usability", "ReferenceUsabilityValidator", state)
+
 
 def prompt_readiness(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("prompt-readiness", "PromptReadinessValidator", state)
 
+
 def scene_continuity(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("scene-continuity", "SceneContinuityValidator", state)
+
 
 def assembly(state: StudioGraphState) -> dict[str, object]:
     return _run_validator("assembly", "AssemblyValidator", state)
@@ -50,7 +56,9 @@ def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
     """Run a single validator in parallel and return its report."""
-    srv: Any = state.get("_services")
+    from film_pipeline.graph.nodes import _get_services
+
+    srv: Any = _get_services(dict(state))
     if srv is None:
         return {
             "_qc_reports": [{"validator_id": validator_id, "status": "skipped"}],
@@ -121,14 +129,16 @@ def _resolve_validator_instance(srv: Any, validator_id: str) -> Any:
         return None
 
     instance = vcls()
-    if hasattr(instance, "set_services") and hasattr(srv, "model_adapter"):
-        from contextlib import suppress
+    if hasattr(instance, "set_services") and hasattr(srv, "prompt_runner"):
+        pr = srv.prompt_runner
+        if hasattr(pr, "model_adapter"):
+            from contextlib import suppress
 
-        with suppress(Exception):
-            instance.set_services(
-                adapter=srv.model_adapter,
-                router=srv.model_router,
-            )
+            with suppress(Exception):
+                instance.set_services(
+                    adapter=pr.model_adapter,
+                    router=pr.model_router if hasattr(pr, "model_router") else None,
+                )
     return instance
 
 
@@ -136,7 +146,9 @@ def _load_artifact_for_validator(state: StudioGraphState) -> dict[str, Any] | No
     """Load the first available artifact from state refs."""
     from copy import deepcopy
 
-    srv: Any = state.get("_services")
+    from film_pipeline.graph.nodes import _get_services
+
+    srv: Any = _get_services(dict(state))
     if srv is None:
         return None
 
@@ -165,6 +177,7 @@ def _load_artifact_for_validator(state: StudioGraphState) -> dict[str, Any] | No
 
 # ── Fan-out router ─────────────────────────────────────────────────────
 
+
 def fan_out_validators(state: StudioGraphState) -> list[Send]:
     """Create one Send per validator for parallel execution."""
     return [
@@ -179,6 +192,7 @@ def fan_out_validators(state: StudioGraphState) -> list[Send]:
 
 # ── Reduce node ────────────────────────────────────────────────────────
 
+
 def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     """Collect parallel validator reports into state."""
     raw_raw = state.get("_qc_raw_reports", [])
@@ -192,6 +206,7 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
 
 
 # ── Subgraph factory ───────────────────────────────────────────────────
+
 
 def build_qc_subgraph() -> CompiledStateGraph:
     """Build the QC subgraph with parallel validator fan-out via Send."""

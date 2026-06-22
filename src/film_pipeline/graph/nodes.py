@@ -6,6 +6,7 @@ and persist artifacts. Remaining phases are flag-only pending fan-out.
 
 from __future__ import annotations
 
+import contextvars
 import json
 from copy import deepcopy
 from typing import Any, cast
@@ -14,9 +15,22 @@ from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 
+_SERVICES_CTX: contextvars.ContextVar[GraphServices | None] = contextvars.ContextVar(
+    "_film_pipeline_services", default=None
+)
+
 
 def _get_services(state: dict[str, Any]) -> GraphServices | None:
-    return state.get(SERVICES_KEY)
+    """Return ``GraphServices`` from state, falling back to context variable.
+
+    When running through a LangGraph ``StateGraph`` channel system,
+    extra state keys not declared in the TypedDict may be dropped.
+    The context variable provides a reliable fallback.
+    """
+    svc = state.get(SERVICES_KEY)
+    if svc is not None:
+        return svc  # type: ignore[no-any-return]
+    return _SERVICES_CTX.get()
 
 
 def _get_template_registry() -> Any:
@@ -52,6 +66,19 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
     "orchestrator-agent": "operations_triage",
     "kb-curator-agent": "operations_triage",
 }
+
+
+def _propagate_side_effects(source: dict[str, Any], dest: dict[str, Any]) -> None:
+    """Copy known side-effect keys from ``source`` to ``dest``.
+
+    ``_run_agent`` mutates ``source`` (the node's ``new_state``) via
+    ``_record_handoff``, but nodes return only an ``updates`` dict.
+    This helper ensures routing decisions and other side effects
+    survive the node boundary.
+    """
+    for key in ("_routing_decisions", "issues", "validation_report_refs", "_validation_reports"):
+        if key in source:
+            dest[key] = source[key]
 
 
 def _run_agent(
@@ -221,6 +248,7 @@ def _run_agent(
             task,
             context_vars=context_vars,
             model_profile=resolved_profile,
+            agent_id=resolved_agent_id,
         )
     else:
         # Non-critical agent: generic RCTCO assembly (not in critical path)
@@ -243,6 +271,11 @@ def _run_agent(
         template_id=template_id,
         model_profile=resolved_profile,
     )
+
+    # Propagate side-effect state mutations so callers can merge them
+    routing = state.get("_routing_decisions")
+    if routing:
+        result["_routing_decisions"] = list(routing)
 
     return result
 
@@ -525,6 +558,7 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -560,6 +594,7 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -601,6 +636,7 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -642,6 +678,7 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -678,6 +715,7 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -762,6 +800,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -877,6 +916,7 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -945,6 +985,7 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -1019,6 +1060,7 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -1140,8 +1182,8 @@ def _run_script_validators(
         try:
             instance = vcls()
             instance.set_services(
-                adapter=services.model_adapter,
-                router=services.model_router,
+                adapter=getattr(services.prompt_runner, "model_adapter", None),
+                router=getattr(services.prompt_runner, "model_router", None),
                 template_registry=_get_template_registry(),
             )
             report = instance.run(artifact)
@@ -1164,8 +1206,8 @@ def _run_reference_validators(
     try:
         instance = ReferenceUsabilityValidator()
         instance.set_services(
-            adapter=services.model_adapter,
-            router=services.model_router,
+            adapter=getattr(services.prompt_runner, "model_adapter", None),
+            router=getattr(services.prompt_runner, "model_router", None),
         )
         report = instance.run(artifact)
     except Exception:
@@ -1187,8 +1229,8 @@ def _run_prompt_validators(
     try:
         instance = PromptReadinessValidator()
         instance.set_services(
-            adapter=services.model_adapter,
-            router=services.model_router,
+            adapter=getattr(services.prompt_runner, "model_adapter", None),
+            router=getattr(services.prompt_runner, "model_router", None),
         )
         report = instance.run(artifact)
     except Exception:
@@ -1210,8 +1252,8 @@ def _run_continuity_validators(
     try:
         instance = SceneContinuityValidator()
         instance.set_services(
-            adapter=services.model_adapter,
-            router=services.model_router,
+            adapter=getattr(services.prompt_runner, "model_adapter", None),
+            router=getattr(services.prompt_runner, "model_router", None),
         )
         report = instance.run(artifact)
     except Exception:
@@ -1233,8 +1275,8 @@ def _run_assembly_validators(
     try:
         instance = AssemblyValidator()
         instance.set_services(
-            adapter=services.model_adapter,
-            router=services.model_router,
+            adapter=getattr(services.prompt_runner, "model_adapter", None),
+            router=getattr(services.prompt_runner, "model_router", None),
         )
         report = instance.run(artifact)
     except Exception:
@@ -1258,8 +1300,8 @@ def _run_delivery_validators(
     try:
         instance = DeliveryCompletenessValidator()
         instance.set_services(
-            adapter=services.model_adapter,
-            router=services.model_router,
+            adapter=getattr(services.prompt_runner, "model_adapter", None),
+            router=getattr(services.prompt_runner, "model_router", None),
         )
         report = instance.run(artifact)
     except Exception:
@@ -1343,6 +1385,7 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
+    _propagate_side_effects(new_state, updates)
     return updates
 
 
@@ -1495,9 +1538,7 @@ def _is_new_issue(issue: dict[str, Any], original_state: dict[str, Any]) -> bool
     if not iid:
         return False
     orig_ids = {
-        i.get("issue_id")
-        for i in (original_state.get("issues", []) or [])
-        if i.get("issue_id")
+        i.get("issue_id") for i in (original_state.get("issues", []) or []) if i.get("issue_id")
     }
     return iid not in orig_ids
 

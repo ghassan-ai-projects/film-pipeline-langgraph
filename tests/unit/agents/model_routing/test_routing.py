@@ -90,9 +90,7 @@ class TestModelRouter:
     def test_all_profiles_have_required_keys(self) -> None:
         router = ModelRouter()
         for name in router.list_profiles():
-            model_id, max_tokens, temperature, top_p, freq_pen = router.resolve_model_params(
-                name
-            )
+            model_id, max_tokens, temperature, top_p, freq_pen = router.resolve_model_params(name)
             assert isinstance(model_id, str) and model_id
             assert max_tokens > 0
             assert 0.0 <= temperature <= 1.0

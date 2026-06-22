@@ -102,13 +102,13 @@ class GraphServices:
 
 
 def _default_mock_responses() -> dict[str, dict[str, Any]]:
-    """Canned mock responses for critical-path agents.
+    """Canned mock responses keyed by agent_id.
 
-    These produce schema-shaped outputs so agents can parse real
-    artifacts from mock model calls. Used in mock-mode execution.
+    Each key is an agent_id (e.g. ``"intake-classifier-agent"``) so mock
+    dispatch is unambiguous regardless of how task strings are worded.
     """
     return {
-        "Classify the user's film idea and produce a project profile.": {
+        "intake-classifier-agent": {
             "intake": {
                 "identity": {
                     "project_id": "demo",
@@ -122,7 +122,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 "classified_input": "A demo film project.",
             }
         },
-        "Create the film's creative constitution from the project idea.": {
+        "film-constitution-agent": {
             "constitution": {
                 "project_id": "demo",
                 "theme": "Hope against despair in a fractured world.",
@@ -144,7 +144,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 ],
             }
         },
-        "Write the film treatment and scene breakdown from the constitution.": {
+        "treatment-agent": {
             "treatment": {
                 "text": "A lone survivor navigates a post-calamity world, discovering that the real threat is not the environment but the remnants of human ambition.",
                 "themes": ["survival", "trust", "redemption"],
@@ -171,7 +171,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 },
             ],
         },
-        "Write the full screenplay from the treatment and scene intents.": {
+        "screenwriter-agent": {
             "story_bible": {
                 "project_id": "demo",
                 "logline": "A year after the collapse, one woman's discovery could rebuild civilization or destroy what's left of it.",
@@ -244,7 +244,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 "total_dialogue_lines": 2,
             },
         },
-        "Create visual development references from the script and constitution.": {
+        "reference-strategy-planner": {
             "visual_dev": {
                 "project_id": "demo",
                 "reference_entries": [
@@ -271,7 +271,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 ],
             }
         },
-        "Create the detailed shot matrix from the script and visual references.": {
+        "shot-design-agent": {
             "shot_matrix": {
                 "project_id": "demo",
                 "rows": [
@@ -319,7 +319,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 ],
             }
         },
-        "Create the generation plan from the shot matrix and budget constraints.": {
+        "provider-planning-agent": {
             "generation_plan": {
                 "cost_estimate": {
                     "project_id": "demo",
@@ -349,7 +349,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 ],
             }
         },
-        "Synthesize validator reports into a unified QC report.": {
+        "clip-validator": {
             "consensus": {
                 "review_id": "qc-001",
                 "artifact_refs": ["film_constitution", "script", "shot_matrix"],
@@ -377,7 +377,7 @@ def _default_mock_responses() -> dict[str, dict[str, Any]]:
                 "orchestrator_recommendation": "Proceed to assembly. All critical checks passed.",
             }
         },
-        "Create the assembly manifest from generated media and the shot matrix.": {
+        "failure-handling-agent": {
             "assembly": {
                 "cut_id": "review-cut-v1",
                 "project_id": "demo",
