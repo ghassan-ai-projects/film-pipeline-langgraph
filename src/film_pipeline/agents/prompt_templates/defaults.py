@@ -143,9 +143,9 @@ def _structure_extractor() -> PromptTemplate:
 
 def _intake_classifier() -> PromptTemplate:
     return PromptTemplate(
-        template_id="intake-classifier-v1",
+        template_id="intake-classifier-v2",
         agent_id="intake-classifier-agent",
-        version=1,
+        version=2,
         role="You are the intake-classifier-agent (Intake Classifier). "
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
@@ -159,10 +159,15 @@ def _intake_classifier() -> PromptTemplate:
         constraints=(
             "Genre classification must be specific (not just 'sci-fi' but "
             "'grounded sci-fi drama' or 'cyberpunk noir thriller'). "
-            "Runtime must be realistic for the story scope — estimate actual seconds, "
-            "and never use 1 second unless the user explicitly asked for a 1-second film. "
-            "For a normal short film idea, target_runtime_seconds "
-            "should usually be between 60 and 1800. "
+            "Runtime sizing by story scope — use these concrete ranges:\n"
+            "  - Quick single-moment/single-location idea → 60-120s\n"
+            "  - Simple story with 1-2 characters, 1 location → 120-240s\n"
+            "  - Developed narrative with arc, multiple locations → 240-600s\n"
+            "  - Complex story with subplots, multiple characters → 600-1200s\n"
+            "  - Epic or multi-act journey → 1200-1800s\n"
+            "Estimate actual seconds, never use 1 second unless explicitly asked. "
+            "If the idea describes a journey through multiple locations with "
+            "character development, default to 300-600s, not 180s. "
             "Aspect ratio must fit the story's visual intent "
             "(e.g., 2.35:1 for epic, 1.85:1 for intimate). "
             "You must provide at least one concrete genre tag. "
