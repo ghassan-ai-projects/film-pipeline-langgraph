@@ -315,9 +315,9 @@ def _development_creator() -> PromptTemplate:
 
 def _screenwriter() -> PromptTemplate:
     return PromptTemplate(
-        template_id="screenwriter-v1",
+        template_id="screenwriter-v2",
         agent_id="screenwriter-agent",
-        version=1,
+        version=2,
         role="You are the screenwriter-agent (Screenwriter). "
         "Your role is to write the full screenplay from the treatment.",
         core_task=(
@@ -346,7 +346,8 @@ def _screenwriter() -> PromptTemplate:
             "{\n"
             '  "story_bible": {\n'
             '    "project_id": "...",\n'
-            '    "logline": "One sentence that hooks the audience.",\n'
+            '    "logline": {"text": "One sentence that hooks the audience.",'
+            ' "hook": "Optional second-sentence hook."},\n'
             '    "premise": {"text": "...", "dramatic_question": "..."},\n'
             '    "treatment_text": "Multi-paragraph treatment prose.",\n'
             '    "themes": ["theme1", "theme2"],\n'

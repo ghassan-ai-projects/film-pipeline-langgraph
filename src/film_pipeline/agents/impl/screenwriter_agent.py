@@ -55,12 +55,15 @@ class ScreenwriterAgent(BaseAgent):
         try:
             # --- StoryBible ---
             bible_data = data.get("story_bible", data)
-            logline_text = str(bible_data.get("logline", bible_data.get("logline_text", "")))
+            raw_logline = bible_data.get("logline", "")
+            if isinstance(raw_logline, dict):
+                logline_text = str(raw_logline.get("text", ""))
+                logline_hook = str(raw_logline.get("hook", ""))
+            else:
+                logline_text = str(raw_logline)
+                logline_hook = str(bible_data.get("hook", ""))
             try:
-                logline = Logline(
-                    text=logline_text,
-                    hook=str(bible_data.get("hook", "")),
-                )
+                logline = Logline(text=logline_text, hook=logline_hook)
             except Exception:
                 logline = Logline(text=logline_text or "Untitled film project.")
             premise_data = bible_data.get("premise", {})
@@ -86,6 +89,10 @@ class ScreenwriterAgent(BaseAgent):
                 act_map=act_map,
             )
             raw_scenes = bible_data.get("scene_list", bible_data.get("scenes", []))
+            # Unwrap if LLM produced {"scenes": [...]} (matching the template's
+            # SceneList object shape) instead of a bare list
+            if isinstance(raw_scenes, dict):
+                raw_scenes = raw_scenes.get("scenes", [])
             from film_pipeline.schemas.story_bible import SceneIntent as SI
 
             scene_intents = [
