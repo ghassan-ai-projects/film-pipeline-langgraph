@@ -1,4 +1,10 @@
-"""Base validator — standard lifecycle: prepare → validate → score → report."""
+"""Base validator — standard lifecycle: prepare → validate → score → report.
+
+Subclasses implement ``_validate_rules()`` for rule-based checks.
+When ``llm_enabled=True`` and services are injected, ``validate()``
+dispatches to ``_validate_llm()`` which uses the shared LLM infrastructure
+(ModelRouter, PromptTemplateRegistry, ModelAdapter).
+"""
 
 from __future__ import annotations
 
@@ -6,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.schemas._base import ValidationStatus
+from film_pipeline.schemas._base import ValidationModality, ValidationStatus
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
 )
@@ -15,27 +21,218 @@ from film_pipeline.validation.thresholds import score_to_status
 
 
 class BaseValidator(ABC):
-    """Standard validator lifecycle contract.
+    """Standard validator lifecycle.
 
-    Every validator implements:
-    - validate(artifact, context) → raw result dict
-    - score(raw) → float
-    - report(artifact_refs, score, issues) → ValidationReport
+    Subclasses implement ``_validate_rules()`` for rule-based checks.
+    When ``llm_enabled=True`` and services are injected, ``validate()``
+    dispatches to ``_validate_llm()``.
     """
 
     entry: ValidatorRegistryEntry
+    llm_enabled: bool = False
 
     def __init__(self, entry: ValidatorRegistryEntry) -> None:
         self.entry = entry
+        self._adapter: Any = None
+        self._router: Any = None
+        self._template_registry: Any = None
+        self._prompt_runner: Any = None
 
-    @abstractmethod
+    # ── Service injection ──────────────────────────────────────────
+
+    def set_services(
+        self,
+        *,
+        adapter: Any = None,
+        router: Any = None,
+        template_registry: Any = None,
+        prompt_runner: Any = None,
+    ) -> None:
+        """Inject runtime services for LLM validation.
+
+        Args:
+            adapter: ModelAdapter instance (required for LLM calls).
+            router: ModelRouter instance (required for model resolution).
+            template_registry: PromptTemplateRegistry (required for prompt loading).
+            prompt_runner: PromptRunner instance (optional, for RCTCO assembly).
+        """
+        if adapter is not None:
+            self._adapter = adapter
+        if router is not None:
+            self._router = router
+        if template_registry is not None:
+            self._template_registry = template_registry
+        if prompt_runner is not None:
+            self._prompt_runner = prompt_runner
+
+    def _has_llm_services(self) -> bool:
+        return (
+            self._adapter is not None
+            and self._router is not None
+            and self._template_registry is not None
+        )
+
+    # ── Public API ──────────────────────────────────────────────────
+
     def validate(
         self,
         artifact: dict[str, Any],
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Run the validation and return structured findings."""
+        """Run validation, dispatching to LLM or rules."""
+        if self.llm_enabled and self._has_llm_services():
+            try:
+                return self._validate_llm(artifact, context)
+            except Exception:
+                import logging
+
+                logging.warning(
+                    "Validator '%s': LLM validation failed, falling back to rule-based check.",
+                    self.entry.validator_id,
+                )
+        return self._validate_rules(artifact, context)
+
+    @abstractmethod
+    def _validate_rules(
+        self,
+        artifact: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Rule-based validation (existing logic, renamed from validate)."""
         ...
+
+    # ── LLM validation lifecycle ────────────────────────────────────
+
+    def _validate_llm(
+        self,
+        artifact: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Shared LLM validation: prompt → model → parse."""
+        # 1. Load template
+        template = self._template_registry.get(agent_id=self.entry.validator_id)
+        if template is None:
+            raise RuntimeError(
+                f"No prompt template found for validator '{self.entry.validator_id}'"
+            )
+
+        # 2. Resolve model
+        profile = self.entry.model_profile
+        if not profile:
+            raise RuntimeError(f"Validator '{self.entry.validator_id}' has no model_profile set.")
+        model = self._router.resolve_or_raise(profile)
+
+        # 3. Build prompt
+        ctx = (context or {}) | {"artifact": artifact}
+        prompt = self._build_validation_prompt(template, ctx)
+
+        # 4. Call LLM
+        is_multimodal = self._needs_multimodal()
+        images = self._extract_images(artifact) if is_multimodal else None
+
+        if is_multimodal and images:
+            text = self._adapter.chat_multimodal(
+                prompt,
+                model=model,
+                images_b64=images,
+                max_tokens=4096,
+                temperature=0.2,
+            )
+        else:
+            text = self._adapter.chat(
+                prompt,
+                model=model,
+                system=template.role,
+                max_tokens=4096,
+                temperature=0.2,
+            )
+
+        # 5. Parse response
+        return self._parse_validation_response(text)
+
+    def _build_validation_prompt(
+        self,
+        template: Any,
+        context: dict[str, Any],
+    ) -> str:
+        """Build the full validation prompt from template + context."""
+        if self._prompt_runner is not None:
+            return str(self._prompt_runner.build(template=template, context=context))
+        # Fallback: assemble full prompt from template parts
+        parts = []
+        if template.core_task:
+            parts.append(template.core_task)
+        if template.context_template:
+            parts.append(template.context_template.format_map(_SafeDict(context)))
+        if template.constraints:
+            parts.append(template.constraints)
+        if template.output_format:
+            parts.append(f"Respond ONLY with valid JSON in this format:\n{template.output_format}")
+        return "\n\n".join(parts)
+
+    def _needs_multimodal(self) -> bool:
+        """Check if this validator needs multimodal (image+text) input."""
+        return (
+            ValidationModality.IMAGE in self.entry.modalities
+            or ValidationModality.VIDEO in self.entry.modalities
+        )
+
+    def _extract_images(self, artifact: dict[str, Any]) -> list[str]:
+        """Extract base64-encoded images from the artifact.
+
+        Override in subclasses for artifact-specific extraction.
+        """
+        for key in ("images", "frames", "asset_data", "clips"):
+            value = artifact.get(key)
+            if isinstance(value, list) and value:
+                images: list[str] = []
+                for item in value:
+                    if isinstance(item, str):
+                        images.append(item)
+                    elif isinstance(item, dict):
+                        b64 = item.get("data") or item.get("b64") or item.get("image_b64")
+                        if b64:
+                            images.append(str(b64))
+                if images:
+                    return images
+        return []
+
+    def _parse_validation_response(self, text: str) -> dict[str, Any]:
+        """Parse LLM response into the expected raw dict format."""
+        import json
+
+        text = text.strip()
+        try:
+            return dict(json.loads(text))
+        except json.JSONDecodeError:
+            pass
+
+        for fence in ("```json", "```JSON", "```"):
+            if fence in text:
+                idx = text.rfind(fence)
+                block = text[idx + len(fence) :]
+                close = block.find("```")
+                if close != -1:
+                    block = block[:close]
+                try:
+                    return dict(json.loads(block.strip()))
+                except json.JSONDecodeError:
+                    pass
+
+        brace_start = text.find("{")
+        brace_end = text.rfind("}")
+        if brace_start != -1 and brace_end > brace_start:
+            try:
+                return dict(json.loads(text[brace_start : brace_end + 1]))
+            except json.JSONDecodeError:
+                pass
+
+        raise ValueError(
+            f"Validator '{self.entry.validator_id}' LLM response is not valid JSON. "
+            f"Preview: {text[:300]}"
+        )
+
+    # ── Abstract methods (unchanged) ────────────────────────────────
 
     @abstractmethod
     def extract_score(self, raw: dict[str, Any]) -> float:
@@ -46,6 +243,8 @@ class BaseValidator(ABC):
     def extract_issues(self, raw: dict[str, Any]) -> list[ValidationIssue]:
         """Extract issues (blocking + warnings) from raw output."""
         ...
+
+    # ── Full lifecycle ──────────────────────────────────────────────
 
     def run(
         self,
@@ -79,6 +278,13 @@ class BaseValidator(ABC):
                 ValidationStatus.BLOCKED,
             ),
         )
+
+
+class _SafeDict(dict[str, str]):
+    """Dict that returns the missing key as the value for missing keys."""
+
+    def __missing__(self, key: str) -> str:
+        return f"{{{key}}}"
 
 
 def _recommended_actions(

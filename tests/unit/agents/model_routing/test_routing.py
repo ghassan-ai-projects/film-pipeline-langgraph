@@ -11,29 +11,29 @@ class TestModelRouter:
     def test_select_creative_writer(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer")
-        assert model == "google/gemini-3-flash-preview"
+        assert model == "deepseek/deepseek-chat"
 
     def test_select_strict_validator(self) -> None:
         router = ModelRouter()
         model = router.select("strict_validator")
-        assert model == "google/gemini-3-flash-preview"
+        assert model == "deepseek/deepseek-chat"
 
     def test_select_prefer_cheap(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer", prefer_cheap=True)
-        assert model == "deepseek/deepseek-v4-flash"  # fallback
+        assert model == "google/gemini-3-flash-preview"  # fallback
 
     def test_fallback(self) -> None:
         router = ModelRouter()
         model = router.fallback("creative_writer")
-        assert model in ("deepseek/deepseek-v4-flash", "google/gemini-3-flash-preview")
+        assert model in ("deepseek/deepseek-chat", "google/gemini-3-flash-preview")
 
     def test_cost_ranked(self) -> None:
         router = ModelRouter()
         ranked = router.cost_ranked("creative_writer")
         assert len(ranked) == 2
         assert "google/gemini-3-flash-preview" in ranked
-        assert "deepseek/deepseek-v4-flash" in ranked
+        assert "deepseek/deepseek-chat" in ranked
 
     def test_cost_ranked_single(self) -> None:
         router = ModelRouter()
@@ -45,7 +45,7 @@ class TestModelRouter:
         profiles = router.list_profiles()
         assert "creative_writer" in profiles
         assert "strict_validator" in profiles
-        assert len(profiles) == 6
+        assert len(profiles) == 8  # 6 agent + 2 validator profiles
 
     def test_unknown_profile_raises(self) -> None:
         router = ModelRouter()
@@ -60,12 +60,12 @@ class TestModelRouter:
     def test_resolve_or_raise_success(self) -> None:
         router = ModelRouter()
         model = router.resolve_or_raise("creative_writer")
-        assert model == "google/gemini-3-flash-preview"
+        assert model == "deepseek/deepseek-chat"
 
     def test_resolve_model_params(self) -> None:
         router = ModelRouter()
         model_id, max_tokens, temperature = router.resolve_model_params("strict_validator")
-        assert model_id == "google/gemini-3-flash-preview"
+        assert model_id == "deepseek/deepseek-chat"
         assert max_tokens == 4096
         assert temperature == 0.1
 

@@ -57,6 +57,11 @@ _PROVIDER_HEALTH_SNAPSHOT = f"{_ORCH_NS}__provider_health_snapshot"
 # Shape: dict with keys: cap_usd, spent_usd, remaining_usd, blocking_threshold_exceeded
 _BUDGET_SNAPSHOT = f"{_ORCH_NS}__budget_snapshot"
 
+# Execution brief: the orchestrator's structural contract for the film.
+# Populated by StructureExtractorAgent after script phase. Used by Gate A/B/C
+# validators to enforce shot-count, runtime, and field invariants.
+_EXECUTION_BRIEF = f"{_ORCH_NS}__execution_brief"
+
 
 # --- Candidate vs approved refs ----------------------------------------------
 
@@ -370,6 +375,38 @@ def get_budget_snapshot(state: dict[str, Any]) -> dict[str, Any]:
 def is_budget_blocked(state: dict[str, Any]) -> bool:
     """Return True if the budget threshold has been exceeded."""
     return cast(bool, get_budget_snapshot(state).get("threshold_exceeded", False))
+
+
+# --- Execution brief ---------------------------------------------------------
+
+
+def set_execution_brief(state: dict[str, Any], brief: Any) -> None:
+    """Cache the ExecutionBrief in orchestrator state.
+
+    The brief is stored as a dict for serialisation compatibility with the
+    graph state. Callers can pass either an ``ExecutionBrief`` instance or a
+    dict with the same shape.
+    """
+    if hasattr(brief, "model_dump"):
+        state[_EXECUTION_BRIEF] = brief.model_dump(mode="json")
+    elif isinstance(brief, dict):
+        state[_EXECUTION_BRIEF] = dict(brief)
+    else:
+        state[_EXECUTION_BRIEF] = brief
+
+
+def get_execution_brief(state: dict[str, Any]) -> Any | None:
+    """Return the cached ExecutionBrief from orchestrator state.
+
+    Returns the raw cached dict/object. Callers should validate the shape
+    before use. Returns ``None`` if no brief has been set.
+    """
+    return state.get(_EXECUTION_BRIEF)
+
+
+def has_execution_brief(state: dict[str, Any]) -> bool:
+    """Return True if an ExecutionBrief exists in orchestrator state."""
+    return _EXECUTION_BRIEF in state
 
 
 # --- Initialization ----------------------------------------------------------

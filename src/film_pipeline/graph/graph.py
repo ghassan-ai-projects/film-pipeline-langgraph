@@ -18,6 +18,7 @@ from film_pipeline.graph.nodes import (
     intake_node,
     post_node,
     qc_node,
+    repair_phase_node,
     request_revision_node,
     script_node,
     shot_bible_node,
@@ -49,7 +50,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("await_approval", _passthrough)
     builder.add_node("approve_phase", approve_phase_node)
     builder.add_node("request_revision", request_revision_node)
-    builder.add_node("repair", _passthrough)
+    builder.add_node("repair", repair_phase_node)
     builder.add_node("end", _passthrough)
 
     # Entry

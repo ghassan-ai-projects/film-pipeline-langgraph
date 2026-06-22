@@ -142,13 +142,30 @@ class StudioRuntime:
             return latest
 
     def approve_phase(self) -> dict[str, Any]:
-        """Approve the current phase and advance."""
+        """Approve the current phase and advance.
+
+        Raises ValueError if blocking issues exist in the current phase.
+        Blocking issues must be resolved (via request_revision + re-run)
+        before the phase can be approved.
+        """
         active = self.get_active()
         if not active:
             raise ValueError("No active project.")
         current_phase = str(active.get("current_phase", ""))
         if not current_phase:
             raise ValueError("No active phase to approve.")
+
+        # ── Guard: reject approval when structural issues exist ──────────
+        issues: list[dict[str, object]] = active.get("issues", [])
+        blocking = [i for i in issues if i.get("severity") == "blocking"]
+        if blocking:
+            codes = ", ".join(str(i.get("code", "?")) for i in blocking)
+            raise ValueError(
+                f"Cannot approve phase '{current_phase}': "
+                f"{len(blocking)} blocking issue(s) must be resolved first. "
+                f"Codes: {codes}"
+            )
+
         approved_state = self._approve_current_phase(active)
         checkpoint = self.create_checkpoint(
             project_id=active["project_id"],
