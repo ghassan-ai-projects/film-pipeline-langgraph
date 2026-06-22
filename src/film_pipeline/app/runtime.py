@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from film_pipeline.checkpoints.git_backend import GitBackend
@@ -105,103 +105,106 @@ class StudioRuntime:
         return self.graph
 
     def run_graph(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Run the graph with the given state, streaming results.
+        """Run the graph with the given state.
 
         Injects ``GraphServices`` into state before invocation so nodes can
         access agents, artifact store, and validators.
+
+        With LangGraph ``interrupt()`` + checkpointer, the graph pauses at
+        human gates and resumes via ``graph.invoke(Command(...), config)``.
+        No recursion-limit workaround needed.
         """
         graph = self.ensure_graph()
-        from langgraph.errors import GraphRecursionError
 
-        # Inject graph services so nodes can invoke agents and persist artifacts
         state = dict(state)
         state[SERVICES_KEY] = self.services
 
-        try:
-            return graph.invoke(  # type: ignore[no-any-return]
-                state,
-                config={
-                    "recursion_limit": 50,
-                    "configurable": {"thread_id": state.get("project_id", "default")},
-                },
-            )
-        except GraphRecursionError:
-            latest: dict[str, Any] = dict(state)
-            try:
-                for event in graph.stream(
-                    state,
-                    config={
-                        "recursion_limit": 50,
-                        "configurable": {"thread_id": state.get("project_id", "default")},
-                    },
-                    stream_mode="values",
-                ):
-                    latest = dict(event)
-            except GraphRecursionError:
-                pass
-            return latest
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": state.get("project_id", "default")},
+        }
+
+        return graph.invoke(state, config)  # type: ignore[no-any-return]
 
     def approve_phase(self) -> dict[str, Any]:
         """Approve the current phase and advance.
 
-        Raises ValueError if blocking issues exist in the current phase.
-        Blocking issues must be resolved (via request_revision + re-run)
-        before the phase can be approved.
+        Resumes the graph via ``Command(resume={"action": "approve"})``.
+        The graph handles phase transitions automatically — no manual
+        node invocation needed.
         """
+        from langgraph.types import Command
+
         active = self.get_active()
         if not active:
             raise ValueError("No active project.")
+
         current_phase = str(active.get("current_phase", ""))
         if not current_phase:
             raise ValueError("No active phase to approve.")
 
-        # ── Guard: reject approval when structural issues exist ──────────
-        issues: list[dict[str, object]] = active.get("issues", [])
-        blocking = [i for i in issues if i.get("severity") == "blocking"]
-        if blocking:
-            codes = ", ".join(str(i.get("code", "?")) for i in blocking)
-            raise ValueError(
-                f"Cannot approve phase '{current_phase}': "
-                f"{len(blocking)} blocking issue(s) must be resolved first. "
-                f"Codes: {codes}"
-            )
+        graph = self.ensure_graph()
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": active["project_id"]},
+        }
 
-        approved_state = self._approve_current_phase(active)
+        state = graph.invoke(
+            Command(resume={"action": "approve"}),
+            config,
+        )
+        state = cast(dict[str, Any], state)
+
+        self.projects[active["project_id"]] = state
+        self._persist_project_state(active["project_id"])
+
         checkpoint = self.create_checkpoint(
             project_id=active["project_id"],
-            phase=current_phase,
-            reason=f"Approved {current_phase}",
+            phase=str(state.get("current_phase", "")),
+            reason=f"Approved at {current_phase}",
         )
-        result = self._advance_to_next_phase(approved_state)
+
         self._record_audit(
             "human",
             "approve_phase",
             project_id=active["project_id"],
             phase=current_phase,
-            next_phase=str(result.get("current_phase", "")),
+            next_phase=str(state.get("current_phase", "")),
             checkpoint_id=checkpoint.checkpoint_id,
         )
-        return result
+        return state
 
     def request_revision(self, note: str = "") -> dict[str, Any]:
-        """Request revision of the current phase."""
+        """Request revision of the current phase.
+
+        Resumes the graph via ``Command(resume={"action": "revise"})``.
+        The graph routes to repair automatically.
+        """
+        from langgraph.types import Command
+
         active = self.get_active()
         if not active:
             raise ValueError("No active project.")
-        from film_pipeline.graph.nodes import request_revision_node
 
-        result = request_revision_node(active)
-        if note:
-            result["issues"][-1]["note"] = note
-        self.projects[active["project_id"]] = result
+        graph = self.ensure_graph()
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": active["project_id"]},
+        }
+
+        state = graph.invoke(
+            Command(resume={"action": "revise", "note": note}),
+            config,
+        )
+        state = cast(dict[str, Any], state)
+
+        self.projects[active["project_id"]] = state
         self._persist_project_state(active["project_id"])
+
         self._record_audit(
             "human",
             "request_revision",
             project_id=active["project_id"],
             note=note,
         )
-        return result
+        return state
 
     # --- Checkpoints ---
 

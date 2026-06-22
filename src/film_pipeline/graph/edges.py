@@ -52,7 +52,8 @@ def after_phase(state: dict[str, Any]) -> str:
 def after_approval(state: dict[str, Any]) -> str:
     """Route after the human approval gate.
 
-    If approved, advance to the next phase. If issues exist, route to repair.
+    If approved, advance to the next phase. If stalled, stay at the gate
+    (prevents infinite repair loop). If issues exist, route to repair.
     Otherwise, stay at the approval gate.
     """
     if state.get("approved"):
@@ -71,6 +72,13 @@ def after_approval(state: dict[str, Any]) -> str:
             "delivery": "end",
         }
         return next_map.get(phase, "end")
+
+    # Prevent infinite repair loop when stalled
+    from film_pipeline.graph.orchestrator_state import is_stalled
+
+    if is_stalled(state, str(state.get("current_phase", ""))):
+        return "await_approval"
+
     if state.get("issues"):
         return "repair"
     return "await_approval"
