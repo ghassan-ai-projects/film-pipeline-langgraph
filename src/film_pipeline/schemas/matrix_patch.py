@@ -66,7 +66,9 @@ class MatrixPatch(SchemaBase):
                 update.old_values[key] = row.get(key)
             for key in update.append:
                 existing_val: object = row.get(key, [])
-                update.old_values[key] = list(existing_val) if isinstance(existing_val, list) else []
+                update.old_values[key] = (
+                    list(existing_val) if isinstance(existing_val, list) else []
+                )
 
             # Apply set
             row.update(update.set)
