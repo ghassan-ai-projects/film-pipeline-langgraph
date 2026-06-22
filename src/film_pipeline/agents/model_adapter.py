@@ -54,6 +54,8 @@ class ModelAdapter:
         model: str,
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        top_p: float = 0.95,
+        frequency_penalty: float = 0.0,
     ) -> dict[str, Any]:
         """Post a chat-completion request to OpenRouter and return parsed JSON.
 
@@ -66,6 +68,8 @@ class ModelAdapter:
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
+            "top_p": top_p,
+            "frequency_penalty": frequency_penalty,
         }
         data = json.dumps(body).encode()
         req = urllib.request.Request(
@@ -97,6 +101,8 @@ class ModelAdapter:
         system: str = "",
         max_tokens: int = 4096,
         temperature: float = 0.7,
+        top_p: float = 0.95,
+        frequency_penalty: float = 0.0,
     ) -> str:
         """Send a prompt and return the model's text response.
 
@@ -112,6 +118,8 @@ class ModelAdapter:
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
+            top_p=top_p,
+            frequency_penalty=frequency_penalty,
         )
         choices: list[dict[str, Any]] = response.get("choices", [])
         if not choices:
@@ -230,6 +238,8 @@ class ModelAdapter:
         system: str = "",
         max_tokens: int = 4096,
         temperature: float = 0.3,
+        top_p: float = 0.95,
+        frequency_penalty: float = 0.0,
     ) -> dict[str, Any]:
         """Send a prompt, expect a JSON response, parse and return it.
 
@@ -244,6 +254,8 @@ class ModelAdapter:
             system=system,
             max_tokens=max_tokens,
             temperature=temperature,
+            top_p=top_p,
+            frequency_penalty=frequency_penalty,
         ).strip()
 
         # Strategy 1: Direct JSON parse

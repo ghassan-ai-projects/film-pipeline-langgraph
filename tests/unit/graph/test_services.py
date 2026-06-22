@@ -157,8 +157,10 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
             system: str = "",
             max_tokens: int = 4096,
             temperature: float = 0.7,
+            top_p: float = 0.95,
+            frequency_penalty: float = 0.0,
         ) -> dict[str, Any]:
-            _ = (model, system, max_tokens, temperature)
+            _ = (model, system, max_tokens, temperature, top_p, frequency_penalty)
             self.prompt = prompt
             return {
                 "development": {

@@ -17,6 +17,8 @@ _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
         "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 8192,
         "temperature": 0.7,
+        "top_p": 0.95,
+        "frequency_penalty": 0.3,
     },
     "strict_validator": {
         "primary": "deepseek/deepseek-chat",
@@ -124,12 +126,17 @@ class ModelRouter:
     def list_profiles(self) -> list[str]:
         return list(self.profiles.keys())
 
-    def resolve_model_params(self, profile_name: str) -> tuple[str, int, float]:
-        """Resolve full model params: (model_id, max_tokens, temperature)."""
+    def resolve_model_params(self, profile_name: str) -> tuple[str, int, float, float, float]:
+        """Resolve full model params.
+
+        Returns (model_id, max_tokens, temperature, top_p, frequency_penalty).
+        """
         profile = self.profiles.get(profile_name)
         if profile is None:
             raise ModelResolutionError(f"Model profile '{profile_name}' is not defined.")
         model_id = str(profile["primary"])
         max_tokens = int(str(profile.get("max_tokens", 4096)))
         temperature = float(str(profile.get("temperature", 0.7)))
-        return model_id, max_tokens, temperature
+        top_p = float(str(profile.get("top_p", 0.95)))
+        frequency_penalty = float(str(profile.get("frequency_penalty", 0.0)))
+        return model_id, max_tokens, temperature, top_p, frequency_penalty

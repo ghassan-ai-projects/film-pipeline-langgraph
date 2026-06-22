@@ -64,10 +64,14 @@ class TestModelRouter:
 
     def test_resolve_model_params(self) -> None:
         router = ModelRouter()
-        model_id, max_tokens, temperature = router.resolve_model_params("strict_validator")
+        model_id, max_tokens, temperature, top_p, freq_pen = router.resolve_model_params(
+            "strict_validator"
+        )
         assert model_id == "deepseek/deepseek-chat"
         assert max_tokens == 4096
         assert temperature == 0.1
+        assert top_p == 0.95
+        assert freq_pen == 0.0
 
     def test_custom_profiles(self) -> None:
         router = ModelRouter(
@@ -86,7 +90,11 @@ class TestModelRouter:
     def test_all_profiles_have_required_keys(self) -> None:
         router = ModelRouter()
         for name in router.list_profiles():
-            model_id, max_tokens, temperature = router.resolve_model_params(name)
+            model_id, max_tokens, temperature, top_p, freq_pen = router.resolve_model_params(
+                name
+            )
             assert isinstance(model_id, str) and model_id
             assert max_tokens > 0
             assert 0.0 <= temperature <= 1.0
+            assert 0.0 <= top_p <= 1.0
+            assert -2.0 <= freq_pen <= 2.0
