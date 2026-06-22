@@ -20,8 +20,38 @@ make ci-check   # format + lint + test (90% coverage) + build + product-gate
 
 ## Current Status
 
-The repository is now centered on a clips-first workflow with a state-driven
-orchestrator:
+The repository implements an 8-phase architecture optimization across the full
+pipeline. All phases are committed and passing CI:
+
+| Phase | Feature | Status |
+|-------|---------|--------|
+| 0 | Agent profile routing, quality instructions, model retry wrapper | ✅ |
+| 1 | Real human gates via `interrupt()` + `MemorySaver` checkpointer | ✅ |
+| 2 | Typed state contract (`StudioGraphState`) + partial-update nodes | ✅ |
+| 3 | Auto-increment artifact versions + `built_from` dependency tracking | ✅ |
+| 4 | Living Master Film Matrix via versioned downstream patches | ✅ |
+| 5 | Structured repair feedback (`RepairFeedback` schema) | ✅ |
+| 6 | Per-phase scoped context packets | ✅ |
+| 7 | QC subgraph with `Send` API parallel validator fan-out | ✅ |
+| 8 | Advanced sampling (`top_p` + `frequency_penalty`) | ✅ |
+
+Key architectural changes from the baseline:
+- Human gates use real LangGraph `interrupt()` — no more `GraphRecursionError`
+  workaround. `approve_phase` / `request_revision` resume the graph via
+  `Command(resume=…)`.
+- `StateGraph(dict)` replaced with `StateGraph(StudioGraphState)` — typed
+  state with append-only reducers for `artifact_refs`, `issues`, and
+  `validation_report_refs`.
+- All phase nodes return partial updates; deep-copy eliminated.
+- `_save_artifact()` auto-increments versions — repair never overwrites.
+- Downstream phases emit `MatrixPatch` artifacts updating individual matrix
+  rows — the matrix is now living, not a frozen artifact.
+- QC validators run in parallel via LangGraph `Send` API fan-out.
+- Agent prompts receive only phase-relevant context (not all 8 artifacts).
+- Creative agents use `frequency_penalty=0.3` to reduce repetition.
+- Graph state persists to `.graph_state.json` for crash recovery.
+- Fix stall infinite loop in `after_approval()` — stalled phases offer
+  "escalate" action instead of looping repair → approval.
 
 - critical-path agents execute through dedicated prompt templates
 - runtime approvals create checkpoints and audit events

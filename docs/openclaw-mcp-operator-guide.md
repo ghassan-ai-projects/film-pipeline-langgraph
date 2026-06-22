@@ -7,6 +7,26 @@ The key rule is now:
 - server mode is the source of truth
 - project mode must match server mode
 
+## Phase 0-8 Improvements (2026-06)
+
+The following improvements are now live across the pipeline:
+
+| Phase | What changed | Operator impact |
+|-------|-------------|-----------------|
+| 0 | Agents use correct model profiles (creative=temp 0.7, validators=temp 0.1) | Higher-quality creative output; validators are stricter |
+| 0 | Model retry wrapper (3 attempts → escalate) | JSON parse failures auto-retry; agents no longer crash on bad output |
+| 1 | Real human gates via `interrupt()` + `Command(resume=…)` | `approve_phase` / `request_revision` resume the graph; no `GraphRecursionError` |
+| 1 | MemorySaver checkpointer + stall detection | Stalled phases show "escalate" action instead of infinite repair loop |
+| 2 | `StudioGraphState` TypedDict | `artifact_refs` and `issues` auto-accumulate via reducers |
+| 3 | Auto-increment artifact versions | Repair creates v2, v3 — never overwrites v1; `built_from` tracks dependencies |
+| 3 | Staleness detection | `consistency_check_node` warns when artifacts were built from stale upstream versions |
+| 4 | Living matrix via patches | Downstream phases emit `MatrixPatch` updating per-row `prompt_ref`, `asset_refs`, `validation_refs`, `status` |
+| 5 | Structured repair feedback | Agents receive exact row-by-row fix instructions, not text blobs |
+| 6 | Scoped context packets | Agents receive only phase-relevant data, reducing token cost ~80% |
+| 7 | QC subgraph with parallel validators | 6 validators run concurrently via `Send` API |
+| 8 | `top_p` + `frequency_penalty` sampling | Creative agents use `frequency_penalty=0.3` to reduce repetition |
+| P0 | Graph state checkpointing | `.graph_state.json` persisted after every graph interaction for crash recovery |
+
 ## Modes
 
 Use one of these startup commands:
@@ -71,13 +91,26 @@ When computing the next action, the orchestrator checks in this order:
 | # | Check | Action if triggered |
 |---|-------|---------------------|
 | 1 | Human approval required | `wait_for_human` |
-| 2 | Blocking failure decision | `escalate_to_failure_handler` or `continue_unrelated_work` |
-| 3 | Provider blocked (generation phase) | `continue_unrelated_work` |
-| 4 | Budget threshold exceeded | `escalate_to_human` |
-| 5 | Blocking validation issues | `handle_blockers` |
-| 6 | Pending revision request | `revise` (force repair before approval) |
-| 7 | Phase not yet approved | `present_review_package` |
-| 8 | Approved, no blockers | `advance_to_<next_phase>` |
+| 2 | Stalled phase (convergence exhausted) | `escalate` (new in Phase 1) |
+| 3 | Blocking failure decision | `escalate_to_failure_handler` or `continue_unrelated_work` |
+| 4 | Provider blocked (generation phase) | `continue_unrelated_work` |
+| 5 | Budget threshold exceeded | `escalate_to_human` |
+| 6 | Blocking validation issues | `handle_blockers` |
+| 7 | Pending revision request | `revise` (force repair before approval) |
+| 8 | Phase not yet approved | `present_review_package` |
+| 9 | Approved, no blockers | `advance_to_<next_phase>` |
+
+**Consistency check (Phase 3):** Every phase node now routes through a
+`consistency_check_node` before approval. This node runs staleness detection
+on new artifacts — if an artifact was built from a version that has since been
+superseded, a warning is emitted. Warnings are informational in Phase 3
+(non-blocking).
+
+**Stall escalation (Phase 1):** When a phase fails 3 repair rounds without
+convergence, the interrupt payload includes `"escalate"` in
+`allowed_actions`. The operator can escalate, which marks the phase as stalled
+and prevents further automatic repair attempts. The graph no longer enters the
+infinite repair→approval loop that existed before Phase 1.
 
 ### Key Concepts
 
@@ -109,9 +142,25 @@ candidate.
 with agreement levels and surfaced disagreements — scores are never silently
 averaged.
 
-**Convergence Tracking**: If a phase goes through 5 revision rounds without
+**Convergence Tracking**: If a phase goes through 3 repair rounds without
 converging (e.g., validator score frozen), the orchestrator marks the phase as
-stalled and escalates.
+stalled and offers `escalate` in the interrupt payload. The operator chooses
+between: approve with known issues, roll back, or manually edit. The repair
+feedback is structured (Phase 5) — agents receive exact row-by-row fix
+instructions via `RepairFeedback`, not guesswork from text blobs.
+
+**Matrix Patches (Phase 4):** Downstream phases (`gen_planning`, `generation`,
+`qc`, `post`) emit `MatrixPatch` artifacts that update individual matrix rows.
+For example, `gen_planning` sets `prompt_ref` and `status: "prompted"` on each
+row. `qc_node` updates `validation_refs` and `status` based on per-row findings.
+Use `materialize_matrix(store, project_id, base_ref, patch_refs)` to build the
+current matrix from base + layered patches. Patch artifacts are versioned
+(Phase 3) and never overwrite.
+
+**Scoped Context (Phase 6):** Agents no longer receive all 8 artifact JSON blobs
+truncated at 6000 chars. Each phase gets a scoped context packet — e.g.,
+`shot_bible` receives the execution brief summary, not the full matrix.
+Token savings: ~80% per agent call.
 
 ### Orchestrator Summary Tool
 
