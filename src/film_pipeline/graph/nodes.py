@@ -189,6 +189,17 @@ def _run_agent(
         _inject_artifact_context(state, services, context_vars)
         _inject_config_context(state, context_vars)
 
+        # Build scoped context packet for this phase (Phase 6 — replaces
+        # loading all artifacts when the phase has a dedicated builder)
+        from film_pipeline.graph.context_packets import PHASE_BUILDERS
+
+        builder = PHASE_BUILDERS.get(phase)
+        if builder is not None:
+            from contextlib import suppress
+
+            with suppress(Exception):
+                context_vars["scoped_context"] = builder(state, services)
+
         # Inject validator issues for QC synthesis
         issues_list: list[dict[str, Any]] = state.get("issues", [])
         if issues_list:
