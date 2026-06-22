@@ -8,10 +8,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from film_pipeline.graph.edges import after_approval, after_phase
+from film_pipeline.graph.edges import after_approval
 from film_pipeline.graph.nodes import (
     approve_phase_node,
     await_approval_node,
+    consistency_check_node,
     constitution_node,
     delivery_node,
     development_node,
@@ -50,6 +51,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("delivery_node", delivery_node)
 
     # Human gate nodes
+    builder.add_node("consistency_check", consistency_check_node)
     builder.add_node("await_approval", await_approval_node)
     builder.add_node("approve_phase", approve_phase_node)
     builder.add_node("request_revision", request_revision_node)
@@ -76,32 +78,16 @@ def build_graph() -> CompiledStateGraph:
         },
     )
 
-    # Phase → await_approval or next phase
-    builder.add_conditional_edges("intake_node", after_phase, {"await_approval": "await_approval"})
-    builder.add_conditional_edges(
-        "constitution_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges(
-        "development_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges("script_node", after_phase, {"await_approval": "await_approval"})
-    builder.add_conditional_edges(
-        "visual_dev_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges(
-        "shot_bible_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges(
-        "gen_planning_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges(
-        "generation_node", after_phase, {"await_approval": "await_approval"}
-    )
-    builder.add_conditional_edges("qc_node", after_phase, {"await_approval": "await_approval"})
-    builder.add_conditional_edges("post_node", after_phase, {"await_approval": "await_approval"})
-    builder.add_conditional_edges(
-        "delivery_node", after_phase, {"await_approval": "await_approval"}
-    )
+    # Phase → consistency_check (non-blocking staleness detection)
+    for phase_node in [
+        "intake_node", "constitution_node", "development_node", "script_node",
+        "visual_dev_node", "shot_bible_node", "gen_planning_node",
+        "generation_node", "qc_node", "post_node", "delivery_node",
+    ]:
+        builder.add_edge(phase_node, "consistency_check")
+
+    # Consistency → await_approval (always passes through)
+    builder.add_edge("consistency_check", "await_approval")
 
     # Approval gate → next phase or repair
     builder.add_conditional_edges(

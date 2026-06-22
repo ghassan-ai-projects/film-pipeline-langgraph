@@ -99,6 +99,42 @@ class ArtifactStore:
             results.append(read_metadata(meta_path))
         return results
 
+    def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
+        """Determine the next version number for an artifact.
+
+        Scans existing artifact files in the phase directory and returns
+        max(version) + 1, or 1 if no prior versions exist.
+        """
+        # Use version 1 as placeholder to get the parent directory
+        phase_dir = self._artifact_path(project_id, phase, artifact_id, 1).parent
+        if not phase_dir.exists():
+            return 1
+
+        safe_id = artifact_id.replace(":", "_").replace("/", "_")
+        existing = list(phase_dir.glob(f"{safe_id}.v*.json"))
+        if not existing:
+            return 1
+
+        versions: list[int] = []
+        for p in existing:
+            stem = p.stem  # e.g. "shot_matrix.v3"
+            if ".v" in stem:
+                try:
+                    v = int(stem.split(".v")[-1])
+                    versions.append(v)
+                except ValueError:
+                    continue
+
+        return max(versions) + 1 if versions else 1
+
+    def load_metadata(
+        self, project_id: str, phase: str, artifact_id: str, version: int
+    ) -> ArtifactMetadata:
+        """Load only the metadata sidecar, not the full artifact body."""
+        content_path = self._artifact_path(project_id, phase, artifact_id, version)
+        meta_path = _meta_sidecar(content_path)
+        return read_metadata(meta_path)
+
 
 def _meta_sidecar(content_path: Path) -> Path:
     return content_path.with_suffix(content_path.suffix + ".meta.json")

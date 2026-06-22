@@ -33,6 +33,14 @@ class ArtifactMetadata(SchemaBase):
     kb_context_ref: str | None = None
     created_at: datetime
     schema_version: str = "v1"
+    built_from: dict[str, str] = Field(
+        default_factory=dict,
+        description="Map of artifact_id → version_ref at creation time.",
+    )
+    change_summary: str = Field(
+        default="",
+        description="What changed in this version (set on repair/revision).",
+    )
 
 
 class ArtifactVersion(SchemaBase):
