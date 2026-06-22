@@ -256,14 +256,14 @@ class SchemaBase(BaseModel):
     layer can detect and migrate older versions safely.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(frozen=True, extra="ignore", populate_by_name=True)
     schema_version: str = Field(default="v1", description="Schema version identifier.")
 
 
 class MutableSchemaBase(BaseModel):
     """Schema base for objects that mutate during a run (e.g. budgets)."""
 
-    model_config = ConfigDict(frozen=False, extra="forbid", populate_by_name=True)
+    model_config = ConfigDict(frozen=False, extra="ignore", populate_by_name=True)
     schema_version: str = Field(default="v1", description="Schema version identifier.")
 
 

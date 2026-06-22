@@ -226,22 +226,36 @@ async def handle_jsonrpc(server: MCPServer, request: dict[str, Any]) -> dict[str
 
 
 def main() -> int:
-    """Run a minimal stdio MCP server."""
+    """Run a minimal stdio MCP server.
+
+    Bootstrap validation logs warnings to stderr but never prevents the
+    server from starting — individual tool calls will fail with actionable
+    errors if their required resources are missing.
+    """
     from film_pipeline.app.bootstrap import validate_environment
 
     issues = validate_environment()
     if issues:
+        print("[film-pipeline-mcp] Bootstrap warnings:", file=sys.stderr)
         for issue in issues:
-            print(issue, file=sys.stderr)
-        return 1
+            print(f"  - {issue}", file=sys.stderr)
+        print(
+            "[film-pipeline-mcp] Server starting anyway — "
+            "tools that require missing resources will return errors.",
+            file=sys.stderr,
+        )
 
     server = MCPServer()
     stdin = sys.stdin.buffer
     stdout = sys.stdout.buffer
 
+    print("[film-pipeline-mcp] Server ready, waiting for JSON-RPC on stdin.", file=sys.stderr)
+    sys.stderr.flush()
+
     while True:
         message = _read_message(stdin)
         if message is None:
+            print("[film-pipeline-mcp] stdin closed, exiting.", file=sys.stderr)
             return 0
         response = asyncio.run(handle_jsonrpc(server, message))
         if response is not None:

@@ -990,6 +990,11 @@ def test_list_providers_real_mode_has_no_mock_fallback() -> None:
 
 
 def test_server_stdio_real_mode_requires_bootstrap() -> None:
+    """Server warns about missing API key but still starts in real mode.
+
+    Bootstrap validation is advisory — the server enters the read loop
+    and tool calls that require the API key will fail individually.
+    """
     env = dict(os.environ)
     env["FILM_PIPELINE_MCP_MODE"] = "real"
     env.pop("OPENROUTER_API_KEY", None)
@@ -1000,8 +1005,10 @@ def test_server_stdio_real_mode_requires_bootstrap() -> None:
         env=env,
         check=False,
     )
-    assert proc.returncode == 1
-    assert "OPENROUTER_API_KEY" in proc.stderr.decode("utf-8")
+    stderr_text = proc.stderr.decode("utf-8")
+    assert proc.returncode == 0, f"Server should start (exit 0 on EOF), got {proc.returncode}"
+    assert "OPENROUTER_API_KEY" in stderr_text, "Should warn about missing API key"
+    assert "Server ready" in stderr_text, "Should enter read loop despite bootstrap warnings"
 
 
 def _frame_message(payload: dict[str, object]) -> bytes:
