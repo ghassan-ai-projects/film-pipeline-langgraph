@@ -1,0 +1,15 @@
+# Auto-Approve Profile — disables human approval gates for headless runs.
+# Stack this on top of any provider/quality profile stack for automated
+# end-to-end pipeline execution (e.g., OpenClaw, CI, batch processing).
+#
+# Example stack:
+#   base.studio → film-type.narrative → provider.seedance_primary → auto-approve
+
+profile:
+  id: auto-approve
+  name: "Auto-Approve (Headless)"
+  version: "1.0"
+  description: "Disables human approval gates for automated/headless runs."
+
+studio:
+  require_human_approval: false
