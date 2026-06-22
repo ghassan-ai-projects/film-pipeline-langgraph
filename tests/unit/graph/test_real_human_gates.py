@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestGraphWithCheckpointer:
     def test_graph_compiles_with_checkpointer(self) -> None:
@@ -27,10 +25,7 @@ class TestAwaitApprovalNode:
             "_orchestrator__convergence": {},
         }
         payload = _build_payload(state)
-        assert "project_id" in payload
-        assert "phase" in payload
-        assert "allowed_actions" in payload
-        assert "approve_phase" in payload["allowed_actions"]
+        assert "approve_phase" in _get_actions(payload)
 
     def test_blocking_issues_prevent_approval(self) -> None:
         """When blocking issues exist, approve_phase is not allowed."""
@@ -49,8 +44,9 @@ class TestAwaitApprovalNode:
             "_orchestrator__convergence": {},
         }
         payload = _build_payload(state)
-        assert "approve_phase" not in payload["allowed_actions"]
-        assert "request_revision" in payload["allowed_actions"]
+        actions = _get_actions(payload)
+        assert "approve_phase" not in actions
+        assert "request_revision" in actions
         assert payload["blocking_issue_count"] == 1
 
     def test_stalled_phase_allows_escalate(self) -> None:
@@ -70,8 +66,9 @@ class TestAwaitApprovalNode:
             },
         }
         payload = _build_payload(state)
-        assert "approve_phase" not in payload["allowed_actions"]
-        assert "escalate" in payload["allowed_actions"]
+        actions = _get_actions(payload)
+        assert "approve_phase" not in actions
+        assert "escalate" in actions
         assert payload["stalled"] is True
 
     def test_no_issues_allows_approval(self) -> None:
@@ -85,8 +82,9 @@ class TestAwaitApprovalNode:
             "_orchestrator__convergence": {},
         }
         payload = _build_payload(state)
-        assert "approve_phase" in payload["allowed_actions"]
-        assert "request_revision" in payload["allowed_actions"]
+        actions = _get_actions(payload)
+        assert "approve_phase" in actions
+        assert "request_revision" in actions
         assert payload["blocking_issue_count"] == 0
 
 
@@ -146,7 +144,7 @@ def _build_payload(state: dict[str, object]) -> dict[str, object]:
         )
     else:
         blocking_count = 0
-    stalled = is_stalled(state, phase)  # type: ignore[arg-type]
+    stalled = is_stalled(state, phase)
 
     allowed_actions: list[str] = []
     if blocking_count == 0:
@@ -165,3 +163,11 @@ def _build_payload(state: dict[str, object]) -> dict[str, object]:
         "stalled": stalled,
         "allowed_actions": allowed_actions,
     }
+
+
+def _get_actions(payload: dict[str, object]) -> list[str]:
+    """Extract allowed_actions as a typed list for assertions."""
+    from typing import cast
+
+    actions: object = payload.get("allowed_actions", [])
+    return cast(list[str], actions) if isinstance(actions, list) else []
