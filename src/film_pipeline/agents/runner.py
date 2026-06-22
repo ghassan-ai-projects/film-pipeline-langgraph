@@ -140,7 +140,9 @@ class PromptRunner:
         import logging
 
         _logger = logging.getLogger(__name__)
-        model_id, max_tokens, temperature = self.model_router.resolve_model_params(model_profile)
+        model_id, max_tokens, temperature, top_p, frequency_penalty = (
+            self.model_router.resolve_model_params(model_profile)
+        )
 
         # --- Attempt 1: normal call ---
         try:
@@ -150,6 +152,8 @@ class PromptRunner:
                 system=prompt.role,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                top_p=top_p,
+                frequency_penalty=frequency_penalty,
             )
         except ValueError:
             pass
@@ -173,6 +177,8 @@ class PromptRunner:
                 system=prompt.role,
                 max_tokens=max_tokens,
                 temperature=0.1,
+                top_p=top_p,
+                frequency_penalty=frequency_penalty,
             )
         except ValueError:
             pass
@@ -207,6 +213,8 @@ class PromptRunner:
                 system=prompt.role,
                 max_tokens=max_tokens,
                 temperature=0.1,
+                top_p=top_p,
+                frequency_penalty=frequency_penalty,
             )
         except ValueError:
             _logger.error(
