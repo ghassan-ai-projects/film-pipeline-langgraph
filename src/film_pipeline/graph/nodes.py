@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
@@ -17,6 +17,41 @@ from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 
 def _get_services(state: dict[str, Any]) -> GraphServices | None:
     return state.get(SERVICES_KEY)
+
+
+def _get_template_registry() -> Any:
+    """Return the session-scoped prompt template registry."""
+    from film_pipeline.agents.prompt_templates.registry import get_registry
+
+    return get_registry()
+
+
+_AGENT_PROFILE_MAP: dict[str, str] = {
+    # Creative agents → creative profiles (temperature 0.7, 8192 tokens)
+    "film-constitution-agent": "creative_writer",
+    "treatment-agent": "creative_writer",
+    "screenwriter-agent": "creative_writer",
+    "shot-design-agent": "creative_writer",
+    "reference-strategy-planner": "visual_reasoner",
+    "visual-dev-agent": "visual_reasoner",
+    "character-dossier-agent": "creative_writer",
+    "environment-bible-agent": "creative_writer",
+    "prompt-composition-agent": "creative_writer",
+    # Analytical/structural agents → strict profiles
+    "structure-extractor-agent": "strict_validator",
+    "clip-validator": "strict_validator",
+    "scene-continuity-validator": "strict_validator",
+    "full-movie-flow-validator": "strict_validator",
+    # Operational agents → operational profiles
+    "intake-classifier-agent": "operations_triage",
+    "config-inference-agent": "operations_triage",
+    "provider-planning-agent": "operations_triage",
+    "generation-scheduler-agent": "operations_triage",
+    "continuity-ledger-agent": "operations_triage",
+    "failure-handling-agent": "operations_triage",
+    "orchestrator-agent": "operations_triage",
+    "kb-curator-agent": "operations_triage",
+}
 
 
 def _run_agent(
@@ -35,6 +70,11 @@ def _run_agent(
 
     Returns the agent's result dict, or a fallback if services aren't available.
     """
+    # Inject repair feedback into the task if present (set by repair_phase_node)
+    feedback = state.pop("_repair_feedback", "")
+    if feedback:
+        task = f"{feedback}\n\n{task}"
+
     services = _get_services(state)
     if services is None:
         return {"status": "no_services", "agent": agent_id}
@@ -75,6 +115,7 @@ def _run_agent(
     from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
     from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
     from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+    from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
     from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 
     agent_map: dict[str, type[BaseAgent]] = {
@@ -82,6 +123,7 @@ def _run_agent(
         "film-constitution-agent": ConstitutionAgent,
         "treatment-agent": DevelopmentAgent,
         "screenwriter-agent": ScreenwriterAgent,
+        "structure-extractor-agent": StructureExtractorAgent,
         "shot-design-agent": ShotBibleAgent,
         "reference-strategy-planner": VisualDevAgent,
         "visual-dev-agent": VisualDevAgent,
@@ -92,7 +134,6 @@ def _run_agent(
     agent_cls = agent_map.get(resolved_agent_id)
 
     template_id = ""
-    model_profile = ""
 
     if agent_cls is not None:
         # Critical-path agent: dedicated template required
@@ -119,6 +160,11 @@ def _run_agent(
             "shot_matrix_content": "",
             "visual_refs": "",
             "visual_refs_content": "",
+            "execution_brief_ref": "",
+            "execution_brief_content": "",
+            "validator_issues": "",
+            "target_runtime_seconds": "",
+            "film_type": "",
             "budget_cap": "",
             "preferred_providers": "",
         }
@@ -130,15 +176,40 @@ def _run_agent(
             "story_bible_ref",
             "shot_matrix_ref",
             "visual_refs",
+            "execution_brief_ref",
         ):
+            val = state.get(key)
+            if val:
+                context_vars[key] = str(val)
+        # Populate numeric/typed state fields
+        for key in ("target_runtime_seconds", "film_type"):
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
         _inject_artifact_context(state, services, context_vars)
         _inject_config_context(state, context_vars)
 
-        model_output, template_id, model_profile = services.prompt_runner.run_from_template(
-            template, kb, task, context_vars=context_vars
+        # Inject validator issues for QC synthesis
+        issues_list: list[dict[str, Any]] = state.get("issues", [])
+        if issues_list:
+            context_vars["validator_issues"] = json.dumps(issues_list, indent=2)
+
+        # Compute script scene count from loaded script content (for structure extractor)
+        if resolved_agent_id == "structure-extractor-agent" and context_vars.get("script_content"):
+            try:
+                script_data = json.loads(context_vars["script_content"])
+                scenes = script_data.get("scenes", [])
+                context_vars["script_scene_count"] = str(len(scenes))
+            except (json.JSONDecodeError, KeyError, TypeError):
+                context_vars["script_scene_count"] = "0"
+
+        resolved_profile = _AGENT_PROFILE_MAP.get(resolved_agent_id, "operations_triage")
+        model_output, template_id, _ = services.prompt_runner.run_from_template(
+            template,
+            kb,
+            task,
+            context_vars=context_vars,
+            model_profile=resolved_profile,
         )
     else:
         # Non-critical agent: generic RCTCO assembly (not in critical path)
@@ -159,7 +230,7 @@ def _run_agent(
         route_result,
         result,
         template_id=template_id,
-        model_profile=model_profile,
+        model_profile=resolved_profile,
     )
 
     return result
@@ -312,6 +383,7 @@ def _inject_artifact_context(
         "script_ref": ("script", "script_content"),
         "shot_matrix_ref": ("shot_bible", "shot_matrix_content"),
         "visual_refs": ("visual_dev", "visual_refs_content"),
+        "execution_brief_ref": ("shot_bible", "execution_brief_content"),
     }
     for ref_key, (phase_name, content_key) in artifact_map.items():
         ref = str(state.get(ref_key, "") or "").strip()
@@ -381,7 +453,11 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="intake-classifier-agent",
         phase="intake",
-        task="Classify the user's film idea and produce a project profile.",
+        task=(
+            "Classify the user's film idea: determine genre, tone, audience, "
+            "realistic runtime estimate, aspect ratio, and delivery format. "
+            "Identify risks and produce a structured project profile."
+        ),
     )
     profile = result.get("profile")
     if profile is not None:
@@ -389,6 +465,11 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             new_state["profile_ref"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
+        # Surface key fields to state for downstream agent context
+        if hasattr(profile, "target_runtime_seconds"):
+            new_state["target_runtime_seconds"] = profile.target_runtime_seconds
+        if hasattr(profile, "film_type"):
+            new_state["film_type"] = str(profile.film_type)
 
     return new_state
 
@@ -407,7 +488,11 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="film-constitution-agent",
         phase="constitution",
-        task="Create the film's creative constitution from the project idea.",
+        task=(
+            "Define the film's creative constitution: theme, tone, emotional "
+            "promise, visual language, camera philosophy, character truths, "
+            "and quality standards. This governs every downstream decision."
+        ),
     )
     constitution = result.get("constitution")
     if constitution is not None:
@@ -433,7 +518,11 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="treatment-agent",
         phase="development",
-        task="Write the film treatment and scene breakdown from the constitution.",
+        task=(
+            "Develop the film treatment: write treatment prose, identify "
+            "themes, map the three-act structure, and break down every scene "
+            "with dramatic function, emotional shift, conflict, and outcome."
+        ),
     )
     treatment = result.get("treatment")
     scene_list = result.get("scene_list")
@@ -465,7 +554,11 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="screenwriter-agent",
         phase="script",
-        task="Write the full screenplay from the treatment and scene intents.",
+        task=(
+            "Write the complete screenplay: logline, premise, story bible "
+            "with scene-by-scene breakdown, dialogue, action lines, and "
+            "setup-payoff mapping across all three acts."
+        ),
     )
     story_bible = result.get("story_bible")
     script = result.get("script")
@@ -497,7 +590,12 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="reference-strategy-planner",
         phase="visual_dev",
-        task="Create visual development references from the script and constitution.",
+        task=(
+            "Design the visual look: color palette, lighting approach, "
+            "camera style, and shot-by-shot reference entries with provider "
+            "tiers (fast/standard/ultra) for character, environment, and "
+            "prop sheets."
+        ),
     )
     index = result.get("reference_index")
     if index is not None:
@@ -516,11 +614,45 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "shot_bible"
 
+    # ── Pre-step: extract structural metadata if not already present ──────
+    from film_pipeline.graph.orchestrator_state import has_execution_brief, set_execution_brief
+    from film_pipeline.graph.orchestrator_validators import load_execution_brief
+
+    if not has_execution_brief(new_state) and load_execution_brief(new_state) is None:
+        extract_result = _run_agent(
+            new_state,
+            agent_id="structure-extractor-agent",
+            phase="shot_bible",
+            task=(
+                "Extract the structural metadata from the story: runtime, "
+                "movement/act breakdown, shot counts, mandatory anchors, "
+                "environment progression, and pacing style."
+            ),
+        )
+        brief = extract_result.get("execution_brief")
+        if brief is not None:
+            set_execution_brief(new_state, brief)
+            brief_ref = _save_artifact(new_state, brief, "execution_brief", "shot_bible")
+            if brief_ref:
+                new_state["execution_brief_ref"] = brief_ref
+
+            # Cross-validate the extracted brief against the StoryBible
+            from film_pipeline.graph.orchestrator_validators import validate_execution_brief
+
+            brief_issues = validate_execution_brief(new_state, brief)
+            new_state.setdefault("issues", []).extend(brief_issues)
+
+    # ── Run the shot design agent ────────────────────────────────────────
     result = _run_agent(
         new_state,
         agent_id="shot-design-agent",
         phase="shot_bible",
-        task="Create the detailed shot matrix from the script and visual references.",
+        task=(
+            "Produce the master film matrix: decompose every scene into "
+            "individual shots with camera, duration, characters, environment, "
+            "and prompt_ref. Match the exact shot count and runtime from "
+            "the Execution Brief."
+        ),
     )
     shot_matrix = result.get("shot_matrix")
     if shot_matrix is not None:
@@ -528,6 +660,15 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             new_state["shot_matrix_ref"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
+
+    # ── Gate A: validate shot structure against execution brief ──────────
+    if shot_matrix is not None:
+        brief = load_execution_brief(new_state)
+        if brief is not None:
+            from film_pipeline.graph.orchestrator_validators import validate_shot_structure
+
+            struct_issues = validate_shot_structure(new_state, brief, shot_matrix)
+            new_state.setdefault("issues", []).extend(struct_issues)
 
     return new_state
 
@@ -543,7 +684,12 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         new_state,
         agent_id="provider-planning-agent",
         phase="gen_planning",
-        task="Create the generation plan from the shot matrix and budget constraints.",
+        task=(
+            "Plan generation for every shot: select providers and models, "
+            "estimate cost per shot and total, order by dependency. "
+            "Every row in the shot matrix must have a plan entry with "
+            "real (non-zero) cost estimates."
+        ),
     )
     cost_estimate = result.get("cost_estimate")
     if cost_estimate is not None:
@@ -555,6 +701,30 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     if gen_requests:
         new_state["generation_requests"] = gen_requests
 
+    # ── Gate B: validate planning completeness ───────────────────────────
+    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    if shot_matrix_ref:
+        services = _get_services(new_state)
+        if services is not None:
+            try:
+                from film_pipeline.schemas._base import FilmPhase
+
+                parsed = _parse_ref(shot_matrix_ref)
+                matrix_data = services.artifact_store.load(
+                    str(new_state.get("project_id", "")),
+                    FilmPhase("shot_bible"),
+                    parsed.artifact_id,
+                    parsed.version,
+                )
+                from film_pipeline.graph.orchestrator_validators import (
+                    validate_planning_completeness,
+                )
+
+                plan_issues = validate_planning_completeness(new_state, matrix_data, cost_estimate)
+                new_state.setdefault("issues", []).extend(plan_issues)
+            except (FileNotFoundError, ValueError, KeyError):
+                pass
+
     return new_state
 
 
@@ -564,6 +734,15 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = False
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "generation_batch"
+
+    # ── Gate C: validate dispatch readiness ──────────────────────────────
+    gen_requests = new_state.get("generation_requests")
+    if gen_requests is not None:
+        from film_pipeline.graph.orchestrator_validators import validate_dispatch_readiness
+
+        dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
+        new_state.setdefault("issues", []).extend(dispatch_issues)
+
     return new_state
 
 
@@ -574,12 +753,19 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["human_approval_required"] = True
     new_state["human_approval_phase"] = "qc"
 
-    # Run the consensus agent for QC synthesis
+    # Run validators against upstream artifacts FIRST
+    _run_validators(new_state)
+
+    # Then synthesize their findings into a unified QC report
     result = _run_agent(
         new_state,
         agent_id="clip-validator",
         phase="qc",
-        task="Synthesize validator reports into a unified QC report.",
+        task=(
+            "Synthesize all validator reports into a unified QC consensus: "
+            "identify agreement areas, resolve conflicts, produce weighted "
+            "pass/fail/block recommendation with actionable feedback."
+        ),
     )
     report = result.get("consensus_report")
     if report is not None:
@@ -587,9 +773,6 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             new_state["consensus_report_ref"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
-
-    # Run validators against upstream artifacts
-    _run_validators(new_state)
 
     return new_state
 
@@ -651,22 +834,22 @@ def _run_validators(state: dict[str, Any]) -> None:
     # --- Phase-specific validator dispatch ---
 
     if phase in ("script", "qc") and artifact_data:
-        _run_script_validators(artifact_data, issues, state)
+        _run_script_validators(artifact_data, issues, state, services)
 
     if phase in ("visual_dev", "qc") and artifact_data:
-        _run_reference_validators(artifact_data, issues, state)
+        _run_reference_validators(artifact_data, issues, state, services)
 
     if phase in ("gen_planning", "qc") and artifact_data:
-        _run_prompt_validators(artifact_data, issues, state)
+        _run_prompt_validators(artifact_data, issues, state, services)
 
     if phase in ("shot_bible", "qc") and artifact_data:
-        _run_continuity_validators(artifact_data, issues, state)
+        _run_continuity_validators(artifact_data, issues, state, services)
 
     if phase in ("post", "assembly", "qc") and artifact_data:
-        _run_assembly_validators(artifact_data, issues, state)
+        _run_assembly_validators(artifact_data, issues, state, services)
 
     if phase == "delivery" and artifact_data:
-        _run_delivery_validators(artifact_data, issues, state)
+        _run_delivery_validators(artifact_data, issues, state, services)
 
     state["issues"] = issues
 
@@ -700,6 +883,7 @@ def _run_script_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run the two script-phase validators against loaded artifacts."""
     from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
@@ -710,6 +894,11 @@ def _run_script_validators(
     for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
         try:
             instance = vcls()
+            instance.set_services(
+                adapter=services.model_adapter,
+                router=services.model_router,
+                template_registry=_get_template_registry(),
+            )
             report = instance.run(artifact)
         except Exception:
             continue
@@ -720,6 +909,7 @@ def _run_reference_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run reference usability validator against visual_dev artifacts."""
     from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
@@ -728,6 +918,10 @@ def _run_reference_validators(
     artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
     try:
         instance = ReferenceUsabilityValidator()
+        instance.set_services(
+            adapter=services.model_adapter,
+            router=services.model_router,
+        )
         report = instance.run(artifact)
     except Exception:
         return
@@ -738,6 +932,7 @@ def _run_prompt_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run prompt readiness validator against gen_planning artifacts."""
     from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
@@ -746,6 +941,10 @@ def _run_prompt_validators(
     artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
     try:
         instance = PromptReadinessValidator()
+        instance.set_services(
+            adapter=services.model_adapter,
+            router=services.model_router,
+        )
         report = instance.run(artifact)
     except Exception:
         return
@@ -756,6 +955,7 @@ def _run_continuity_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run scene continuity validator against shot_bible artifacts."""
     from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
@@ -764,6 +964,10 @@ def _run_continuity_validators(
     artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
     try:
         instance = SceneContinuityValidator()
+        instance.set_services(
+            adapter=services.model_adapter,
+            router=services.model_router,
+        )
         report = instance.run(artifact)
     except Exception:
         return
@@ -774,6 +978,7 @@ def _run_assembly_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run assembly validator against post/assembly artifacts."""
     from film_pipeline.validation.impl.assembly import AssemblyValidator
@@ -782,6 +987,10 @@ def _run_assembly_validators(
     artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
     try:
         instance = AssemblyValidator()
+        instance.set_services(
+            adapter=services.model_adapter,
+            router=services.model_router,
+        )
         report = instance.run(artifact)
     except Exception:
         return
@@ -792,6 +1001,7 @@ def _run_delivery_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
     state: dict[str, Any],
+    services: Any,
 ) -> None:
     """Run delivery completeness validator against delivery artifacts."""
     from film_pipeline.validation.impl.delivery_completeness import (
@@ -802,6 +1012,10 @@ def _run_delivery_validators(
     artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
     try:
         instance = DeliveryCompletenessValidator()
+        instance.set_services(
+            adapter=services.model_adapter,
+            router=services.model_router,
+        )
         report = instance.run(artifact)
     except Exception:
         return
@@ -874,6 +1088,15 @@ def delivery_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+
+    # ── Guard: reject approval when structural issues exist ──────────
+    issues: list[dict[str, Any]] = new_state.get("issues", [])
+    blocking = [i for i in issues if i.get("severity") == "blocking"]
+    if blocking:
+        new_state["approved"] = False
+        new_state["_approval_blocked_by_issues"] = True
+        return new_state
+
     new_state["approved"] = True
     new_state["human_approval_required"] = False
 
@@ -915,3 +1138,92 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     artifact_refs = new_state.get("artifact_refs", [])
     add_revision_request(new_state, artifact_refs, note="Human requested revision.")
     return new_state
+
+
+# ── Phase node registry (for repair routing) ────────────────────────────
+
+
+_PHASE_NODES: dict[str, Any] = {
+    "intake": None,  # intake_node,
+    "constitution": None,  # constitution_node,
+    "development": None,  # development_node,
+    "script": None,  # script_node,
+    "visual_dev": None,  # visual_dev_node,
+    "shot_bible": None,  # shot_bible_node,
+    "gen_planning": None,  # gen_planning_node,
+    "generation": None,  # generation_node,
+    "qc": None,  # qc_node,
+    "post": None,  # post_node,
+    "delivery": None,  # delivery_node,
+}
+
+
+def _init_phase_nodes() -> None:
+    """Lazy-init the phase node registry to avoid circular imports."""
+    if _PHASE_NODES["intake"] is not None:
+        return
+    _PHASE_NODES.update(
+        {
+            "intake": intake_node,
+            "constitution": constitution_node,
+            "development": development_node,
+            "script": script_node,
+            "visual_dev": visual_dev_node,
+            "shot_bible": shot_bible_node,
+            "gen_planning": gen_planning_node,
+            "generation": generation_node,
+            "qc": qc_node,
+            "post": post_node,
+            "delivery": delivery_node,
+        }
+    )
+
+
+def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Generic repair: re-run the current phase's agent to fix issues.
+
+    Checks convergence tracking — after 3 repair rounds without resolution,
+    marks the phase as stalled and returns to human.
+    """
+    from film_pipeline.graph.orchestrator_state import (
+        increment_convergence_round,
+        is_stalled,
+        mark_stalled,
+    )
+
+    _init_phase_nodes()
+    phase = str(state.get("current_phase", ""))
+    phase_fn = _PHASE_NODES.get(phase)
+    if phase_fn is None:
+        new_state = deepcopy(state)
+        new_state.setdefault("issues", []).append(
+            {
+                "severity": "warning",
+                "code": "no_repair_handler",
+                "message": f"No repair handler for phase '{phase}'.",
+            }
+        )
+        return new_state
+
+    # Track repair attempts
+    round_num = increment_convergence_round(state, phase)
+
+    if is_stalled(state, phase, max_rounds=3):
+        mark_stalled(state, phase, f"Repair failed after {round_num} rounds.")
+        return state
+
+    # Inject feedback so the agent knows what to fix
+    blocking = [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
+    if blocking:
+        feedback_parts = []
+        for i in blocking:
+            code = i.get("code", "?")
+            msg = i.get("message", "")
+            feedback_parts.append(f"[{code}] {msg}")
+        state["_repair_feedback"] = (
+            f"REPAIR ROUND {round_num}: Your previous output was REJECTED. "
+            f"Issues to fix:\n" + "\n".join(feedback_parts)
+        )
+
+    # Re-run the phase node — gates will re-validate
+    return cast(dict[str, Any], phase_fn(state))

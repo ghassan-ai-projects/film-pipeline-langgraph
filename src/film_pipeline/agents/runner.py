@@ -112,18 +112,38 @@ class PromptRunner:
 
         When ``model_adapter`` is set and no mock matches, resolves the model
         through the router and calls the real LLM, expecting a JSON response.
+
+        Retry strategy (3 attempts):
+        1. Normal call with assigned profile.
+        2. Retry with temperature 0.1 + explicit JSON instruction.
+        3. Retry with fallback model.
+        After 3 failures, returns an error dict (never crashes).
         """
         if prompt.core_task in self.mock_responses:
             return self.mock_responses[prompt.core_task]
-        if self.model_adapter is not None:
-            if self.model_router is None:
-                raise RuntimeError(
-                    "Model adapter is configured but no model router is set. "
-                    "Pass model_router= to PromptRunner."
-                )
-            model_id, max_tokens, temperature = self.model_router.resolve_model_params(
-                model_profile
+        if self.model_adapter is None:
+            import logging
+
+            _logger = logging.getLogger(__name__)
+            _logger.warning(
+                "PromptRunner.call_model falling back to generic mock — "
+                "task '%s' not in mock_responses and no model_adapter configured.",
+                prompt.core_task[:80],
             )
+            return {"status": "ok", "agent": "mock", "output": {"_warning": "generic_fallback"}}
+        if self.model_router is None:
+            raise RuntimeError(
+                "Model adapter is configured but no model router is set. "
+                "Pass model_router= to PromptRunner."
+            )
+
+        import logging
+
+        _logger = logging.getLogger(__name__)
+        model_id, max_tokens, temperature = self.model_router.resolve_model_params(model_profile)
+
+        # --- Attempt 1: normal call ---
+        try:
             return self.model_adapter.chat_json(
                 prompt.rendered,
                 model=model_id,
@@ -131,16 +151,79 @@ class PromptRunner:
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
-        # No mock matched, no model adapter — return fallback with a warning
-        import logging
+        except ValueError:
+            pass
 
-        _logger = logging.getLogger(__name__)
         _logger.warning(
-            "PromptRunner.call_model falling back to generic mock — "
-            "task '%s' not in mock_responses and no model_adapter configured.",
-            prompt.core_task[:80],
+            "PromptRunner.call_model attempt 1 failed for profile '%s' (model=%s). "
+            "Retrying with temperature 0.1.",
+            model_profile,
+            model_id,
         )
-        return {"status": "ok", "agent": "mock", "output": {"_warning": "generic_fallback"}}
+
+        # --- Attempt 2: lower temperature + explicit JSON instruction ---
+        retry_prompt = (
+            prompt.rendered + "\n\n!!! IMPORTANT: You MUST output valid, parseable JSON. "
+            "No markdown commentary, no trailing text — just pure JSON."
+        )
+        try:
+            return self.model_adapter.chat_json(
+                retry_prompt,
+                model=model_id,
+                system=prompt.role,
+                max_tokens=max_tokens,
+                temperature=0.1,
+            )
+        except ValueError:
+            pass
+
+        # --- Attempt 3: fallback model ---
+        try:
+            fallback_model = self.model_router.fallback(model_profile)
+        except Exception:
+            fallback_model = model_id
+        if fallback_model == model_id:
+            _logger.error(
+                "PromptRunner.call_model all 3 attempts failed for profile '%s'. "
+                "No distinct fallback model available.",
+                model_profile,
+            )
+            return {
+                "status": "model_failure",
+                "agent": "prompt_runner",
+                "error": "all_retries_exhausted",
+                "profile": model_profile,
+                "model": model_id,
+            }
+
+        _logger.warning(
+            "PromptRunner.call_model attempt 2 failed. Retrying with fallback model %s.",
+            fallback_model,
+        )
+        try:
+            return self.model_adapter.chat_json(
+                retry_prompt,
+                model=fallback_model,
+                system=prompt.role,
+                max_tokens=max_tokens,
+                temperature=0.1,
+            )
+        except ValueError:
+            _logger.error(
+                "PromptRunner.call_model all 3 attempts failed — "
+                "profile=%s, model=%s, fallback=%s.",
+                model_profile,
+                model_id,
+                fallback_model,
+            )
+            return {
+                "status": "model_failure",
+                "agent": "prompt_runner",
+                "error": "all_retries_exhausted",
+                "profile": model_profile,
+                "model": model_id,
+                "fallback_model": fallback_model,
+            }
 
     def run(
         self,
