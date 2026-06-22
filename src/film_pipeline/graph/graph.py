@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.nodes import (
     approve_phase_node,
+    await_approval_node,
     constitution_node,
     delivery_node,
     development_node,
@@ -47,7 +49,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_node("delivery_node", delivery_node)
 
     # Human gate nodes
-    builder.add_node("await_approval", _passthrough)
+    builder.add_node("await_approval", await_approval_node)
     builder.add_node("approve_phase", approve_phase_node)
     builder.add_node("request_revision", request_revision_node)
     builder.add_node("repair", repair_phase_node)
@@ -127,7 +129,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("repair", "await_approval")
     builder.add_edge("end", END)
 
-    return builder.compile()
+    return builder.compile(checkpointer=MemorySaver())
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:

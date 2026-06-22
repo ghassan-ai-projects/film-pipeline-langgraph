@@ -1086,6 +1086,64 @@ def delivery_node(state: dict[str, Any]) -> dict[str, Any]:
     return new_state
 
 
+def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Pause the graph for human review. Resumes via Command(resume=decision).
+
+    LangGraph constraint: all code before ``interrupt()`` re-executes on
+    resume. The payload is built from state reads only — no mutations —
+    so it is naturally idempotent.
+    """
+    from langgraph.types import interrupt
+
+    from film_pipeline.graph.orchestrator_state import is_stalled
+
+    phase = str(state.get("current_phase", ""))
+    gate = str(state.get("human_approval_phase", ""))
+    issues: list[dict[str, Any]] = state.get("issues", [])
+    blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
+    stalled = is_stalled(state, phase)
+
+    # Determine allowed actions
+    allowed_actions: list[str] = []
+    if blocking_count == 0:
+        allowed_actions.append("approve_phase")
+    if stalled:
+        allowed_actions.append("escalate")
+    else:
+        allowed_actions.append("request_revision")
+
+    payload: dict[str, Any] = {
+        "project_id": state.get("project_id", ""),
+        "phase": phase,
+        "gate": gate,
+        "artifact_refs": state.get("artifact_refs", []),
+        "blocking_issue_count": blocking_count,
+        "stalled": stalled,
+        "allowed_actions": allowed_actions,
+    }
+
+    decision = interrupt(payload)
+
+    # Normalize the decision
+    if isinstance(decision, dict):
+        action = str(decision.get("action", ""))
+        note = str(decision.get("note", ""))
+    elif isinstance(decision, str):
+        action = decision
+        note = ""
+    else:
+        action = "await"
+
+    if action in ("approve", "approve_phase"):
+        return approve_phase_node(state)
+    elif action in ("revise", "request_revision"):
+        if note:
+            state["_revision_note"] = note
+        return request_revision_node(state)
+    else:
+        return state
+
+
 def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
 
@@ -1118,6 +1176,7 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     new_state["approved"] = False
     new_state["human_approval_required"] = False
+    revision_note = str(new_state.pop("_revision_note", ""))
     issues = new_state.get("issues", [])
     new_state["issues"] = [
         *issues,
@@ -1125,7 +1184,7 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
             "issue_id": "rev",
             "severity": "warning",
             "code": "REVISION_REQUESTED",
-            "message": "Human requested revision.",
+            "message": revision_note or "Human requested revision.",
         },
     ]
     # Record durable revision request via orchestrator state helpers
