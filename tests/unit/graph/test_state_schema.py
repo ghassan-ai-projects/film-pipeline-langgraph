@@ -30,7 +30,7 @@ class TestStudioGraphState:
         """total=False TypedDict accepts runtime-injected _services key."""
         from film_pipeline.graph.state_schema import StudioGraphState
 
-        state: StudioGraphState = {"project_id": "test"}  # type: ignore[typeddict-unknown-key]
+        state: StudioGraphState = {"project_id": "test"}
         state["_services"] = object()  # type: ignore[typeddict-unknown-key]
         assert state["project_id"] == "test"
 
