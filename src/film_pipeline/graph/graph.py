@@ -27,11 +27,12 @@ from film_pipeline.graph.nodes import (
     visual_dev_node,
 )
 from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.graph.state_schema import StudioGraphState
 
 
 def build_graph() -> CompiledStateGraph:
     """Construct the supervisor graph with all phases and approval gates."""
-    builder = StateGraph(dict)
+    builder = StateGraph(StudioGraphState)
 
     builder.add_node("phase_router", _passthrough)
 

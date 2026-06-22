@@ -444,10 +444,13 @@ def _compact_json_context(data: dict[str, Any], max_chars: int = 6000) -> str:
 def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     """Intake: classify input, infer config, present for approval."""
     new_state = deepcopy(state)
-    new_state["current_phase"] = "intake"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "config"
+    updates: dict[str, Any] = {
+        "current_phase": "intake",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "config",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -463,15 +466,16 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     if profile is not None:
         ref = _save_artifact(new_state, profile, "project_profile", "intake")
         if ref:
-            new_state["profile_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
-        # Surface key fields to state for downstream agent context
+            updates["profile_ref"] = ref
+            new_refs.append(ref)
         if hasattr(profile, "target_runtime_seconds"):
-            new_state["target_runtime_seconds"] = profile.target_runtime_seconds
+            updates["target_runtime_seconds"] = profile.target_runtime_seconds
         if hasattr(profile, "film_type"):
-            new_state["film_type"] = str(profile.film_type)
+            updates["film_type"] = str(profile.film_type)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
 # ── Constitution ─────────────────────────────────────────────────────────────
@@ -479,10 +483,13 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    new_state["current_phase"] = "constitution"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "constitution"
+    updates: dict[str, Any] = {
+        "current_phase": "constitution",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "constitution",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -498,10 +505,12 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
     if constitution is not None:
         ref = _save_artifact(new_state, constitution, "film_constitution", "constitution")
         if ref:
-            new_state["constitution_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["constitution_ref"] = ref
+            new_refs.append(ref)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
 # ── Development ──────────────────────────────────────────────────────────────
@@ -509,10 +518,13 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def development_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    new_state["current_phase"] = "development"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "treatment"
+    updates: dict[str, Any] = {
+        "current_phase": "development",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "treatment",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -529,15 +541,17 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
     if treatment is not None:
         ref = _save_artifact(new_state, treatment, "treatment", "development")
         if ref:
-            new_state["treatment_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["treatment_ref"] = ref
+            new_refs.append(ref)
     if scene_list is not None:
         ref = _save_artifact(new_state, scene_list, "scene_list", "development")
         if ref:
-            new_state["scene_list_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["scene_list_ref"] = ref
+            new_refs.append(ref)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
 # ── Script ───────────────────────────────────────────────────────────────────
@@ -545,10 +559,13 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def script_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    new_state["current_phase"] = "script"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "script"
+    updates: dict[str, Any] = {
+        "current_phase": "script",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "script",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -565,15 +582,17 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
     if story_bible is not None:
         ref = _save_artifact(new_state, story_bible, "story_bible", "script")
         if ref:
-            new_state["story_bible_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["story_bible_ref"] = ref
+            new_refs.append(ref)
     if script is not None:
         ref = _save_artifact(new_state, script, "script", "script")
         if ref:
-            new_state["script_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["script_ref"] = ref
+            new_refs.append(ref)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
 # ── Remaining phases (flag-only, pending agent implementations) ──────────────
@@ -581,10 +600,13 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    new_state["current_phase"] = "visual_dev"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "visual_bible"
+    updates: dict[str, Any] = {
+        "current_phase": "visual_dev",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "visual_bible",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -601,14 +623,17 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     if index is not None:
         ref = _save_artifact(new_state, index, "reference_index", "visual_dev")
         if ref:
-            new_state["visual_refs"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["visual_refs"] = ref
+            new_refs.append(ref)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
 def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    original = state  # keep reference for diff computation
     new_state["current_phase"] = "shot_bible"
     new_state["approved"] = False
     new_state["human_approval_required"] = True
@@ -670,11 +695,29 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
             struct_issues = validate_shot_structure(new_state, brief, shot_matrix)
             new_state.setdefault("issues", []).extend(struct_issues)
 
-    return new_state
+    # Compute partial update from before/after diff
+    updates: dict[str, Any] = {
+        "current_phase": "shot_bible",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "shot_bible",
+    }
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ("shot_matrix_ref", "execution_brief_ref"):
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
 
 
 def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    original = state
     new_state["current_phase"] = "gen_planning"
     new_state["approved"] = False
     new_state["human_approval_required"] = True
@@ -725,11 +768,29 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
             except (FileNotFoundError, ValueError, KeyError):
                 pass
 
-    return new_state
+    # Compute partial update from before/after diff
+    updates: dict[str, Any] = {
+        "current_phase": "gen_planning",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "generation_spend",
+    }
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ("cost_estimate_ref",):
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
 
 
 def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    original = state
     new_state["current_phase"] = "generation"
     new_state["approved"] = False
     new_state["human_approval_required"] = True
@@ -743,11 +804,22 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
         dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
         new_state.setdefault("issues", []).extend(dispatch_issues)
 
-    return new_state
+    # Compute partial update from before/after diff
+    updates: dict[str, Any] = {
+        "current_phase": "generation",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "generation_batch",
+    }
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    return updates
 
 
 def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
+    original = state
     new_state["current_phase"] = "qc"
     new_state["approved"] = False
     new_state["human_approval_required"] = True
@@ -774,7 +846,24 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
             new_state["consensus_report_ref"] = ref
             new_state.setdefault("artifact_refs", []).append(ref)
 
-    return new_state
+    # Compute partial update from before/after diff
+    updates: dict[str, Any] = {
+        "current_phase": "qc",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "qc",
+    }
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ("consensus_report_ref",):
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
 
 
 def _run_validators(state: dict[str, Any]) -> None:
@@ -1056,10 +1145,13 @@ def _append_validator_report(
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    new_state["current_phase"] = "post"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "assembly"
+    updates: dict[str, Any] = {
+        "current_phase": "post",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "assembly",
+    }
+    new_refs: list[str] = []
 
     result = _run_agent(
         new_state,
@@ -1071,19 +1163,21 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
     if manifest is not None:
         ref = _save_artifact(new_state, manifest, "assembly_manifest", "post")
         if ref:
-            new_state["assembly_manifest_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
+            updates["assembly_manifest_ref"] = ref
+            new_refs.append(ref)
 
-    return new_state
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    return updates
 
 
-def delivery_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    new_state["current_phase"] = "delivery"
-    new_state["approved"] = False
-    new_state["human_approval_required"] = True
-    new_state["human_approval_phase"] = "final_delivery"
-    return new_state
+def delivery_node(_state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "current_phase": "delivery",
+        "approved": False,
+        "human_approval_required": True,
+        "human_approval_phase": "final_delivery",
+    }
 
 
 def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -1136,12 +1230,11 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if action in ("approve", "approve_phase"):
         return approve_phase_node(state)
-    elif action in ("revise", "request_revision"):
+    if action in ("revise", "request_revision"):
         if note:
             state["_revision_note"] = note
         return request_revision_node(state)
-    else:
-        return state
+    return state
 
 
 def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -1197,6 +1290,25 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     artifact_refs = new_state.get("artifact_refs", [])
     add_revision_request(new_state, artifact_refs, note="Human requested revision.")
     return new_state
+
+
+def _is_new_ref(ref: str, original_state: dict[str, Any]) -> bool:
+    """Return True if *ref* was not present in the original state's artifact_refs."""
+    orig_refs = set(original_state.get("artifact_refs", []) or [])
+    return ref not in orig_refs
+
+
+def _is_new_issue(issue: dict[str, Any], original_state: dict[str, Any]) -> bool:
+    """Return True if *issue* has a novel issue_id not in the original state."""
+    iid = issue.get("issue_id")
+    if not iid:
+        return False
+    orig_ids = {
+        i.get("issue_id")
+        for i in (original_state.get("issues", []) or [])
+        if i.get("issue_id")
+    }
+    return iid not in orig_ids
 
 
 # ── Phase node registry (for repair routing) ────────────────────────────
