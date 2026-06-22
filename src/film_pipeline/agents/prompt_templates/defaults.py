@@ -39,6 +39,7 @@ def load_all(reg: PromptTemplateRegistry) -> None:
     reg.register(_qc_synthesizer())
     reg.register(_structure_extractor())
     reg.register(_assembly_agent())
+    reg.register(_orchestrator_review())
 
 
 def _structure_extractor() -> PromptTemplate:
@@ -1097,4 +1098,68 @@ def _delivery_completeness_validator() -> PromptTemplate:
             '"affected_shot": "<filename>"}]}'
         ),
         output_schema_ref="validation.ValidationReport",
+    )
+
+
+def _orchestrator_review() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="orchestrator-review-v1",
+        agent_id="orchestrator-agent",
+        version=1,
+        role=(
+            "You are the orchestrator-agent (Autonomous Quality Reviewer). "
+            "Your role is to review creative output against the film's target "
+            "runtime and constitution. You decide whether to approve, request "
+            "revision, or escalate to human."
+        ),
+        core_task=(
+            "Review the phase output below. Decide ONE action:\n\n"
+            "1. APPROVE — output is structurally sound for the target runtime. "
+            "The scene count, content depth, and pacing support the intended duration.\n\n"
+            "2. REVISE — output needs specific improvements. Give ONE focused, "
+            "creative suggestion. Reference specific scenes or elements. "
+            "Say what's good and should be preserved. Do not list multiple issues — "
+            "pick the most impactful one.\n\n"
+            "3. ESCALATE — output is fundamentally wrong, the target is ambiguous, "
+            "or this is the 3rd repair attempt without convergence. "
+            "Only escalate when you cannot provide useful creative direction."
+        ),
+        context_template=(
+            "TARGET FILM:\n"
+            "  Runtime: {target_runtime_seconds}s\n"
+            "  Film type: {film_type}\n"
+            "  Pacing: {pacing_style}\n\n"
+            "CONSTITUTION:\n"
+            "{constitution_summary}\n\n"
+            "CURRENT PHASE: {current_phase}\n"
+            "CONVERGENCE ROUND: {convergence_round} of 3\n\n"
+            "PHASE OUTPUT:\n"
+            "{phase_output_summary}\n\n"
+            "METRICS:\n"
+            "{metrics_summary}\n\n"
+            "CONSISTENCY WARNINGS:\n"
+            "{consistency_warnings}"
+        ),
+        constraints=(
+            "Choose exactly ONE action. If revising, give ONE specific suggestion — "
+            "not a list. Reference actual elements from the output (scene IDs, "
+            "character names, specific descriptions). Say what to preserve, not just "
+            "what to change. Be creative and editorial, not mechanical. "
+            "Do not reject output just because a number is lower than some formula — "
+            "assess whether the content can support the runtime. "
+            "If the content is rich enough despite fewer scenes, approve it."
+        ),
+        output_format=(
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "orchestrator_decision": {\n'
+            '    "action": "approve | revise | escalate",\n'
+            '    "feedback": "If revising: one specific, creative suggestion. '
+            'Reference specific scenes or elements.",\n'
+            '    "preserve": ["what is good and should be kept"],\n'
+            '    "reasoning": "Why this decision. Brief."\n'
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="orchestrator.OrchestratorDecision",
     )

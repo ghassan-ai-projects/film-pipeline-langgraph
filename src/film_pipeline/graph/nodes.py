@@ -63,7 +63,7 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
     "generation-scheduler-agent": "operations_triage",
     "continuity-ledger-agent": "operations_triage",
     "failure-handling-agent": "operations_triage",
-    "orchestrator-agent": "operations_triage",
+    "orchestrator-agent": "strict_validator",
     "kb-curator-agent": "operations_triage",
 }
 
@@ -81,6 +81,143 @@ def _require_human_approval(state: dict[str, Any]) -> bool:
         if isinstance(studio, dict):
             return bool(studio.get("require_human_approval", True))
     return True
+
+
+def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
+    """Build context vars for the orchestrator review agent.
+
+    Summarises the target film, current phase output, and structural metrics
+    so the orchestrator can assess quality without loading every artifact.
+    """
+    ctx: dict[str, str] = {
+        "target_runtime_seconds": str(state.get("target_runtime_seconds", "300")),
+        "film_type": str(state.get("film_type", "narrative")),
+        "pacing_style": "standard",
+        "current_phase": str(state.get("current_phase", "")),
+        "convergence_round": "1",
+        "constitution_summary": "(not available)",
+        "phase_output_summary": "(not available)",
+        "metrics_summary": "(not available)",
+        "consistency_warnings": "(none)",
+    }
+
+    # Convergence round from orchestrator state
+    conv = state.get("_orchestrator__convergence", {})
+    if isinstance(conv, dict):
+        phase_conv = conv.get(ctx["current_phase"], {})
+        if isinstance(phase_conv, dict):
+            ctx["convergence_round"] = str(phase_conv.get("round_count", 1))
+
+    # Constitution summary
+    constitution_ref = state.get("constitution_ref", "")
+    if constitution_ref and isinstance(constitution_ref, str) and constitution_ref.strip():
+        services = _get_services(state)
+        if services is not None:
+            try:
+                parsed = _parse_ref(str(constitution_ref))
+                from film_pipeline.schemas._base import FilmPhase
+
+                data = services.artifact_store.load(
+                    str(state.get("project_id", "")),
+                    FilmPhase("constitution"),
+                    parsed.artifact_id,
+                    parsed.version,
+                )
+                if isinstance(data, dict):
+                    ctx["constitution_summary"] = (
+                        f"theme: {data.get('theme', '?')}\n"
+                        f"tone: {data.get('tone', '?')}\n"
+                        f"visual_language: {str(data.get('visual_language', ''))[:200]}"
+                    )
+            except Exception:
+                pass
+
+    # Phase output summary — load current phase artifacts
+    services = _get_services(state)
+    if services is not None:
+        from film_pipeline.schemas._base import FilmPhase
+
+        project_id = str(state.get("project_id", ""))
+        try:
+            artifacts = services.artifact_store.list_artifacts(
+                project_id, FilmPhase(ctx["current_phase"])
+            )
+        except Exception:
+            artifacts = []
+
+        lines: list[str] = []
+        total_scenes = 0
+        total_shots = 0
+        for a in artifacts:
+            try:
+                data = services.artifact_store.load(
+                    project_id, FilmPhase(ctx["current_phase"]), a.artifact_id, a.version
+                )
+            except Exception:
+                continue
+            if isinstance(data, dict):
+                lines.append(f"\n{a.artifact_id} (v{a.version}):")
+                # Extract key metrics
+                for key in ("scenes", "scene_list", "rows", "shot_count"):
+                    val = data.get(key)
+                    if isinstance(val, list):
+                        lines.append(f"  {key}: {len(val)} items")
+                        if key == "scenes":
+                            total_scenes = len(val)
+                        elif key == "rows":
+                            total_shots = len(val)
+                # Scene-level preview
+                scenes = data.get("scenes", [])
+                if isinstance(scenes, list):
+                    for s in scenes[:5]:
+                        if isinstance(s, dict):
+                            sid = s.get("scene_id", "?")
+                            func = str(s.get("dramatic_function", ""))[:80]
+                            lines.append(f"  {sid}: {func}")
+                rows = data.get("rows", [])
+                if isinstance(rows, list):
+                    for r in rows[:5]:
+                        if isinstance(r, dict):
+                            sid = r.get("shot_id", "?")
+                            dur = r.get("duration_seconds", "?")
+                            lines.append(f"  {sid}: {dur}s")
+                # Key text fields
+                for key in ("text", "theme", "themes", "title"):
+                    val = data.get(key)
+                    if isinstance(val, str) and val:
+                        lines.append(f"  {key}: {val[:150]}")
+                    elif isinstance(val, list):
+                        lines.append(f"  {key}: {', '.join(str(x)[:60] for x in val[:3])}")
+
+        ctx["phase_output_summary"] = "\n".join(lines) if lines else "(no artifacts produced)"
+
+        # Metrics
+        target = int(ctx["target_runtime_seconds"])
+        metrics_parts: list[str] = []
+        if total_scenes:
+            avg_scene = target / max(total_scenes, 1)
+            metrics_parts.append(
+                f"scene_count: {total_scenes} (~{avg_scene:.0f}s per scene for {target}s target)"
+            )
+        if total_shots:
+            metrics_parts.append(f"shot_count: {total_shots}")
+        if total_shots and total_scenes:
+            metrics_parts.append(f"shots_per_scene: {total_shots / max(total_scenes, 1):.1f}")
+        ctx["metrics_summary"] = "\n".join(metrics_parts) if metrics_parts else "(no metrics)"
+
+        # Consistency warnings
+        warnings = state.get("consistency_warnings", [])
+        if warnings:
+            ctx["consistency_warnings"] = "\n".join(
+                str(w)[:200] for w in (warnings if isinstance(warnings, list) else [])
+            )
+            if (
+                isinstance(ctx["consistency_warnings"], str)
+                and len(ctx["consistency_warnings"]) > 800
+            ):
+                ctx["consistency_warnings"] = ctx["consistency_warnings"][:800] + "..."
+
+    return ctx
 
 
 def _propagate_side_effects(source: dict[str, Any], dest: dict[str, Any]) -> None:
@@ -154,6 +291,7 @@ def _run_agent(
     from film_pipeline.agents.impl.development_agent import DevelopmentAgent
     from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
     from film_pipeline.agents.impl.intake_agent import IntakeAgent
+    from film_pipeline.agents.impl.orchestrator_agent import OrchestratorAgent
     from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
     from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
     from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
@@ -172,6 +310,7 @@ def _run_agent(
         "provider-planning-agent": GenPlannerAgent,
         "clip-validator": QCSynthesisAgent,
         "failure-handling-agent": AssemblyAgent,
+        "orchestrator-agent": OrchestratorAgent,
     }
     agent_cls = agent_map.get(resolved_agent_id)
 
@@ -230,6 +369,11 @@ def _run_agent(
                 context_vars[key] = str(val)
         _inject_artifact_context(state, services, context_vars)
         _inject_config_context(state, context_vars)
+
+        # Inject orchestrator review context when this is the orchestrator agent
+        if resolved_agent_id == "orchestrator-agent":
+            phase_ctx = _build_phase_context(state)
+            context_vars.update(phase_ctx)
 
         # Build scoped context packet for this phase (Phase 6 — replaces
         # loading all artifacts when the phase has a dedicated builder)
@@ -1440,12 +1584,40 @@ def consistency_check_node(state: dict[str, Any]) -> dict[str, Any]:
     return {"consistency_warnings": warnings} if warnings else {}
 
 
+def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
+    """Run the orchestrator agent to decide approve/revise/escalate.
+
+    Returns the agent's decision dict or ``None`` if the agent is unavailable
+    (no services, no model — fall through to human gate).
+    """
+    services = _get_services(state)
+    if services is None:
+        return None
+
+    result = _run_agent(
+        state,
+        agent_id="orchestrator-agent",
+        phase=str(state.get("current_phase", "")),
+        task=(
+            "Review the phase output against the target runtime and constitution. "
+            "Decide: approve (output is sound), revise (give one focused suggestion), "
+            "or escalate (stuck or fundamentally wrong)."
+        ),
+    )
+    if result.get("status") in ("no_services", "agent_not_found", "no_impl"):
+        return None
+    action = result.get("action")
+    if action not in ("approve", "revise", "escalate"):
+        return None
+    return result
+
+
 def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     """Pause the graph for human review. Resumes via Command(resume=decision).
 
-    LangGraph constraint: all code before ``interrupt()`` re-executes on
-    resume. The payload is built from state reads only — no mutations —
-    so it is naturally idempotent.
+    The orchestrator agent runs first — it decides approve/revise autonomously.
+    Only escalates to human when the agent is unavailable, returns escalate,
+    or the phase is stalled.
 
     Short-circuits when ``approved`` is already ``True`` — the phase node
     auto-approved (e.g. headless/auto-approve profile). The downstream
@@ -1454,15 +1626,34 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("approved"):
         return state
 
-    from langgraph.types import interrupt
-
+    # ── Try autonomous orchestrator agent first ────────────────────────
     from film_pipeline.graph.orchestrator_state import is_stalled
 
     phase = str(state.get("current_phase", ""))
+    stalled = is_stalled(state, phase)
+
+    if not stalled:
+        orch_decision = _run_orchestrator_agent(state)
+        if orch_decision is not None:
+            action = orch_decision.get("action", "escalate")
+            if action == "approve":
+                return approve_phase_node(state)
+            if action == "revise":
+                state["_repair_feedback"] = orch_decision.get("feedback", "")
+                preserve = orch_decision.get("preserve", [])
+                if preserve:
+                    state["_repair_feedback"] += "\n\nPreserve: " + "; ".join(
+                        str(p) for p in preserve
+                    )
+                return request_revision_node(state)
+            # escalate: fall through to human gate
+
+    # ── Human gate (fallback) ──────────────────────────────────────────
+    from langgraph.types import interrupt
+
     gate = str(state.get("human_approval_phase", ""))
     issues: list[dict[str, Any]] = state.get("issues", [])
     blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
-    stalled = is_stalled(state, phase)
 
     # Determine allowed actions
     allowed_actions: list[str] = []

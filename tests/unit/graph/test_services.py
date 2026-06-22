@@ -81,10 +81,9 @@ def test_run_agent_no_impl() -> None:
     runner = PromptRunner(mock_responses={"task": {"output": "data"}})
     services = GraphServices(prompt_runner=runner, agent_registry=registry)
     state = {"project_id": "p1", SERVICES_KEY: services}
-    # delivery phase defaults to orchestrator-agent — registered but no impl class
-    result = _run_agent(state, "some-agent", "delivery", "task")
-    assert result["status"] == "no_impl"
-    assert result["agent"] == "orchestrator-agent"
+    # unknown agent that doesn't resolve to any registered impl
+    result = _run_agent(state, "unknown-agent-xyz", "intake", "task")
+    assert result["status"] in ("no_impl", "agent_not_found")
 
 
 def test_graph_services_kb_for_without_builder() -> None:
