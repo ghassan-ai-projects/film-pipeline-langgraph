@@ -783,6 +783,48 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     if gen_requests:
         new_state["generation_requests"] = gen_requests
 
+    # ── Emit matrix patch: update prompt_ref + status per row ────────────
+    shot_groups = result.get("shot_groups") or []
+    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    if shot_groups and shot_matrix_ref:
+        from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
+
+        row_updates: list[Any] = []
+        for group in shot_groups:
+            sid = str(group.get("shot_id", ""))
+            if not sid:
+                continue
+            row_updates.append(
+                MatrixRowUpdate(
+                    shot_id=sid,
+                    set={
+                        "prompt_ref": str(group.get("prompt_ref", "")),
+                        "provider_plan_ref": str(group.get("provider_plan_ref", "")),
+                        "status": "prompted",
+                    },
+                )
+            )
+
+        if row_updates:
+            patch = MatrixPatch(
+                patch_id=f"gen_planning_{new_state.get('project_id', '')}",
+                matrix_ref=shot_matrix_ref,
+                phase="gen_planning",
+                reason="Generation plan assigned prompts and provider references per shot.",
+                updates=row_updates,
+                created_by_agent="provider-planning-agent",
+            )
+            patch_ref = _save_artifact(
+                new_state,
+                patch,
+                "matrix_patch_gen_planning",
+                "gen_planning",
+                artifact_type="generation_plan",
+            )
+            if patch_ref:
+                new_state["gen_planning_patch_ref"] = patch_ref
+                new_state.setdefault("artifact_refs", []).append(patch_ref)
+
     # ── Gate B: validate planning completeness ───────────────────────────
     shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
     if shot_matrix_ref:
@@ -820,7 +862,7 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
-    for key in ("cost_estimate_ref",):
+    for key in ("cost_estimate_ref", "gen_planning_patch_ref"):
         val = new_state.get(key)
         if val:
             updates[key] = val
@@ -842,6 +884,45 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
 
         dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
         new_state.setdefault("issues", []).extend(dispatch_issues)
+
+    # ── Emit matrix patch: mark rows as generated ────────────────────────
+    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    if gen_requests and shot_matrix_ref:
+        from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
+
+        row_updates: list[Any] = []
+        for req in gen_requests:
+            if isinstance(req, dict):
+                sid = str(req.get("shot_id", ""))
+                asset_ref = str(req.get("asset_ref", req.get("output_ref", "")))
+                if sid:
+                    row_updates.append(
+                        MatrixRowUpdate(
+                            shot_id=sid,
+                            set={"status": "generated"},
+                            append={"asset_refs": [asset_ref]} if asset_ref else {},
+                        )
+                    )
+
+        if row_updates:
+            patch = MatrixPatch(
+                patch_id=f"generation_{new_state.get('project_id', '')}",
+                matrix_ref=shot_matrix_ref,
+                phase="generation",
+                reason="Clips generated — updating row asset references and status.",
+                updates=row_updates,
+                created_by_agent="generation-scheduler-agent",
+            )
+            patch_ref = _save_artifact(
+                new_state,
+                patch,
+                "matrix_patch_generation",
+                "generation",
+                artifact_type="generation_plan",
+            )
+            if patch_ref:
+                new_state["generation_patch_ref"] = patch_ref
+                new_state.setdefault("artifact_refs", []).append(patch_ref)
 
     # Compute partial update from before/after diff
     updates: dict[str, Any] = {
@@ -866,6 +947,31 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # Run validators against upstream artifacts FIRST
     _run_validators(new_state)
+
+    # ── Emit matrix patch from validator findings ────────────────────────
+    pending_updates = new_state.pop("_pending_row_updates", [])
+    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    if pending_updates and shot_matrix_ref:
+        from film_pipeline.schemas.matrix_patch import MatrixPatch
+
+        patch = MatrixPatch(
+            patch_id=f"qc_{new_state.get('project_id', '')}",
+            matrix_ref=shot_matrix_ref,
+            phase="qc",
+            reason="QC validators produced per-row findings — updating status and validation refs.",
+            updates=pending_updates,
+            created_by_agent="clip-validator",
+        )
+        patch_ref = _save_artifact(
+            new_state,
+            patch,
+            "matrix_patch_qc",
+            "qc",
+            artifact_type="consensus_report",
+        )
+        if patch_ref:
+            new_state["qc_patch_ref"] = patch_ref
+            new_state.setdefault("artifact_refs", []).append(patch_ref)
 
     # Then synthesize their findings into a unified QC report
     result = _run_agent(
@@ -898,7 +1004,7 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
-    for key in ("consensus_report_ref",):
+    for key in ("consensus_report_ref", "qc_patch_ref"):
         val = new_state.get(key)
         if val:
             updates[key] = val
@@ -1180,6 +1286,25 @@ def _append_validator_report(
                 "validator_id": report.validator_id,
             }
         )
+
+    # ── Track per-row findings for matrix patch emission ──────────────
+    from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
+
+    pending: list[Any] = state.setdefault("_pending_row_updates", [])
+    for finding in report.blocking_issues + report.warnings:
+        shot_id = getattr(finding, "affected_shot", None)
+        if shot_id:
+            pending.append(
+                MatrixRowUpdate(
+                    shot_id=str(shot_id),
+                    append={"validation_refs": [report.validator_id]},
+                    set={
+                        "status": "failed"
+                        if getattr(finding, "severity", "") == "blocking"
+                        else "validated",
+                    },
+                )
+            )
 
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:
