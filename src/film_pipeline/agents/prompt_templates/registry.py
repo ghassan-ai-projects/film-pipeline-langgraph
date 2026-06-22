@@ -27,21 +27,23 @@ class PromptTemplate:
     constraints: str
     output_format: str
     output_schema_ref: str
+    quality_instructions: str = ""
 
     def render(self, **context_vars: str) -> str:
         """Render the template with context variable substitution."""
         ctx = self.context_template
         for key, value in context_vars.items():
             ctx = ctx.replace(f"{{{key}}}", value)
-        return "\n\n".join(
-            [
-                f"# Role\n{self.role}",
-                f"# Core Task\n{self.core_task}",
-                f"# Context\n{ctx}",
-                f"# Constraints\n{self.constraints}",
-                f"# Output\n{self.output_format}",
-            ]
-        )
+        parts = [
+            f"# Role\n{self.role}",
+            f"# Core Task\n{self.core_task}",
+            f"# Context\n{ctx}",
+            f"# Constraints\n{self.constraints}",
+            f"# Output\n{self.output_format}",
+        ]
+        if self.quality_instructions:
+            parts.append(self.quality_instructions)
+        return "\n\n".join(parts)
 
 
 @dataclass
@@ -84,7 +86,8 @@ def get_registry() -> PromptTemplateRegistry:
 
 
 def _load_defaults(reg: PromptTemplateRegistry) -> None:
-    """Load the default prompt templates for all critical-path agents."""
-    from film_pipeline.agents.prompt_templates.defaults import load_all
+    """Load the default prompt templates for all critical-path agents and validators."""
+    from film_pipeline.agents.prompt_templates.defaults import load_all, load_validator_templates
 
     load_all(reg)
+    load_validator_templates(reg)

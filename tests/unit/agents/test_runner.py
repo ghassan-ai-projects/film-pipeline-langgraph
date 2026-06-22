@@ -208,6 +208,144 @@ class TestPromptRunner:
         with pytest.raises(RuntimeError, match="no model router is set"):
             runner.call_model(prompt)
 
+    def test_retry_on_json_parse_failure(self) -> None:
+        """Three attempts with escalation on repeated ValueError."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = [
+            ValueError("bad json"),
+            ValueError("bad json again"),
+            ValueError("still bad"),
+        ]
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "primary-model",
+                    "fallback": "fallback-model",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="fail",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+        result = runner.call_model(prompt, model_profile="operations_triage")
+        assert result["status"] == "model_failure"
+        assert result["error"] == "all_retries_exhausted"
+        assert result["profile"] == "operations_triage"
+        assert mock_adapter.chat_json.call_count == 3
+        # Attempt 2: temperature 0.1
+        assert mock_adapter.chat_json.call_args_list[1].kwargs["temperature"] == 0.1
+        # Attempt 3: fallback model
+        assert mock_adapter.chat_json.call_args_list[2].kwargs["model"] == "fallback-model"
+
+    def test_retry_succeeds_on_second_attempt(self) -> None:
+        """If first call fails, second succeeds with lower temp."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = [
+            ValueError("bad"),
+            {"recovered": True},
+        ]
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "pm",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="recover",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+        result = runner.call_model(prompt, model_profile="operations_triage")
+        assert result == {"recovered": True}
+        assert mock_adapter.chat_json.call_count == 2
+
+    def test_retry_succeeds_with_fallback_model(self) -> None:
+        """Third attempt uses fallback model and succeeds."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = [
+            ValueError("bad"),
+            ValueError("bad2"),
+            {"fallback_saved_us": True},
+        ]
+        router = ModelRouter(
+            profiles={
+                "creative_writer": {
+                    "primary": "primary-x",
+                    "fallback": "cheap-fallback",
+                    "max_tokens": 8192,
+                    "temperature": 0.7,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="fb",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+        result = runner.call_model(prompt, model_profile="creative_writer")
+        assert result == {"fallback_saved_us": True}
+        assert mock_adapter.chat_json.call_count == 3
+        # Third attempt uses fallback
+        assert mock_adapter.chat_json.call_args_list[2].kwargs["model"] == "cheap-fallback"
+
+    def test_run_from_template_includes_quality_instructions(self) -> None:
+        """run_from_template renders quality_instructions into the prompt."""
+        from unittest.mock import MagicMock
+
+        from film_pipeline.agents.prompt_templates.registry import PromptTemplate
+
+        template = PromptTemplate(
+            template_id="test-tpl",
+            agent_id="test-agent",
+            version=1,
+            role="Test Role",
+            core_task="Test Task",
+            context_template="ctx: {idea}",
+            constraints="Be good.",
+            output_format="JSON",
+            output_schema_ref="test",
+            quality_instructions="QUALITY REQUIREMENTS:\n- Be detailed.",
+        )
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.return_value = {"ok": True}
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "m",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        kb = _make_kb()
+        runner.run_from_template(template, kb, "Task", context_vars={"idea": "test"})
+        call_arg = mock_adapter.chat_json.call_args[0][0]  # first positional arg
+        assert "QUALITY REQUIREMENTS" in call_arg
+        assert "Be detailed." in call_arg
+
 
 def _make_contract(
     blocked_kb_domains: list[str] | None = None,
