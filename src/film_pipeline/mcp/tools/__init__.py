@@ -3913,6 +3913,7 @@ def _canonicalize_profile_stack(args: dict[str, object]) -> dict[str, str]:
         "quality_profile": ("quality",),
         "provider_profile": ("provider",),
         "review_profile": ("review",),
+        "auto_approve_profile": ("",),  # no prefix — matches any profile dir
     }
     for key, prefixes in mapping.items():
         raw = str(args.get(key, "")).strip()
@@ -3933,6 +3934,7 @@ def _resolve_project_config(profile_stack: dict[str, str]) -> dict[str, object]:
         "quality_profile",
         "provider_profile",
         "review_profile",
+        "auto_approve_profile",
     ):
         value = profile_stack.get(key, "")
         if value:

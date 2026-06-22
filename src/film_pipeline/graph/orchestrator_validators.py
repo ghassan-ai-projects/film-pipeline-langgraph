@@ -294,8 +294,8 @@ def validate_planning_completeness(
         rows = raw if isinstance(raw, list) else []
 
     # --- Check field completeness per row ---
+    # prompt_ref is filled BY gen_planning (via matrix patch), not a prerequisite.
     REQUIRED_FIELDS = [
-        ("prompt_ref", "prompt_ref"),
         ("characters", "characters"),
         ("environment", "environment"),
         ("camera_profile", "camera_profile"),
@@ -331,10 +331,13 @@ def validate_planning_completeness(
         elif isinstance(cost_estimate, dict):
             raw_count = cost_estimate.get("clip_count", cost_estimate.get("total_clips", 0))
             clip_count = int(raw_count) if raw_count is not None else 0
-        if hasattr(cost_estimate, "total_cost_usd"):
-            total_cost = float(getattr(cost_estimate, "total_cost_usd", 0.0) or 0.0)
+        if hasattr(cost_estimate, "estimated_cost_usd"):
+            total_cost = float(getattr(cost_estimate, "estimated_cost_usd", 0.0) or 0.0)
         elif isinstance(cost_estimate, dict):
-            raw_cost = cost_estimate.get("total_cost_usd", cost_estimate.get("total_cost", 0.0))
+            raw_cost = cost_estimate.get(
+                "estimated_cost_usd",
+                cost_estimate.get("total_cost_usd", cost_estimate.get("total_cost", 0.0)),
+            )
             total_cost = float(raw_cost) if raw_cost is not None else 0.0
 
         if clip_count == 0:
