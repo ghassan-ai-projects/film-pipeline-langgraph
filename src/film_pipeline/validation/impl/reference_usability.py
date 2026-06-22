@@ -25,14 +25,14 @@ class ReferenceUsabilityValidator(BaseValidator):
             scope=ValidationScope.ARTIFACT,
             modalities=[ValidationModality.IMAGE],
             input_schema="reference_strategy",
-            models=["gemini-flash"],
+            model_profile="multimodal_reviewer",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
             blocking_conditions=["low_resolution", "moderation_risk", "wrong_subject"],
             warning_conditions=["poor_lighting", "non_matching_style"],
         )
         super().__init__(entry)
 
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: object = None,
@@ -182,6 +182,10 @@ class ReferenceUsabilityValidator(BaseValidator):
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
                 severity=str(i.get("severity", "info")),
+                suggestion=str(i.get("suggestion", "")),
+                affected_entity=str(i.get("affected_entity", "")),
+                affected_field=str(i.get("affected_field", "")),
+                affected_shot=str(i.get("affected_shot", "")),
             )
             for i in raw.get("issues", [])
         ]

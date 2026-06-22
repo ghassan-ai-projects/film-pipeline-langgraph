@@ -19,7 +19,7 @@ class TestSmokeChecks:
     def test_agent_registry(self) -> None:
         ok, detail = check_agent_registry()
         assert ok is True, detail
-        assert "19" in detail
+        assert "20" in detail
 
     def test_validator_registry(self) -> None:
         ok, detail = check_validator_registry()

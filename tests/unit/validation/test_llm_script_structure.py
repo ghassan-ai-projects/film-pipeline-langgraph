@@ -5,11 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-
 from film_pipeline.agents.prompt_templates.registry import PromptTemplate
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
-from film_pipeline.schemas.registries.validator_registry import ValidatorRegistryEntry
 from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 

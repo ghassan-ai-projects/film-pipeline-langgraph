@@ -85,6 +85,7 @@ class TestReviewCompositeSheet:
             png,
             "character_identity_sheet",
             "leo",
+            model="test-model",
             http_opener=_mock_opener(response),
             api_key="test",
         )
@@ -137,7 +138,12 @@ class TestReviewCompositeSheet:
             ]
         }
         result = review_composite_sheet(
-            png, "environment_board", "studio", http_opener=_mock_opener(response), api_key="test"
+            png,
+            "environment_board",
+            "studio",
+            model="test-model",
+            http_opener=_mock_opener(response),
+            api_key="test",
         )
         assert result.passed is False
         assert result.status == "needs_delta_fix"
@@ -145,6 +151,8 @@ class TestReviewCompositeSheet:
         assert "geometry_unclear" in result.bad_reference_tags
 
     def test_unknown_sheet_type(self, tmp_path: Path) -> None:
-        result = review_composite_sheet(_make_png(tmp_path), "unknown_type", "x")
+        result = review_composite_sheet(
+            _make_png(tmp_path), "unknown_type", "x", model="test-model"
+        )
         assert result.passed is False
         assert result.error is not None

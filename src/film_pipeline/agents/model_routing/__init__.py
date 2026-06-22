@@ -48,6 +48,18 @@ _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
         "max_tokens": 4096,
         "temperature": 0.2,
     },
+    "multimodal_reviewer": {
+        "primary": "google/gemini-3-flash-preview",
+        "fallback": "deepseek/deepseek-chat",
+        "max_tokens": 4096,
+        "temperature": 0.2,
+    },
+    "text_validator": {
+        "primary": "deepseek/deepseek-chat",
+        "fallback": "google/gemini-3-flash-preview",
+        "max_tokens": 4096,
+        "temperature": 0.1,
+    },
 }
 
 

@@ -25,14 +25,14 @@ class AssemblyValidator(BaseValidator):
             scope=ValidationScope.DELIVERY,
             modalities=[ValidationModality.ASSEMBLY],
             input_schema="assembly_manifest",
-            models=["gemini-flash"],
+            model_profile="text_validator",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
             blocking_conditions=["missing_clips", "broken_transitions", "wrong_order"],
             warning_conditions=["audio_sync_minor", "color_grade_inconsistent"],
         )
         super().__init__(entry)
 
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: object = None,
@@ -226,6 +226,10 @@ class AssemblyValidator(BaseValidator):
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
                 severity=str(i.get("severity", "info")),
+                suggestion=str(i.get("suggestion", "")),
+                affected_entity=str(i.get("affected_entity", "")),
+                affected_field=str(i.get("affected_field", "")),
+                affected_shot=str(i.get("affected_shot", "")),
             )
             for i in raw.get("issues", [])
         ]

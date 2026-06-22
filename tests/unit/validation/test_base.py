@@ -11,7 +11,7 @@ from film_pipeline.validation.base import BaseValidator
 
 
 class _ConcreteValidator(BaseValidator):
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: dict[str, Any] | None = None,
@@ -28,7 +28,7 @@ class _ConcreteValidator(BaseValidator):
 
 
 class _BlockingValidator(_ConcreteValidator):
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: dict[str, Any] | None = None,
@@ -94,7 +94,7 @@ class TestBaseValidator:
         )
 
         class _NotesValidator(_ConcreteValidator):
-            def validate(
+            def _validate_rules(
                 self,
                 artifact: dict[str, Any],
                 context: dict[str, Any] | None = None,
@@ -117,7 +117,7 @@ class TestBaseValidator:
         )
 
         class _ReviseValidator(_ConcreteValidator):
-            def validate(
+            def _validate_rules(
                 self,
                 artifact: dict[str, Any],
                 context: dict[str, Any] | None = None,

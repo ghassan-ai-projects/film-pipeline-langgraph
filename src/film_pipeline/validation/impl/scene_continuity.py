@@ -26,14 +26,14 @@ class SceneContinuityValidator(BaseValidator):
             scope=ValidationScope.SCENE,
             modalities=[ValidationModality.CONTINUITY],
             input_schema="scene_clips",
-            models=["gemini-flash"],
+            model_profile="multimodal_reviewer",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
             blocking_conditions=["character_state_mismatch", "prop_disappeared"],
             warning_conditions=["lighting_shift", "wardrobe_minor_drift"],
         )
         super().__init__(entry)
 
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: object = None,
@@ -187,6 +187,10 @@ class SceneContinuityValidator(BaseValidator):
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
                 severity=str(i.get("severity", "info")),
+                suggestion=str(i.get("suggestion", "")),
+                affected_entity=str(i.get("affected_entity", "")),
+                affected_field=str(i.get("affected_field", "")),
+                affected_shot=str(i.get("affected_shot", "")),
             )
             for i in raw.get("issues", [])
         ]

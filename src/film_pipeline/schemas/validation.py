@@ -18,6 +18,10 @@ class ValidationIssue(SchemaBase):
     code: str
     message: str
     severity: str = Field(description="'info' | 'warning' | 'blocking'.")
+    suggestion: str = ""
+    affected_entity: str = ""
+    affected_field: str = ""
+    affected_shot: str = ""
 
 
 class ValidationReport(SchemaBase):

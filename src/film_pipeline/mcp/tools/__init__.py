@@ -794,7 +794,9 @@ Return ONLY valid JSON. No markdown fences, no commentary.
         # Use PromptRunner with model_adapter if available
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(prompt, model="google/gemini-3-flash-preview")
+            raw = runner.model_adapter.chat(
+                prompt, model=runner.model_router.resolve("creative_writer")
+            )
             model_output = raw if isinstance(raw, dict) else {}
         else:
             # Mock mode: return a minimal valid response
@@ -1008,7 +1010,9 @@ Return ONLY valid JSON:
         runner = _services(rt).prompt_runner
         model_output: dict[str, Any]
         if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(prompt, model="google/gemini-3-flash-preview")
+            raw = runner.model_adapter.chat(
+                prompt, model=runner.model_router.resolve("creative_writer")
+            )
             model_output = raw if isinstance(raw, dict) else {}
         else:
             model_output = {
@@ -1110,7 +1114,7 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
                 "Return JSON with 'profiles' array (profile_id, use_case, lens, "
                 "framing, movement, depth_of_field, composition_rules, "
                 "transition_rules, emotional_meaning) and 'default_profile_id'.",
-                model="google/gemini-3-flash-preview",
+                model=runner.model_router.resolve("creative_writer"),
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1215,7 +1219,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
                 "Return JSON with 'color_palette' (4-8 hex codes), "
                 "'texture', 'grain', 'visual_mood', 'reference_stills', "
                 "and 'must_not_change'.",
-                model="google/gemini-3-flash-preview",
+                model=runner.model_router.resolve("creative_writer"),
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1317,7 +1321,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
                 "Return JSON with 'shot_matrix' containing 'rows' array of shot rows "
                 "(shot_id, act_id, scene_id, duration_seconds, characters, environment, "
                 "camera_profile, priority, risk_level) and 'coverage_groups' array.",
-                model="google/gemini-3-flash-preview",
+                model=runner.model_router.resolve("creative_writer"),
             )
             model_output = raw if isinstance(raw, dict) else {}
         else:
@@ -1836,6 +1840,9 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
                     frame_review_result = review_frame(
                         target_path,
                         retry_prompt,
+                        model=_services(rt).prompt_runner.model_router.resolve_or_raise(
+                            "visual_reasoner"
+                        ),
                         subject_type=str(raw.get("subject_type", "character")),
                         frame_id=reference_id,
                     )
@@ -2468,9 +2475,16 @@ def _build_optional_sheets(
 def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
     """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""
     try:
+        from film_pipeline.agents.model_routing import ModelRouter
         from film_pipeline.generation.sheet_reviewer import review_composite_sheet
 
-        review_composite_sheet(sheet_path, sheet_type, subject_id)
+        router = ModelRouter()
+        review_composite_sheet(
+            sheet_path,
+            sheet_type,
+            subject_id,
+            model=router.resolve_or_raise("visual_reasoner"),
+        )
     except Exception:
         pass  # validation failure doesn't block
 

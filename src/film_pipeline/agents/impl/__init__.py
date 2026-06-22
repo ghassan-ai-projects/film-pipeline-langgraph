@@ -11,6 +11,7 @@ from film_pipeline.agents.impl.intake_agent import IntakeAgent
 from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
 from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
 from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
 from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 
@@ -26,6 +27,7 @@ __all__ = [
     "QCSynthesisAgent",
     "ScreenwriterAgent",
     "ShotBibleAgent",
+    "StructureExtractorAgent",
     "StyleBibleAgent",
     "VisualDevAgent",
 ]

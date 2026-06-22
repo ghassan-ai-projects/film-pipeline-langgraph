@@ -21,6 +21,7 @@ def regenerate_failing_tiles(
     *,
     regenerate_fn: Any,
     max_iterations: int = 3,
+    model: str = "",
 ) -> tuple[float, int, list[str]]:
     """Regenerate failing tiles from a composite validation review.
 
@@ -32,6 +33,7 @@ def regenerate_failing_tiles(
         regenerate_fn: Callable(entry, prompt_feedback) -> Path that regenerates
                        a single frame and returns the new file path.
         max_iterations: Max delta iterations (default 3).
+        model: Model ID for sheet review (required, resolved via ModelRouter).
 
     Returns:
         (best_score, iterations_used, failing_tiles_history)
@@ -65,7 +67,7 @@ def regenerate_failing_tiles(
         # Re-validate the sheet
         sheet_type = sheet_review.sheet_type
         subject_id = sheet_review.sheet_id
-        sheet_review = review_composite_sheet(sheet_path, sheet_type, subject_id)
+        sheet_review = review_composite_sheet(sheet_path, sheet_type, subject_id, model=model)
 
         if sheet_review.total > best_score:
             best_score = sheet_review.total

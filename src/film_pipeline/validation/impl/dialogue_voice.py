@@ -26,14 +26,14 @@ class DialogueVoiceValidator(BaseValidator):
             scope=ValidationScope.SCENE,
             modalities=[ValidationModality.TEXT],
             input_schema="scene_script",
-            models=["gpt-5-mini"],
+            model_profile="text_validator",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
             blocking_conditions=["voice_inconsistency", "character_truth_broken"],
             warning_conditions=["generic_dialogue", "exposition_heavy"],
         )
         super().__init__(entry)
 
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: object = None,
@@ -185,6 +185,10 @@ class DialogueVoiceValidator(BaseValidator):
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
                 severity=str(i.get("severity", "info")),
+                suggestion=str(i.get("suggestion", "")),
+                affected_entity=str(i.get("affected_entity", "")),
+                affected_field=str(i.get("affected_field", "")),
+                affected_shot=str(i.get("affected_shot", "")),
             )
             for i in raw.get("issues", [])
         ]

@@ -23,8 +23,8 @@ def check_agent_registry() -> tuple[bool, str]:
         from film_pipeline.agents.mvp import MVP_AGENTS
 
         count = len(MVP_AGENTS)
-        if count != 19:
-            return False, f"Expected 19 agents, got {count}"
+        if count != 20:
+            return False, f"Expected 20 agents, got {count}"
         return True, f"{count} agents registered"
     except Exception as e:
         return False, str(e)

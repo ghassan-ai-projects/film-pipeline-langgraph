@@ -47,6 +47,7 @@ class TestRegenerateFailingTiles:
             tmp_path,
             regenerate_fn=regen_fn,
             max_iterations=2,
+            model="test-model",
         )
 
         assert "profile-right" in regenerated

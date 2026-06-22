@@ -27,7 +27,7 @@ class ValidatorRegistryEntry(SchemaBase):
     modalities: list[ValidationModality] = Field(default_factory=list)
     input_schema: str = ""
     output_schema: str = "validation-report:v1"
-    models: list[str] = Field(default_factory=list)
+    model_profile: str = ""
     thresholds: ValidatorThresholds = Field(default_factory=ValidatorThresholds)
     blocking_conditions: list[str] = Field(default_factory=list)
     warning_conditions: list[str] = Field(default_factory=list)

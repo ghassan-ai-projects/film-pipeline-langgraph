@@ -101,7 +101,7 @@ def review_frame(
     frame_id: str = "",
     http_opener: Any = None,
     api_key: str | None = None,
-    model: str = "gemini-3-flash-preview",
+    model: str,
 ) -> FrameReviewResult:
     """Run Gemini Flash review on a single reference frame.
 

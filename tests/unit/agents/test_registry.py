@@ -45,7 +45,7 @@ class TestAgentRegistry:
     def test_register_many(self) -> None:
         registry = AgentRegistry()
         registry.register_many(MVP_AGENTS)
-        assert len(registry) == 19
+        assert len(registry) == 20
 
     def test_lookup_by_id(self) -> None:
         registry = AgentRegistry()

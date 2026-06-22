@@ -24,12 +24,15 @@ def after_phase(state: dict[str, Any]) -> str:
     # Actions that route to the human gate
     if action in (
         "wait_for_human",
-        "handle_blockers",
         "present_review_package",
         "escalate_to_human",
         "continue_unrelated_work",
     ):
         return "await_approval"
+
+    # Actions that route to automatic repair
+    if action in ("handle_blockers",):
+        return "repair"
 
     # Actions that route to a phase node (keep advance_to_ prefix for
     # compatibility with existing tests and graph node routing)

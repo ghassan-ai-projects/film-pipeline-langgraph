@@ -109,6 +109,7 @@ class TestReviewFrame:
         result = review_frame(
             png,
             "test prompt",
+            model="test-model",
             http_opener=_mock_opener(response),
             api_key="test-key",
         )
@@ -151,6 +152,7 @@ class TestReviewFrame:
         result = review_frame(
             png,
             "test prompt",
+            model="test-model",
             http_opener=_mock_opener(response),
             api_key="test-key",
         )
@@ -180,6 +182,7 @@ class TestReviewFrame:
         result = review_frame(
             png,
             "test prompt",
+            model="test-model",
             http_opener=_mock_opener(response),
             api_key="test-key",
         )
@@ -191,6 +194,7 @@ class TestReviewFrame:
         result = review_frame(
             png,
             "test prompt",
+            model="test-model",
             http_opener=_mock_opener({"candidates": []}),
             api_key="test-key",
         )
@@ -201,6 +205,7 @@ class TestReviewFrame:
         result = review_frame(
             tmp_path / "nonexistent.png",
             "test prompt",
+            model="test-model",
             api_key="test-key",
         )
         assert result.passed is False

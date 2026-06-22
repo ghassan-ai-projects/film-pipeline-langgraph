@@ -20,20 +20,22 @@ class ScriptStructureValidator(BaseValidator):
     Matches the ``scene-writing-validator`` contract.
     """
 
+    llm_enabled = True
+
     def __init__(self) -> None:
         entry = ValidatorRegistryEntry(
             validator_id="scene-writing-validator",
             scope=ValidationScope.SCENE,
             modalities=[ValidationModality.TEXT],
             input_schema="scene_script",
-            models=["gemini-flash"],
+            model_profile="text_validator",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
             blocking_conditions=["missing_scene_intent", "no_conflict"],
             warning_conditions=["dialogue_dense", "scene_too_long"],
         )
         super().__init__(entry)
 
-    def validate(
+    def _validate_rules(
         self,
         artifact: dict[str, Any],
         context: object = None,
@@ -137,6 +139,10 @@ class ScriptStructureValidator(BaseValidator):
         return {"scenes_count": len(scenes), "issues": issues}
 
     def extract_score(self, raw: dict[str, Any]) -> float:
+        # LLM path: score is directly in the response
+        if "score" in raw and "scenes_count" not in raw:
+            return float(raw.get("score", 0))
+        # Stub path: compute from issue counts
         issues: list[dict[str, str]] = raw.get("issues", [])
         scenes_count: int = raw.get("scenes_count", 0)
         if scenes_count == 0:
@@ -156,6 +162,10 @@ class ScriptStructureValidator(BaseValidator):
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
                 severity=str(i.get("severity", "info")),
+                suggestion=str(i.get("suggestion", "")),
+                affected_entity=str(i.get("affected_entity", "")),
+                affected_field=str(i.get("affected_field", "")),
+                affected_shot=str(i.get("affected_shot", "")),
             )
             for i in raw.get("issues", [])
         ]

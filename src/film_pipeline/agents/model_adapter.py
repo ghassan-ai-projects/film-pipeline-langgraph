@@ -24,9 +24,15 @@ class ModelAdapter:
     Testable: pass ``_http_opener`` to inject a mock HTTP handler.
     """
 
-    def __init__(self, http_opener: Any = None, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        http_opener: Any = None,
+        api_key: str | None = None,
+        gemini_api_key: str | None = None,
+    ) -> None:
         self._http_opener = http_opener
         self._configured_api_key = api_key
+        self._configured_gemini_api_key = gemini_api_key
 
     def _api_key(self) -> str:
         key = self._configured_api_key or lookup("seedance-openrouter")
@@ -34,6 +40,12 @@ class ModelAdapter:
             raise RuntimeError(
                 "OPENROUTER_API_KEY is not set. Set it in the environment or in a local .env file."
             )
+        return key
+
+    def _gemini_api_key(self) -> str:
+        key = self._configured_gemini_api_key or lookup("gemini-imagen-4")
+        if not key:
+            raise RuntimeError("GOOGLE_API_KEY is not set. Set it in the environment or .env file.")
         return key
 
     def _request(
@@ -106,6 +118,109 @@ class ModelAdapter:
             raise RuntimeError("OpenRouter returned no choices.")
         msg: dict[str, Any] = choices[0].get("message", {})
         return str(msg.get("content", ""))
+
+    def chat_multimodal(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        images_b64: list[str] | None = None,
+        mime_type: str = "image/png",
+        max_tokens: int = 4096,
+        temperature: float = 0.2,
+    ) -> str:
+        """Send prompt + images to a multimodal model.
+
+        When model starts with 'google/', uses Gemini's generateContent API
+        with inline image data. Otherwise falls back to text-only chat()
+        (images are dropped with a warning).
+
+        Args:
+            prompt: The text prompt.
+            model: Full model ID (e.g. "google/gemini-3-flash-preview").
+            images_b64: Base64-encoded images (no data URI prefix).
+            mime_type: Image MIME type for Gemini API.
+            max_tokens: Max output tokens.
+            temperature: Generation temperature.
+
+        Returns:
+            Model's text response.
+        """
+        if not images_b64:
+            return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
+
+        if model.startswith("google/"):
+            return self._call_gemini_api(
+                prompt=prompt,
+                model=model,
+                images_b64=images_b64,
+                mime_type=mime_type,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+        import logging
+
+        logging.warning(
+            "chat_multimodal: dropping %d images for non-Google model '%s'",
+            len(images_b64),
+            model,
+        )
+        return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
+
+    def _call_gemini_api(
+        self,
+        prompt: str,
+        model: str,
+        images_b64: list[str],
+        mime_type: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
+        """Call Gemini's generateContent API with text + inline images."""
+        key = self._gemini_api_key()
+        gemini_model = model.removeprefix("google/")
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{gemini_model}:generateContent?key={key}"
+        )
+
+        parts: list[dict[str, Any]] = [{"text": prompt}]
+        for img in images_b64:
+            parts.append({"inline_data": {"mime_type": mime_type, "data": img}})
+
+        body = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+        )
+
+        opener: Any = self._http_opener or urllib.request.build_opener()
+        try:
+            with opener.open(req) as resp:
+                raw: Any = json.loads(resp.read().decode("utf-8"))
+                response: dict[str, Any] = dict(raw)
+        except (urllib.error.HTTPError, OSError) as e:
+            detail = str(e)
+            if isinstance(e, urllib.error.HTTPError):
+                body_text = e.read().decode(errors="replace")
+                detail = f"HTTP {e.code}: {body_text[:200]}"
+            raise RuntimeError(f"Gemini generateContent failed: {detail}") from e
+
+        candidates: list[dict[str, Any]] = response.get("candidates", [])
+        if not candidates:
+            raise RuntimeError("Gemini returned no candidates.")
+        parts_out: list[dict[str, Any]] = candidates[0].get("content", {}).get("parts", [])
+        if not parts_out:
+            raise RuntimeError("Gemini returned no content parts.")
+        return str(parts_out[0].get("text", ""))
 
     def chat_json(
         self,
