@@ -34,6 +34,9 @@ mcp = [
   "mcp>=1.0",
 ]
 
+[project.scripts]
+film-pipeline-tui = "film_pipeline.tui.app:main"
+
 [project.urls]
 Homepage = "https://github.com/ghassan-ai-projects/film-pipeline-langgraph"
 Repository = "https://github.com/ghassan-ai-projects/film-pipeline-langgraph"

@@ -192,6 +192,12 @@ class StudioRuntime:
                 Command(resume={"action": "approve"}),
                 config,
             )
+            _preserve_external_generation_requests(state, active)
+            _strip_stale_generation_request_blockers(state)
+            if not _approval_made_progress(
+                state, current_phase
+            ) or _has_stale_generation_request_blocker(state, active):
+                state = self._advance_to_next_phase(dict(active))
         except Exception:
             # No checkpoint exists — advance manually via phase nodes
             state = self._advance_to_next_phase(dict(active))
@@ -484,6 +490,70 @@ def _normalize_server_mode(server_mode: str) -> str:
     if mode not in {"mock", "real"}:
         raise ValueError(f"server_mode must be 'mock' or 'real', got '{server_mode}'")
     return mode
+
+
+def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
+    """Return whether a graph approval resume changed phase or intentionally blocked."""
+    if state.get("completed"):
+        return True
+    if state.get("_approval_blocked_by_issues"):
+        return True
+    issues = state.get("issues", [])
+    if isinstance(issues, list) and any(
+        isinstance(issue, dict) and issue.get("severity") == "blocking" for issue in issues
+    ):
+        return True
+    current_phase = str(state.get("current_phase", ""))
+    if current_phase == previous_phase:
+        return False
+    if current_phase in PHASE_ORDER and previous_phase in PHASE_ORDER:
+        return PHASE_ORDER.index(current_phase) > PHASE_ORDER.index(previous_phase)
+    return bool(current_phase)
+
+
+def _has_stale_generation_request_blocker(
+    resumed_state: dict[str, Any],
+    active_state: dict[str, Any],
+) -> bool:
+    """Detect graph checkpoints that predate externally planned generation requests."""
+    if str(active_state.get("current_phase", "")) != "generation":
+        return False
+    if not active_state.get("generation_requests"):
+        return False
+    if resumed_state.get("generation_requests"):
+        return False
+    issues = resumed_state.get("issues", [])
+    if not isinstance(issues, list):
+        return False
+    stale_codes = {"empty_generation_requests", "no_generation_requests"}
+    return any(isinstance(issue, dict) and issue.get("code") in stale_codes for issue in issues)
+
+
+def _preserve_external_generation_requests(
+    resumed_state: dict[str, Any],
+    active_state: dict[str, Any],
+) -> None:
+    """Carry generation requests created by MCP tools across graph checkpoint resumes."""
+    if resumed_state.get("generation_requests"):
+        return
+    generation_requests = active_state.get("generation_requests")
+    if generation_requests:
+        resumed_state["generation_requests"] = generation_requests
+
+
+def _strip_stale_generation_request_blockers(state: dict[str, Any]) -> None:
+    """Remove generated request-missing blockers after requests are restored."""
+    if not state.get("generation_requests"):
+        return
+    issues = state.get("issues", [])
+    if not isinstance(issues, list):
+        return
+    stale_codes = {"empty_generation_requests", "no_generation_requests"}
+    state["issues"] = [
+        issue
+        for issue in issues
+        if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
+    ]
 
 
 def _configured_server_mode() -> str:

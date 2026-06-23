@@ -2637,6 +2637,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
         prompt_ref=prompt_ref,
         mode=mode,
     )
+    _sync_generation_requests_from_ledger(active, ledger.rows)
     return _ok(
         planned=len(shot_ids),
         total_rows=len(ledger.rows),
@@ -2673,12 +2674,44 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
         return _error(str(e))
 
     submitted = [r for r in ledger.rows if r.status.value == "submitted"]
+    _sync_generation_requests_from_ledger(active, submitted)
     estimated_total = mgr.estimate_total_cost(project_id)
     return _ok(
         approved=len(submitted),
         total_rows=len(ledger.rows),
         estimated_total_cost_usd=estimated_total,
     )
+
+
+def _sync_generation_requests_from_ledger(active: dict[str, Any], rows: list[Any]) -> None:
+    """Publish dispatchable generation requests from ledger rows into graph state."""
+    requests: list[dict[str, object]] = []
+    for row in rows:
+        shot_id = str(getattr(row, "shot_id", ""))
+        if not shot_id:
+            continue
+        prompt_ref = str(getattr(row, "prompt_ref", ""))
+        requests.append(
+            {
+                "generation_request_id": str(getattr(row, "generation_request_id", "")),
+                "generation_id": str(getattr(row, "generation_id", "")),
+                "project_id": str(getattr(row, "project_id", active.get("project_id", ""))),
+                "shot_id": shot_id,
+                "mode": str(getattr(getattr(row, "mode", ""), "value", getattr(row, "mode", ""))),
+                "provider": str(getattr(row, "provider", "")),
+                "model": str(getattr(row, "model", "")),
+                "prompt_ref": prompt_ref,
+                "prompt_payload": {
+                    "prompt_ref": prompt_ref,
+                    "shot_id": shot_id,
+                },
+                "reference_refs": list(getattr(row, "reference_refs", [])),
+                "status": str(
+                    getattr(getattr(row, "status", ""), "value", getattr(row, "status", ""))
+                ),
+            }
+        )
+    active["generation_requests"] = requests
 
 
 async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
