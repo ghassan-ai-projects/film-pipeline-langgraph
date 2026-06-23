@@ -18,6 +18,18 @@ make setup      # uv sync --group dev
 make ci-check   # format + lint + test (90% coverage) + build + product-gate
 ```
 
+Run the terminal operator console:
+
+```bash
+uv run film-pipeline-tui
+```
+
+Equivalent module entry point:
+
+```bash
+uv run python -m film_pipeline.tui.app
+```
+
 ## Current Status
 
 The repository implements an 8-phase architecture optimization across the full
@@ -77,6 +89,43 @@ pytest -m integration  # integration
 # Build package
 make build
 ```
+
+### Terminal Operator Console
+
+The TUI is a keyboard-first operator console for creating a project from an idea,
+reviewing generated artifacts, approving phases, requesting revisions, and
+inspecting checkpoints, providers, audit events, and artifacts.
+
+Start it from the repository root:
+
+```bash
+uv run film-pipeline-tui
+```
+
+Or start directly from the module:
+
+```bash
+uv run python -m film_pipeline.tui.app
+```
+
+To open directly into project creation:
+
+```bash
+uv run film-pipeline-tui --create
+```
+
+Basic create-from-idea flow:
+
+1. Choose `1. New project from idea`.
+2. Enter `project id`, `title`, optional `slug`, runtime mode `mock`,
+   workflow mode `manual`, and the film idea.
+3. The console creates the project, submits the idea, runs intake, and opens the dashboard.
+4. Use `4. Review workspace` to inspect the current phase.
+5. Use `5. Approve phase` to advance, or `6. Request revision` to send notes.
+
+The first implementation uses the in-process gateway over the shared
+application service layer. It does not require network access or provider keys
+for mock-mode project creation.
 
 ## Documentation
 
