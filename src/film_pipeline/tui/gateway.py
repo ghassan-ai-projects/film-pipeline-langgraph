@@ -12,6 +12,7 @@ from film_pipeline.app.services.models import (
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
+    ValidationWorkspace,
 )
 
 
@@ -35,6 +36,9 @@ class StudioGateway(Protocol):
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
         """Return the current phase review workspace."""
+
+    def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
+        """Return validation reports and issues."""
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         """Approve the active phase."""

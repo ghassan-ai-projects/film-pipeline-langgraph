@@ -13,6 +13,7 @@ from film_pipeline.app.services.models import (
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
+    ValidationWorkspace,
 )
 from film_pipeline.tui.app import OperatorConsole
 from film_pipeline.tui.formatting import table
@@ -23,6 +24,8 @@ class RecordingGateway:
     """Small gateway fake for console interaction tests."""
 
     created_request: ProjectCreateRequest | None = None
+    approved_count: int = 0
+    revision_count: int = 0
 
     def list_projects(self) -> list[ProjectListItem]:
         return []
@@ -62,7 +65,17 @@ class RecordingGateway:
             recommendation="Review the intake outputs.",
         )
 
+    def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
+        return ValidationWorkspace(
+            project_id=project_id or "field-message",
+            phase="intake",
+            source="stored_state",
+            reports=[{"validator_id": "script-structure", "score": 91}],
+            blocking_issues=[{"severity": "blocking", "message": "Missing shot prompt."}],
+        )
+
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
+        self.approved_count += 1
         return MutationResult(
             ok=True,
             project_id=project_id or "field-message",
@@ -70,6 +83,7 @@ class RecordingGateway:
         )
 
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
+        self.revision_count += 1
         return MutationResult(
             ok=True,
             project_id=project_id or "field-message",
@@ -123,6 +137,51 @@ class TestOperatorConsole:
 
         assert "project_id" in rendered
         assert "status" in rendered
+
+    def test_approve_phase_requires_confirmation(self) -> None:
+        gateway = RecordingGateway()
+        inputs = iter(["n"])
+        output: list[str] = []
+        console = OperatorConsole(
+            gateway=gateway,
+            input_func=lambda _prompt: next(inputs),
+            output_func=output.append,
+        )
+        console._active_project_id = "field-message"
+
+        console._approve_phase()
+
+        assert gateway.approved_count == 0
+        assert "Approval cancelled." in output
+
+    def test_approve_phase_runs_after_confirmation(self) -> None:
+        gateway = RecordingGateway()
+        inputs = iter(["yes"])
+        output: list[str] = []
+        console = OperatorConsole(
+            gateway=gateway,
+            input_func=lambda _prompt: next(inputs),
+            output_func=output.append,
+        )
+        console._active_project_id = "field-message"
+
+        console._approve_phase()
+
+        assert gateway.approved_count == 1
+        assert any("Current phase: constitution" in line for line in output)
+
+    def test_validation_view_renders_reports_and_issues(self) -> None:
+        gateway = RecordingGateway()
+        output: list[str] = []
+        console = OperatorConsole(gateway=gateway, output_func=output.append)
+        console._active_project_id = "field-message"
+
+        console._show_validation()
+
+        rendered = "\n".join(output)
+        assert "Validation" in rendered
+        assert "script-structure" in rendered
+        assert "Missing shot prompt" in rendered
 
 
 def test_gateway_protocol_shape_accepts_recording_gateway() -> None:

@@ -83,6 +83,31 @@ class TestOperatorService:
         assert len(checkpoints) == 1
         assert checkpoints[0]["phase"] == "constitution"
 
+    def test_validation_workspace_splits_blocking_and_non_blocking_issues(
+        self, tmp_path: Path
+    ) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="validation-test",
+                title="Validation Test",
+                idea="A projectionist restores a lost frame.",
+            )
+        )
+        state = service.runtime.projects["validation-test"]
+        state["_validation_reports"] = [{"validator_id": "script-structure", "score": 91}]
+        state["issues"] = [
+            {"severity": "blocking", "message": "Missing shot prompt."},
+            {"severity": "warning", "message": "Weak scene transition."},
+        ]
+
+        workspace = service.get_validation_workspace("validation-test")
+
+        assert workspace.source == "stored_state"
+        assert len(workspace.reports) == 1
+        assert len(workspace.blocking_issues) == 1
+        assert len(workspace.non_blocking_issues) == 1
+
     def test_submit_idea_requires_text(self, tmp_path: Path) -> None:
         service = _service(tmp_path)
         service.create_project(ProjectCreateRequest(project_id="empty", title="Empty"))

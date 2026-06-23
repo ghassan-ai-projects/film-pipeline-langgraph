@@ -10,6 +10,7 @@ from film_pipeline.app.services.models import (
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
+    ValidationWorkspace,
 )
 from film_pipeline.app.services.operator import OperatorService
 
@@ -37,6 +38,9 @@ class InProcessStudioGateway:
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
         return self._service.get_review_workspace(project_id)
+
+    def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
+        return self._service.get_validation_workspace(project_id)
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         return self._service.approve_phase(project_id)

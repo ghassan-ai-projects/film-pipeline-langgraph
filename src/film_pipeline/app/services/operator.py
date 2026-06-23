@@ -20,6 +20,7 @@ from film_pipeline.app.services.models import (
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
+    ValidationWorkspace,
 )
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.router import compute_actions
@@ -164,6 +165,27 @@ class OperatorService:
             open_issues=blocking_issues,
             available_actions=list(router_result.eligible),
             blocked_actions=list(router_result.blocked),
+        )
+
+    def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
+        """Return stored validation reports and current validation issues."""
+        state = self._state_for_project(project_id)
+        reports = state.get("_validation_reports", [])
+        report_list = list(reports) if isinstance(reports, list) else []
+        issue_list = [
+            issue
+            for issue in cast(list[Mapping[str, Any]], state.get("issues", []))
+            if isinstance(issue, dict)
+        ]
+        blocking = [dict(issue) for issue in issue_list if issue.get("severity") == "blocking"]
+        non_blocking = [dict(issue) for issue in issue_list if issue.get("severity") != "blocking"]
+        return ValidationWorkspace(
+            project_id=str(state["project_id"]),
+            phase=str(state.get("current_phase", "")),
+            source="stored_state" if report_list else "none",
+            reports=[cast(dict[str, Any], report) for report in report_list],
+            blocking_issues=blocking,
+            non_blocking_issues=non_blocking,
         )
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
