@@ -81,12 +81,13 @@ class OperatorConsole:
                 "4": self._show_review,
                 "5": self._approve_phase,
                 "6": self._request_revision_interactive,
-                "7": self._list_artifacts,
-                "8": self._inspect_artifact_interactive,
-                "9": self._list_checkpoints,
-                "10": self._list_providers,
-                "11": self._show_audit,
-                "12": self._submit_idea_interactive,
+                "7": self._show_validation,
+                "8": self._list_artifacts,
+                "9": self._inspect_artifact_interactive,
+                "10": self._list_checkpoints,
+                "11": self._list_providers,
+                "12": self._show_audit,
+                "13": self._submit_idea_interactive,
             }
             action = actions.get(choice)
             if action is None:
@@ -108,12 +109,13 @@ class OperatorConsole:
                 "4. Review workspace",
                 "5. Approve phase",
                 "6. Request revision",
-                "7. List artifacts",
-                "8. Inspect artifact",
-                "9. Checkpoints",
-                "10. Providers",
-                "11. Audit",
-                "12. Submit idea to active project",
+                "7. Validation",
+                "8. List artifacts",
+                "9. Inspect artifact",
+                "10. Checkpoints",
+                "11. Providers",
+                "12. Audit",
+                "13. Submit idea to active project",
                 "q. Quit",
             ]
         )
@@ -198,12 +200,21 @@ class OperatorConsole:
                 self._output(f"- {issue}")
 
     def _approve_phase(self) -> None:
+        dashboard = self.gateway.get_dashboard(self._project_ref())
+        if not self._confirm(
+            f"Approve phase '{dashboard.current_phase}' for project '{dashboard.project_id}'?"
+        ):
+            self._output("Approval cancelled.")
+            return
         result = self.gateway.approve_phase(self._project_ref())
         self._active_project_id = result.project_id
         self._output(f"{result.message} Current phase: {result.current_phase}")
 
     def _request_revision_interactive(self) -> None:
         note = self._input("revision note: ").strip()
+        if not self._confirm("Submit revision request?"):
+            self._output("Revision request cancelled.")
+            return
         result = self.gateway.request_revision(note, self._project_ref())
         self._active_project_id = result.project_id
         self._output(f"{result.message} Current phase: {result.current_phase}")
@@ -217,6 +228,34 @@ class OperatorConsole:
         result = self.gateway.submit_idea(project_id, idea)
         self._active_project_id = result.project_id
         self._output(f"{result.message} Current phase: {result.current_phase}")
+
+    def _show_validation(self) -> None:
+        workspace = self.gateway.get_validation_workspace(self._project_ref())
+        self._output(title("Validation"))
+        self._output(
+            table(
+                [
+                    {
+                        "project": workspace.project_id,
+                        "phase": workspace.phase or "none",
+                        "source": workspace.source,
+                        "reports": len(workspace.reports),
+                        "blocking": len(workspace.blocking_issues),
+                        "non_blocking": len(workspace.non_blocking_issues),
+                    }
+                ],
+                ["project", "phase", "source", "reports", "blocking", "non_blocking"],
+            )
+        )
+        if workspace.reports:
+            self._output("\nReports:")
+            self._output(pretty(workspace.reports))
+        if workspace.blocking_issues:
+            self._output("\nBlocking issues:")
+            self._output(pretty(workspace.blocking_issues))
+        if workspace.non_blocking_issues:
+            self._output("\nWarnings and info:")
+            self._output(pretty(workspace.non_blocking_issues))
 
     def _list_artifacts(self) -> None:
         artifacts = self.gateway.list_artifacts(self._project_ref())
@@ -263,6 +302,10 @@ class OperatorConsole:
 
     def _project_ref(self) -> str | None:
         return self._active_project_id or None
+
+    def _confirm(self, prompt: str) -> bool:
+        answer = self._input(f"{prompt} [y/N] ").strip().lower()
+        return answer in {"y", "yes"}
 
 
 def main(argv: list[str] | None = None) -> int:

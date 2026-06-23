@@ -72,6 +72,18 @@ class ReviewWorkspace:
 
 
 @dataclass(frozen=True)
+class ValidationWorkspace:
+    """Validation report and issue summary for a project."""
+
+    project_id: str
+    phase: str
+    source: str
+    reports: list[dict[str, Any]] = field(default_factory=list)
+    blocking_issues: list[dict[str, Any]] = field(default_factory=list)
+    non_blocking_issues: list[dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ArtifactDetail:
     """Artifact detail shown by the TUI."""
 
