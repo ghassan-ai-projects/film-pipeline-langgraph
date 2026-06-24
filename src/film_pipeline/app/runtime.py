@@ -319,6 +319,62 @@ class StudioRuntime:
             events = [e for e in events if e.get("details", {}).get("project_id") == project_id]
         return events[-limit:]
 
+    # --- Operator comments ---
+
+    def add_operator_comment(
+        self,
+        project_id: str,
+        *,
+        target_type: str,
+        target_id: str,
+        body: str,
+        phase: str = "",
+        source: str = "tui",
+    ) -> dict[str, Any]:
+        """Persist an operator comment on a project target."""
+        project = self.projects.get(project_id)
+        if project is None:
+            raise ValueError(f"Project '{project_id}' not found.")
+        comment = {
+            "comment_id": f"comment:{uuid4().hex[:8]}",
+            "project_id": project_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "body": body,
+            "phase": phase,
+            "source": source,
+            "created_at": datetime.now(UTC).isoformat(),
+            "resolved": False,
+        }
+        project.setdefault("_operator_comments", []).append(comment)
+        self._persist_project_state(project_id)
+        self._record_audit(
+            "human",
+            "add_operator_comment",
+            project_id=project_id,
+            target_type=target_type,
+            target_id=target_id,
+            phase=phase,
+        )
+        return comment
+
+    def list_operator_comments(
+        self,
+        project_id: str,
+        *,
+        include_resolved: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Return operator comments for a project."""
+        project = self.projects.get(project_id)
+        if project is None:
+            raise ValueError(f"Project '{project_id}' not found.")
+        comments = [
+            comment
+            for comment in cast(list[dict[str, Any]], project.get("_operator_comments", []))
+            if include_resolved or not comment.get("resolved", False)
+        ]
+        return list(comments)
+
     # --- Blockers ---
 
     def get_blockers(self, project_id: str) -> list[dict[str, str]]:

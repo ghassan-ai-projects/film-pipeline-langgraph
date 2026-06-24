@@ -7,6 +7,8 @@ from film_pipeline.app.services.models import (
     AuditEvent,
     DashboardSummary,
     MutationResult,
+    OperatorComment,
+    OperatorCommentRequest,
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
@@ -47,6 +49,21 @@ class InProcessStudioGateway:
 
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
         return self._service.request_revision(note, project_id)
+
+    def add_operator_comment(
+        self,
+        request: OperatorCommentRequest,
+        project_id: str | None = None,
+    ) -> OperatorComment:
+        return self._service.add_operator_comment(request, project_id)
+
+    def list_operator_comments(
+        self,
+        project_id: str | None = None,
+        *,
+        include_resolved: bool = False,
+    ) -> list[OperatorComment]:
+        return self._service.list_operator_comments(project_id, include_resolved=include_resolved)
 
     def list_artifacts(
         self, project_id: str | None = None, phase: str | None = None

@@ -84,6 +84,32 @@ class ValidationWorkspace:
 
 
 @dataclass(frozen=True)
+class OperatorCommentRequest:
+    """Operator annotation attached to a concrete project target."""
+
+    target_type: str
+    target_id: str
+    body: str
+    phase: str = ""
+    source: str = "tui"
+
+
+@dataclass(frozen=True)
+class OperatorComment:
+    """Stored operator annotation."""
+
+    comment_id: str
+    project_id: str
+    target_type: str
+    target_id: str
+    body: str
+    phase: str
+    source: str
+    created_at: str
+    resolved: bool = False
+
+
+@dataclass(frozen=True)
 class ArtifactDetail:
     """Artifact detail shown by the TUI."""
 
