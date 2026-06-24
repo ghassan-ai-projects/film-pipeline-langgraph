@@ -350,6 +350,7 @@ def build_phase_detail(
     if dashboard and phase == dashboard.current_phase:
         if "approve_phase" in dashboard.eligible_actions:
             commands.append("approve")
+            commands.append("confirm approve")
         if "request_revision" in dashboard.eligible_actions:
             commands.append("revise <note>")
     summary = (
@@ -404,7 +405,14 @@ def build_command_suggestions(
                 {
                     "command": "approve",
                     "scope": "review",
-                    "reason": "approve the current phase",
+                    "reason": "preview approval consequence and require confirmation",
+                }
+            )
+            rows.append(
+                {
+                    "command": "confirm approve",
+                    "scope": "review",
+                    "reason": "commit pending phase approval after preview",
                 }
             )
         if "request_revision" in dashboard.eligible_actions:
@@ -500,6 +508,11 @@ def build_command_help_rows(options: CommandOptions) -> list[dict[str, object]]:
             "purpose": "prefill a targeted revision note without submitting it",
         },
         {
+            "command": "confirm approve",
+            "values": "after running approve",
+            "purpose": "commit the pending phase approval after consequence preview",
+        },
+        {
             "command": "create <project_id> | <title> | <idea>",
             "values": "three required fields",
             "purpose": "create a new film project with default runtime settings",
@@ -569,6 +582,7 @@ def build_command_validation(
         "audit",
         "next",
         "approve",
+        "confirm approve",
         "show blocked",
     }
     if normalized in tab_aliases:
