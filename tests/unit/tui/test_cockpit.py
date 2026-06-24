@@ -344,6 +344,7 @@ def test_command_suggestions_include_live_navigation_and_fix_commands() -> None:
     commands = [str(row["command"]) for row in suggestions]
     assert "phase script" in commands
     assert "approve" in commands
+    assert "confirm approve" in commands
     assert "fix SC_004" in commands
     assert "artifact script" in commands
     assert "scene SC_007" in commands
@@ -1054,7 +1055,7 @@ def test_textual_cockpit_next_command_opens_review_workspace() -> None:
     asyncio.run(run())
 
 
-def test_textual_cockpit_approve_alias_calls_gateway() -> None:
+def test_textual_cockpit_approve_requires_confirmation() -> None:
     async def run() -> None:
         gateway = RecordingGateway()
         app = FilmCockpitApp(gateway=gateway)
@@ -1063,7 +1064,28 @@ def test_textual_cockpit_approve_alias_calls_gateway() -> None:
             app._run_command("approve")
             await pilot.pause()
 
+            context = app.query_one("#context_panel", Static).renderable
+            assert gateway.approved_count == 0
+            assert app.pending_confirmation == "approve"
+            assert "Confirm Approval" in str(context)
+            assert "confirm approve" in str(context)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_confirm_approve_calls_gateway() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app._run_command("approve")
+            await pilot.pause()
+            app._run_command("confirm approve")
+            await pilot.pause()
+
             assert gateway.approved_count == 1
+            assert app.pending_confirmation == ""
 
     asyncio.run(run())
 

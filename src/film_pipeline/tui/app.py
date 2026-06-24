@@ -174,6 +174,7 @@ class FilmCockpitApp(App[None]):
         self.matrix_filter = ""
         self._matrix_pivot = "status"
         self.matrix_impact: MatrixImpact | None = None
+        self.pending_confirmation = ""
         self._table_rows: dict[str, list[dict[str, object]]] = {}
 
     def compose(self) -> ComposeResult:
@@ -304,12 +305,17 @@ class FilmCockpitApp(App[None]):
         palette.focus()
 
     def action_approve_phase(self) -> None:
-        """Approve the active phase."""
+        """Prepare explicit approval confirmation for the active phase."""
+        self._prepare_approval_confirmation()
+
+    def _approve_phase_now(self) -> None:
+        """Approve the active phase after explicit operator confirmation."""
         if not self.active_project_id:
             self._update_context("No active project.")
             return
         result = self.gateway.approve_phase(self.active_project_id)
         self.active_project_id = result.project_id
+        self.pending_confirmation = ""
         self._update_context(
             f"{result.message or 'Phase approved.'}\nCurrent phase: {result.current_phase}"
         )
@@ -972,6 +978,9 @@ class FilmCockpitApp(App[None]):
         if normalized == "approve":
             self.action_approve_phase()
             return
+        if normalized == "confirm approve":
+            self._confirm_approval()
+            return
         if normalized.startswith("revise "):
             self.query_one("#comment_input", Input).value = command.removeprefix("revise ").strip()
             self.action_request_revision()
@@ -1033,10 +1042,39 @@ class FilmCockpitApp(App[None]):
             return
         self._update_context(
             "Unknown command.\n\n"
-            "Try: next, phase <phase>, open review, open graph, show blocked, matrix blocking, "
-            "matrix pivot status, dashboard blockers, review issue <id>, thread <target>, "
-            "reader next, link <target>, draft <target> | <note>, validator <id>, fix <target>."
+            "Try: next, phase <phase>, open review, open graph, show blocked, approve, "
+            "confirm approve, matrix blocking, matrix pivot status, dashboard blockers, "
+            "review issue <id>, thread <target>, reader next, link <target>, "
+            "draft <target> | <note>, validator <id>, fix <target>."
         )
+
+    def _prepare_approval_confirmation(self) -> None:
+        snapshot = self.snapshot
+        dashboard = snapshot.dashboard if snapshot else None
+        if not self.active_project_id or snapshot is None or dashboard is None:
+            self._update_context("No active project.")
+            return
+        if "approve_phase" not in dashboard.eligible_actions:
+            self._update_context("Approval is not eligible for the current project state.")
+            return
+        blocking = len(snapshot.validation.blocking_issues) if snapshot.validation else 0
+        self.pending_confirmation = "approve"
+        self.action_open_tab("review")
+        self._update_context(
+            "Confirm Approval\n\n"
+            f"project: {dashboard.project_id}\n"
+            f"phase: {dashboard.current_phase or 'none'}\n"
+            f"mode: {dashboard.workflow_mode}/{dashboard.runtime_mode}\n"
+            f"blocking validation issues: {blocking}\n\n"
+            "Approval will promote the current candidate phase and resume the pipeline. "
+            "Type 'confirm approve' to continue."
+        )
+
+    def _confirm_approval(self) -> None:
+        if self.pending_confirmation != "approve":
+            self._update_context("No pending approval confirmation. Run 'approve' first.")
+            return
+        self._approve_phase_now()
 
     def _create_project_from_command(self, payload: str) -> None:
         parts = [part.strip() for part in payload.split("|")]
