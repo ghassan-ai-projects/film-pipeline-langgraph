@@ -8,7 +8,7 @@ import pytest
 
 from film_pipeline.app.runtime import create_runtime
 from film_pipeline.app.services.errors import BackendOperationError, ProjectNotFoundError
-from film_pipeline.app.services.models import ProjectCreateRequest
+from film_pipeline.app.services.models import OperatorCommentRequest, ProjectCreateRequest
 from film_pipeline.app.services.operator import OperatorService
 
 
@@ -107,6 +107,39 @@ class TestOperatorService:
         assert len(workspace.reports) == 1
         assert len(workspace.blocking_issues) == 1
         assert len(workspace.non_blocking_issues) == 1
+
+    def test_operator_comments_are_persisted_and_audited(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="notes", title="Notes"))
+
+        comment = service.add_operator_comment(
+            OperatorCommentRequest(
+                target_type="scene",
+                target_id="SC_007",
+                phase="script",
+                body="This scene needs a sharper emotional turn.",
+            ),
+            "notes",
+        )
+
+        comments = service.list_operator_comments("notes")
+        audit = service.get_audit_feed("notes")
+        assert comment.comment_id.startswith("comment:")
+        assert comments == [comment]
+        assert comments[0].target_type == "scene"
+        assert comments[0].target_id == "SC_007"
+        assert comments[0].body == "This scene needs a sharper emotional turn."
+        assert any(event.action == "add_operator_comment" for event in audit)
+
+    def test_operator_comment_requires_target_and_body(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="bad-notes", title="Bad Notes"))
+
+        with pytest.raises(BackendOperationError, match="comment body is required"):
+            service.add_operator_comment(
+                OperatorCommentRequest(target_type="scene", target_id="SC_001", body=""),
+                "bad-notes",
+            )
 
     def test_submit_idea_requires_text(self, tmp_path: Path) -> None:
         service = _service(tmp_path)

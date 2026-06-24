@@ -17,6 +17,8 @@ from film_pipeline.app.services.models import (
     AuditEvent,
     DashboardSummary,
     MutationResult,
+    OperatorComment,
+    OperatorCommentRequest,
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
@@ -214,6 +216,43 @@ class OperatorService:
             message="Revision requested.",
         )
 
+    def add_operator_comment(
+        self,
+        request: OperatorCommentRequest,
+        project_id: str | None = None,
+    ) -> OperatorComment:
+        """Persist a target-scoped operator comment."""
+        if not request.body.strip():
+            raise BackendOperationError("comment body is required.")
+        if not request.target_type.strip():
+            raise BackendOperationError("comment target_type is required.")
+        if not request.target_id.strip():
+            raise BackendOperationError("comment target_id is required.")
+        state = self._state_for_project(project_id)
+        raw = self.runtime.add_operator_comment(
+            str(state["project_id"]),
+            target_type=request.target_type.strip(),
+            target_id=request.target_id.strip(),
+            body=request.body.strip(),
+            phase=request.phase.strip(),
+            source=request.source.strip() or "tui",
+        )
+        return self._comment_from_raw(raw)
+
+    def list_operator_comments(
+        self,
+        project_id: str | None = None,
+        *,
+        include_resolved: bool = False,
+    ) -> list[OperatorComment]:
+        """List target-scoped operator comments."""
+        state = self._state_for_project(project_id)
+        comments = self.runtime.list_operator_comments(
+            str(state["project_id"]),
+            include_resolved=include_resolved,
+        )
+        return [self._comment_from_raw(comment) for comment in comments]
+
     def list_artifacts(
         self, project_id: str | None = None, phase: str | None = None
     ) -> list[dict[str, Any]]:
@@ -303,6 +342,20 @@ class OperatorService:
                 )
             )
         return feed
+
+    @staticmethod
+    def _comment_from_raw(raw: Mapping[str, Any]) -> OperatorComment:
+        return OperatorComment(
+            comment_id=str(raw.get("comment_id", "")),
+            project_id=str(raw.get("project_id", "")),
+            target_type=str(raw.get("target_type", "")),
+            target_id=str(raw.get("target_id", "")),
+            body=str(raw.get("body", "")),
+            phase=str(raw.get("phase", "")),
+            source=str(raw.get("source", "")),
+            created_at=str(raw.get("created_at", "")),
+            resolved=bool(raw.get("resolved", False)),
+        )
 
     def _state_for_project(self, project_id: str | None) -> dict[str, Any]:
         if project_id:

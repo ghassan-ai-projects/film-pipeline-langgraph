@@ -9,6 +9,8 @@ from film_pipeline.app.services.models import (
     AuditEvent,
     DashboardSummary,
     MutationResult,
+    OperatorComment,
+    OperatorCommentRequest,
     ProjectCreateRequest,
     ProjectListItem,
     ReviewWorkspace,
@@ -45,6 +47,21 @@ class StudioGateway(Protocol):
 
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
         """Request a revision with notes."""
+
+    def add_operator_comment(
+        self,
+        request: OperatorCommentRequest,
+        project_id: str | None = None,
+    ) -> OperatorComment:
+        """Persist a target-scoped operator comment."""
+
+    def list_operator_comments(
+        self,
+        project_id: str | None = None,
+        *,
+        include_resolved: bool = False,
+    ) -> list[OperatorComment]:
+        """List target-scoped operator comments."""
 
     def list_artifacts(
         self, project_id: str | None = None, phase: str | None = None
