@@ -33,6 +33,12 @@ class TestQualityInstructions:
         rendered = tpl.render(idea="test film idea")
         assert "QUALITY REQUIREMENTS" in rendered
 
+    def test_render_includes_current_date_context(self) -> None:
+        """render() injects temporal context and allows deterministic override."""
+        tpl = _screenwriter()
+        rendered = tpl.render(idea="test film idea", current_date="2026-06-24")
+        assert "# Runtime Context\nCurrent date: 2026-06-24" in rendered
+
     def test_empty_quality_instructions_not_rendered(self) -> None:
         """render() must NOT append quality section when field is empty."""
         tpl = PromptTemplate(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
@@ -106,10 +107,46 @@ class TestCharacterBibleAgent:
 
     def test_execute_handles_raw_string(self) -> None:
         agent = _make_agent()
+        payload: Any = json.dumps({"data": _VALID_OUTPUT})
 
-        result = agent.execute(_VALID_OUTPUT)
+        result = agent.execute(payload)
         bible = result["character_bible"]
         assert bible.character_id == "leo"
+        assert bible.visual_identity.identity_block.startswith("A tall man")
+
+    def test_execute_handles_malformed_model_output_shapes(self) -> None:
+        agent = _make_agent()
+        invalid_json: Any = "{not json"
+        non_dict: Any = 42
+
+        empty_from_json = agent.execute(invalid_json)["character_bible"]
+        empty_from_non_dict = agent.execute(non_dict)["character_bible"]
+        malformed = agent.execute(
+            {
+                "output": {
+                    "character_id": "leo",
+                    "project_id": "p1",
+                    "identity": "wrong type",
+                    "voice": "wrong type",
+                    "wardrobe": "wrong type",
+                    "emotional_arc": "wrong type",
+                    "relationships": "wrong type",
+                    "reference_assets": [1, "ref"],
+                    "must_not_change": [None, "identity"],
+                }
+            }
+        )["character_bible"]
+
+        assert empty_from_json.character_id == ""
+        assert empty_from_non_dict.character_id == ""
+        assert malformed.character_id == "leo"
+        assert malformed.visual_identity.identity_block == ""
+        assert malformed.voice_rules.vocabulary == []
+        assert malformed.wardrobe_rules.act_variants == {}
+        assert malformed.relationship_map == []
+        assert malformed.reference_assets == ["1", "ref"]
+        assert malformed.must_not_change == ["None", "identity"]
+        assert agent.validate({"character_bible": object()}) is False
 
     def test_execute_handles_empty_input(self) -> None:
         agent = _make_agent()

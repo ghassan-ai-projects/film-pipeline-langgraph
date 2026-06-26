@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from film_pipeline.providers.failure_classifier import FailureClassifier
+from film_pipeline.providers.failure_classifier import (
+    FailureClassifier,
+    compress_prompt_for_retry,
+    is_token_limit_exceeded,
+)
 from film_pipeline.providers.health import ProviderHealth, ProviderHealthTracker
 from film_pipeline.schemas._base import ProviderStatus
 
@@ -55,6 +59,33 @@ class TestFailureClassifier:
         assert health.status == ProviderStatus.BLOCKED_QUOTA
         assert "quota" in health.blocked_reason.lower()
         assert len(health.resume_requirements) > 0
+
+    def test_detects_provider_token_limit_errors(self) -> None:
+        assert is_token_limit_exceeded(
+            ValueError("context_length_exceeded: maximum context length exceeded"),
+            "openai/gpt-4.1",
+        )
+        assert is_token_limit_exceeded(
+            RuntimeError("ResourceExhausted: token count exceeds model limit"),
+            "google/gemini-3-flash-preview",
+        )
+        assert not is_token_limit_exceeded(ValueError("bad json"), "deepseek/deepseek-chat")
+
+    def test_compress_prompt_for_retry_preserves_task_and_output(self) -> None:
+        prompt = "\n\n".join(
+            [
+                "# Role\nwriter",
+                "# Core Task\nwrite the script",
+                "# Context\n" + ("0123456789" * 100),
+                "# Constraints\nkeep continuity",
+                "# Output\njson schema",
+            ]
+        )
+        compressed = compress_prompt_for_retry(prompt, factor=0.2)
+        assert "# Core Task\nwrite the script" in compressed
+        assert "# Output\njson schema" in compressed
+        assert "context compressed for retry" in compressed
+        assert len(compressed) < len(prompt)
 
 
 class TestProviderHealthTracker:

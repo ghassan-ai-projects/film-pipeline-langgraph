@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import os
 import subprocess
@@ -285,6 +286,148 @@ def test_server_jsonrpc_initialize() -> None:
     assert response is not None
     result = cast(dict[str, object], response["result"])
     assert result["protocolVersion"] == "2025-03-26"
+
+
+def test_server_jsonrpc_handles_notifications_ping_and_unknown_method() -> None:
+    from film_pipeline.mcp.server import handle_jsonrpc
+
+    server = MCPServer()
+
+    initialized = asyncio.run(
+        handle_jsonrpc(server, {"jsonrpc": "2.0", "method": "notifications/initialized"})
+    )
+    ping = asyncio.run(handle_jsonrpc(server, {"jsonrpc": "2.0", "id": 2, "method": "ping"}))
+    unknown = asyncio.run(handle_jsonrpc(server, {"jsonrpc": "2.0", "id": 3, "method": "missing"}))
+
+    assert initialized is None
+    assert ping == {"jsonrpc": "2.0", "id": 2, "result": {}}
+    assert unknown is not None
+    assert unknown["error"] == {"code": -32601, "message": "Method not found: missing"}
+
+
+def test_server_jsonrpc_rejects_invalid_requests_and_tool_call_params() -> None:
+    from film_pipeline.mcp.server import handle_jsonrpc
+
+    server = MCPServer()
+
+    missing_method = asyncio.run(handle_jsonrpc(server, {"jsonrpc": "2.0", "id": 1}))
+    bad_name = asyncio.run(
+        handle_jsonrpc(
+            server,
+            {"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": 123}},
+        )
+    )
+    bad_args = asyncio.run(
+        handle_jsonrpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "tools/call",
+                "params": {"name": "list_projects", "arguments": []},
+            },
+        )
+    )
+
+    assert missing_method is not None
+    assert missing_method["error"] == {
+        "code": -32600,
+        "message": "Invalid request: missing method.",
+    }
+    assert bad_name is not None
+    assert bad_name["error"] == {
+        "code": -32602,
+        "message": "tools/call requires string param 'name'.",
+    }
+    assert bad_args is not None
+    assert bad_args["error"] == {
+        "code": -32602,
+        "message": "tools/call requires object param 'arguments'.",
+    }
+
+
+def test_server_jsonrpc_tools_list_and_call_success_error_flags() -> None:
+    from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
+    from film_pipeline.mcp.server import handle_jsonrpc
+
+    registry = ToolRegistry()
+    registry.register(
+        ToolContract(
+            name="returns_not_ok",
+            description="returns ok false",
+            group=ToolGroup.STATE,
+            input_schema={"type": "object"},
+        ),
+        lambda _args: {"ok": False, "message": "not ready"},
+    )
+    server = MCPServer(tools=registry)
+
+    listed = asyncio.run(
+        handle_jsonrpc(server, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    )
+    called = asyncio.run(
+        handle_jsonrpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "returns_not_ok", "arguments": {}},
+            },
+        )
+    )
+
+    assert listed is not None
+    listed_result = cast(dict[str, object], listed["result"])
+    tools = cast(list[dict[str, object]], listed_result["tools"])
+    assert tools == [
+        {
+            "name": "returns_not_ok",
+            "description": "returns ok false",
+            "inputSchema": {"type": "object"},
+        }
+    ]
+    assert called is not None
+    call_result = cast(dict[str, object], called["result"])
+    assert call_result["isError"] is True
+    assert call_result["structuredContent"] == {"ok": False, "message": "not ready"}
+
+
+def test_server_jsonrpc_tools_call_wraps_tool_errors() -> None:
+    from film_pipeline.mcp.server import handle_jsonrpc
+
+    server = MCPServer()
+
+    response = asyncio.run(
+        handle_jsonrpc(
+            server,
+            {
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "tools/call",
+                "params": {"name": "does_not_exist", "arguments": {}},
+            },
+        )
+    )
+
+    assert response is not None
+    assert response["error"] == {"code": -32000, "message": "Unknown tool: does_not_exist"}
+
+
+def test_server_framing_round_trips_jsonrpc_message() -> None:
+    from film_pipeline.mcp.server import _read_message, _write_message
+
+    stream = io.BytesIO()
+    _write_message(stream, {"jsonrpc": "2.0", "id": 1, "result": {"ok": True}})
+    stream.seek(0)
+
+    assert _read_message(stream) == {"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}
+
+
+def test_server_framing_returns_none_on_empty_stream() -> None:
+    from film_pipeline.mcp.server import _read_message
+
+    assert _read_message(io.BytesIO()) is None
 
 
 def test_server_stdio_initialize_and_tools_list() -> None:

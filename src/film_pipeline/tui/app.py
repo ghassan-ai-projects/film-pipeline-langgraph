@@ -37,6 +37,7 @@ from film_pipeline.tui.view_models import (
     ReaderView,
     TargetSelection,
     build_artifact_reader,
+    build_asset_action_rows,
     build_command_help_rows,
     build_command_options,
     build_command_suggestions,
@@ -97,6 +98,58 @@ class FilmCockpitApp(App[None]):
         padding: 0 1;
     }
 
+    #dashboard_top {
+        height: 7;
+    }
+
+    #dashboard_summary {
+        width: 1fr;
+    }
+
+    #attention_panel {
+        width: 1fr;
+    }
+
+    #dashboard_ops {
+        height: 1fr;
+    }
+
+    #dashboard_kpi_table {
+        width: 35%;
+    }
+
+    #dashboard_action_table {
+        width: 65%;
+    }
+
+    #asset_ops {
+        height: 13;
+    }
+
+    #asset_table {
+        width: 45%;
+    }
+
+    #asset_action_table {
+        width: 55%;
+    }
+
+    #reader_ops {
+        height: 1fr;
+    }
+
+    #reader_index_table {
+        width: 35%;
+    }
+
+    #reader_body_stack {
+        width: 65%;
+    }
+
+    #reader_body {
+        height: 1fr;
+    }
+
     .panel {
         border: solid #3b4252;
         padding: 0 1;
@@ -145,6 +198,7 @@ class FilmCockpitApp(App[None]):
         Binding("g,m", "open_tab('matrix')", "Matrix"),
         Binding("g,s", "open_tab('scenes')", "Scenes"),
         Binding("g,a", "open_tab('assets')", "Assets"),
+        Binding("g,h", "open_tab('guide')", "Guide"),
         Binding("g,v", "open_tab('validation')", "Validation"),
         Binding("g,p", "open_tab('providers')", "Providers"),
         Binding("g,c", "open_tab('checkpoints')", "Checkpoints"),
@@ -172,6 +226,7 @@ class FilmCockpitApp(App[None]):
         self.reader: ReaderView | None = None
         self.selected_target: TargetSelection | None = None
         self.matrix_filter = ""
+        self.project_filter = "production"
         self._matrix_pivot = "status"
         self.matrix_impact: MatrixImpact | None = None
         self.pending_confirmation = ""
@@ -183,6 +238,7 @@ class FilmCockpitApp(App[None]):
         with Horizontal(id="shell"):
             with Vertical(id="project_rail"):
                 yield Static("Projects", classes="headline")
+                yield Static("", id="project_filter", classes="panel")
                 yield DataTable(id="project_table")
                 yield Button("New Project", id="new_project", variant="primary")
                 yield Button("Refresh", id="refresh_button")
@@ -190,10 +246,12 @@ class FilmCockpitApp(App[None]):
                 yield Static("", id="status_bar", classes="panel")
                 with TabbedContent(initial="dashboard", id="tabs"):
                     with TabPane("Dashboard", id="dashboard"):
-                        yield Static("", id="dashboard_summary", classes="panel")
-                        yield Static("", id="attention_panel", classes="panel")
-                        yield DataTable(id="dashboard_kpi_table")
-                        yield DataTable(id="dashboard_action_table")
+                        with Horizontal(id="dashboard_top"):
+                            yield Static("", id="dashboard_summary", classes="panel")
+                            yield Static("", id="attention_panel", classes="panel")
+                        with Horizontal(id="dashboard_ops"):
+                            yield DataTable(id="dashboard_kpi_table")
+                            yield DataTable(id="dashboard_action_table")
                         yield DataTable(id="dashboard_artifacts")
                     with TabPane("Graph", id="graph"):
                         yield Static("", id="graph_summary", classes="panel")
@@ -232,16 +290,23 @@ class FilmCockpitApp(App[None]):
                         yield DataTable(id="scene_table")
                         yield Static("", id="scene_reader", classes="panel")
                     with TabPane("Assets", id="assets"):
-                        yield Static("Assets and Artifacts", classes="headline")
-                        yield DataTable(id="asset_table")
-                        yield Static("Reader Index", classes="headline")
-                        yield DataTable(id="reader_index_table")
+                        with Horizontal(id="asset_ops"):
+                            yield DataTable(id="asset_table")
+                            yield DataTable(id="asset_action_table")
                         yield Static("", id="reader_title", classes="panel")
-                        yield Static("", id="reader_outline", classes="panel")
-                        yield Static("", id="reader_body", classes="panel")
-                        yield Static("", id="reader_metadata", classes="panel")
+                        with Horizontal(id="reader_ops"):
+                            yield DataTable(id="reader_index_table")
+                            with Vertical(id="reader_body_stack"):
+                                yield Static("", id="reader_outline", classes="panel")
+                                yield Static("", id="reader_body", classes="panel")
+                                yield Static("", id="reader_metadata", classes="panel")
                         yield DataTable(id="reader_link_table")
                         yield Static("", id="reader_links", classes="panel")
+                    with TabPane("Guide", id="guide"):
+                        yield Static("1 Minute Movie Guide", classes="headline")
+                        yield Static("", id="guide_summary", classes="panel")
+                        yield DataTable(id="guide_table")
+                        yield Static("", id="guide_detail", classes="panel")
                     with TabPane("Validation", id="validation"):
                         yield Static("", id="validation_summary", classes="panel")
                         yield Static("", id="validation_intelligence", classes="panel")
@@ -429,6 +494,12 @@ class FilmCockpitApp(App[None]):
             self._open_reader_index(row)
         if table_id == "reader_link_table":
             self._run_command(str(row.get("command", "")))
+        if table_id == "asset_action_table":
+            self._fill_command(str(row.get("command", "")))
+        if table_id == "project_table":
+            self._switch_project(str(row.get("project", "")))
+        if table_id == "guide_table":
+            self._show_guide_step(row)
         if selection.target_type == "artifact" and selection.target_id:
             self._try_load_artifact_detail(selection)
 
@@ -449,7 +520,8 @@ class FilmCockpitApp(App[None]):
 
     def _load_snapshot(self) -> CockpitSnapshot:
         projects = self.gateway.list_projects()
-        dashboard = self._load_dashboard(projects)
+        visible_projects = self._visible_projects(projects)
+        dashboard = self._load_dashboard(visible_projects)
         project_id = dashboard.project_id if dashboard else None
         review = self.gateway.get_review_workspace(project_id) if project_id else None
         validation = self.gateway.get_validation_workspace(project_id) if project_id else None
@@ -479,7 +551,7 @@ class FilmCockpitApp(App[None]):
                 matrix_rows=matrix_rows,
             ),
             command_options=build_command_options(
-                projects=projects,
+                projects=visible_projects,
                 dashboard=dashboard,
                 validation=validation,
                 artifacts=artifacts,
@@ -511,6 +583,7 @@ class FilmCockpitApp(App[None]):
         self._render_review(snapshot)
         self._render_scenes(snapshot)
         self._render_assets(snapshot)
+        self._render_guide(snapshot)
         self._render_validation(snapshot)
         self._render_checkpoints(snapshot)
         self._render_providers(snapshot)
@@ -520,16 +593,24 @@ class FilmCockpitApp(App[None]):
         self._context_for_tab(self.query_one("#tabs", TabbedContent).active or "dashboard")
 
     def _render_projects(self, projects: list[ProjectListItem]) -> None:
+        visible_projects = self._visible_projects(projects)
+        summary = (
+            f"Lane: {self.project_filter} | all: {len(projects)} | visible: {len(visible_projects)}"
+        )
+        self.query_one("#project_filter", Static).update(
+            f"{summary}\nCommands: projects production, projects test, projects all, project <id>"
+        )
         rows = [
             {
                 "project": project.project_id,
+                "kind": project.project_kind,
                 "phase": project.current_phase,
                 "status": project.status,
                 "review": "yes" if project.awaiting_review else "",
             }
-            for project in projects
+            for project in visible_projects
         ]
-        self._set_table("#project_table", ["project", "phase", "status", "review"], rows)
+        self._set_table("#project_table", ["project", "kind", "phase", "status", "review"], rows)
 
     def _render_status(
         self,
@@ -756,6 +837,32 @@ class FilmCockpitApp(App[None]):
             ["artifact_id", "artifact_type", "phase", "version", "status"],
             snapshot.artifacts,
         )
+        self._set_table(
+            "#asset_action_table",
+            ["artifact_id", "action", "phase", "purpose", "command"],
+            build_asset_action_rows(snapshot.artifacts),
+        )
+
+    def _render_guide(self, snapshot: CockpitSnapshot) -> None:
+        dashboard = snapshot.dashboard
+        active = dashboard.project_id if dashboard else "none"
+        rows = self._guide_rows(snapshot)
+        done = len([row for row in rows if row.get("status") == "done"])
+        blocked = len([row for row in rows if row.get("status") == "blocked"])
+        current = len([row for row in rows if row.get("status") == "current"])
+        self.query_one("#guide_summary", Static).update(
+            "Validated mock-first path for a 1 minute film with a few clips.\n"
+            f"Active project: {active}\n"
+            f"Progress: {done}/6 done | current: {current} | blocked: {blocked}\n"
+            "Use the command column to drive the cockpit. Approvals remain explicit."
+        )
+        self._set_table(
+            "#guide_table",
+            ["step", "status", "goal", "command", "evidence"],
+            rows,
+        )
+        if rows:
+            self._show_guide_step(rows[0], open_tab=False)
 
     def _render_validation(self, snapshot: CockpitSnapshot) -> None:
         validation = snapshot.validation
@@ -935,6 +1042,12 @@ class FilmCockpitApp(App[None]):
             )
         elif tab_id == "validation" and snapshot.validation is not None:
             self._update_context(pretty(snapshot.validation))
+        elif tab_id == "guide":
+            self._update_context(
+                "Guide\n\n"
+                "A-Z path: create a mock project, approve each review gate, inspect assets, "
+                "validate blockers, then generate and review the resulting images."
+            )
         else:
             self._update_context("Context updates with the active page and selected object.")
 
@@ -965,6 +1078,8 @@ class FilmCockpitApp(App[None]):
             "providers": "providers",
             "assets": "assets",
             "artifacts": "assets",
+            "guide": "guide",
+            "open guide": "guide",
             "scenes": "scenes",
             "checkpoints": "checkpoints",
             "audit": "audit",
@@ -1009,11 +1124,20 @@ class FilmCockpitApp(App[None]):
         if normalized.startswith("phase "):
             self._show_phase_detail(command.split(maxsplit=1)[1].strip())
             return
+        if normalized.startswith("project "):
+            self._switch_project(command.split(maxsplit=1)[1].strip())
+            return
+        if normalized.startswith("projects "):
+            self._filter_projects(command.split(maxsplit=1)[1].strip())
+            return
         if normalized.startswith("create "):
             self._create_project_from_command(command.removeprefix("create ").strip())
             return
         if normalized.startswith("artifact "):
             self._open_artifact(command.split(maxsplit=1)[1].strip())
+            return
+        if normalized.startswith("asset "):
+            self._asset_command(command.removeprefix("asset ").strip())
             return
         if normalized.startswith("scene "):
             self._open_scene(command.split(maxsplit=1)[1].strip())
@@ -1045,7 +1169,8 @@ class FilmCockpitApp(App[None]):
             "Try: next, phase <phase>, open review, open graph, show blocked, approve, "
             "confirm approve, matrix blocking, matrix pivot status, dashboard blockers, "
             "review issue <id>, thread <target>, reader next, link <target>, "
-            "draft <target> | <note>, validator <id>, fix <target>."
+            "draft <target> | <note>, asset change <id> | <note>, project <id>, "
+            "projects test, validator <id>, fix <target>."
         )
 
     def _prepare_approval_confirmation(self) -> None:
@@ -1090,6 +1215,7 @@ class FilmCockpitApp(App[None]):
                 idea=idea,
                 runtime_mode="mock",
                 workflow_mode="manual",
+                project_kind="production",
             )
         )
         self.active_project_id = result.project_id
@@ -1261,6 +1387,274 @@ class FilmCockpitApp(App[None]):
             "dashboard blockers, dashboard warnings, dashboard providers, "
             "dashboard comments, dashboard phase"
         )
+
+    def _switch_project(self, project_id: str) -> None:
+        if not project_id:
+            self._update_context("Use: project <project_id>")
+            return
+        try:
+            dashboard = self.gateway.set_active_project(project_id)
+        except (ServiceError, ValueError, FileNotFoundError) as exc:
+            self._update_context(
+                f"Project '{project_id}' is listed but cannot be opened yet.\n\n{exc}\n\n"
+                "Discovered projects need runtime recovery support before they can be active."
+            )
+            return
+        self.active_project_id = dashboard.project_id
+        self._update_context(
+            f"Opened project: {dashboard.project_id}\n"
+            f"phase: {dashboard.current_phase or 'none'}\n"
+            f"status: {dashboard.status}"
+        )
+        self.action_refresh()
+
+    def _filter_projects(self, value: str) -> None:
+        normalized = value.strip().lower()
+        if normalized not in {"production", "test", "all"}:
+            self._update_context("Use: projects production, projects test, or projects all")
+            return
+        self.project_filter = normalized
+        if self.snapshot is not None:
+            self._render_projects(self.snapshot.projects)
+        self._update_context(
+            f"Project lane: {self.project_filter}\n\n"
+            "Select a row or run project <id> to open a loaded project."
+        )
+
+    def _asset_command(self, payload: str) -> None:
+        normalized = payload.strip().lower()
+        if normalized.startswith("review "):
+            self._request_asset_review(payload.removeprefix("review ").strip())
+            return
+        if normalized.startswith("change "):
+            self._request_asset_revision("change", payload.removeprefix("change ").strip())
+            return
+        if normalized.startswith("extend "):
+            self._request_asset_revision("extend", payload.removeprefix("extend ").strip())
+            return
+        self._update_context(
+            "Asset commands\n\n"
+            "asset review <artifact_id>\n"
+            "asset change <artifact_id> | <note>\n"
+            "asset extend <artifact_id> | <note>"
+        )
+
+    def _request_asset_review(self, artifact_id: str) -> None:
+        snapshot = self.snapshot
+        if snapshot is None or snapshot.dashboard is None:
+            self._update_context("No active project.")
+            return
+        artifact = self._artifact_row(artifact_id)
+        if artifact is None:
+            self._update_context(f"Artifact '{artifact_id}' is not in the current snapshot.")
+            return
+        comment = self.gateway.add_operator_comment(
+            OperatorCommentRequest(
+                target_type="artifact",
+                target_id=artifact_id,
+                phase=str(artifact.get("phase", "")),
+                source="tui_asset_action",
+                body="[asset_action=review] Please review this artifact for production use.",
+            ),
+            snapshot.dashboard.project_id,
+        )
+        self.selected_target = TargetSelection(
+            target_type="artifact",
+            target_id=artifact_id,
+            phase=str(artifact.get("phase", "")),
+            source="asset_review",
+            detail=artifact,
+        )
+        self._update_context(
+            "Asset Review Requested\n\n"
+            f"artifact: {artifact_id}\n"
+            f"comment: {comment.comment_id}\n\n"
+            "The request is stored as an operator comment and appears in Review threads."
+        )
+        self.action_refresh()
+
+    def _request_asset_revision(self, action: str, payload: str) -> None:
+        parts = [part.strip() for part in payload.split("|", maxsplit=1)]
+        if len(parts) != 2 or not all(parts):
+            self._update_context(f"Use: asset {action} <artifact_id> | <note>")
+            return
+        artifact_id, note = parts
+        artifact = self._artifact_row(artifact_id)
+        if artifact is None:
+            self._update_context(f"Artifact '{artifact_id}' is not in the current snapshot.")
+            return
+        self.selected_target = TargetSelection(
+            target_type="artifact",
+            target_id=artifact_id,
+            phase=str(artifact.get("phase", "")),
+            source=f"asset_{action}",
+            detail=artifact,
+        )
+        self.query_one("#comment_input", Input).value = note
+        if not self.active_project_id:
+            self._update_context("No active project.")
+            return
+        result = self.gateway.request_revision(
+            format_targeted_revision_note(
+                self.selected_target,
+                f"[asset_action={action}] {note}",
+            ),
+            self.active_project_id,
+        )
+        self._update_context(
+            f"Asset {action.title()} Requested\n\n"
+            f"artifact: {artifact_id}\n"
+            f"phase: {artifact.get('phase', '')}\n"
+            f"current phase: {result.current_phase}\n\n"
+            "The request was submitted through the revision path."
+        )
+        self.action_refresh()
+
+    def _artifact_row(self, artifact_id: str) -> dict[str, object] | None:
+        snapshot = self.snapshot
+        if snapshot is None:
+            return None
+        return next(
+            (row for row in snapshot.artifacts if str(row.get("artifact_id", "")) == artifact_id),
+            None,
+        )
+
+    def _visible_projects(self, projects: list[ProjectListItem]) -> list[ProjectListItem]:
+        if self.project_filter == "all":
+            return projects
+        visible = [project for project in projects if project.project_kind == self.project_filter]
+        return visible or projects
+
+    def _guide_rows(self, snapshot: CockpitSnapshot) -> list[dict[str, object]]:
+        base_rows = [
+            {
+                "step": 1,
+                "goal": "Create a short mock project",
+                "command": (
+                    "create 1min-field | 1 Minute Field | "
+                    "A courier crosses three locations to deliver one warning."
+                ),
+                "validation": "Dashboard phase becomes intake and review is available.",
+            },
+            {
+                "step": 2,
+                "goal": "Approve intake through script gates",
+                "command": "next -> approve -> confirm approve",
+                "validation": "Repeat until current phase reaches visual_dev or blockers appear.",
+            },
+            {
+                "step": 3,
+                "goal": "Inspect the production backbone",
+                "command": "open assets; artifact <id>; reader next",
+                "validation": "Reader shows scene, shot matrix, character, or reference details.",
+            },
+            {
+                "step": 4,
+                "goal": "Fix targeted issues before generation",
+                "command": "show blocked; fix <target>; revise <note>",
+                "validation": "Blocking validation count returns to zero before approval.",
+            },
+            {
+                "step": 5,
+                "goal": "Reach generation planning and generation",
+                "command": "phase gen_planning; approve; confirm approve",
+                "validation": "Generation artifacts appear under Assets and Matrix.",
+            },
+            {
+                "step": 6,
+                "goal": "Review generated images and delivery readiness",
+                "command": "open assets; matrix blocking; open validation",
+                "validation": (
+                    "Images, sidecars, validation, checkpoints, and audit are inspectable."
+                ),
+            },
+        ]
+        return [self._guide_status(row, snapshot) for row in base_rows]
+
+    @staticmethod
+    def _guide_status(row: dict[str, object], snapshot: CockpitSnapshot) -> dict[str, object]:
+        dashboard = snapshot.dashboard
+        validation = snapshot.validation
+        artifacts = snapshot.artifacts
+        phase = dashboard.current_phase if dashboard else ""
+        phase_order = (
+            "intake",
+            "constitution",
+            "development",
+            "script",
+            "visual_dev",
+            "shot_bible",
+            "gen_planning",
+            "generation",
+            "qc",
+            "post",
+            "delivery",
+        )
+
+        def phase_at_or_after(target: str) -> bool:
+            if phase not in phase_order or target not in phase_order:
+                return False
+            return phase_order.index(phase) >= phase_order.index(target)
+
+        blocking_count = len(validation.blocking_issues) if validation else 0
+        artifact_phases = {str(artifact.get("phase", "")) for artifact in artifacts}
+        artifact_count = len(artifacts)
+        step = int(str(row["step"]))
+        status = "pending"
+        evidence = str(row["validation"])
+        if step == 1:
+            status = "done" if dashboard and phase else "current"
+            evidence = (
+                f"Active project {dashboard.project_id} is at {phase}."
+                if dashboard and phase
+                else "No active project yet."
+            )
+        elif step == 2:
+            if phase_at_or_after("visual_dev"):
+                status = "done"
+                evidence = f"Project reached {phase}."
+            elif dashboard and phase:
+                status = "current"
+                evidence = f"Continue approvals from {phase}."
+        elif step == 3:
+            status = "done" if artifact_count else "pending"
+            evidence = f"{artifact_count} artifact(s) are available to inspect."
+        elif step == 4:
+            if blocking_count:
+                status = "blocked"
+                evidence = f"{blocking_count} blocking validation issue(s) need fixes."
+            elif validation:
+                status = "done"
+                evidence = "No blocking validation issues are present."
+        elif step == 5:
+            if phase_at_or_after("generation") or "generation" in artifact_phases:
+                status = "done"
+                evidence = "Generation phase or artifacts are present."
+            elif phase_at_or_after("gen_planning"):
+                status = "current"
+                evidence = f"Project is at {phase}; approve generation planning when ready."
+        elif step == 6:
+            has_generation_assets = "generation" in artifact_phases
+            if has_generation_assets and validation:
+                status = "done"
+                evidence = "Generated assets and validation workspace are available."
+            elif has_generation_assets:
+                status = "current"
+                evidence = "Generated assets exist; open validation next."
+        return {**row, "status": status, "evidence": evidence}
+
+    def _show_guide_step(self, row: dict[str, object], *, open_tab: bool = True) -> None:
+        if open_tab:
+            self.action_open_tab("guide")
+        detail = (
+            f"Step {row.get('step')}: {row.get('goal')}\n\n"
+            f"Status: {row.get('status', 'pending')}\n\n"
+            f"Command: {row.get('command')}\n\n"
+            f"Validation: {row.get('validation')}\n\n"
+            f"Evidence: {row.get('evidence', 'Not checked yet.')}"
+        )
+        self.query_one("#guide_detail", Static).update(detail)
+        self._update_context(detail)
 
     def _matrix_pivot_field(self) -> str:
         return getattr(self, "_matrix_pivot", "status")
@@ -1646,6 +2040,8 @@ class FilmCockpitApp(App[None]):
             "#review_issue_table",
             "#scene_table",
             "#asset_table",
+            "#asset_action_table",
+            "#guide_table",
             "#reader_index_table",
             "#reader_link_table",
             "#validation_table",

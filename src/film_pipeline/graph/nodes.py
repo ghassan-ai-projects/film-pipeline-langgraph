@@ -11,7 +11,10 @@ import json
 from copy import deepcopy
 from typing import Any, cast
 
+from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl.registry import get_agent_class
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 
@@ -228,7 +231,13 @@ def _propagate_side_effects(source: dict[str, Any], dest: dict[str, Any]) -> Non
     This helper ensures routing decisions and other side effects
     survive the node boundary.
     """
-    for key in ("_routing_decisions", "issues", "validation_report_refs", "_validation_reports"):
+    for key in (
+        "_routing_decisions",
+        "_repair_feedback",
+        "issues",
+        "validation_report_refs",
+        "_validation_reports",
+    ):
         if key in source:
             dest[key] = source[key]
 
@@ -250,7 +259,7 @@ def _run_agent(
     Returns the agent's result dict, or a fallback if services aren't available.
     """
     # Inject repair feedback into the task if present (set by repair_phase_node)
-    feedback = state.pop("_repair_feedback", "")
+    feedback = str(state.get("_repair_feedback", "") or "")
     if feedback:
         task = f"{feedback}\n\n{task}"
 
@@ -285,34 +294,7 @@ def _run_agent(
     # Critical-path agents (those in agent_map) require dedicated prompt templates.
     # Non-critical agents fall through to generic RCTCO assembly.
 
-    from film_pipeline.agents.base import BaseAgent
-    from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
-    from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
-    from film_pipeline.agents.impl.development_agent import DevelopmentAgent
-    from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
-    from film_pipeline.agents.impl.intake_agent import IntakeAgent
-    from film_pipeline.agents.impl.orchestrator_agent import OrchestratorAgent
-    from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
-    from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
-    from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
-    from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
-    from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
-
-    agent_map: dict[str, type[BaseAgent]] = {
-        "intake-classifier-agent": IntakeAgent,
-        "film-constitution-agent": ConstitutionAgent,
-        "treatment-agent": DevelopmentAgent,
-        "screenwriter-agent": ScreenwriterAgent,
-        "structure-extractor-agent": StructureExtractorAgent,
-        "shot-design-agent": ShotBibleAgent,
-        "reference-strategy-planner": VisualDevAgent,
-        "visual-dev-agent": VisualDevAgent,
-        "provider-planning-agent": GenPlannerAgent,
-        "clip-validator": QCSynthesisAgent,
-        "failure-handling-agent": AssemblyAgent,
-        "orchestrator-agent": OrchestratorAgent,
-    }
-    agent_cls = agent_map.get(resolved_agent_id)
+    agent_cls = get_agent_class(resolved_agent_id)
 
     template_id = ""
 
@@ -435,6 +417,9 @@ def _run_agent(
     routing = state.get("_routing_decisions")
     if routing:
         result["_routing_decisions"] = list(routing)
+    if feedback:
+        state["_repair_feedback"] = ""
+        result["_repair_feedback"] = ""
 
     return result
 
@@ -639,7 +624,10 @@ def _inject_artifact_context(
                 parsed.artifact_id,
                 parsed.version,
             )
-            context_vars[content_key] = _compact_json_context(data)
+            context_vars[content_key] = compact_json_context(
+                data,
+                max_chars=_artifact_context_max_chars(state),
+            )
         except (FileNotFoundError, ValueError, KeyError):
             continue
 
@@ -672,12 +660,21 @@ def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) 
         context_vars["preferred_providers"] = ", ".join(preferred)
 
 
-def _compact_json_context(data: dict[str, Any], max_chars: int = 6000) -> str:
-    """Serialize artifact content for prompt context without exploding token count."""
-    text = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=True)
-    if len(text) <= max_chars:
-        return text
-    return f"{text[:max_chars]}\n... [truncated]"
+def _artifact_context_max_chars(state: dict[str, Any]) -> int:
+    resolved_config = state.get("resolved_config", {})
+    if not isinstance(resolved_config, dict):
+        return DEFAULT_MAX_CONTEXT_CHARS
+    context_config = resolved_config.get("context", {})
+    if not isinstance(context_config, dict):
+        return DEFAULT_MAX_CONTEXT_CHARS
+    raw = context_config.get("max_chars_per_artifact")
+    if raw is None or isinstance(raw, bool):
+        return DEFAULT_MAX_CONTEXT_CHARS
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_CONTEXT_CHARS
+    return value if value > 0 else DEFAULT_MAX_CONTEXT_CHARS
 
 
 # ── Intake ───────────────────────────────────────────────────────────────────
@@ -1058,10 +1055,22 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
                 )
                 from film_pipeline.graph.orchestrator_validators import (
                     validate_planning_completeness,
+                    validate_shot_scene_references,
                 )
 
                 plan_issues = validate_planning_completeness(new_state, matrix_data, cost_estimate)
                 new_state.setdefault("issues", []).extend(plan_issues)
+                script_ref = str(new_state.get("script_ref", "") or "")
+                if script_ref:
+                    script_parsed = _parse_ref(script_ref)
+                    script_data = services.artifact_store.load(
+                        str(new_state.get("project_id", "")),
+                        FilmPhase("script"),
+                        script_parsed.artifact_id,
+                        script_parsed.version,
+                    )
+                    ref_issues = validate_shot_scene_references(script_data, matrix_data)
+                    new_state.setdefault("issues", []).extend(ref_issues)
             except (FileNotFoundError, ValueError, KeyError):
                 pass
 

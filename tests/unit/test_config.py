@@ -9,6 +9,7 @@ import pytest
 from film_pipeline.config.loader import ProfileLoader, ProfileSource
 from film_pipeline.config.merger import ProfileMerger
 from film_pipeline.config.resolver import ConfigResolver, ResolvedConfig
+from film_pipeline.config.runtime_overrides import apply_runtime_overrides
 from film_pipeline.config.validator import ConfigValidator
 
 # --- Loader tests --------------------------------------------------------
@@ -119,6 +120,42 @@ def test_merge_later_wins() -> None:
     assert merged["film_type"] == "experimental"
 
 
+# --- Runtime override tests ---------------------------------------------
+
+
+def test_apply_runtime_overrides_does_not_mutate_input() -> None:
+    cfg = {"quality_profile": "studio", "studio": {"require_human_approval": True}}
+
+    overridden = apply_runtime_overrides(
+        cfg,
+        environ={
+            "FILM_PIPELINE_QUALITY": "draft",
+            "FILM_PIPELINE_APPROVAL_MODE": "false",
+        },
+    )
+
+    assert cfg == {"quality_profile": "studio", "studio": {"require_human_approval": True}}
+    assert overridden["quality_profile"] == "draft"
+    assert overridden["studio"]["require_human_approval"] is False
+
+
+def test_apply_runtime_overrides_coerces_nested_values() -> None:
+    overridden = apply_runtime_overrides(
+        {},
+        environ={
+            "FILM_PIPELINE_MAX_SCENES": "12",
+            "FILM_PIPELINE_SKIP_VISUAL_DEV": "yes",
+            "FILM_PIPELINE_MAX_CONTEXT_CHARS": "8000",
+            "FILM_PIPELINE_MODEL_OVERRIDE": "custom/model",
+        },
+    )
+
+    assert overridden["limits"]["max_scenes"] == 12
+    assert overridden["studio"]["skip_visual_dev"] is True
+    assert overridden["context"]["max_chars_per_artifact"] == 8000
+    assert overridden["models"]["creative_writer"]["primary"] == "custom/model"
+
+
 # --- Validator tests -----------------------------------------------------
 
 
@@ -187,6 +224,24 @@ def test_resolver_no_conflicts_happy_path() -> None:
     assert result.raw["quality_profile"] == "studio"
     # review strategy comes from last profile that touches it
     assert result.raw["review"]["strategy"] == "multi_model_panel"
+
+
+def test_resolver_applies_runtime_overrides_last(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FILM_PIPELINE_QUALITY", "draft")
+    monkeypatch.setenv("FILM_PIPELINE_APPROVAL_MODE", "false")
+    r = ConfigResolver(loader=ProfileLoader(profiles_dir=Path("profiles")))
+
+    result = r.resolve(
+        [
+            "base.studio",
+            "film-type.narrative",
+            "quality.studio",
+            "provider.seedance_primary",
+        ]
+    )
+
+    assert result.raw["quality_profile"] == "draft"
+    assert result.raw["studio"]["require_human_approval"] is False
 
 
 def test_resolver_detects_festival_free_conflict() -> None:

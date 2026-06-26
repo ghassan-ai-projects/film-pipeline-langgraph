@@ -57,6 +57,21 @@ class TestRouter:
         )
         assert r.next_action == "wait_for_human"
 
+    def test_human_gate_blocks_approval_when_stalled_with_blockers(self) -> None:
+        r = compute_actions(
+            {
+                "current_phase": "shot_bible",
+                "approved": False,
+                "human_approval_required": True,
+                "_stalled_phase": "shot_bible",
+                "issues": [{"severity": "blocking"}],
+            }
+        )
+        assert r.next_action == "wait_for_human"
+        assert "approve_phase" not in r.eligible
+        assert "escalate_to_human" in r.eligible
+        assert r.blocked[0]["action"] == "approve_phase"
+
     def test_phases_count(self) -> None:
         assert len(PHASE_ORDER) == 11
 

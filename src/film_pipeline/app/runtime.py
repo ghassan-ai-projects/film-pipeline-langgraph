@@ -18,7 +18,7 @@ from uuid import uuid4
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.router import PHASE_ORDER
-from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
@@ -107,8 +107,8 @@ class StudioRuntime:
     def run_graph(self, state: dict[str, Any]) -> dict[str, Any]:
         """Run the graph with the given state.
 
-        Injects ``GraphServices`` into state before invocation so nodes can
-        access agents, artifact store, and validators.
+        Supplies ``GraphServices`` through runtime context before invocation
+        so checkpoints never need to serialize service objects.
 
         With LangGraph ``interrupt()`` + checkpointer, the graph pauses at
         human gates and resumes via ``graph.invoke(Command(...), config)``.
@@ -119,16 +119,18 @@ class StudioRuntime:
         graph = self.ensure_graph()
 
         state = dict(state)
-        state[SERVICES_KEY] = self.services
 
-        # Set context-var fallback so nodes can find services even when
-        # LangGraph TypedDict channels drop the _services key.
+        # Set context-var fallback so nodes can find services without storing
+        # runtime dependencies in checkpointed graph state.
         import film_pipeline.graph.nodes as _gn
 
         token = _gn._SERVICES_CTX.set(self.services)
         try:
             config: dict[str, Any] = {
-                "configurable": {"thread_id": state.get("project_id", "default")},
+                "configurable": {
+                    "thread_id": state.get("project_id", "default"),
+                    "services": self.services,
+                },
                 "recursion_limit": 50,  # 10 phases x ~3 steps each + repair headroom
             }
             result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
@@ -179,11 +181,11 @@ class StudioRuntime:
 
         graph = self.ensure_graph()
         config: dict[str, Any] = {
-            "configurable": {"thread_id": active["project_id"]},
+            "configurable": {"thread_id": active["project_id"], "services": self.services},
         }
 
         # Set the services context variable so graph nodes can find
-        # GraphServices even when the TypedDict channel drops _services.
+        # GraphServices without checkpointing runtime objects.
         import film_pipeline.graph.nodes as _gn
 
         token = _gn._SERVICES_CTX.set(self.services)
@@ -239,13 +241,19 @@ class StudioRuntime:
 
         graph = self.ensure_graph()
         config: dict[str, Any] = {
-            "configurable": {"thread_id": active["project_id"]},
+            "configurable": {"thread_id": active["project_id"], "services": self.services},
         }
 
-        state = graph.invoke(
-            Command(resume={"action": "revise", "note": note}),
-            config,
-        )
+        import film_pipeline.graph.nodes as _gn
+
+        token = _gn._SERVICES_CTX.set(self.services)
+        try:
+            state = graph.invoke(
+                Command(resume={"action": "revise", "note": note}),
+                config,
+            )
+        finally:
+            _gn._SERVICES_CTX.reset(token)
         state = cast(dict[str, Any], state)
 
         self.projects[active["project_id"]] = state

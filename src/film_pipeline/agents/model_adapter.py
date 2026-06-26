@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Callable
+from inspect import Parameter, signature
 from typing import Any
 
 from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
@@ -29,10 +31,12 @@ class ModelAdapter:
         http_opener: Any = None,
         api_key: str | None = None,
         gemini_api_key: str | None = None,
+        request_timeout_seconds: float | None = 120.0,
     ) -> None:
         self._http_opener = http_opener
         self._configured_api_key = api_key
         self._configured_gemini_api_key = gemini_api_key
+        self.request_timeout_seconds = request_timeout_seconds
 
     def _api_key(self) -> str:
         key = self._configured_api_key or lookup("seedance-openrouter")
@@ -83,7 +87,7 @@ class ModelAdapter:
         )
         opener: Any = self._http_opener or urllib.request.build_opener()
         try:
-            with opener.open(req) as resp:
+            with _open_with_timeout(opener.open, req, self.request_timeout_seconds) as resp:
                 raw: Any = json.loads(resp.read())
                 return dict(raw)
         except (urllib.error.HTTPError, OSError) as e:
@@ -212,7 +216,7 @@ class ModelAdapter:
 
         opener: Any = self._http_opener or urllib.request.build_opener()
         try:
-            with opener.open(req) as resp:
+            with _open_with_timeout(opener.open, req, self.request_timeout_seconds) as resp:
                 raw: Any = json.loads(resp.read().decode("utf-8"))
                 response: dict[str, Any] = dict(raw)
         except (urllib.error.HTTPError, OSError) as e:
@@ -312,3 +316,25 @@ class ModelAdapter:
             f"Response length: {len(text)} chars. "
             f"Preview: {text[:300]}"
         )
+
+
+def _open_with_timeout(
+    open_fn: Callable[..., Any],
+    req: urllib.request.Request,
+    timeout_seconds: float | None,
+) -> Any:
+    """Call opener.open with a timeout when the injected opener supports it."""
+    if timeout_seconds is None or not _accepts_timeout_kw(open_fn):
+        return open_fn(req)
+    return open_fn(req, timeout=timeout_seconds)
+
+
+def _accepts_timeout_kw(open_fn: Callable[..., Any]) -> bool:
+    """Return whether a callable can accept a ``timeout=`` keyword."""
+    try:
+        params = signature(open_fn).parameters
+    except (TypeError, ValueError):
+        return True
+    return any(param.kind == Parameter.VAR_KEYWORD for param in params.values()) or any(
+        name == "timeout" for name in params
+    )

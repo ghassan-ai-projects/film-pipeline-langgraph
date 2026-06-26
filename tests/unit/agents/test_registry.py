@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import logging
+
+import pytest
+
 from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.schemas._base import AgentFamily, AgentRole
@@ -41,6 +45,83 @@ class TestAgentRegistry:
             raise AssertionError("Expected ValueError")
         except ValueError:
             pass
+
+    def test_register_unknown_model_profile_raises(self) -> None:
+        registry = AgentRegistry()
+        contract = AgentRegistration(
+            agent_id="bad-model-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops"],
+            default_model_profile="missing-profile",
+        )
+
+        with pytest.raises(ValueError, match="unknown model profile"):
+            registry.register(contract)
+
+    def test_register_blank_capability_raises(self) -> None:
+        registry = AgentRegistry()
+        contract = AgentRegistration(
+            agent_id="blank-capability-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=[""],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops"],
+        )
+
+        with pytest.raises(ValueError, match="blank value"):
+            registry.register(contract)
+
+    def test_register_overlapping_kb_domains_raises(self) -> None:
+        registry = AgentRegistry()
+        contract = AgentRegistration(
+            agent_id="overlap-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops"],
+            blocked_kb_domains=["ops"],
+        )
+
+        with pytest.raises(ValueError, match="both allows and blocks"):
+            registry.register(contract)
+
+    def test_register_unknown_kb_domain_warns_when_allowlist_configured(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        registry = AgentRegistry(known_kb_domains={"ops"})
+        contract = AgentRegistration(
+            agent_id="unknown-domain-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            output_artifacts=["output"],
+            allowed_kb_domains=["ops", "typo"],
+        )
+
+        with caplog.at_level(logging.WARNING, logger="film_pipeline.agents.registry"):
+            registry.register(contract)
+
+        assert "unknown KB domain" in caplog.text
+        assert registry.lookup_by_id("unknown-domain-agent") == contract
+
+    def test_register_unknown_output_artifact_raises_when_allowlist_configured(self) -> None:
+        registry = AgentRegistry(known_output_artifacts={"script"})
+        contract = AgentRegistration(
+            agent_id="unknown-output-agent",
+            family=AgentFamily.OPERATIONS,
+            role=AgentRole.CREATOR,
+            capabilities=["test"],
+            output_artifacts=["review_report"],
+            allowed_kb_domains=["ops"],
+        )
+
+        with pytest.raises(ValueError, match="unknown artifact"):
+            registry.register(contract)
 
     def test_register_many(self) -> None:
         registry = AgentRegistry()

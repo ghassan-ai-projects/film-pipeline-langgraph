@@ -76,7 +76,26 @@ def after_approval(state: dict[str, Any]) -> str:
     # Prevent infinite repair loop when stalled
     from film_pipeline.graph.orchestrator_state import is_stalled
 
-    if is_stalled(state, str(state.get("current_phase", ""))):
+    phase = str(state.get("current_phase", ""))
+    if is_stalled(state, phase):
+        state["human_approval_required"] = True
+        state["_stalled_phase"] = phase
+        issue_id = f"stalled:{phase}"
+        issues = state.setdefault("issues", [])
+        if not any(
+            isinstance(issue, dict) and issue.get("issue_id") == issue_id for issue in issues
+        ):
+            issues.append(
+                {
+                    "issue_id": issue_id,
+                    "severity": "blocking",
+                    "code": "ORCHESTRATOR_STALLED",
+                    "message": (
+                        f"Phase '{phase}' has stalled after repeated review or repair attempts. "
+                        "Human intervention is required."
+                    ),
+                }
+            )
         return "await_approval"
 
     if state.get("issues"):

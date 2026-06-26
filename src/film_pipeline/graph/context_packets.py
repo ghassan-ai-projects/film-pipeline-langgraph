@@ -141,7 +141,10 @@ def _load_ref(state: dict[str, Any], services: Any, ref: str) -> dict[str, Any] 
     if len(parts) < 3:
         return None
     artifact_id = parts[1]
-    version = int(parts[2].lstrip("v"))
+    try:
+        version = int(parts[2].lstrip("v"))
+    except ValueError:
+        return None
     # Try common phase directories
     from film_pipeline.schemas._base import FilmPhase
 

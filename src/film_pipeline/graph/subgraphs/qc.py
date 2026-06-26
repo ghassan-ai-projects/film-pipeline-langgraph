@@ -159,7 +159,10 @@ def _load_artifact_for_validator(state: StudioGraphState) -> dict[str, Any] | No
             continue
         parts = ref_str.split(":")
         aid = parts[1] if len(parts) > 1 else ref_str
-        version = int(parts[2].lstrip("v")) if len(parts) > 2 else 1
+        try:
+            version = int(parts[2].lstrip("v")) if len(parts) > 2 else 1
+        except ValueError:
+            continue
         try:
             from film_pipeline.schemas._base import FilmPhase
 

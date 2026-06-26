@@ -166,3 +166,98 @@ class FailureClassifier:
         failure = cls.classify(error_message)
         health.mark_blocked(failure.status, failure.reason)
         health.resume_requirements = failure.resume_requirements
+
+
+_TOKEN_LIMIT_PATTERNS_BY_PROVIDER: dict[str, tuple[str, ...]] = {
+    "anthropic": (
+        "prompt is too long",
+        "input is too long",
+        "maximum context length",
+    ),
+    "deepseek": (
+        "context_length_exceeded",
+        "maximum context length",
+        "too many tokens",
+        "token limit",
+    ),
+    "gemini": (
+        "input too long",
+        "maximum number of tokens",
+        "resourceexhausted",
+        "token count exceeds",
+    ),
+    "openai": (
+        "context_length_exceeded",
+        "maximum context length",
+        "reduce the length",
+    ),
+}
+
+_COMMON_TOKEN_LIMIT_PATTERNS: tuple[str, ...] = (
+    "context length",
+    "context_length_exceeded",
+    "maximum context",
+    "prompt too long",
+    "too many tokens",
+    "token limit",
+)
+
+
+def is_token_limit_exceeded(exception: Exception, model_id: str = "") -> bool:
+    """Return True when a provider error means the input exceeded context limits."""
+    error_text = str(exception).lower()
+    model_text = model_id.lower()
+    for provider, patterns in _TOKEN_LIMIT_PATTERNS_BY_PROVIDER.items():
+        if provider in model_text and any(pattern in error_text for pattern in patterns):
+            return True
+    return any(pattern in error_text for pattern in _COMMON_TOKEN_LIMIT_PATTERNS)
+
+
+def compress_prompt_for_retry(prompt_text: str, *, factor: float = 0.6) -> str:
+    """Reduce prompt context for a token-limit retry while preserving task/schema sections.
+
+    This is deliberately deterministic. It does not invent summaries, and it keeps
+    role, task, constraints, and output instructions intact while cutting the
+    usually-largest ``# Context`` section.
+    """
+    safe_factor = max(0.1, min(0.9, factor))
+    sections = _split_markdown_sections(prompt_text)
+    if not sections:
+        keep_chars = max(1, int(len(prompt_text) * safe_factor))
+        return (
+            f"{prompt_text[:keep_chars]}\n\n"
+            f"[context compressed for retry: removed {len(prompt_text) - keep_chars} chars]"
+        )
+
+    compressed: list[str] = []
+    for heading, body in sections:
+        normalized = heading.strip().lower()
+        if normalized == "context":
+            keep_chars = max(1, int(len(body) * safe_factor))
+            removed = max(0, len(body) - keep_chars)
+            compressed.append(
+                f"# {heading}\n{body[:keep_chars].rstrip()}\n"
+                f"[context compressed for retry: removed {removed} chars]"
+            )
+        else:
+            compressed.append(f"# {heading}\n{body.rstrip()}")
+    return "\n\n".join(compressed)
+
+
+def _split_markdown_sections(prompt_text: str) -> list[tuple[str, str]]:
+    """Split an RCTCO-style prompt into top-level markdown sections."""
+    sections: list[tuple[str, list[str]]] = []
+    current_heading = ""
+    current_body: list[str] = []
+    for line in prompt_text.splitlines():
+        if line.startswith("# "):
+            if current_heading:
+                sections.append((current_heading, current_body))
+            current_heading = line[2:].strip()
+            current_body = []
+            continue
+        if current_heading:
+            current_body.append(line)
+    if current_heading:
+        sections.append((current_heading, current_body))
+    return [(heading, "\n".join(body).strip()) for heading, body in sections]
