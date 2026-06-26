@@ -156,6 +156,34 @@ def test_apply_runtime_overrides_coerces_nested_values() -> None:
     assert overridden["models"]["creative_writer"]["primary"] == "custom/model"
 
 
+def test_apply_runtime_overrides_ignores_unmapped_variables() -> None:
+    cfg = {"quality_profile": "studio"}
+
+    overridden = apply_runtime_overrides(
+        cfg,
+        environ={
+            "UNRELATED_ENV": "should-not-appear",
+            "FILM_PIPELINE_SEARCH_API": "vector",
+        },
+    )
+
+    assert overridden["quality_profile"] == "studio"
+    assert overridden["generation"]["search_api"] == "vector"
+    assert "UNRELATED_ENV" not in overridden
+    assert cfg == {"quality_profile": "studio"}
+
+
+def test_apply_runtime_overrides_replaces_scalar_branch_with_nested_mapping() -> None:
+    overridden = apply_runtime_overrides(
+        {"studio": True},
+        environ={
+            "FILM_PIPELINE_APPROVAL_MODE": "on",
+        },
+    )
+
+    assert overridden["studio"] == {"require_human_approval": True}
+
+
 # --- Validator tests -----------------------------------------------------
 
 
