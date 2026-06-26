@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import json
+from pathlib import Path
+
 
 class TestStudioGraphState:
     def test_state_compiles_with_graph(self) -> None:
@@ -10,6 +14,17 @@ class TestStudioGraphState:
 
         graph = build_graph()
         assert graph is not None
+
+    def test_langgraph_config_exports_compiled_graph(self) -> None:
+        """langgraph.json points at an importable compiled graph."""
+        config_path = Path(__file__).parents[3] / "langgraph.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        graph_ref = config["graphs"]["film_pipeline"]
+        module_file, attr = graph_ref.split(":")
+        module_name = module_file.removeprefix("./src/").removesuffix(".py").replace("/", ".")
+        module = importlib.import_module(module_name)
+
+        assert getattr(module, attr) is not None
 
     def test_artifact_refs_uses_add_reducer(self) -> None:
         """Verifying add reducer appends, not replaces."""
@@ -26,13 +41,13 @@ class TestStudioGraphState:
         state["current_phase"] = "constitution"
         assert state["current_phase"] == "constitution"
 
-    def test_total_false_allows_extra_keys(self) -> None:
-        """total=False TypedDict accepts runtime-injected _services key."""
+    def test_services_key_is_runtime_only(self) -> None:
+        """Graph services are runtime context, not part of typed graph state."""
         from film_pipeline.graph.state_schema import StudioGraphState
 
         state: StudioGraphState = {"project_id": "test"}
-        state["_services"] = object()  # type: ignore[typeddict-unknown-key]
         assert state["project_id"] == "test"
+        assert "_services" not in StudioGraphState.__annotations__
 
     def test_partial_update_preserves_other_keys(self) -> None:
         """Merging partial update dict preserves unmodified keys."""
@@ -76,7 +91,7 @@ class TestTypedStateKeys:
         assert "validation_report_refs" in StudioGraphState.__annotations__
 
     def test_services_key_not_in_schema(self) -> None:
-        """_services key is NOT in the typed schema (injected at runtime)."""
+        """_services key is NOT in the typed schema."""
         from film_pipeline.graph.state_schema import StudioGraphState
 
         assert "_services" not in StudioGraphState.__annotations__

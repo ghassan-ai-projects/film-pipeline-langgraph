@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
@@ -105,10 +106,50 @@ class TestEnvironmentBibleAgent:
 
     def test_execute_handles_raw_string(self) -> None:
         agent = _make_agent()
+        payload: Any = json.dumps({"data": _VALID_OUTPUT})
 
-        result = agent.execute(_VALID_OUTPUT)
+        result = agent.execute(payload)
         bible = result["environment_bible"]
         assert bible.environment_id == "studio"
+        assert bible.fingerprint.text.startswith("A creative sanctuary")
+
+    def test_execute_handles_malformed_model_output_shapes(self) -> None:
+        agent = _make_agent()
+        invalid_json: Any = "{not json"
+        non_dict: Any = object()
+
+        empty_from_json = agent.execute(invalid_json)["environment_bible"]
+        empty_from_non_dict = agent.execute(non_dict)["environment_bible"]
+        malformed = agent.execute(
+            {
+                "output": {
+                    "environment_id": "studio",
+                    "project_id": "p1",
+                    "locked_prompt_block": "A real location block.",
+                    "zones": "wrong type",
+                    "viewpoints": "wrong type",
+                    "lighting_states": "wrong type",
+                    "color_palette": "wrong type",
+                    "fingerprint": "wrong type",
+                    "invariants": ["keep", 1],
+                    "reference_assets": [1, "ref"],
+                    "must_not_change": [None, "windows"],
+                }
+            }
+        )["environment_bible"]
+
+        assert empty_from_json.environment_id == ""
+        assert empty_from_non_dict.environment_id == ""
+        assert malformed.environment_id == "studio"
+        assert malformed.zones == []
+        assert malformed.viewpoints == []
+        assert malformed.lighting_states == []
+        assert malformed.color_palette == []
+        assert malformed.fingerprint.text == ""
+        assert malformed.invariants == ["keep"]
+        assert malformed.reference_assets == ["1", "ref"]
+        assert malformed.must_not_change == ["None", "windows"]
+        assert agent.validate({"environment_bible": object()}) is False
 
     def test_execute_handles_empty_input(self) -> None:
         agent = _make_agent()

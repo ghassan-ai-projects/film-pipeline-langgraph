@@ -9,11 +9,24 @@ output is fundamentally wrong).
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel, Field, ValidationError
 
 from film_pipeline.agents.base import BaseAgent
 
 _logger = logging.getLogger(__name__)
+
+
+class OrchestratorDecision(BaseModel):
+    """Validated decision shape for the autonomous phase reviewer."""
+
+    action: Literal["approve", "revise", "escalate"]
+    feedback: str = ""
+    preserve: list[str] = Field(default_factory=list)
+    reasoning: str = ""
+    quality_score: int = Field(default=3, ge=1, le=5)
+    critical_issues: list[str] = Field(default_factory=list)
 
 
 class OrchestratorAgent(BaseAgent):
@@ -37,15 +50,23 @@ class OrchestratorAgent(BaseAgent):
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         data = model_output.get("orchestrator_decision", model_output)
-        action = str(data.get("action", "escalate")).strip().lower()
-        if action not in ("approve", "revise", "escalate"):
-            action = "escalate"
-        return {
-            "action": action,
-            "feedback": str(data.get("feedback", "")),
-            "preserve": [str(p) for p in data.get("preserve", [])],
-            "reasoning": str(data.get("reasoning", "")),
-        }
+        if not isinstance(data, dict):
+            data = {}
+        normalized = dict(data)
+        normalized["action"] = str(normalized.get("action", "escalate")).strip().lower()
+        if "quality_score" not in normalized:
+            normalized["quality_score"] = 3
+        try:
+            decision = OrchestratorDecision.model_validate(normalized)
+        except ValidationError as exc:
+            _logger.warning("Invalid orchestrator decision; escalating: %s", exc)
+            decision = OrchestratorDecision(
+                action="escalate",
+                feedback="Orchestrator decision was malformed and requires human review.",
+                reasoning=str(exc),
+                critical_issues=["malformed_orchestrator_decision"],
+            )
+        return decision.model_dump()
 
     def validate(self, result: dict[str, Any]) -> bool:
         return result.get("action", "") in ("approve", "revise", "escalate")

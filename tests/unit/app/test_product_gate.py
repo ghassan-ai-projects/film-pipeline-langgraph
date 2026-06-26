@@ -9,10 +9,12 @@ import yaml
 
 from film_pipeline.app.product_gate import (
     ProductGateManifest,
+    ProductGateReport,
     detect_stubbed_critical_tools,
     evaluate_product_gate,
     load_manifest,
     load_plan_manifest,
+    main,
 )
 
 
@@ -37,6 +39,32 @@ def test_load_manifest_reads_lists(tmp_path: Path) -> None:
     assert manifest.required_docs == ("docs/a.md",)
 
 
+def test_load_manifest_rejects_non_mapping(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text("- not\n- mapping\n")
+
+    with pytest.raises(ValueError, match="must be a mapping"):
+        load_manifest(manifest_path)
+
+
+def test_load_manifest_rejects_non_string_lists(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "manifest.yaml"
+    manifest_path.write_text(
+        yaml.safe_dump(
+            {
+                "allowed_stub_tools": [123],
+                "critical_mcp_tools": [],
+                "required_docs": [],
+                "required_e2e_tests": [],
+                "required_behavior_tests": [],
+            }
+        )
+    )
+
+    with pytest.raises(ValueError, match="allowed_stub_tools"):
+        load_manifest(manifest_path)
+
+
 def test_load_plan_manifest_reads_plan_keys(tmp_path: Path) -> None:
     manifest_path = tmp_path / "plan-manifest.yaml"
     manifest_path.write_text(
@@ -59,6 +87,13 @@ def test_load_plan_manifest_reads_plan_keys(tmp_path: Path) -> None:
 
 def test_load_plan_manifest_returns_none_for_missing_file() -> None:
     assert load_plan_manifest(Path("nonexistent/manifest.yaml")) is None
+
+
+def test_load_plan_manifest_returns_none_for_invalid_shape(tmp_path: Path) -> None:
+    manifest_path = tmp_path / "plan-manifest.yaml"
+    manifest_path.write_text("- invalid\n")
+
+    assert load_plan_manifest(manifest_path) is None
 
 
 def test_detect_stubbed_critical_tools_ignores_allowed_stubs() -> None:
@@ -150,3 +185,61 @@ def test_evaluate_product_gate_plan_manifest_missing_flag(
 
     assert report.ok is False
     assert report.plan_manifest_missing is True
+
+
+def test_product_gate_report_lines_for_pass_and_fail() -> None:
+    passing = ProductGateReport()
+    failing = ProductGateReport(
+        missing_files=["docs/missing.md"],
+        stubbed_critical_tools=["approve_phase"],
+        plan_manifest_missing=True,
+    )
+
+    assert passing.ok is True
+    assert passing.lines() == ["Product gate: PASS"]
+    assert failing.ok is False
+    lines = failing.lines()
+    assert lines[0] == "Product gate: FAIL"
+    assert "Missing required evidence files:" in lines
+    assert "- docs/missing.md" in lines
+    assert "Critical MCP tools still stubbed:" in lines
+    assert "- approve_phase" in lines
+    assert any("Product-completion plan manifest missing" in line for line in lines)
+
+
+def test_main_returns_zero_for_passing_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = ProductGateManifest(
+        allowed_stub_tools=frozenset(),
+        critical_mcp_tools=(),
+        required_docs=(),
+        required_e2e_tests=(),
+        required_behavior_tests=(),
+    )
+
+    monkeypatch.setattr("film_pipeline.app.product_gate.load_manifest", lambda: manifest)
+    monkeypatch.setattr("film_pipeline.app.product_gate.load_plan_manifest", lambda: manifest)
+    monkeypatch.setattr(
+        "film_pipeline.app.product_gate.evaluate_product_gate",
+        lambda _manifest, _plan_manifest: ProductGateReport(),
+    )
+
+    assert main() == 0
+
+
+def test_main_returns_one_for_failing_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = ProductGateManifest(
+        allowed_stub_tools=frozenset(),
+        critical_mcp_tools=(),
+        required_docs=(),
+        required_e2e_tests=(),
+        required_behavior_tests=(),
+    )
+
+    monkeypatch.setattr("film_pipeline.app.product_gate.load_manifest", lambda: manifest)
+    monkeypatch.setattr("film_pipeline.app.product_gate.load_plan_manifest", lambda: None)
+    monkeypatch.setattr(
+        "film_pipeline.app.product_gate.evaluate_product_gate",
+        lambda _manifest, _plan_manifest: ProductGateReport(plan_manifest_missing=True),
+    )
+
+    assert main() == 1

@@ -8,6 +8,7 @@ ModelRouter — no hardcoded model strings in execution paths.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from film_pipeline.agents.model_adapter import ModelAdapter
@@ -28,9 +29,11 @@ class RCTCOPrompt:
     rendered: str = ""
 
     def __post_init__(self) -> None:
+        current_date = datetime.now(UTC).date().isoformat()
         self.rendered = "\n\n".join(
             [
                 f"# Role\n{self.role}",
+                f"# Runtime Context\nCurrent date: {current_date}",
                 f"# Core Task\n{self.core_task}",
                 f"# Context\n{self.context}",
                 f"# Constraints\n{self.constraints}",
@@ -159,15 +162,21 @@ class PromptRunner:
 
         import logging
 
+        from film_pipeline.providers.failure_classifier import (
+            compress_prompt_for_retry,
+            is_token_limit_exceeded,
+        )
+
         _logger = logging.getLogger(__name__)
         model_id, max_tokens, temperature, top_p, frequency_penalty = (
             self.model_router.resolve_model_params(model_profile)
         )
+        rendered_prompt = prompt.rendered
 
         # --- Attempt 1: normal call ---
         try:
             return self.model_adapter.chat_json(
-                prompt.rendered,
+                rendered_prompt,
                 model=model_id,
                 system=prompt.role,
                 max_tokens=max_tokens,
@@ -175,8 +184,19 @@ class PromptRunner:
                 top_p=top_p,
                 frequency_penalty=frequency_penalty,
             )
-        except ValueError:
-            pass
+        except Exception as exc:
+            if is_token_limit_exceeded(exc, model_id):
+                rendered_prompt = compress_prompt_for_retry(rendered_prompt, factor=0.6)
+                _logger.warning(
+                    "PromptRunner.call_model hit token limit for profile '%s' "
+                    "(model=%s). Compressed context for retry.",
+                    model_profile,
+                    model_id,
+                )
+            elif isinstance(exc, ValueError):
+                pass
+            else:
+                raise
 
         _logger.warning(
             "PromptRunner.call_model attempt 1 failed for profile '%s' (model=%s). "
@@ -187,7 +207,7 @@ class PromptRunner:
 
         # --- Attempt 2: lower temperature + explicit JSON instruction ---
         retry_prompt = (
-            prompt.rendered + "\n\n!!! IMPORTANT: You MUST output valid, parseable JSON. "
+            rendered_prompt + "\n\n!!! IMPORTANT: You MUST output valid, parseable JSON. "
             "No markdown commentary, no trailing text — just pure JSON."
         )
         try:
@@ -200,8 +220,23 @@ class PromptRunner:
                 top_p=top_p,
                 frequency_penalty=frequency_penalty,
             )
-        except ValueError:
-            pass
+        except Exception as exc:
+            if is_token_limit_exceeded(exc, model_id):
+                rendered_prompt = compress_prompt_for_retry(rendered_prompt, factor=0.35)
+                retry_prompt = (
+                    rendered_prompt + "\n\n!!! IMPORTANT: You MUST output valid, parseable JSON. "
+                    "No markdown commentary, no trailing text — just pure JSON."
+                )
+                _logger.warning(
+                    "PromptRunner.call_model hit token limit again for profile '%s' "
+                    "(model=%s). Compressed context more aggressively for fallback.",
+                    model_profile,
+                    model_id,
+                )
+            elif isinstance(exc, ValueError):
+                pass
+            else:
+                raise
 
         # --- Attempt 3: fallback model ---
         try:

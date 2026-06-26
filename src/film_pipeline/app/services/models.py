@@ -16,6 +16,7 @@ class ProjectCreateRequest:
     idea: str = ""
     runtime_mode: str = "mock"
     workflow_mode: str = "manual"
+    project_kind: str = "production"
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,8 @@ class ProjectListItem:
     has_blockers: bool
     awaiting_review: bool
     last_updated_at: str = ""
+    project_kind: str = "production"
+    project_root: str = ""
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,7 @@ class DashboardSummary:
     artifact_count: int = 0
     checkpoint_count: int = 0
     has_blockers: bool = False
+    stalled_phase: str = ""
 
 
 @dataclass(frozen=True)

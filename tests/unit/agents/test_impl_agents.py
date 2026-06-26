@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
 from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
 from film_pipeline.agents.impl.development_agent import DevelopmentAgent
 from film_pipeline.agents.impl.intake_agent import IntakeAgent
+from film_pipeline.agents.impl.orchestrator_agent import OrchestratorAgent
+from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
+from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
 from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole, FilmType
+from film_pipeline.schemas._base import AgentFamily, AgentRole, FilmType, ValidationStatus
+from film_pipeline.schemas.assembly import AssemblyManifest
+from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
@@ -15,6 +21,7 @@ from film_pipeline.schemas.project import ProjectProfile
 from film_pipeline.schemas.reference import ReferenceIndex
 from film_pipeline.schemas.script import Script
 from film_pipeline.schemas.story_bible import SceneList, StoryBible, Treatment
+from film_pipeline.schemas.validation import ConsensusReport
 
 
 def _make_kb() -> KBContextPacket:
@@ -25,6 +32,30 @@ def _make_kb() -> KBContextPacket:
         agent_id="test-agent",
         task="Test task",
     )
+
+
+class TestOrchestratorAgent:
+    def test_execute_validates_structured_decision(self) -> None:
+        agent = OrchestratorAgent(_make_contract("orchestrator-agent"))
+        result = agent.execute(
+            {
+                "orchestrator_decision": {
+                    "action": "approve",
+                    "quality_score": 5,
+                    "feedback": "clean",
+                    "preserve": ["tone"],
+                }
+            }
+        )
+        assert result["action"] == "approve"
+        assert result["quality_score"] == 5
+        assert result["preserve"] == ["tone"]
+
+    def test_execute_escalates_malformed_decision(self) -> None:
+        agent = OrchestratorAgent(_make_contract("orchestrator-agent"))
+        result = agent.execute({"orchestrator_decision": {"action": "ship_it"}})
+        assert result["action"] == "escalate"
+        assert "malformed_orchestrator_decision" in result["critical_issues"]
 
 
 # ── ConstitutionAgent ────────────────────────────────────────────────────────
@@ -505,6 +536,328 @@ class TestVisualDevAgent:
         assert inputs["script_ref"] == "artifact:script:v1"
         assert inputs["constitution_ref"] == "artifact:film_constitution:v1"
         assert inputs["task"] == "Create visual dev references"
+
+
+# ── StructureExtractorAgent ──────────────────────────────────────────────────
+
+
+class TestStructureExtractorAgent:
+    def test_prepare_extracts_artifact_refs(self) -> None:
+        agent = StructureExtractorAgent(_make_contract("structure-extractor-agent"))
+
+        inputs = agent.prepare(
+            {
+                "project_id": "p1",
+                "story_bible_ref": "artifact:story_bible:v1",
+                "script_ref": "artifact:script:v1",
+            },
+            _make_kb(),
+            "Extract structure",
+        )
+
+        assert inputs == {
+            "project_id": "p1",
+            "story_bible_ref": "artifact:story_bible:v1",
+            "script_ref": "artifact:script:v1",
+            "task": "Extract structure",
+        }
+
+    def test_execute_parses_nested_execution_brief(self) -> None:
+        agent = StructureExtractorAgent(_make_contract("structure-extractor-agent"))
+
+        result = agent.execute(
+            {
+                "execution_brief": {
+                    "project_id": "p1",
+                    "target_runtime_seconds": "240",
+                    "movements": [
+                        {
+                            "movement_id": "act_1",
+                            "shot_count": "3",
+                            "duration_range_seconds": ["8", "12"],
+                            "description": "Opening movement",
+                        },
+                        {
+                            "shot_count": 2,
+                            "duration_range_seconds": "bad",
+                        },
+                    ],
+                    "mandatory_anchors": ["opening image", 7],
+                    "environment_progression": ["room", "street"],
+                    "pacing_style": "measured",
+                }
+            }
+        )
+
+        brief = result["execution_brief"]
+        assert isinstance(brief, ExecutionBrief)
+        assert brief.project_id == "p1"
+        assert brief.target_runtime_seconds == 240
+        assert brief.movements[0].movement_id == "act_1"
+        assert brief.movements[0].shot_count == 3
+        assert brief.movements[0].duration_range_seconds == (8, 12)
+        assert brief.movements[1].movement_id == "act_2"
+        assert brief.movements[1].duration_range_seconds == (10, 15)
+        assert brief.mandatory_anchors == ["opening image", "7"]
+        assert brief.environment_progression == ["room", "street"]
+        assert brief.pacing_style == "measured"
+        assert agent.validate(result)
+
+    def test_execute_falls_back_to_runtime_from_movements(self) -> None:
+        agent = StructureExtractorAgent(_make_contract("structure-extractor-agent"))
+
+        result = agent.execute(
+            {
+                "project_id": "p2",
+                "target_runtime_seconds": "unknown",
+                "estimated_runtime_seconds": None,
+                "movements": [
+                    {"movement_id": "a", "shot_count": 2, "duration_range_seconds": [10, 20]},
+                    {"movement_id": "b", "shot_count": 1, "duration_range_seconds": (30, 50)},
+                ],
+            }
+        )
+
+        brief = result["execution_brief"]
+        assert isinstance(brief, ExecutionBrief)
+        assert brief.target_runtime_seconds == 70
+
+    def test_execute_defaults_non_dict_output(self) -> None:
+        agent = StructureExtractorAgent(_make_contract("structure-extractor-agent"))
+
+        result = agent.execute({"execution_brief": "not structured"})
+
+        brief = result["execution_brief"]
+        assert isinstance(brief, ExecutionBrief)
+        assert brief.project_id == ""
+        assert brief.target_runtime_seconds == 300
+        assert brief.movements == []
+        assert not agent.validate(result)
+
+    def test_validate_rejects_missing_or_empty_brief(self) -> None:
+        agent = StructureExtractorAgent(_make_contract("structure-extractor-agent"))
+
+        assert not agent.validate({})
+        assert not agent.validate({"execution_brief": "bad"})
+        assert not agent.validate(
+            {
+                "execution_brief": ExecutionBrief(
+                    project_id="",
+                    target_runtime_seconds=300,
+                    movements=[],
+                )
+            }
+        )
+
+
+# ── AssemblyAgent ────────────────────────────────────────────────────────────
+
+
+class TestAssemblyAgent:
+    def test_prepare_extracts_media_and_artifact_refs(self) -> None:
+        agent = AssemblyAgent(_make_contract("failure-handling-agent"))
+
+        inputs = agent.prepare(
+            {
+                "project_id": "p1",
+                "media_refs": ["clip:s1:v1"],
+                "shot_matrix_ref": "artifact:shot_matrix:v1",
+                "script_ref": "artifact:script:v1",
+            },
+            _make_kb(),
+            "Assemble final cut",
+        )
+
+        assert inputs == {
+            "project_id": "p1",
+            "media_refs": "['clip:s1:v1']",
+            "shot_matrix_ref": "artifact:shot_matrix:v1",
+            "script_ref": "artifact:script:v1",
+            "task": "Assemble final cut",
+        }
+
+    def test_execute_parses_full_assembly_manifest(self) -> None:
+        agent = AssemblyAgent(_make_contract("failure-handling-agent"))
+
+        result = agent.execute(
+            {
+                "assembly": {
+                    "cut_id": "cut-v2",
+                    "project_id": "p1",
+                    "clip_order": [
+                        {
+                            "shot_id": "s1",
+                            "source_asset_ref": "asset:s1",
+                            "in_seconds": 1,
+                            "out_seconds": 4.5,
+                            "coverage_role": "master",
+                        }
+                    ],
+                    "transitions": [
+                        {
+                            "from_shot_id": "s1",
+                            "to_shot_id": "s2",
+                            "transition_type": "dissolve",
+                            "duration_seconds": 0.5,
+                        }
+                    ],
+                    "audio_plan": {
+                        "music_track_refs": ["music:main"],
+                        "sfx_track_refs": ["sfx:rain"],
+                        "dialogue_track_refs": ["dialogue:mix"],
+                    },
+                    "color_plan": {
+                        "look": "cool dusk",
+                        "per_scene": {"sc_001": "blue shadow"},
+                    },
+                    "duration_total_seconds": 12,
+                }
+            }
+        )
+
+        manifest = result["assembly_manifest"]
+        assert isinstance(manifest, AssemblyManifest)
+        assert manifest.cut_id == "cut-v2"
+        assert manifest.project_id == "p1"
+        assert manifest.clip_order[0].shot_id == "s1"
+        assert manifest.clip_order[0].source_asset_ref == "asset:s1"
+        assert manifest.clip_order[0].coverage_role == "master"
+        assert manifest.transitions[0].transition_type == "dissolve"
+        assert manifest.audio_plan.music_track_refs == ["music:main"]
+        assert manifest.color_plan.per_scene == {"sc_001": "blue shadow"}
+        assert manifest.duration_total_seconds == 12
+        assert agent.validate(result)
+
+    def test_execute_accepts_flat_clips_and_computes_duration(self) -> None:
+        agent = AssemblyAgent(_make_contract("failure-handling-agent"))
+
+        result = agent.execute(
+            {
+                "project_id": "p2",
+                "clips": [
+                    {"source_asset_ref": "asset:a", "in_seconds": 0, "out_seconds": 2},
+                    {
+                        "shot_id": "s2",
+                        "source_asset_ref": "asset:b",
+                        "in_seconds": 2,
+                        "out_seconds": 5,
+                    },
+                ],
+            }
+        )
+
+        manifest = result["assembly_manifest"]
+        assert isinstance(manifest, AssemblyManifest)
+        assert manifest.clip_order[0].shot_id == "shot_0000"
+        assert manifest.clip_order[1].shot_id == "s2"
+        assert manifest.duration_total_seconds == 5
+
+    def test_validate_rejects_missing_or_empty_manifest(self) -> None:
+        agent = AssemblyAgent(_make_contract("failure-handling-agent"))
+
+        assert not agent.validate({})
+        assert not agent.validate({"assembly_manifest": "bad"})
+        result = agent.execute({"project_id": "p1", "clip_order": []})
+        assert not agent.validate(result)
+
+
+# ── QCSynthesisAgent ─────────────────────────────────────────────────────────
+
+
+class TestQCSynthesisAgent:
+    def test_prepare_extracts_validator_report_refs(self) -> None:
+        agent = QCSynthesisAgent(_make_contract("clip-validator"))
+
+        inputs = agent.prepare(
+            {"project_id": "p1", "validator_report_refs": ["report:one", "report:two"]},
+            _make_kb(),
+            "Synthesize validation",
+        )
+
+        assert inputs == {
+            "project_id": "p1",
+            "validator_report_refs": "['report:one', 'report:two']",
+            "task": "Synthesize validation",
+        }
+
+    def test_execute_parses_full_consensus_report(self) -> None:
+        agent = QCSynthesisAgent(_make_contract("clip-validator"))
+
+        result = agent.execute(
+            {
+                "consensus": {
+                    "review_id": "qc-123",
+                    "artifact_refs": ["artifact:script:v1"],
+                    "reviewers": [
+                        {
+                            "model_id": "validator-a",
+                            "validator_id": "script-structure",
+                            "score": "87.5",
+                            "status": "pass_with_notes",
+                        }
+                    ],
+                    "agreement_level": "high",
+                    "consensus_status": "pass_with_notes",
+                    "shared_findings": ["structure works"],
+                    "disagreements": ["tone risk"],
+                    "orchestrator_recommendation": "approve with note",
+                }
+            }
+        )
+
+        report = result["consensus_report"]
+        assert isinstance(report, ConsensusReport)
+        assert report.review_id == "qc-123"
+        assert report.artifact_refs == ["artifact:script:v1"]
+        assert report.reviewers[0].model_id == "validator-a"
+        assert report.reviewers[0].validator_id == "script-structure"
+        assert report.reviewers[0].score == 87.5
+        assert report.reviewers[0].status == ValidationStatus.PASS_WITH_NOTES
+        assert report.agreement_level == "high"
+        assert report.consensus_status == ValidationStatus.PASS_WITH_NOTES
+        assert report.shared_findings == ["structure works"]
+        assert report.disagreements == ["tone risk"]
+        assert report.orchestrator_recommendation == "approve with note"
+        assert agent.validate(result)
+
+    def test_execute_accepts_direct_reviewer_list(self) -> None:
+        agent = QCSynthesisAgent(_make_contract("clip-validator"))
+
+        result = agent.execute(
+            {
+                "consensus": [
+                    {"model_id": "m1", "score": 80, "status": "pass"},
+                    {"validator_id": "continuity", "score": 55, "status": "needs_revision"},
+                ]
+            }
+        )
+
+        report = result["consensus_report"]
+        assert isinstance(report, ConsensusReport)
+        assert report.review_id == "qc-001"
+        assert report.agreement_level == "medium"
+        assert report.consensus_status == ValidationStatus.PASS
+        assert report.reviewers[0].model_id == "m1"
+        assert report.reviewers[1].model_id == "model_1"
+        assert report.reviewers[1].validator_id == "continuity"
+        assert report.reviewers[1].status == ValidationStatus.NEEDS_REVISION
+
+    def test_execute_defaults_non_structured_output_to_empty_report(self) -> None:
+        agent = QCSynthesisAgent(_make_contract("clip-validator"))
+
+        result = agent.execute({"consensus": "not structured"})
+
+        report = result["consensus_report"]
+        assert isinstance(report, ConsensusReport)
+        assert report.review_id == "qc-001"
+        assert report.reviewers == []
+        assert not agent.validate(result)
+
+    def test_validate_rejects_missing_or_malformed_report(self) -> None:
+        agent = QCSynthesisAgent(_make_contract("clip-validator"))
+
+        assert not agent.validate({})
+        assert not agent.validate({"consensus_report": "bad"})
 
 
 def _make_visual_dev_output() -> dict[str, object]:

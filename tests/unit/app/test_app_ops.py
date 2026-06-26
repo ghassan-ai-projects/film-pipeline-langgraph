@@ -57,6 +57,39 @@ class TestBootstrap:
         issues = validate_environment()
         assert any("OPENROUTER_API_KEY" in issue for issue in issues)
 
+    def test_validate_environment_rejects_artifacts_file(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        (tmp_path / "artifacts").write_text("not a directory")
+
+        issues = validate_environment()
+
+        assert "artifacts exists but is not a directory." in issues
+
+    def test_validate_environment_reports_unwritable_artifacts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        (tmp_path / "artifacts").mkdir()
+
+        def fail_touch(self: Path) -> None:
+            if self.name == ".write_test":
+                raise OSError("denied")
+            Path.touch(self)
+
+        monkeypatch.setattr(Path, "touch", fail_touch)
+
+        issues = validate_environment()
+
+        assert "Cannot write to artifacts/ directory." in issues
+
 
 class TestHealth:
     def test_health_status_default(self) -> None:
@@ -70,6 +103,79 @@ class TestHealth:
         status = check_readiness()
         assert isinstance(status, HealthStatus)
         assert status.ready is False  # missing profiles + KB in tmp
+
+    def test_check_readiness_reports_degraded_provider(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import film_pipeline.app.bootstrap as bootstrap
+        import film_pipeline.app.runtime as runtime
+        import film_pipeline.kb.paths as kb_paths
+
+        class FakeRuntime:
+            def list_providers(self) -> list[str]:
+                return ["veo", "imagen"]
+
+            def get_provider_health(self, provider_id: str) -> dict[str, str] | None:
+                if provider_id == "veo":
+                    return {"status": "degraded"}
+                return {"status": "healthy"}
+
+        kb_manifest = tmp_path / "kb.yaml"
+        kb_manifest.write_text("items: []")
+        monkeypatch.setattr(bootstrap, "validate_environment", list)
+        monkeypatch.setattr(kb_paths, "kb_manifest_path", lambda: kb_manifest)
+        monkeypatch.setattr(runtime, "get_runtime", lambda: FakeRuntime())
+
+        status = check_readiness()
+
+        assert status.ready is False
+        assert status.checks == {"bootstrap": True, "providers": False, "kb": True}
+        assert "Provider 'veo' status: degraded" in status.messages
+
+    def test_check_readiness_with_no_providers_and_existing_kb(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import film_pipeline.app.bootstrap as bootstrap
+        import film_pipeline.app.runtime as runtime
+        import film_pipeline.kb.paths as kb_paths
+
+        class FakeRuntime:
+            def list_providers(self) -> list[str]:
+                return []
+
+        kb_manifest = tmp_path / "kb.yaml"
+        kb_manifest.write_text("items: []")
+        monkeypatch.setattr(bootstrap, "validate_environment", list)
+        monkeypatch.setattr(kb_paths, "kb_manifest_path", lambda: kb_manifest)
+        monkeypatch.setattr(runtime, "get_runtime", lambda: FakeRuntime())
+
+        status = check_readiness()
+
+        assert status.ready is True
+        assert status.checks == {"bootstrap": True, "providers": True, "kb": True}
+        assert status.messages == []
+
+    def test_check_readiness_includes_bootstrap_and_kb_messages(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import film_pipeline.app.bootstrap as bootstrap
+        import film_pipeline.app.runtime as runtime
+        import film_pipeline.kb.paths as kb_paths
+
+        class FakeRuntime:
+            def list_providers(self) -> list[str]:
+                return []
+
+        missing_kb = tmp_path / "missing.yaml"
+        monkeypatch.setattr(bootstrap, "validate_environment", lambda: ["profiles missing"])
+        monkeypatch.setattr(kb_paths, "kb_manifest_path", lambda: missing_kb)
+        monkeypatch.setattr(runtime, "get_runtime", lambda: FakeRuntime())
+
+        status = check_readiness()
+
+        assert status.ready is False
+        assert status.checks == {"bootstrap": False, "providers": True, "kb": False}
+        assert status.messages == ["profiles missing", "KB manifest not found."]
 
 
 class TestVersion:

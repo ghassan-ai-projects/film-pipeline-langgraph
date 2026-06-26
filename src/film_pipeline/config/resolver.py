@@ -7,6 +7,7 @@ from typing import Any
 
 from film_pipeline.config.loader import ProfileLoader, ProfileSource
 from film_pipeline.config.merger import ProfileMerger
+from film_pipeline.config.runtime_overrides import apply_runtime_overrides
 from film_pipeline.config.validator import ConfigConflict, ConfigValidator
 
 
@@ -34,6 +35,6 @@ class ConfigResolver:
     def resolve(self, names: list[str]) -> ResolvedConfig:
         """Layer profiles in order and return a validated config."""
         sources = self.loader.load_many(names)
-        raw = self.merger.merge(sources)
+        raw = apply_runtime_overrides(self.merger.merge(sources))
         conflicts = self.validator.validate(raw)
         return ResolvedConfig(raw=raw, sources=sources, conflicts=conflicts)

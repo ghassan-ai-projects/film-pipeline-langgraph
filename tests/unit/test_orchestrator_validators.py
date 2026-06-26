@@ -13,6 +13,7 @@ from film_pipeline.graph.orchestrator_validators import (
     validate_dispatch_readiness,
     validate_execution_brief,
     validate_planning_completeness,
+    validate_shot_scene_references,
     validate_shot_structure,
 )
 from film_pipeline.schemas.execution_brief import ExecutionBrief, MovementSpec
@@ -190,6 +191,19 @@ class TestGateBPlanningCompleteness:
         issues = validate_planning_completeness({}, matrix, None)
         assert len(issues) >= 1
         assert any("missing_cost_estimate" in i["code"] for i in issues)
+
+    def test_blocks_shots_referencing_missing_script_scenes(self) -> None:
+        script = {"scenes": [{"scene_id": "SC_001"}]}
+        matrix = {
+            "rows": [
+                {"shot_id": "shot_001", "scene_id": "SC_001"},
+                {"shot_id": "shot_002", "scene_id": "SC_999"},
+            ]
+        }
+        issues = validate_shot_scene_references(script, matrix)
+        assert len(issues) == 1
+        assert issues[0]["code"] == "shot_scene_reference_mismatch"
+        assert "shot_002->SC_999" in issues[0]["message"]
 
 
 # ── Gate C: Dispatch readiness ─────────────────────────────────────────────

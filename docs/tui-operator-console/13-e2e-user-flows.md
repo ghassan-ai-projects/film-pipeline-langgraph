@@ -575,13 +575,80 @@ adjustment.
 - structure compare view
 - cross-links from act to scenes
 
+## Flow 10: Cockpit-Guided 1 Minute Mock Film
+
+### Actor
+
+- film_creator
+
+### Mode
+
+- runtime: `mock`
+- workflow: `manual`
+
+### Goal
+
+Create a small 1 minute film from idea to generated image assets while staying inside the
+TUI cockpit.
+
+### Journey
+
+1. creator opens the TUI
+2. creator opens `Guide`
+3. Guide shows each step as `done`, `current`, `blocked`, or `pending` with evidence from
+   current phase, artifacts, validation, and generated assets
+4. creator runs:
+   - `create 1min-field | 1 Minute Field | A courier crosses three locations to deliver one warning.`
+5. dashboard shows intake as the current phase and review as the next action
+6. creator repeats:
+   - `next`
+   - `approve`
+   - `confirm approve`
+7. creator inspects assets during each phase:
+   - `open assets`
+   - `artifact <artifact_id>`
+   - `reader next`
+8. creator takes direct asset actions when an artifact needs attention:
+   - `asset review <artifact_id>`
+   - `asset change <artifact_id> | <note>`
+   - `asset extend <artifact_id> | <note>`
+9. creator handles blockers before generation:
+   - `show blocked`
+   - `fix <target>`
+   - `revise <note>`
+10. creator reaches generation planning and generation
+11. creator validates generated assets through:
+   - `matrix blocking`
+   - `open validation`
+   - `open assets`
+
+### Success Criteria
+
+- the project rail defaults to production projects
+- test and demo projects are visible only through `projects test` or `projects all`
+- the guide gives concrete commands and validation checks for each step
+- the guide computes live evidence for each step instead of remaining static text
+- assets are inspectable through the reader with linked comments and validation
+- approval remains explicit through `confirm approve`
+
+### Critical TUI Requirements
+
+- `Guide` tab
+- project rail lanes for `production`, `test`, and `all`
+- `project <id>` switching
+- asset reader with index and links
+- asset action rows for review, change, and extension requests
+- horizontal Dashboard and Assets operating bands so summaries, actions, and readers stay visible
+- smart matrix filters for blockers and generated assets
+
 ## What These Flows Imply About The TUI
 
 The TUI should be built around these centers of gravity:
 
 - `Dashboard` for triage and explanation
 - `Review` for human decision-making
-- `Artifacts` for deep reading and comparison
+- `Artifacts` for deep reading, navigation, actions, and comparison
+- `Guide` for the first complete 1 minute mock film path
 - `Checkpoints` for safe recovery
 - `Providers` for operational control
 

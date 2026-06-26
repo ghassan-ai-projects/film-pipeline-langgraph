@@ -12,6 +12,7 @@ and is not consumed by the prompt framework.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -34,8 +35,10 @@ class PromptTemplate:
         ctx = self.context_template
         for key, value in context_vars.items():
             ctx = ctx.replace(f"{{{key}}}", value)
+        current_date = context_vars.get("current_date") or datetime.now(UTC).date().isoformat()
         parts = [
             f"# Role\n{self.role}",
+            f"# Runtime Context\nCurrent date: {current_date}",
             f"# Core Task\n{self.core_task}",
             f"# Context\n{ctx}",
             f"# Constraints\n{self.constraints}",

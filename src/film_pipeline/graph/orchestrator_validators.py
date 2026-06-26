@@ -368,6 +368,73 @@ def validate_planning_completeness(
     return issues
 
 
+def validate_shot_scene_references(
+    script: Any,
+    shot_matrix: Any,
+) -> list[dict[str, Any]]:
+    """Ensure every shot row references a scene that exists in the script."""
+    scene_ids = _extract_scene_ids(script)
+    rows = _extract_rows(shot_matrix)
+    if not scene_ids or not rows:
+        return []
+
+    missing: list[str] = []
+    for row in rows:
+        scene_id = str(_row_attr(row, "scene_id", "") or "")
+        shot_id = str(_row_attr(row, "shot_id", "?") or "?")
+        if scene_id and scene_id not in scene_ids:
+            missing.append(f"{shot_id}->{scene_id}")
+
+    if not missing:
+        return []
+    return [
+        _blocking(
+            "shot_scene_reference_mismatch",
+            f"{len(missing)} shot row(s) reference scenes that do not exist in the script: "
+            f"{', '.join(missing[:8])}" + ("..." if len(missing) > 8 else ""),
+        )
+    ]
+
+
+def _extract_rows(value: Any) -> list[Any]:
+    """Return row-like values from a matrix object or dict."""
+    if hasattr(value, "rows"):
+        rows = value.rows
+        return list(rows) if isinstance(rows, list) else []
+    if isinstance(value, dict):
+        rows = value.get("rows", [])
+        return rows if isinstance(rows, list) else []
+    return []
+
+
+def _extract_scene_ids(script: Any) -> set[str]:
+    """Extract scene IDs from Script/StoryBible-like objects and dicts."""
+    if hasattr(script, "scenes"):
+        scenes = script.scenes
+        return {
+            str(_row_attr(scene, "scene_id", ""))
+            for scene in scenes
+            if str(_row_attr(scene, "scene_id", ""))
+        }
+    if not isinstance(script, dict):
+        return set()
+
+    candidates: list[Any] = []
+    raw_scenes = script.get("scenes", [])
+    if isinstance(raw_scenes, list):
+        candidates.extend(raw_scenes)
+    scene_list = script.get("scene_list", {})
+    if isinstance(scene_list, dict):
+        nested = scene_list.get("scenes", [])
+        if isinstance(nested, list):
+            candidates.extend(nested)
+    return {
+        str(_row_attr(scene, "scene_id", ""))
+        for scene in candidates
+        if str(_row_attr(scene, "scene_id", ""))
+    }
+
+
 # ── Gate C: Dispatch readiness ────────────────────────────────────────────
 
 

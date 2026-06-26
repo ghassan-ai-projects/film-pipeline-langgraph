@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
 class TestGraphWithCheckpointer:
@@ -131,6 +131,23 @@ class TestAfterApproval:
             },
         }
         assert after_approval(state) == "await_approval"
+        assert state["human_approval_required"] is True
+        assert state["_stalled_phase"] == "shot_bible"
+        issues = cast(list[dict[str, object]], state["issues"])
+        stalled_issues = [
+            issue
+            for issue in issues
+            if isinstance(issue, dict) and issue.get("code") == "ORCHESTRATOR_STALLED"
+        ]
+        assert len(stalled_issues) == 1
+        assert after_approval(state) == "await_approval"
+        issues = cast(list[dict[str, object]], state["issues"])
+        stalled_issues = [
+            issue
+            for issue in issues
+            if isinstance(issue, dict) and issue.get("code") == "ORCHESTRATOR_STALLED"
+        ]
+        assert len(stalled_issues) == 1
 
 
 def _build_payload(state: dict[str, object]) -> dict[str, object]:

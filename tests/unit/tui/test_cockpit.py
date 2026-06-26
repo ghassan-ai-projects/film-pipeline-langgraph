@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-from textual.widgets import DataTable, Input, Static
+from textual.containers import Horizontal, Vertical
+from textual.widgets import DataTable, Input, Static, TabbedContent
 
 from film_pipeline.app.services.errors import ProjectNotFoundError
 from film_pipeline.app.services.models import (
@@ -24,6 +25,7 @@ from film_pipeline.app.services.models import (
 from film_pipeline.tui.app import FilmCockpitApp
 from film_pipeline.tui.view_models import (
     build_artifact_reader,
+    build_asset_action_rows,
     build_command_help_rows,
     build_command_options,
     build_command_suggestions,
@@ -47,6 +49,7 @@ from film_pipeline.tui.view_models import (
     filter_command_suggestions,
     filter_matrix_rows,
     format_fix_draft,
+    format_selection_detail,
     format_targeted_revision_note,
     selection_from_row,
     summarize_attention,
@@ -63,6 +66,7 @@ class RecordingGateway:
     revision_notes: list[str] | None = None
     comments: list[OperatorComment] | None = None
     active_project_id: str = "field-message"
+    extra_projects: list[ProjectListItem] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.revision_notes is None:
@@ -80,7 +84,8 @@ class RecordingGateway:
                 status="awaiting_review",
                 has_blockers=True,
                 awaiting_review=True,
-            )
+            ),
+            *self.extra_projects,
         ]
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
@@ -292,6 +297,30 @@ class RecordingGateway:
         ]
 
 
+class NoApprovalGateway(RecordingGateway):
+    """Gateway state where approval is not currently eligible."""
+
+    def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+        dashboard = super().get_dashboard(project_id)
+        return DashboardSummary(
+            project_id=dashboard.project_id,
+            title=dashboard.title,
+            slug=dashboard.slug,
+            current_phase=dashboard.current_phase,
+            runtime_mode=dashboard.runtime_mode,
+            workflow_mode=dashboard.workflow_mode,
+            status="in_progress",
+            next_action="continue_work",
+            route_reason="approval not ready",
+            eligible_actions=[],
+            blocked_actions=[],
+            issue_count=dashboard.issue_count,
+            artifact_count=dashboard.artifact_count,
+            checkpoint_count=dashboard.checkpoint_count,
+            has_blockers=False,
+        )
+
+
 def test_graph_rows_mark_current_phase() -> None:
     dashboard = RecordingGateway().get_dashboard("field-message")
 
@@ -342,7 +371,11 @@ def test_command_suggestions_include_live_navigation_and_fix_commands() -> None:
     )
 
     commands = [str(row["command"]) for row in suggestions]
+    assert "open guide" in commands
     assert "phase script" in commands
+    assert "project field-message" in commands
+    assert "projects production" in commands
+    assert "projects test" in commands
     assert "approve" in commands
     assert "confirm approve" in commands
     assert "fix SC_004" in commands
@@ -383,6 +416,38 @@ def test_dashboard_kpis_and_actions_surface_operator_priorities() -> None:
     assert actions[0]["command"] == "next"
     assert any(row["command"] == "fix SC_004" for row in actions)
     assert any(row["command"] == "approve" for row in actions)
+
+
+def test_dashboard_rows_surface_stalled_phase() -> None:
+    dashboard = DashboardSummary(
+        project_id="field-message",
+        title="The Field Message",
+        slug="field-message",
+        current_phase="shot_bible",
+        runtime_mode="mock",
+        workflow_mode="hybrid",
+        status="stalled",
+        next_action="wait_for_human",
+        route_reason="repair stalled",
+        stalled_phase="shot_bible",
+        has_blockers=True,
+        issue_count=1,
+    )
+
+    actions = build_dashboard_action_rows(dashboard, None, None)
+    suggestions = build_command_suggestions(
+        dashboard=dashboard,
+        validation=None,
+        artifacts=[],
+        matrix_rows=[],
+    )
+    graph = build_graph_rows(dashboard)
+    attention = summarize_attention(dashboard, None, [])
+
+    assert any(row["action"] == "escalate stalled phase" for row in actions)
+    assert any(row["scope"] == "escalation" for row in suggestions)
+    assert any(row["phase"] == "shot_bible" and row["status"] == "stalled" for row in graph)
+    assert any("STALLED: shot_bible" in line for line in attention)
 
 
 def test_matrix_rows_merge_artifacts_and_validation_issues() -> None:
@@ -565,6 +630,85 @@ def test_reader_index_and_link_rows_make_artifact_navigable() -> None:
     assert link_rows[1]["command"] == "thread SC_004"
 
 
+def test_asset_action_rows_make_artifacts_actionable() -> None:
+    rows = build_asset_action_rows(RecordingGateway().list_artifacts("field-message"))
+
+    script_actions = [row for row in rows if row["artifact_id"] == "script"]
+    assert [row["action"] for row in script_actions] == ["review", "change", "extend"]
+    assert script_actions[0]["command"] == "asset review script"
+    assert script_actions[1]["command"] == "asset change script | <note>"
+    assert script_actions[2]["command"] == "asset extend script | <note>"
+
+
+def test_artifact_reader_renders_text_treatment_scene_list_and_compact_bodies() -> None:
+    text_artifact = ArtifactDetail(
+        artifact_id="logline",
+        artifact_type="text",
+        phase="intake",
+        version=1,
+        status="candidate",
+        body={"text": "A courier hears tomorrow's warning today.", "created_by": "agent"},
+    )
+    treatment_artifact = ArtifactDetail(
+        artifact_id="treatment",
+        artifact_type="treatment",
+        phase="development",
+        version=2,
+        status="candidate",
+        body={
+            "treatment": {"text": "Act one opens at the abandoned platform."},
+            "validation_refs": ["validation:1"],
+        },
+    )
+    scene_list_artifact = ArtifactDetail(
+        artifact_id="scene_list",
+        artifact_type="scene_list",
+        phase="script",
+        version=1,
+        status="candidate",
+        body={
+            "scene_list": {
+                "scenes": [
+                    {"scene_id": "SC_001", "dramatic_function": "Arrival"},
+                    {"dramatic_function": "Missing id fallback"},
+                ]
+            },
+            "approval_ref": "approval:1",
+        },
+    )
+    compact_artifact = ArtifactDetail(
+        artifact_id="metadata",
+        artifact_type="metadata",
+        phase="delivery",
+        version=1,
+        status="candidate",
+        body={
+            "title": "Field Message",
+            "shots": [1, 2],
+            "owner": {"agent": "delivery"},
+            "empty": None,
+        },
+    )
+
+    text_reader = build_artifact_reader(text_artifact, comments=[], validation=None)
+    treatment_reader = build_artifact_reader(treatment_artifact, comments=[], validation=None)
+    scene_reader = build_artifact_reader(scene_list_artifact, comments=[], validation=None)
+    compact_reader = build_artifact_reader(compact_artifact, comments=[], validation=None)
+
+    assert text_reader.body == "A courier hears tomorrow's warning today."
+    assert text_reader.metadata["created_by"] == "agent"
+    assert treatment_reader.body == "Act one opens at the abandoned platform."
+    assert treatment_reader.metadata["validation_refs"] == ["validation:1"]
+    assert scene_reader.outline == ["SC_001: Arrival", "?: Missing id fallback"]
+    assert build_reader_index_rows(scene_list_artifact)[0]["command"] == "scene SC_001"
+    assert compact_reader.body.splitlines() == [
+        "title: Field Message",
+        "shots: 2 item(s)",
+        "owner: 1 field(s)",
+        "empty: None",
+    ]
+
+
 def test_command_options_collect_selectable_ids() -> None:
     gateway = RecordingGateway()
     validation = gateway.get_validation_workspace("field-message")
@@ -578,6 +722,7 @@ def test_command_options_collect_selectable_ids() -> None:
     )
 
     assert options.project_ids == ["field-message"]
+    assert options.project_kinds == ["production", "test", "all"]
     assert "script" in options.phases
     assert options.artifact_ids == ["scene_matrix", "script"]
     assert options.scene_ids == ["SC_004", "SC_007"]
@@ -599,7 +744,11 @@ def test_command_help_rows_include_live_argument_values() -> None:
     help_rows = build_command_help_rows(options)
 
     by_command = {str(row["command"]): row for row in help_rows}
+    assert "field-message" in str(by_command["project <project_id>"]["values"])
+    assert "production" in str(by_command["projects <production|test|all>"]["values"])
     assert "script" in str(by_command["artifact <artifact_id>"]["values"])
+    assert "script" in str(by_command["asset review <artifact_id>"]["values"])
+    assert "script" in str(by_command["asset change <artifact_id> | <note>"]["values"])
     assert "SC_004" in str(by_command["scene <scene_id>"]["values"])
     assert "dialogue-voice" in str(by_command["validator <validator_id>"]["values"])
     assert by_command["create <project_id> | <title> | <idea>"]["purpose"]
@@ -625,21 +774,98 @@ def test_command_validation_accepts_known_values_and_rejects_unknown_values() ->
     )
 
     assert build_command_validation("artifact script", options, suggestions).status == "ready"
+    assert build_command_validation("asset review script", options, suggestions).status == "ready"
+    assert (
+        build_command_validation(
+            "asset change script | Sharpen the visual beat.", options, suggestions
+        ).status
+        == "ready"
+    )
+    assert (
+        build_command_validation(
+            "asset extend script | Add one image beat.", options, suggestions
+        ).status
+        == "ready"
+    )
+    assert build_command_validation("project field-message", options, suggestions).status == "ready"
+    assert build_command_validation("projects test", options, suggestions).status == "ready"
     assert build_command_validation("scene SC_004", options, suggestions).status == "ready"
     assert (
         build_command_validation("create film | Film | Idea", options, suggestions).status
         == "ready"
     )
     unknown = build_command_validation("artifact missing", options, suggestions)
+    unknown_asset = build_command_validation("asset review missing", options, suggestions)
+    unknown_project = build_command_validation("project missing", options, suggestions)
     bad_pivot = build_command_validation("matrix pivot mood", options, suggestions)
     partial = build_command_validation("artifact sc", options, suggestions)
 
     assert unknown.status == "unknown"
     assert "Unknown artifact" in unknown.message
+    assert unknown_asset.status == "unknown"
+    assert "Unknown asset review" in unknown_asset.message
+    assert unknown_project.status == "unknown"
+    assert "Unknown project" in unknown_project.message
     assert bad_pivot.status == "unknown"
     assert "Unknown matrix pivot" in bad_pivot.message
     assert partial.status == "incomplete"
     assert partial.completion == "artifact scene_matrix"
+
+
+def test_command_validation_guides_incomplete_and_pipe_commands() -> None:
+    gateway = RecordingGateway()
+    validation = gateway.get_validation_workspace("field-message")
+    artifacts = gateway.list_artifacts("field-message")
+    matrix_rows = build_matrix_rows(artifacts, validation)
+    suggestions = build_command_suggestions(
+        dashboard=gateway.get_dashboard("field-message"),
+        validation=validation,
+        artifacts=artifacts,
+        matrix_rows=matrix_rows,
+    )
+    options = build_command_options(
+        projects=gateway.list_projects(),
+        dashboard=gateway.get_dashboard("field-message"),
+        validation=validation,
+        artifacts=artifacts,
+        providers=gateway.list_provider_status(),
+    )
+
+    assert build_command_validation("", options, suggestions).completion == "open graph"
+    assert build_command_validation("create", options, suggestions).status == "incomplete"
+    assert build_command_validation("asset", options, suggestions).status == "incomplete"
+    assert (
+        build_command_validation("asset change script | <note>", options, suggestions).status
+        == "incomplete"
+    )
+    assert (
+        build_command_validation("create <project_id> | Film | Idea", options, suggestions).status
+        == "incomplete"
+    )
+    assert build_command_validation("phase", options, suggestions).completion == "phase script"
+    assert build_command_validation("validator", options, suggestions).completion.startswith(
+        "validator "
+    )
+    assert build_command_validation("matrix", options, suggestions).status == "ready"
+    assert build_command_validation("matr", options, suggestions).completion == "matrix"
+    assert (
+        build_command_validation("matrix pivot", options, suggestions).completion
+        == "matrix pivot status"
+    )
+    assert build_command_validation("matrix blocking", options, suggestions).status == "ready"
+    assert build_command_validation("comment", options, suggestions).status == "incomplete"
+    assert (
+        build_command_validation("comment SC_004 | keep this quiet", options, suggestions).status
+        == "ready"
+    )
+    assert (
+        build_command_validation("draft SC_004 | <note>", options, suggestions).status
+        == "incomplete"
+    )
+    assert build_command_validation("review issue", options, suggestions).status == "incomplete"
+    assert build_command_validation("review issue SC_004", options, suggestions).status == "ready"
+    assert build_command_validation("appr", options, suggestions).completion == "approve"
+    assert build_command_validation("nonsense", options, suggestions).status == "unknown"
 
 
 def test_command_suggestions_filter_and_complete_prefixes() -> None:
@@ -657,6 +883,62 @@ def test_command_suggestions_filter_and_complete_prefixes() -> None:
 
     assert [row["command"] for row in filtered] == ["fix SC_004", "fix SC_007"]
     assert complete_command_prefix("art", suggestions) == "artifact script"
+
+
+def test_selection_from_row_covers_tui_table_sources() -> None:
+    rows: dict[str, dict[str, object]] = {
+        "asset_table": {"artifact_id": "script", "phase": "script"},
+        "asset_action_table": {"artifact_id": "script", "action": "review", "phase": "script"},
+        "dashboard_kpi_table": {"metric": "blockers"},
+        "dashboard_action_table": {"action": "approve"},
+        "project_table": {"project": "field-message", "kind": "production"},
+        "guide_table": {"step": 3, "goal": "Inspect assets"},
+        "review_checklist_table": {"check": "read script"},
+        "review_issue_table": {"target_type": "scene", "target_id": "SC_004"},
+        "comment_thread_table": {"target_type": "scene", "target_id": "SC_004"},
+        "validation_table": {"target": "SC_004", "phase": "script"},
+        "validation_group_table": {"validator_id": "dialogue-voice"},
+        "validation_fix_table": {"target_type": "scene", "target_id": "SC_004"},
+        "matrix_table": {"kind": "artifact", "target": "script", "phase": "script"},
+        "matrix_pivot_table": {"value": "blocking"},
+        "graph_table": {"phase": "script"},
+        "graph_artifact_table": {"artifact_id": "script", "phase": "script"},
+        "command_suggestion_table": {"command": "fix SC_004"},
+        "reader_index_table": {"target_type": "scene", "target_id": "SC_004"},
+        "reader_link_table": {"kind": "validation", "target_id": "SC_004"},
+        "provider_table": {"provider_id": "imagen"},
+        "checkpoint_table": {"checkpoint_id": "checkpoint:1", "phase": "script"},
+        "unknown_table": {"first": "fallback"},
+    }
+
+    selections = {source: selection_from_row(source, row) for source, row in rows.items()}
+
+    assert selections["asset_table"].target_type == "artifact"
+    assert selections["asset_action_table"].target_type == "asset_action"
+    assert selections["dashboard_kpi_table"].target_id == "blockers"
+    assert selections["dashboard_action_table"].target_type == "dashboard_action"
+    assert selections["project_table"].target_type == "project"
+    assert selections["guide_table"].target_type == "guide_step"
+    assert selections["review_checklist_table"].target_id == "read script"
+    assert selections["review_issue_table"].target_type == "scene"
+    assert selections["comment_thread_table"].target_id == "SC_004"
+    assert selections["validation_table"].target_type == "validation_issue"
+    assert selections["validation_group_table"].target_type == "validator"
+    assert selections["validation_fix_table"].target_type == "scene"
+    assert selections["matrix_table"].target_type == "artifact"
+    assert selections["matrix_pivot_table"].target_type == "matrix_pivot"
+    assert selections["graph_table"].target_type == "graph_phase"
+    assert selections["graph_artifact_table"].target_id == "script"
+    assert selections["command_suggestion_table"].target_type == "command"
+    assert selections["reader_index_table"].target_type == "scene"
+    assert selections["reader_link_table"].target_type == "validation"
+    assert selections["provider_table"].target_id == "imagen"
+    assert selections["checkpoint_table"].phase == "script"
+    assert selections["unknown_table"].target_id == "fallback"
+    assert "comment script | <what you want changed>" in format_selection_detail(
+        selections["asset_table"]
+    )
+    assert format_targeted_revision_note(None, "  no selection  ") == "no selection"
 
 
 def test_attention_summary_surfaces_review_validation_and_provider_risk() -> None:
@@ -744,6 +1026,7 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             dashboard_kpi_table = app.query_one("#dashboard_kpi_table", DataTable)
             dashboard_action_table = app.query_one("#dashboard_action_table", DataTable)
             graph_artifact_table = app.query_one("#graph_artifact_table", DataTable)
+            asset_action_table = app.query_one("#asset_action_table", DataTable)
             matrix_table = app.query_one("#matrix_table", DataTable)
             matrix_pivot_table = app.query_one("#matrix_pivot_table", DataTable)
             review_checklist_table = app.query_one("#review_checklist_table", DataTable)
@@ -758,6 +1041,7 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             assert dashboard_kpi_table.row_count == 5
             assert dashboard_action_table.row_count >= 3
             assert graph_artifact_table.row_count == 2
+            assert asset_action_table.row_count == 6
             assert matrix_table.row_count >= 3
             assert matrix_pivot_table.row_count >= 2
             assert review_checklist_table.row_count == 5
@@ -767,6 +1051,21 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             assert "Command:" in str(command_validation.renderable)
             assert validation_group_table.row_count == 2
             assert validation_fix_table.row_count == 2
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_uses_dense_dashboard_and_asset_layouts() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            assert app.query_one("#dashboard_top", Horizontal)
+            assert app.query_one("#dashboard_ops", Horizontal)
+            assert app.query_one("#asset_ops", Horizontal)
+            assert app.query_one("#reader_ops", Horizontal)
+            assert app.query_one("#reader_body_stack", Vertical)
 
     asyncio.run(run())
 
@@ -941,6 +1240,70 @@ def test_textual_cockpit_artifact_command_loads_reader_context() -> None:
             assert "INT. STATION - DAWN" in str(body)
             assert "SC_004" in str(context)
             assert index_table.row_count == 1
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_asset_review_command_stores_review_comment() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app._run_command("asset review script")
+            await pilot.pause()
+
+            assert gateway.comments is not None
+            assert gateway.comments[0].target_type == "artifact"
+            assert gateway.comments[0].target_id == "script"
+            assert gateway.comments[0].phase == "script"
+            assert "[asset_action=review]" in gateway.comments[0].body
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_asset_change_and_extend_submit_targeted_revisions() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app._run_command("asset change script | Make scene four less verbal.")
+            await pilot.pause()
+            app._run_command("asset extend scene_matrix | Add one visual bridge shot.")
+            await pilot.pause()
+
+            assert gateway.revision_notes is not None
+            assert "[asset_action=change] Make scene four less verbal." in gateway.revision_notes[0]
+            assert "target_type=artifact target_id=script phase=script" in gateway.revision_notes[0]
+            assert "[asset_action=extend] Add one visual bridge shot." in gateway.revision_notes[1]
+            assert (
+                "target_type=artifact target_id=scene_matrix phase=script"
+                in gateway.revision_notes[1]
+            )
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_asset_action_row_prefills_command() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            rows = app._table_rows["asset_action_table"]
+            row_index = next(
+                index
+                for index, row in enumerate(rows)
+                if row["artifact_id"] == "script" and row["action"] == "change"
+            )
+            table = app.query_one("#asset_action_table", DataTable)
+            table.move_cursor(row=row_index)
+            table.action_select_cursor()
+            await pilot.pause()
+
+            palette = app.query_one("#command_palette", Input)
+            assert palette.value == "asset change script | <note>"
+            assert "open" in palette.classes
 
     asyncio.run(run())
 
@@ -1178,6 +1541,253 @@ def test_textual_cockpit_create_command_prefills_required_fields() -> None:
             assert palette.value == "create <project_id> | <title> | <idea>"
             assert "incomplete" in str(validation)
             assert "Command template" in str(context)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_project_lane_filter_and_switch_command() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway(
+            extra_projects=[
+                ProjectListItem(
+                    project_id="fixture-short-test",
+                    title="Fixture Short",
+                    slug="fixture-short-test",
+                    current_phase="intake",
+                    status="discovered",
+                    has_blockers=False,
+                    awaiting_review=False,
+                    project_kind="test",
+                    project_root="/tmp/projects/fixture-short-test",
+                )
+            ]
+        )
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            assert app.query_one("#project_table", DataTable).row_count == 1
+
+            app._run_command("projects test")
+            await pilot.pause()
+            rows = app._table_rows["project_table"]
+            context = app.query_one("#context_panel", Static).renderable
+            assert app.project_filter == "test"
+            assert rows[0]["project"] == "fixture-short-test"
+            assert "Project lane: test" in str(context)
+
+            app._run_command("projects all")
+            await pilot.pause()
+            app._run_command("project field-message")
+            await pilot.pause()
+
+            assert gateway.active_project_id == "field-message"
+            assert app.active_project_id == "field-message"
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_guide_tab_exposes_validated_1min_path() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app._run_command("open guide")
+            await pilot.pause()
+
+            guide_table = app.query_one("#guide_table", DataTable)
+            guide_detail = app.query_one("#guide_detail", Static).renderable
+            guide_summary = app.query_one("#guide_summary", Static).renderable
+            context = app.query_one("#context_panel", Static).renderable
+            rows = app._table_rows["guide_table"]
+            assert guide_table.row_count == 6
+            assert rows[0]["status"] == "done"
+            assert rows[1]["status"] == "current"
+            assert rows[2]["status"] == "done"
+            assert rows[3]["status"] == "blocked"
+            assert "2/6 done" in str(guide_summary)
+            assert "create 1min-field" in str(guide_detail)
+            assert "Status: done" in str(guide_detail)
+            assert "Active project field-message is at script." in str(guide_detail)
+            assert "A-Z path" in str(context)
+
+    asyncio.run(run())
+
+
+def test_guide_status_rows_cover_later_generation_states() -> None:
+    gateway = RecordingGateway()
+    dashboard = gateway.get_dashboard("field-message")
+    generation_dashboard = DashboardSummary(
+        project_id=dashboard.project_id,
+        title=dashboard.title,
+        slug=dashboard.slug,
+        current_phase="generation",
+        runtime_mode=dashboard.runtime_mode,
+        workflow_mode=dashboard.workflow_mode,
+        status="in_progress",
+        next_action="run_generation",
+        route_reason="generation approved",
+    )
+    snapshot = app_snapshot = None
+    app = FilmCockpitApp(gateway=gateway)
+    snapshot = app_snapshot or app._load_snapshot()
+    generation_snapshot = type(snapshot)(
+        projects=snapshot.projects,
+        dashboard=generation_dashboard,
+        review=snapshot.review,
+        validation=snapshot.validation,
+        artifacts=[
+            *snapshot.artifacts,
+            {
+                "artifact_id": "clip_SC_004",
+                "artifact_type": "clip",
+                "phase": "generation",
+                "version": 1,
+                "status": "candidate",
+            },
+        ],
+        checkpoints=snapshot.checkpoints,
+        providers=snapshot.providers,
+        audit_events=snapshot.audit_events,
+        comments=snapshot.comments,
+        matrix_rows=snapshot.matrix_rows,
+        graph_rows=snapshot.graph_rows,
+        command_suggestions=snapshot.command_suggestions,
+        command_options=snapshot.command_options,
+    )
+
+    rows = app._guide_rows(generation_snapshot)
+
+    assert rows[1]["status"] == "done"
+    assert rows[4]["status"] == "done"
+    assert rows[5]["status"] == "done"
+
+
+def test_textual_cockpit_guidance_branches_for_invalid_commands() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            app._asset_command("")
+            assert "Asset commands" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("asset review missing")
+            await pilot.pause()
+            assert "Artifact 'missing'" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("asset change script")
+            await pilot.pause()
+            assert "Use: asset change" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("projects sandbox")
+            await pilot.pause()
+            assert "projects production" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("project ")
+            await pilot.pause()
+            assert "Unknown command" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._switch_project("")
+            assert "Use: project" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("confirm approve")
+            await pilot.pause()
+            assert "No pending approval" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("create missing-parts")
+            await pilot.pause()
+            assert "Use: create" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("thread missing-target")
+            await pilot.pause()
+            assert "No comment thread" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("draft missing-target")
+            await pilot.pause()
+            assert app.query_one("#tabs", TabbedContent).active == "review"
+
+            app._show_phase_detail("")
+            assert "Use: phase" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("dashboard providers")
+            await pilot.pause()
+            assert app.query_one("#tabs", TabbedContent).active == "providers"
+
+            app._run_command("dashboard comments")
+            await pilot.pause()
+            assert app.query_one("#tabs", TabbedContent).active == "review"
+
+            app._run_command("dashboard unknown")
+            await pilot.pause()
+            assert "Dashboard commands" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("replace <template>")
+            await pilot.pause()
+            assert "Replace template fields" in str(
+                app.query_one("#context_panel", Static).renderable
+            )
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_create_and_missing_target_branches() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            app._run_command(
+                "create new-short | New Short | A one minute chase across three rooms."
+            )
+            await pilot.pause()
+            assert gateway.created_request is not None
+            assert gateway.created_request.project_id == "new-short"
+            assert gateway.created_request.project_kind == "production"
+            assert app.active_project_id == "new-short"
+
+            app._open_artifact("missing-artifact")
+            assert "missing-artifact" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("review issue missing-issue")
+            await pilot.pause()
+            assert app.query_one("#tabs", TabbedContent).active == "review"
+
+            app._run_command("asset extend missing-artifact | Add more coverage.")
+            await pilot.pause()
+            assert "missing-artifact" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._run_command("open unknown-target")
+            await pilot.pause()
+            assert "unknown-target" in str(app.query_one("#context_panel", Static).renderable)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_no_snapshot_and_ineligible_approval_guards() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=NoApprovalGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            app._run_command("approve")
+            await pilot.pause()
+            assert "Approval is not eligible" in str(
+                app.query_one("#context_panel", Static).renderable
+            )
+
+            app.snapshot = None
+            app._show_phase_detail("script")
+            assert "No snapshot loaded" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._start_fix("SC_004")
+            assert "No snapshot loaded" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._show_thread("SC_004")
+            assert "No snapshot loaded" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._request_asset_review("script")
+            assert "No active project" in str(app.query_one("#context_panel", Static).renderable)
 
     asyncio.run(run())
 

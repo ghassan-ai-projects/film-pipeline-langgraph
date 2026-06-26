@@ -10,7 +10,7 @@ from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.graph.nodes import _run_agent, _save_artifact
+from film_pipeline.graph.nodes import _run_agent, _save_artifact, script_node
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import (
     AgentFamily,
@@ -44,6 +44,27 @@ def test_save_artifact_with_services(tmp_path: Path) -> None:
     assert ref == "artifact:script:v1"
 
 
+def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) -> None:
+    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    state: dict[str, object] = {
+        "project_id": "p1",
+        "idea": "A test film.",
+        SERVICES_KEY: services,
+    }
+
+    updates = script_node(state)
+
+    assert updates["story_bible_ref"] == "artifact:story_bible:v1"
+    assert updates["script_ref"] == "artifact:script:v1"
+    assert updates["artifact_refs"] == ["artifact:story_bible:v1", "artifact:script:v1"]
+
+    story_bible = services.artifact_store.load("p1", FilmPhase("script"), "story_bible", 1)
+    script = services.artifact_store.load("p1", FilmPhase("script"), "script", 1)
+    assert story_bible["logline"]["text"]
+    assert script["title"] == "After the Fall"
+    assert story_bible != script
+
+
 def test_run_agent_no_services() -> None:
     state: dict[str, object] = {}
     result = _run_agent(state, "test-agent", "script", "task")
@@ -63,15 +84,15 @@ def test_run_agent_not_found() -> None:
 
 
 def test_run_agent_no_impl() -> None:
-    """Agent registered but not in agent_map — returns no_impl status."""
+    """Registered non-critical agent without implementation returns no_impl."""
     contract = AgentRegistration(
-        agent_id="orchestrator-agent",  # Registered but not in agent_map
+        agent_id="custom-review-agent",
         family=AgentFamily.OPERATIONS,
-        role=AgentRole.ORCHESTRATOR,
-        capabilities=[],
-        input_artifacts=[],
-        output_artifacts=[],
-        allowed_kb_domains=[],
+        role=AgentRole.REVIEWER,
+        capabilities=["custom_review"],
+        input_artifacts=["script"],
+        output_artifacts=["review_report"],
+        allowed_kb_domains=["operations"],
         blocked_kb_domains=[],
         reviewed_by=[],
         failure_modes=[],
@@ -81,9 +102,9 @@ def test_run_agent_no_impl() -> None:
     runner = PromptRunner(mock_responses={"task": {"output": "data"}})
     services = GraphServices(prompt_runner=runner, agent_registry=registry)
     state = {"project_id": "p1", SERVICES_KEY: services}
-    # unknown agent that doesn't resolve to any registered impl
-    result = _run_agent(state, "unknown-agent-xyz", "intake", "task")
-    assert result["status"] in ("no_impl", "agent_not_found")
+    result = _run_agent(state, "custom-review-agent", "script", "task", task_type="review")
+    assert result["status"] == "no_impl"
+    assert result["agent"] == "custom-review-agent"
 
 
 def test_graph_services_kb_for_without_builder() -> None:
@@ -242,3 +263,108 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     assert "treatment" in result
     assert "Memory is a wound." in adapter.prompt
     assert "artifact:film_constitution:v1" in adapter.prompt
+
+
+def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) -> None:
+    class CaptureAdapter:
+        def __init__(self) -> None:
+            self.prompt = ""
+
+        def chat_json(
+            self,
+            prompt: str,
+            *,
+            model: str,
+            system: str = "",
+            max_tokens: int = 4096,
+            temperature: float = 0.7,
+            top_p: float = 0.95,
+            frequency_penalty: float = 0.0,
+        ) -> dict[str, Any]:
+            _ = (model, system, max_tokens, temperature, top_p, frequency_penalty)
+            self.prompt = prompt
+            return {
+                "development": {
+                    "treatment": {
+                        "text": "A treatment rooted in the constitution.",
+                        "themes": ["memory"],
+                        "act_map": {
+                            "act1_setup": "Setup",
+                            "act2_confrontation": "Confrontation",
+                            "act3_resolution": "Resolution",
+                        },
+                    },
+                    "scenes": [
+                        {
+                            "scene_id": "s_001",
+                            "dramatic_function": "Open",
+                            "emotional_shift": "fear to resolve",
+                            "conflict": "internal",
+                            "outcome": "commitment",
+                        }
+                    ],
+                }
+            }
+
+    contract = AgentRegistration(
+        agent_id="treatment-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["story_development"],
+        input_artifacts=["film_constitution"],
+        output_artifacts=["treatment", "scene_list"],
+        allowed_kb_domains=[],
+        blocked_kb_domains=[],
+        reviewed_by=[],
+        failure_modes=[],
+    )
+    registry = AgentRegistry()
+    registry.register(contract)
+    adapter = CaptureAdapter()
+    runner = PromptRunner(model_adapter=adapter, model_router=ModelRouter())  # type: ignore[arg-type]
+    store = ArtifactStore(root=tmp_path / "artifacts")
+    constitution = FilmConstitution(
+        project_id="p1",
+        theme="Memory is a wound.",
+        tone="dark, intimate",
+        emotional_promise="Uneasy recognition.",
+        visual_language="wet neon realism",
+        camera_philosophy="patient observation",
+        quality_bar="No generic thriller beats. " * 800,
+        taboo_mistakes=["No amnesia cliches."],
+    )
+    meta = ArtifactMetadata(
+        artifact_id="film_constitution",
+        artifact_type=ArtifactType.FILM_CONSTITUTION,
+        project_id="p1",
+        phase=FilmPhase("constitution"),
+        version=1,
+        status=ArtifactStatus.CANDIDATE,
+        created_by="test",
+        created_at=datetime.now(UTC),
+    )
+    store.save(constitution, meta)
+    services = GraphServices(
+        prompt_runner=runner,
+        agent_registry=registry,
+        artifact_store=store,
+    )
+    state: dict[str, object] = {
+        "project_id": "p1",
+        "idea": "A memory story.",
+        "constitution_ref": "artifact:film_constitution:v1",
+        "resolved_config": {"context": {"max_chars_per_artifact": 700}},
+        SERVICES_KEY: services,
+    }
+
+    result = _run_agent(
+        state,
+        agent_id="treatment-agent",
+        phase="development",
+        task="Write the film treatment and scene breakdown from the constitution.",
+    )
+
+    assert "treatment" in result
+    assert "[COMPRESSED ARTIFACT CONTEXT]" in adapter.prompt
+    assert "Emitted character budget: 700" in adapter.prompt
+    assert adapter.prompt.count("No generic thriller beats.") < 10

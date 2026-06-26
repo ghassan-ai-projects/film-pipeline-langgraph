@@ -60,6 +60,7 @@ class CommandOptions:
     scene_ids: list[str] = field(default_factory=list)
     validator_ids: list[str] = field(default_factory=list)
     provider_ids: list[str] = field(default_factory=list)
+    project_kinds: list[str] = field(default_factory=lambda: ["production", "test", "all"])
 
 
 @dataclass(frozen=True)
@@ -227,6 +228,16 @@ def build_dashboard_action_rows(
             "command": "next",
         }
     ]
+    if dashboard.stalled_phase:
+        rows.append(
+            {
+                "priority": 1,
+                "action": "escalate stalled phase",
+                "status": "stalled",
+                "reason": f"{dashboard.stalled_phase} needs human intervention.",
+                "command": f"phase {dashboard.stalled_phase}",
+            }
+        )
     if validation and validation.blocking_issues:
         first = validation.blocking_issues[0]
         target = _issue_focus_target(first) or _issue_target(first)
@@ -306,7 +317,10 @@ def build_graph_rows(dashboard: DashboardSummary | None) -> list[dict[str, objec
     rows: list[dict[str, object]] = []
     reached_current = False
     for index, phase in enumerate(GRAPH_PHASES, start=1):
-        if phase == current:
+        if dashboard and dashboard.stalled_phase == phase:
+            status = "stalled"
+            reached_current = True
+        elif phase == current:
             status = "current"
             reached_current = True
         elif current and not reached_current:
@@ -353,6 +367,8 @@ def build_phase_detail(
             commands.append("confirm approve")
         if "request_revision" in dashboard.eligible_actions:
             commands.append("revise <note>")
+        if dashboard.stalled_phase == phase:
+            commands.append("show blocked")
     summary = (
         f"{phase} is {graph_row.get('status', 'unknown')}. "
         f"{len(phase_artifacts)} artifact(s), {len(blockers)} blocker(s)."
@@ -391,6 +407,21 @@ def build_command_suggestions(
             "scope": "matrix",
             "reason": "filter production matrix to blockers",
         },
+        {
+            "command": "open guide",
+            "scope": "guide",
+            "reason": "walk through the 1 minute mock film path",
+        },
+        {
+            "command": "projects production",
+            "scope": "projects",
+            "reason": "hide test projects and focus on real projects",
+        },
+        {
+            "command": "projects test",
+            "scope": "projects",
+            "reason": "show test and demo projects separately",
+        },
     ]
     if dashboard is not None:
         rows.append(
@@ -423,6 +454,21 @@ def build_command_suggestions(
                     "reason": "request changes for the selected target",
                 }
             )
+        if dashboard.stalled_phase:
+            rows.append(
+                {
+                    "command": "show blocked",
+                    "scope": "escalation",
+                    "reason": "inspect stalled phase before operator intervention",
+                }
+            )
+        rows.append(
+            {
+                "command": f"project {dashboard.project_id}",
+                "scope": "projects",
+                "reason": "open the active project from the project rail",
+            }
+        )
     for suggestion in build_validation_fix_suggestions(validation)[:5]:
         rows.append(
             {
@@ -459,13 +505,38 @@ def build_command_help_rows(options: CommandOptions) -> list[dict[str, object]]:
     return [
         {
             "command": "open <page>",
-            "values": "dashboard, graph, matrix, review, scenes, assets, validation",
+            "values": "dashboard, graph, matrix, review, scenes, assets, guide, validation",
             "purpose": "jump between cockpit workspaces",
+        },
+        {
+            "command": "project <project_id>",
+            "values": _preview_values(options.project_ids),
+            "purpose": "open or switch the active project",
+        },
+        {
+            "command": "projects <production|test|all>",
+            "values": _preview_values(options.project_kinds),
+            "purpose": "filter the project rail by production or test lane",
         },
         {
             "command": "artifact <artifact_id>",
             "values": _preview_values(options.artifact_ids),
             "purpose": "open a readable artifact with linked issues and comments",
+        },
+        {
+            "command": "asset review <artifact_id>",
+            "values": _preview_values(options.artifact_ids),
+            "purpose": "store a review request on an artifact",
+        },
+        {
+            "command": "asset change <artifact_id> | <note>",
+            "values": _preview_values(options.artifact_ids),
+            "purpose": "request a targeted artifact change",
+        },
+        {
+            "command": "asset extend <artifact_id> | <note>",
+            "values": _preview_values(options.artifact_ids),
+            "purpose": "request extension, variants, or more detail for an artifact",
         },
         {
             "command": "scene <scene_id>",
@@ -577,6 +648,8 @@ def build_command_validation(
         "providers",
         "assets",
         "artifacts",
+        "guide",
+        "open guide",
         "scenes",
         "checkpoints",
         "audit",
@@ -614,9 +687,47 @@ def build_command_validation(
             completion="create <project_id> | <title> | <idea>",
         )
 
+    if normalized == "asset":
+        return CommandValidation(
+            status="incomplete",
+            message="asset requires review, change, or extend.",
+            completion="asset review <artifact_id>",
+        )
+    if normalized.startswith("asset review"):
+        artifact_id = value.removeprefix("asset review").strip()
+        if not artifact_id:
+            return CommandValidation(
+                status="incomplete",
+                message=f"asset review requires one of: {_preview_values(options.artifact_ids)}.",
+                completion=f"asset review {options.artifact_ids[0]}"
+                if options.artifact_ids
+                else "",
+            )
+        return _validate_known_value("asset review", artifact_id, options.artifact_ids)
+    if normalized.startswith(("asset change", "asset extend")):
+        verb = "asset change" if normalized.startswith("asset change") else "asset extend"
+        payload = value.removeprefix(verb).strip()
+        parts = [part.strip() for part in payload.split("|", maxsplit=1)]
+        if len(parts) != 2 or not all(parts) or any(_is_placeholder(part) for part in parts):
+            return CommandValidation(
+                status="incomplete",
+                message=f"{verb} needs '<artifact_id> | <note>'.",
+                completion=f"{verb} <artifact_id> | <note>",
+            )
+        artifact_id = parts[0]
+        if artifact_id not in options.artifact_ids:
+            known = _preview_values(options.artifact_ids)
+            return CommandValidation(
+                status="unknown",
+                message=f"Unknown artifact '{artifact_id}'. Known: {known}.",
+            )
+        return CommandValidation(status="ready", message=f"Ready: {verb}")
+
     target_commands = {
         "artifact": options.artifact_ids,
         "scene": options.scene_ids,
+        "project": options.project_ids,
+        "projects": options.project_kinds,
         "phase": options.phases,
         "validator": options.validator_ids,
     }
@@ -1058,6 +1169,20 @@ def selection_from_row(source: str, row: dict[str, object]) -> TargetSelection:
             source=source,
             detail=row,
         )
+    if source == "project_table":
+        return TargetSelection(
+            target_type="project",
+            target_id=str(row.get("project", "")),
+            source=source,
+            detail=row,
+        )
+    if source == "guide_table":
+        return TargetSelection(
+            target_type="guide_step",
+            target_id=str(row.get("step", "")),
+            source=source,
+            detail=row,
+        )
     if source == "review_checklist_table":
         return TargetSelection(
             target_type="review_check",
@@ -1160,6 +1285,14 @@ def selection_from_row(source: str, row: dict[str, object]) -> TargetSelection:
         return TargetSelection(
             target_type=str(row.get("kind", "reader_link")),
             target_id=str(row.get("target_id", "")),
+            source=source,
+            detail=row,
+        )
+    if source == "asset_action_table":
+        return TargetSelection(
+            target_type="asset_action",
+            target_id=str(row.get("artifact_id", "")),
+            phase=str(row.get("phase", "")),
             source=source,
             detail=row,
         )
@@ -1335,6 +1468,43 @@ def build_reader_link_rows(reader: ReaderView | None) -> list[dict[str, object]]
     return rows
 
 
+def build_asset_action_rows(artifacts: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Build direct action rows for artifact review and revision work."""
+    rows: list[dict[str, object]] = []
+    for artifact in artifacts:
+        artifact_id = str(artifact.get("artifact_id", ""))
+        artifact_type = str(artifact.get("artifact_type", "artifact"))
+        phase = str(artifact.get("phase", ""))
+        if not artifact_id:
+            continue
+        rows.extend(
+            [
+                {
+                    "artifact_id": artifact_id,
+                    "action": "review",
+                    "phase": phase,
+                    "purpose": f"ask for focused review of {artifact_type}",
+                    "command": f"asset review {artifact_id}",
+                },
+                {
+                    "artifact_id": artifact_id,
+                    "action": "change",
+                    "phase": phase,
+                    "purpose": "request a targeted change",
+                    "command": f"asset change {artifact_id} | <note>",
+                },
+                {
+                    "artifact_id": artifact_id,
+                    "action": "extend",
+                    "phase": phase,
+                    "purpose": "request more detail, coverage, or variants",
+                    "command": f"asset extend {artifact_id} | <note>",
+                },
+            ]
+        )
+    return rows
+
+
 def build_command_options(
     *,
     projects: list[ProjectListItem],
@@ -1416,6 +1586,8 @@ def summarize_attention(
         return ["No active project. Create or select a project."]
     if dashboard.has_blockers:
         lines.append(f"BLOCKED: {dashboard.issue_count} issue(s) need operator attention.")
+    if dashboard.stalled_phase:
+        lines.append(f"STALLED: {dashboard.stalled_phase} requires human intervention.")
     if dashboard.status == "awaiting_review":
         lines.append(f"REVIEW: {dashboard.current_phase} is waiting for approval or revision.")
     if validation and validation.blocking_issues:

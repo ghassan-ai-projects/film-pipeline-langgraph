@@ -8,6 +8,7 @@ helpers.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, cast
 
 from film_pipeline.app.runtime import StudioRuntime, get_runtime
@@ -55,8 +56,12 @@ class OperatorService:
                     status=self._status_for_state(state),
                     has_blockers=has_blockers,
                     awaiting_review=bool(state.get("human_approval_required")),
+                    project_kind=self._project_kind_for_state(state, project_id),
+                    project_root=str(self.runtime.project_roots.get(project_id, "")),
                 )
             )
+        known_ids = {item.project_id for item in items}
+        items.extend(self._discover_project_folders(known_ids))
         return items
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
@@ -73,6 +78,7 @@ class OperatorService:
         )
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
+        state["project_kind"] = self._normalize_project_kind(request.project_kind)
         self.runtime.set_active(request.project_id.strip())
 
         if request.idea.strip():
@@ -138,6 +144,7 @@ class OperatorService:
             artifact_count=len(self.list_artifacts(project_id_value)),
             checkpoint_count=checkpoint_count,
             has_blockers=self._has_blockers(state),
+            stalled_phase=str(state.get("_stalled_phase", "")),
         )
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
@@ -368,6 +375,8 @@ class OperatorService:
     def _require_project(self, project_id: str) -> dict[str, Any]:
         project = self.runtime.get_project(project_id)
         if project is None:
+            project = self._load_discovered_project(project_id)
+        if project is None:
             raise ProjectNotFoundError(f"Project '{project_id}' not found.")
         return project
 
@@ -385,6 +394,8 @@ class OperatorService:
     def _status_for_state(state: dict[str, Any]) -> str:
         if state.get("completed"):
             return "complete"
+        if state.get("_stalled_phase"):
+            return "stalled"
         if state.get("human_approval_required"):
             return "awaiting_review"
         if state.get("current_phase"):
@@ -402,3 +413,102 @@ class OperatorService:
         if not next_action:
             return "No next action is currently available."
         return f"Current action: {next_action}."
+
+    def _discover_project_folders(self, known_ids: set[str]) -> list[ProjectListItem]:
+        """Return project folders present in artifact storage but absent from runtime memory."""
+        root = self._artifact_root()
+        if root is None or not root.exists() or not root.is_dir():
+            return []
+        discovered: list[ProjectListItem] = []
+        for project_dir in sorted(path for path in root.iterdir() if path.is_dir()):
+            project_id = project_dir.name
+            if project_id in known_ids or not self._looks_like_project_dir(project_dir):
+                continue
+            discovered.append(
+                ProjectListItem(
+                    project_id=project_id,
+                    title=project_id.replace("-", " ").replace("_", " ").title(),
+                    slug=project_id,
+                    current_phase=self._latest_discovered_phase(project_dir),
+                    status="discovered",
+                    has_blockers=False,
+                    awaiting_review=False,
+                    project_kind=self._project_kind_for_path(project_dir),
+                    project_root=str(project_dir),
+                )
+            )
+        return discovered
+
+    def _artifact_root(self) -> Path | None:
+        store = self.runtime.services.artifact_store if self.runtime.services else None
+        root = getattr(store, "_root", None)
+        return root if isinstance(root, Path) else None
+
+    def _load_discovered_project(self, project_id: str) -> dict[str, Any] | None:
+        root = self._artifact_root()
+        if root is None:
+            return None
+        project_dir = root / project_id
+        if not project_dir.exists() or not self._looks_like_project_dir(project_dir):
+            return None
+        state = self.runtime.create_project(
+            project_id=project_id,
+            title=project_id.replace("-", " ").replace("_", " ").title(),
+            slug=project_id,
+        )
+        state["current_phase"] = self._latest_discovered_phase(project_dir)
+        state["project_kind"] = self._project_kind_for_path(project_dir)
+        state["human_approval_required"] = False
+        self.runtime.projects[project_id] = state
+        return state
+
+    @staticmethod
+    def _looks_like_project_dir(project_dir: Path) -> bool:
+        return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
+
+    @staticmethod
+    def _latest_discovered_phase(project_dir: Path) -> str:
+        phase_order = (
+            ("10-delivery", "delivery"),
+            ("09-post", "post"),
+            ("08-validation", "qc"),
+            ("07-generated-assets", "generation"),
+            ("06-generation-plan", "gen_planning"),
+            ("05-shot-bible", "shot_bible"),
+            ("04-visual-dev", "visual_dev"),
+            ("03-script", "script"),
+            ("02-development", "development"),
+            ("01-vision", "constitution"),
+            ("intake", "intake"),
+        )
+        for dirname, phase in phase_order:
+            candidate = project_dir / dirname
+            if candidate.exists() and any(candidate.rglob("*.json")):
+                return phase
+        return ""
+
+    @classmethod
+    def _project_kind_for_state(cls, state: Mapping[str, Any], project_id: str) -> str:
+        explicit = str(state.get("project_kind", "")).strip().lower()
+        if explicit:
+            return cls._normalize_project_kind(explicit)
+        return cls._project_kind_for_name(project_id)
+
+    @classmethod
+    def _project_kind_for_path(cls, project_dir: Path) -> str:
+        return cls._project_kind_for_name(project_dir.name)
+
+    @staticmethod
+    def _project_kind_for_name(name: str) -> str:
+        lowered = name.lower()
+        test_markers = ("test", "fixture", "sample", "tmp", "demo")
+        return "test" if any(marker in lowered for marker in test_markers) else "production"
+
+    @staticmethod
+    def _normalize_project_kind(project_kind: str) -> str:
+        kind = project_kind.strip().lower()
+        if kind not in {"production", "test"}:
+            raise BackendOperationError(
+                f"project_kind must be 'production' or 'test', got '{project_kind}'."
+            )
+        return kind

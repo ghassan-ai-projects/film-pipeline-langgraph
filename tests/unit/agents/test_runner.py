@@ -310,6 +310,39 @@ class TestPromptRunner:
         # Third attempt uses fallback
         assert mock_adapter.chat_json.call_args_list[2].kwargs["model"] == "cheap-fallback"
 
+    def test_token_limit_retry_compresses_context_before_retry(self) -> None:
+        """Token-limit failures shrink context instead of replaying the same prompt."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = [
+            ValueError("context_length_exceeded: maximum context length"),
+            {"recovered": True},
+        ]
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "openai/gpt-4.1",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="recover",
+            context="0123456789" * 1000,
+            constraints="x",
+            output_format="y",
+        )
+        result = runner.call_model(prompt, model_profile="operations_triage")
+        assert result == {"recovered": True}
+        first_prompt = mock_adapter.chat_json.call_args_list[0].args[0]
+        second_prompt = mock_adapter.chat_json.call_args_list[1].args[0]
+        assert len(second_prompt) < len(first_prompt)
+        assert "context compressed for retry" in second_prompt
+
     def test_run_from_template_includes_quality_instructions(self) -> None:
         """run_from_template renders quality_instructions into the prompt."""
         from unittest.mock import MagicMock

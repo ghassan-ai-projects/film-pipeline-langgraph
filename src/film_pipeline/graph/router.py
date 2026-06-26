@@ -113,9 +113,25 @@ def compute_actions(state: dict[str, Any]) -> RouterResult:
 
     # --- 1. Human approval required ------------------------------------------
     if human_required:
-        result.eligible = ["approve_phase", "request_revision"]
+        blocking_count = sum(
+            1 for issue in issues if isinstance(issue, dict) and issue.get("severity") == "blocking"
+        )
+        result.eligible = []
+        if blocking_count == 0:
+            result.eligible.append("approve_phase")
+        if state.get("_stalled_phase"):
+            result.eligible.append("escalate_to_human")
+        else:
+            result.eligible.append("request_revision")
         result.next_action = "wait_for_human"
         result.human_gate = APPROVAL_GATES.get(phase, phase)
+        if blocking_count:
+            result.blocked = [
+                {
+                    "action": "approve_phase",
+                    "reason": f"{blocking_count} blocking issue(s) must be resolved first.",
+                }
+            ]
         return result
 
     # --- 2. Failure decisions ------------------------------------------------
