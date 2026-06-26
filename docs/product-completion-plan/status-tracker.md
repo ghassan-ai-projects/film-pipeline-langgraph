@@ -23,7 +23,7 @@ Purpose: Track program progress without weakening the acceptance standard.
 | 03 | Complete | Dynamic routing evidence is green: `tests/integration/test_dynamic_routing.py` passes |
 | 04 | Complete | All 4 validation-runtime integration tests pass; `_run_validators` loads upstream artifacts for QC phase; MCP tools read stored `_validation_reports` and `issues` |
 | 05 | Complete | `get_project_summary` and `promote_test_to_production` unstubbed; 5 remaining video-adjacent stubs per allowed-stub policy |
-| 06 | Complete | All 10 E2E scenarios pass; smoke workflow includes executable manual short-film test; operator docs are now grouped under `documentation/` |
+| 06 | Complete | All 10 E2E scenarios pass; smoke workflow includes executable manual short-film test; operator docs are now grouped under `docs/` |
 
 ---
 
@@ -42,7 +42,7 @@ Purpose: Track program progress without weakening the acceptance standard.
 - `tests/integration/test_validation_runtime.py` — 4/4 passing
 - `tests/integration/test_dynamic_routing.py` — green
 - 10/10 E2E scenarios pass
-- New practical docs hub: `documentation/README.md`
+- New practical docs hub: `docs/README.md`
 - Executable manual walkthrough: `tests/smoke/test_manual_4min_mock_short.py`
 
 All tracked phases in this plan are now complete for the current validated-clips target.

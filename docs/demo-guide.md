@@ -2,7 +2,7 @@
 
 For the maintained demo path, use:
 
-- [documentation/manual-4min-mock-short.md](../documentation/manual-4min-mock-short.md)
+- [docs/README.md](./README.md)
 
 Fast commands:
 

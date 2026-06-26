@@ -1,10 +1,10 @@
 # Runbook — First Film
 
-The maintained walkthrough now lives here:
+The maintained walkthrough is indexed here:
 
-- [documentation/manual-4min-mock-short.md](../documentation/manual-4min-mock-short.md)
+- [docs/README.md](./README.md)
 
-Use that document for the practical operator flow.
+Use this file for the practical operator flow.
 
 Use this executable companion to verify the same path:
 

@@ -367,8 +367,9 @@ Files likely to change:
   Why: support startup registration from config.
 - `Makefile`
   Why: split mock and real MCP entrypoints.
-- `documentation/getting-started.md`
-  Why: stop implying a single mock-first MCP command is the operator path.
+- `docs/README.md`
+  Why: point operators at the current docs index instead of a removed
+  `documentation` tree, which is not present in this repository.
 - `docs/openclaw-mcp-operator-guide.md`
   Why: point OpenClaw at the real-mode workflow once available.
 
