@@ -1,13 +1,13 @@
 # Operations Guide — film-pipeline-langgraph
 
-The maintained practical docs now live in `documentation/`.
+The maintained practical docs now live in `docs/`.
 
 Start here:
 
-- [documentation/getting-started.md](../documentation/getting-started.md)
-- [documentation/repository-structure.md](../documentation/repository-structure.md)
-- [documentation/onboarding.md](../documentation/onboarding.md)
-- [documentation/manual-4min-mock-short.md](../documentation/manual-4min-mock-short.md)
+- [docs/README.md](./README.md)
+- [OpenClaw MCP Operator Guide](./openclaw-mcp-operator-guide.md)
+- [Runbook - First Film](./runbook-first-film.md)
+- [Release Process](./release-process.md)
 
 Core commands:
 

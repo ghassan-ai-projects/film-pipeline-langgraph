@@ -25,9 +25,9 @@ uv run --python 3.12 --group dev pytest tests/unit/app/test_product_gate.py -v
 make test-e2e
 
 # 5. Docs match code
-# - documentation/README.md is current
-# - documentation/onboarding.md matches the code layout
-# - documentation/manual-4min-mock-short.md matches the executable smoke test
+# - docs/README.md is current
+# - docs/operations-guide.md matches the repo workflow
+# - docs/runbook-first-film.md matches the executable smoke test
 # - README.md is up to date
 
 # 6. No secrets in code, docs, or artifacts
@@ -91,4 +91,4 @@ All items under "Final Ship Checklist" must be green:
 
 Practical documentation lives in:
 
-- [../documentation/README.md](../documentation/README.md)
+- [docs/README.md](./README.md)
