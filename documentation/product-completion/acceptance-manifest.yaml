@@ -1,0 +1,78 @@
+version: 1
+
+allowed_stub_tools:
+  - start_generation_batch
+
+critical_mcp_tools:
+  - create_film_project
+  - set_active_project
+  - get_active_project
+  - submit_idea
+  - get_current_phase
+  - get_film_state
+  - get_orchestrator_summary
+  - get_next_actions
+  - get_blockers
+  - review_phase_artifacts
+  - approve_phase
+  - request_revision
+  - list_artifacts
+  - inspect_artifact
+  - list_shots
+  - inspect_shot
+  - inspect_scene
+  - inspect_reference
+  - get_validation_report
+  - list_validation_issues
+  - plan_generation_batch
+  - approve_generation_spend
+  - get_generation_status
+  - resume_generation_polling
+  - list_active_generations
+  - cancel_generation_request
+  - kb_search
+  - kb_get_item
+  - kb_get_context_packet
+  - kb_explain_context_choice
+  - list_checkpoints
+  - create_checkpoint
+  - get_checkpoint
+  - compare_versions
+  - list_artifact_versions
+  - rollback_to_checkpoint
+  - get_invalidation_report
+  - get_audit_log
+  - explain_last_decision
+  - explain_agent_routing
+  - explain_kb_context
+  - check_provider_health
+  - resolve_provider_block
+  - list_providers
+
+required_docs:
+  - documentation/product-completion/README.md
+  - documentation/product-completion/00-product-standard.md
+  - documentation/product-completion/01-runtime-and-graph.md
+  - documentation/product-completion/02-phase-execution-and-artifacts.md
+  - documentation/product-completion/03-agents-prompts-and-dynamic-routing.md
+  - documentation/product-completion/04-validation-and-mcp-product-surface.md
+  - documentation/product-completion/05-generation-providers-and-post.md
+  - documentation/product-completion/06-e2e-acceptance-and-release.md
+  - documentation/product-completion/status-scorecard.md
+
+required_e2e_tests:
+  - tests/e2e/test_scenario_01_happy_path.py
+  - tests/e2e/test_scenario_02_script_revision.py
+  - tests/e2e/test_scenario_03_reference_failure.py
+  - tests/e2e/test_scenario_04_quota_exhausted.py
+  - tests/e2e/test_scenario_05_network_error.py
+  - tests/e2e/test_scenario_06_continuity_drift.py
+  - tests/e2e/test_scenario_07_rollback.py
+  - tests/e2e/test_scenario_08_kb_conflict.py
+  - tests/e2e/test_scenario_09_project_ambiguity.py
+  - tests/e2e/test_scenario_10_dynamic_flow.py
+
+required_behavior_tests:
+  - tests/integration/test_mcp_flow.py
+  - tests/e2e/test_scenario_01_happy_path.py
+  - tests/e2e/test_graph_execution.py

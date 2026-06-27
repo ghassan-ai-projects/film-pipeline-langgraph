@@ -34,11 +34,11 @@ def phase_dir(project_slug: str, phase: str) -> Path:
 
 def artifact_path(project_slug: str, phase: str, artifact_id: str, version: int) -> Path:
     safe_id = artifact_id.replace(":", "_").replace("/", "_")
-    return phase_dir(project_slug, phase) / f"{safe_id}.v{version}.json"
+    return phase_dir(project_slug, phase) / safe_id / "versions" / f"v{version:03}.json"
 
 
-def generated_asset_dir(project_slug: str, shot_id: str) -> Path:
-    return phase_dir(project_slug, "generation") / "shots" / shot_id
+def generated_asset_dir(project_slug: str, scene_id: str, shot_id: str) -> Path:
+    return phase_dir(project_slug, "generation") / "scenes" / scene_id / shot_id
 
 
 def reference_dir(project_slug: str, ref_type: str) -> Path:

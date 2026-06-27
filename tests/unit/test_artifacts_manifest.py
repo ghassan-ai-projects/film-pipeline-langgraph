@@ -19,10 +19,12 @@ class TestAssetEntry:
             asset_id="asset:clip:S001:v1",
             path="output/S001.mp4",
             kind="generated_clip",
+            scene_id="SC_001",
             shot_id="S001",
         )
         assert entry.asset_id == "asset:clip:S001:v1"
         assert entry.kind == "generated_clip"
+        assert entry.scene_id == "SC_001"
         assert entry.shot_id == "S001"
         assert entry.active is True
 
@@ -65,6 +67,30 @@ class TestAssetManifest:
         manifest.add(AssetEntry(asset_id="a3", path="p", kind="generated_clip"))
         clips = manifest.list_by_kind("generated_clip")
         assert len(clips) == 2
+
+    def test_list_by_scene_and_shot(self) -> None:
+        manifest = AssetManifest(project_id="p1")
+        manifest.add(
+            AssetEntry(
+                asset_id="a1",
+                path="p",
+                kind="generated_clip",
+                scene_id="SC_001",
+                shot_id="shot_001",
+            )
+        )
+        manifest.add(
+            AssetEntry(
+                asset_id="a2",
+                path="p",
+                kind="generated_clip",
+                scene_id="SC_002",
+                shot_id="shot_002",
+            )
+        )
+
+        assert [entry.asset_id for entry in manifest.list_by_scene("SC_001")] == ["a1"]
+        assert [entry.asset_id for entry in manifest.list_by_shot("shot_002")] == ["a2"]
 
 
 class TestManifestIO:

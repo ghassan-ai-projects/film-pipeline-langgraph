@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Real-mode MCP operator guide walkthrough test.
 
-Follows docs/openclaw-mcp-operator-guide.md step-by-step with real providers.
+Follows documentation/openclaw-mcp-operator-guide.md step-by-step with real providers.
 Uses the "After the Fall" story from the operator guide examples.
 
 Usage:

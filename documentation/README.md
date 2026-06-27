@@ -9,26 +9,29 @@ Use this folder first if you want to:
 - follow one real end-to-end workflow
 - onboard as a maintainer
 
-Keep using `docs/` for:
-
-- architecture source of truth
-- hard product-completion standards
-- phased implementation and acceptance tracking
+This folder is also where architecture source of truth, hard product-completion
+standards, and phased implementation/acceptance tracking live (the old `docs/`
+folder was retired and folded in here).
 
 ## Read This First
 
-- Product overview: [product-overview.md](./product-overview.md)
-- Getting started: [getting-started.md](./getting-started.md)
-- Repository structure: [repository-structure.md](./repository-structure.md)
-- Code onboarding: [onboarding.md](./onboarding.md)
-- Manual 4-minute mock short: [manual-4min-mock-short.md](./manual-4min-mock-short.md)
+- Architecture blueprint: [architecture-blueprint.md](./architecture-blueprint.md)
+- OpenClaw MCP operator guide: [openclaw-mcp-operator-guide.md](./openclaw-mcp-operator-guide.md)
+
+## Operator & Release References
+
+- Operations guide: [operations-guide.md](./operations-guide.md)
+- Runbook (first film): [runbook-first-film.md](./runbook-first-film.md)
+- Release process: [release-process.md](./release-process.md)
+- Demo guide: [demo-guide.md](./demo-guide.md)
+- Acceptance checklist: [acceptance-checklist.md](./acceptance-checklist.md)
 
 ## Hard Acceptance References
 
-- Product standard: [../docs/product-completion/00-product-standard.md](../docs/product-completion/00-product-standard.md)
-- Product completion index: [../docs/product-completion/README.md](../docs/product-completion/README.md)
-- Execution plan: [../docs/product-completion-plan/README.md](../docs/product-completion-plan/README.md)
-- Acceptance checklist: [../docs/product-completion-plan/acceptance-checklist.md](../docs/product-completion-plan/acceptance-checklist.md)
+- Product standard: [product-completion/00-product-standard.md](./product-completion/00-product-standard.md)
+- Product completion index: [product-completion/README.md](./product-completion/README.md)
+- Execution plan: [product-completion-plan/README.md](./product-completion-plan/README.md)
+- Acceptance checklist: [product-completion-plan/acceptance-checklist.md](./product-completion-plan/acceptance-checklist.md)
 
 ## Verification Entry Points
 

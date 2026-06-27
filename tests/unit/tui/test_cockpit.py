@@ -219,6 +219,8 @@ class RecordingGateway:
                 "phase": "script",
                 "version": 4,
                 "status": "candidate",
+                "scene_ids": ["SC_004"],
+                "scene_count": 1,
             },
             {
                 "artifact_id": "scene_matrix",
@@ -226,9 +228,33 @@ class RecordingGateway:
                 "phase": "script",
                 "version": 2,
                 "status": "candidate",
+                "scene_ids": ["SC_004"],
+                "scene_count": 1,
             },
         ]
         return [row for row in rows if phase in {None, row["phase"]}]
+
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
+        return [
+            {
+                "asset_id": "clip_SC_004_shot_001_take_001",
+                "kind": "generated_clip",
+                "scene_id": "SC_004",
+                "shot_id": "shot_SC_004_001",
+                "take": 1,
+                "active": True,
+                "path": "07-generated-assets/scenes/SC_004/shot_SC_004_001/take_001.mp4",
+            },
+            {
+                "asset_id": "ref_station_platform",
+                "kind": "reference_sheet",
+                "scene_id": "SC_004",
+                "shot_id": "",
+                "take": 1,
+                "active": True,
+                "path": "references/environments/station/ref_station_platform.png",
+            },
+        ]
 
     def inspect_artifact(
         self,
@@ -254,6 +280,23 @@ class RecordingGateway:
                                 "line": "The message arrived before the train.",
                             }
                         ],
+                    }
+                ],
+            }
+        elif artifact_id == "scene_matrix":
+            body = {
+                "artifact_id": "scene_matrix",
+                "artifact_type": "matrix",
+                "rows": [
+                    {
+                        "shot_id": "shot_SC_004_001",
+                        "scene_id": "SC_004",
+                        "story_function": "Mara receives the impossible warning.",
+                        "environment": "abandoned station platform",
+                        "camera_profile": "slow push-in",
+                        "camera_movement": "dolly forward from wide to close",
+                        "asset_refs": ["ref_station_platform", "prop_warning_note"],
+                        "reference_refs": ["style_noir_dawn"],
                     }
                 ],
             }
@@ -319,6 +362,37 @@ class NoApprovalGateway(RecordingGateway):
             checkpoint_count=dashboard.checkpoint_count,
             has_blockers=False,
         )
+
+
+class BrokenArtifactGateway(RecordingGateway):
+    """Gateway fake where one artifact cannot be inspected."""
+
+    def list_artifacts(
+        self, project_id: str | None = None, phase: str | None = None
+    ) -> list[dict[str, object]]:
+        rows = super().list_artifacts(project_id, phase)
+        for row in rows:
+            row.pop("scene_ids", None)
+            row.pop("scene_count", None)
+        return rows
+
+    def inspect_artifact(
+        self,
+        artifact_id: str,
+        phase: str,
+        version: int = 1,
+        project_id: str | None = None,
+    ) -> ArtifactDetail:
+        if artifact_id == "scene_matrix":
+            raise ProjectNotFoundError("artifact missing")
+        return super().inspect_artifact(artifact_id, phase, version, project_id)
+
+
+class NoAssetGateway(RecordingGateway):
+    """Gateway fake without an asset manifest."""
+
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
+        return []
 
 
 def test_graph_rows_mark_current_phase() -> None:
@@ -545,6 +619,38 @@ def test_scene_rows_extract_scene_targets_from_matrix() -> None:
     ]
 
 
+def test_scene_rows_include_artifact_scene_ids_without_validation_issues() -> None:
+    artifacts = [
+        {
+            "artifact_id": "script",
+            "artifact_type": "script",
+            "phase": "script",
+            "version": 1,
+            "status": "candidate",
+            "scene_ids": ["SC_001", "SC_002"],
+        }
+    ]
+
+    scenes = build_scene_rows([], artifacts=artifacts)
+
+    assert scenes == [
+        {
+            "scene": "SC_001",
+            "phase": "script",
+            "status": "candidate",
+            "validation": "passing/unknown",
+            "action": "open scene",
+        },
+        {
+            "scene": "SC_002",
+            "phase": "script",
+            "status": "candidate",
+            "validation": "passing/unknown",
+            "action": "open scene",
+        },
+    ]
+
+
 def test_selection_and_targeted_revision_note_preserve_context() -> None:
     selection = selection_from_row(
         "scene_table",
@@ -591,6 +697,18 @@ def test_artifact_reader_builds_outline_body_and_links() -> None:
     assert "MARA" in reader.body
     assert reader.linked_comments == [comment]
     assert reader.linked_validation[0]["message"] == "Dialogue voice drift in scene 4."
+
+
+def test_artifact_reader_renders_matrix_scene_camera_and_assets() -> None:
+    artifact = RecordingGateway().inspect_artifact("scene_matrix", "script", 2, "field-message")
+
+    reader = build_artifact_reader(artifact, comments=[], validation=None, scene_id="SC_004")
+
+    assert reader.metadata["scene_id"] == "SC_004"
+    assert "camera_profile: slow push-in" in reader.body
+    assert "camera_movement: dolly forward from wide to close" in reader.body
+    assert "assets: ref_station_platform, prop_warning_note" in reader.body
+    assert "references: style_noir_dawn" in reader.body
 
 
 def test_reader_index_and_link_rows_make_artifact_navigable() -> None:
@@ -728,6 +846,25 @@ def test_command_options_collect_selectable_ids() -> None:
     assert options.scene_ids == ["SC_004", "SC_007"]
     assert options.validator_ids == ["dialogue-voice", "payoff", "script-structure"]
     assert options.provider_ids == ["imagen", "seedance"]
+
+
+def test_command_options_collect_scene_ids_from_artifact_summaries() -> None:
+    options = build_command_options(
+        projects=[],
+        dashboard=None,
+        validation=None,
+        artifacts=[
+            {
+                "artifact_id": "shot_matrix",
+                "artifact_type": "matrix",
+                "phase": "shot_bible",
+                "scene_ids": ["SC_010"],
+            }
+        ],
+        providers=[],
+    )
+
+    assert options.scene_ids == ["SC_010"]
 
 
 def test_command_help_rows_include_live_argument_values() -> None:
@@ -888,6 +1025,7 @@ def test_command_suggestions_filter_and_complete_prefixes() -> None:
 def test_selection_from_row_covers_tui_table_sources() -> None:
     rows: dict[str, dict[str, object]] = {
         "asset_table": {"artifact_id": "script", "phase": "script"},
+        "asset_table_manifest": {"asset_id": "clip_1", "scene_id": "SC_004", "shot_id": "shot_1"},
         "asset_action_table": {"artifact_id": "script", "action": "review", "phase": "script"},
         "dashboard_kpi_table": {"metric": "blockers"},
         "dashboard_action_table": {"action": "approve"},
@@ -914,6 +1052,8 @@ def test_selection_from_row_covers_tui_table_sources() -> None:
     selections = {source: selection_from_row(source, row) for source, row in rows.items()}
 
     assert selections["asset_table"].target_type == "artifact"
+    assert selection_from_row("asset_table", rows["asset_table_manifest"]).target_type == "asset"
+    assert selection_from_row("asset_table", rows["asset_table_manifest"]).target_id == "clip_1"
     assert selections["asset_action_table"].target_type == "asset_action"
     assert selections["dashboard_kpi_table"].target_id == "blockers"
     assert selections["dashboard_action_table"].target_type == "dashboard_action"
@@ -1026,6 +1166,7 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             dashboard_kpi_table = app.query_one("#dashboard_kpi_table", DataTable)
             dashboard_action_table = app.query_one("#dashboard_action_table", DataTable)
             graph_artifact_table = app.query_one("#graph_artifact_table", DataTable)
+            asset_table = app.query_one("#asset_table", DataTable)
             asset_action_table = app.query_one("#asset_action_table", DataTable)
             matrix_table = app.query_one("#matrix_table", DataTable)
             matrix_pivot_table = app.query_one("#matrix_pivot_table", DataTable)
@@ -1041,6 +1182,10 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             assert dashboard_kpi_table.row_count == 5
             assert dashboard_action_table.row_count >= 3
             assert graph_artifact_table.row_count == 2
+            assert asset_table.row_count == 2
+            assert app._table_rows["asset_table"][0]["asset_id"] == (
+                "clip_SC_004_shot_001_take_001"
+            )
             assert asset_action_table.row_count == 6
             assert matrix_table.row_count >= 3
             assert matrix_pivot_table.row_count >= 2
@@ -1051,6 +1196,35 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             assert "Command:" in str(command_validation.renderable)
             assert validation_group_table.row_count == 2
             assert validation_fix_table.row_count == 2
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_enriches_artifact_rows_from_current_artifacts() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            assert app.snapshot is not None
+            script = next(row for row in app.snapshot.artifacts if row["artifact_id"] == "script")
+            assert script["scene_ids"] == ["SC_004"]
+            assert script["scene_count"] == 1
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_keeps_artifact_row_when_enrichment_fails() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=BrokenArtifactGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            assert app.snapshot is not None
+            matrix = next(
+                row for row in app.snapshot.artifacts if row["artifact_id"] == "scene_matrix"
+            )
+            assert "scene_ids" not in matrix
 
     asyncio.run(run())
 
@@ -1376,7 +1550,97 @@ def test_textual_cockpit_scene_command_loads_scene_reader() -> None:
             body = app.query_one("#reader_body", Static).renderable
             scene_reader = app.query_one("#scene_reader", Static).renderable
             assert "The message arrived before the train." in str(body)
+            assert "camera_movement: dolly forward from wide to close" in str(body)
+            assert "assets: ref_station_platform, prop_warning_note" in str(body)
+            assert "Manifest Assets" in str(body)
+            assert "clip_SC_004_shot_001_take_001" in str(body)
+            assert "references/environments/station/ref_station_platform.png" in str(body)
             assert "Linked validation" in str(scene_reader)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_unknown_scene_reports_missing_scene() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app._run_command("scene SC_999")
+            await pilot.pause()
+
+            context = app.query_one("#context_panel", Static).renderable
+            assert "Scene 'SC_999' was not found" in str(context)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_scene_row_selection_opens_reader() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_open_tab("scenes")
+            table = app.query_one("#scene_table", DataTable)
+            rows = app._table_rows["scene_table"]
+            row_index = next(index for index, row in enumerate(rows) if row["scene"] == "SC_004")
+            table.move_cursor(row=row_index)
+            table.action_select_cursor()
+            await pilot.pause()
+
+            assert app.reader is not None
+            assert app.reader.metadata["scene_id"] == "SC_004"
+            assert app.reader.metadata["artifact_count"] == 2
+            body = app.query_one("#reader_body", Static).renderable
+            assert "The message arrived before the train." in str(body)
+            assert "camera_profile: slow push-in" in str(body)
+            assert "Manifest Assets" in str(body)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_asset_row_selection_targets_manifest_asset() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_open_tab("assets")
+            table = app.query_one("#asset_table", DataTable)
+            rows = app._table_rows["asset_table"]
+            row_index = next(
+                index for index, row in enumerate(rows) if row["asset_id"] == "ref_station_platform"
+            )
+            table.move_cursor(row=row_index)
+            table.action_select_cursor()
+            await pilot.pause()
+
+            assert app.query_one("#tabs", TabbedContent).active == "assets"
+            assert app.selected_target is not None
+            assert app.selected_target.target_type == "asset"
+            assert app.selected_target.target_id == "ref_station_platform"
+            context = app.query_one("#context_panel", Static).renderable
+            assert "references/environments/station/ref_station_platform.png" in str(context)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_asset_table_falls_back_to_artifact_reader() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=NoAssetGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_open_tab("assets")
+            table = app.query_one("#asset_table", DataTable)
+            rows = app._table_rows["asset_table"]
+            row_index = next(
+                index for index, row in enumerate(rows) if row["artifact_id"] == "scene_matrix"
+            )
+            table.move_cursor(row=row_index)
+            table.action_select_cursor()
+            await pilot.pause()
+
+            assert app.selected_artifact is not None
+            assert app.selected_artifact.artifact_id == "scene_matrix"
+            assert app.query_one("#reader_index_table", DataTable).row_count == 1
 
     asyncio.run(run())
 
@@ -1431,7 +1695,7 @@ def test_textual_cockpit_approve_requires_confirmation() -> None:
             assert gateway.approved_count == 0
             assert app.pending_confirmation == "approve"
             assert "Confirm Approval" in str(context)
-            assert "confirm approve" in str(context)
+            assert "press y" in str(context)
 
     asyncio.run(run())
 
@@ -1445,6 +1709,23 @@ def test_textual_cockpit_confirm_approve_calls_gateway() -> None:
             app._run_command("approve")
             await pilot.pause()
             app._run_command("confirm approve")
+            await pilot.pause()
+
+            assert gateway.approved_count == 1
+            assert app.pending_confirmation == ""
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_second_approve_press_confirms_gateway_call() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_approve_phase()
+            await pilot.pause()
+            app.action_approve_phase()
             await pilot.pause()
 
             assert gateway.approved_count == 1
@@ -1645,6 +1926,7 @@ def test_guide_status_rows_cover_later_generation_states() -> None:
                 "status": "candidate",
             },
         ],
+        assets=snapshot.assets,
         checkpoints=snapshot.checkpoints,
         providers=snapshot.providers,
         audit_events=snapshot.audit_events,

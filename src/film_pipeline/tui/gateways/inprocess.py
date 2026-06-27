@@ -70,6 +70,9 @@ class InProcessStudioGateway:
     ) -> list[dict[str, object]]:
         return self._service.list_artifacts(project_id, phase)
 
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
+        return self._service.list_assets(project_id)
+
     def inspect_artifact(
         self,
         artifact_id: str,
