@@ -49,12 +49,11 @@ class TestPaths:
 
     def test_artifact_path(self) -> None:
         p = artifact_path("slug", "script", "artifact:scene:S001", 3)
-        assert p.name == "artifact_scene_S001.v3.json"
+        assert p.parts[-3:] == ("artifact_scene_S001", "versions", "v003.json")
 
     def test_generated_asset_dir(self) -> None:
-        p = generated_asset_dir("slug", "S001-01")
-        assert "shots" in p.parts
-        assert p.name == "S001-01"
+        p = generated_asset_dir("slug", "SC_001", "shot_001")
+        assert p.parts[-4:] == ("07-generated-assets", "scenes", "SC_001", "shot_001")
 
     def test_reference_dir(self) -> None:
         p = reference_dir("slug", "characters")
@@ -97,9 +96,18 @@ class TestArtifactStore:
             )
             p = store.save(art, meta)
             assert p.exists()
+            assert p.name == "current.json"
+            assert p.parent.name == "artifact_test_v1"
+            assert (p.parent / "current.meta.json").exists()
+            assert (p.parent / "current.md").exists()
+            assert (p.parent / "versions" / "v001.json").exists()
+            assert (p.parent / "versions" / "v001.meta.json").exists()
 
             loaded = store.load("p1", FilmPhase.INTAKE, "artifact:test:v1", 1)
             assert loaded["project_id"] == "p1"
+            markdown = (p.parent / "current.md").read_text()
+            assert "# artifact:test:v1" in markdown
+            assert "- version: 1" in markdown
 
     def test_list_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -123,6 +131,7 @@ class TestArtifactStore:
             store.save(art, m2)
             results = store.list_artifacts("p1", FilmPhase.SCRIPT)
             assert len(results) == 2
+            assert sorted(result.artifact_id for result in results) == ["artifact:a", "artifact:b"]
 
     def test_list_artifacts_no_filter(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,10 +154,79 @@ class TestArtifactStore:
             results = store.list_artifacts("p1")
             assert len(results) == 2
 
+    def test_next_version_uses_versions_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+            )
+            store.save(art, meta)
+
+            assert store.next_version("p1", "script", "artifact:a") == 2
+
+    def test_next_version_returns_one_for_empty_versions_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            version_dir = Path(tmp) / "p1" / "03-script" / "artifact_a" / "versions"
+            version_dir.mkdir(parents=True)
+
+            assert store.next_version("p1", "script", "artifact:a") == 1
+
+    def test_save_dict_writes_scene_markdown_for_filesystem_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            path = store.save_dict(
+                {
+                    "artifact_id": "shot_matrix",
+                    "rows": [
+                        {
+                            "scene_id": "SC_001",
+                            "shot_id": "shot_001",
+                            "story_function": "Reveal the message.",
+                            "environment": "empty platform",
+                            "camera_profile": "slow push-in",
+                            "camera_movement": "dolly from wide to close",
+                            "action_lines": ["Mara opens the note."],
+                            "dialogue": [
+                                {
+                                    "character_id": "MARA",
+                                    "direction": "whispering",
+                                    "line": "It came early.",
+                                }
+                            ],
+                            "asset_refs": ["note_ref"],
+                            "reference_refs": ["platform_ref"],
+                        }
+                    ],
+                },
+                _meta(
+                    artifact_id="shot_matrix",
+                    project_id="p1",
+                    phase=FilmPhase.SHOT_BIBLE,
+                    artifact_type=ArtifactType.MASTER_FILM_MATRIX,
+                ),
+            )
+
+            markdown = path.with_suffix(".md").read_text()
+
+            assert "## SC_001" in markdown
+            assert "- camera_movement: dolly from wide to close" in markdown
+            assert "Mara opens the note." in markdown
+            assert "MARA (whispering) It came early." in markdown
+            assert "- asset_refs: note_ref" in markdown
+            assert "- reference_refs: platform_ref" in markdown
+
 
 class TestManifest:
     def test_asset_entry(self) -> None:
-        e = AssetEntry(asset_id="a", path="p.png", kind="reference_sheet")
+        e = AssetEntry(asset_id="a", path="p.png", kind="reference_sheet", scene_id="SC_001")
+        assert e.scene_id == "SC_001"
         assert e.take == 1
         assert e.active is True
 
@@ -169,6 +247,30 @@ class TestManifest:
         m.add(AssetEntry(asset_id="a", path="p.png", kind="reference_sheet"))
         m.add(AssetEntry(asset_id="b", path="c.mp4", kind="generated_clip"))
         assert len(m.list_by_kind("reference_sheet")) == 1
+
+    def test_list_by_scene_and_shot(self) -> None:
+        m = AssetManifest(project_id="p")
+        m.add(
+            AssetEntry(
+                asset_id="a",
+                path="p.mp4",
+                kind="generated_clip",
+                scene_id="SC_001",
+                shot_id="shot_001",
+            )
+        )
+        m.add(
+            AssetEntry(
+                asset_id="b",
+                path="p.mp4",
+                kind="generated_clip",
+                scene_id="SC_002",
+                shot_id="shot_002",
+            )
+        )
+
+        assert [entry.asset_id for entry in m.list_by_scene("SC_001")] == ["a"]
+        assert [entry.asset_id for entry in m.list_by_shot("shot_002")] == ["b"]
 
 
 class TestArtifactIndex:

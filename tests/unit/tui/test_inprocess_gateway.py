@@ -116,6 +116,10 @@ class RecordingService:
         self._record("list_artifacts", project_id, phase)
         return [{"artifact_id": "script"}]
 
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
+        self._record("list_assets", project_id)
+        return [{"asset_id": "clip_1"}]
+
     def inspect_artifact(
         self,
         artifact_id: str,
@@ -166,6 +170,7 @@ def test_inprocess_gateway_delegates_operator_methods() -> None:
     assert gateway.add_operator_comment(comment_request, "p1").comment_id == "comment:1"
     assert gateway.list_operator_comments("p1", include_resolved=True) == []
     assert gateway.list_artifacts("p1", "script") == [{"artifact_id": "script"}]
+    assert gateway.list_assets("p1") == [{"asset_id": "clip_1"}]
     assert gateway.inspect_artifact("script", "script", 2, "p1").version == 2
     assert gateway.list_checkpoints("p1") == [{"checkpoint_id": "cp1"}]
     assert gateway.list_provider_status() == [{"provider_id": "mock"}]
@@ -185,6 +190,7 @@ def test_inprocess_gateway_delegates_operator_methods() -> None:
         "add_operator_comment",
         "list_operator_comments",
         "list_artifacts",
+        "list_assets",
         "inspect_artifact",
         "list_checkpoints",
         "list_provider_status",

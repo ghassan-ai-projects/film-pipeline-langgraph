@@ -4,9 +4,9 @@ Canonical instructions for coding agents in this repository. Read this file firs
 
 ## Purpose
 
-This repository implements the **LangGraph Film Studio** described in `docs/`. It is an MCP-first, LangGraph-orchestrated, multi-agent system that drives a film from idea through delivery with mandatory human review gates.
+This repository implements the **LangGraph Film Studio** described in `documentation/`. It is an MCP-first, LangGraph-orchestrated, multi-agent system that drives a film from idea through delivery with mandatory human review gates.
 
-The architectural source of truth is `docs/architecture-blueprint.md`. The phased implementation plan is `docs/implementation-plan/`. Read those before writing code.
+The architectural source of truth is `documentation/architecture-blueprint.md`. Hard acceptance and product-completion standards are in `documentation/product-completion/` and `documentation/product-completion-plan/`. Read those before writing code.
 
 ## Engineering Priorities
 
