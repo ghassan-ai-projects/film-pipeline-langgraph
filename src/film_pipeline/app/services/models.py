@@ -48,6 +48,7 @@ class DashboardSummary:
     status: str
     next_action: str
     route_reason: str
+    idea: str = ""
     eligible_actions: list[str] = field(default_factory=list)
     blocked_actions: list[dict[str, str]] = field(default_factory=list)
     pending_revisions: list[dict[str, Any]] = field(default_factory=list)

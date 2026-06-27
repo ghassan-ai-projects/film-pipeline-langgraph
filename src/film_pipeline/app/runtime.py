@@ -227,6 +227,51 @@ class StudioRuntime:
         )
         return state
 
+    def run_validation(self, project_id: str | None = None) -> dict[str, Any]:
+        """Run validators against the active project's current-phase artifacts.
+
+        Executes the same validator dispatch the QC node uses, but against the
+        live project state and *without* advancing the phase. Validator-produced
+        findings replace any prior validator findings (issues tagged with a
+        ``validator_id``) while non-validator blockers are preserved, then the
+        refreshed issues and validation reports are merged back and persisted.
+        """
+        from film_pipeline.graph.nodes import _run_validators
+        from film_pipeline.graph.services import SERVICES_KEY
+
+        active = self.get_project(project_id) if project_id else self.get_active()
+        if active is None:
+            raise ValueError("No active project.")
+        project_id_value = str(active["project_id"])
+
+        preserved_issues = [
+            issue
+            for issue in cast(list[dict[str, Any]], active.get("issues", []))
+            if not (isinstance(issue, dict) and issue.get("validator_id"))
+        ]
+        working = dict(active)
+        working[SERVICES_KEY] = self.services
+        working["issues"] = list(preserved_issues)
+        working["_validation_reports"] = []
+        working.pop("_pending_row_updates", None)
+        _run_validators(working)
+        working.pop(SERVICES_KEY, None)
+
+        active["issues"] = list(working.get("issues", []))
+        active["_validation_reports"] = list(working.get("_validation_reports", []))
+        consensus_ref = working.get("consensus_report_ref")
+        if consensus_ref:
+            active["consensus_report_ref"] = consensus_ref
+        self.projects[project_id_value] = active
+        self._persist_project_state(project_id_value)
+        self._record_audit(
+            "human",
+            "run_validation",
+            project_id=project_id_value,
+            phase=str(active.get("current_phase", "")),
+        )
+        return active
+
     def request_revision(self, note: str = "") -> dict[str, Any]:
         """Request revision of the current phase.
 
@@ -426,6 +471,32 @@ class StudioRuntime:
     def get_all_health(self) -> dict[str, dict[str, Any]]:
         return dict(self.provider_health)
 
+    def seed_default_provider_health(self) -> None:
+        """Seed provider health rows for the configured runtime mode.
+
+        Mock mode advertises the zero-cost mock providers as healthy. Real mode
+        advertises the live generation providers, marking each healthy only when
+        its API credentials are configured so the operator can see at a glance
+        what is wired up. Existing health entries are never overwritten.
+        """
+        if self.provider_health:
+            return
+        if self.server_mode == "real":
+            from film_pipeline.providers import credentials
+
+            for provider_id in ("seedance-openrouter", "veo-fast", "gemini-imagen-4"):
+                if credentials.is_configured(provider_id):
+                    self.set_provider_health(provider_id, "healthy")
+                else:
+                    self.set_provider_health(
+                        provider_id,
+                        "unconfigured",
+                        "API credentials not set",
+                    )
+            return
+        for provider_id in ("mock-image-provider", "mock-video-provider"):
+            self.set_provider_health(provider_id, "healthy", "mock runtime")
+
     def _persist_project_state(self, project_id: str) -> None:
         project = self.projects[project_id]
         project_root = self.project_roots[project_id]
@@ -540,6 +611,7 @@ def get_runtime() -> StudioRuntime:
     configured_mode = _configured_server_mode()
     if _RUNTIME is None or _RUNTIME.server_mode != configured_mode:
         _RUNTIME = create_runtime(configured_mode)
+        _RUNTIME.seed_default_provider_health()
     return _RUNTIME
 
 

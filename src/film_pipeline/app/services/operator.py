@@ -7,6 +7,7 @@ helpers.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, cast
@@ -94,6 +95,27 @@ class OperatorService:
             message="Project created.",
         )
 
+    def set_runtime_mode(self, mode: str) -> str:
+        """Switch the session runtime mode, rebuilding the runtime when it changes.
+
+        Returns the active mode after the switch. A no-op when the requested
+        mode already matches, so it is safe to call before every create.
+        """
+        from film_pipeline.app.runtime import get_runtime, reset_runtime
+
+        if self._runtime is not None:
+            if self._runtime.server_mode != mode:
+                raise BackendOperationError(
+                    "Runtime mode is fixed for an explicitly injected runtime."
+                )
+            return self._runtime.server_mode
+        if get_runtime().server_mode == mode:
+            return mode
+        os.environ["FILM_PIPELINE_MCP_MODE"] = mode
+        runtime = reset_runtime(mode)
+        runtime.seed_default_provider_health()
+        return runtime.server_mode
+
     def set_active_project(self, project_id: str) -> DashboardSummary:
         """Select an active project and return its dashboard."""
         self._require_project(project_id)
@@ -134,6 +156,7 @@ class OperatorService:
             status=self._status_for_state(state),
             next_action=router_result.next_action,
             route_reason=str(latest_decision.get("reason", "")) if latest_decision else "",
+            idea=str(state.get("idea", "")),
             eligible_actions=list(router_result.eligible),
             blocked_actions=list(router_result.blocked),
             pending_revisions=list(ostate.get_pending_revisions(state)),
@@ -197,6 +220,14 @@ class OperatorService:
             blocking_issues=blocking,
             non_blocking_issues=non_blocking,
         )
+
+    def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
+        """Run validators on demand against the current phase and return results."""
+        state = self._state_for_project(project_id)
+        if not str(state.get("current_phase", "")):
+            raise BackendOperationError("Submit an idea before running validation.")
+        self.runtime.run_validation(str(state["project_id"]))
+        return self.get_validation_workspace(str(state["project_id"]))
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         """Approve the active phase through the runtime approval gate."""

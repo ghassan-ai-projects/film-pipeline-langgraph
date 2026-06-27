@@ -30,6 +30,7 @@ from film_pipeline.app.services.models import (
 from film_pipeline.tui.formatting import pretty
 from film_pipeline.tui.gateway import StudioGateway
 from film_pipeline.tui.gateways import InProcessStudioGateway
+from film_pipeline.tui.screens import NewProjectScreen, ReviseIdeaScreen
 from film_pipeline.tui.view_models import (
     CockpitSnapshot,
     MatrixImpact,
@@ -203,9 +204,12 @@ class FilmCockpitApp(App[None]):
         Binding("g,p", "open_tab('providers')", "Providers"),
         Binding("g,c", "open_tab('checkpoints')", "Checkpoints"),
         Binding("g,u", "open_tab('audit')", "Audit"),
+        Binding("n", "new_project", "New"),
+        Binding("i", "revise_idea", "Idea"),
         Binding("a", "approve_phase", "Approve"),
         Binding("y", "confirm_approval", "Confirm"),
         Binding("r", "request_revision", "Revise"),
+        Binding("V", "run_validation", "Validate"),
         Binding("c", "add_comment", "Comment"),
         Binding("/", "toggle_command_palette", "Command"),
         Binding("f5", "refresh", "Refresh"),
@@ -242,6 +246,7 @@ class FilmCockpitApp(App[None]):
                 yield Static("", id="project_filter", classes="panel")
                 yield DataTable(id="project_table")
                 yield Button("New Project", id="new_project", variant="primary")
+                yield Button("Revise Idea", id="revise_idea_button")
                 yield Button("Refresh", id="refresh_button")
             with Vertical(id="workspace"):
                 yield Static("", id="status_bar", classes="panel")
@@ -316,6 +321,11 @@ class FilmCockpitApp(App[None]):
                     with TabPane("Validation", id="validation"):
                         yield Static("", id="validation_summary", classes="panel")
                         yield Static("", id="validation_intelligence", classes="panel")
+                        yield Button(
+                            "Run Validation",
+                            id="run_validation_button",
+                            variant="primary",
+                        )
                         yield DataTable(id="validation_group_table")
                         yield DataTable(id="validation_fix_table")
                         yield DataTable(id="validation_table")
@@ -350,7 +360,7 @@ class FilmCockpitApp(App[None]):
         self._initialize_tables()
         self.action_refresh()
         if self.start_create:
-            self.action_toggle_command_palette()
+            self.action_new_project()
 
     def action_refresh(self) -> None:
         """Refresh all cockpit pages from the gateway."""
@@ -385,6 +395,88 @@ class FilmCockpitApp(App[None]):
     def action_confirm_approval(self) -> None:
         """Commit a prepared approval confirmation."""
         self._confirm_approval()
+
+    def action_new_project(self) -> None:
+        """Open the New Project modal form."""
+        self.push_screen(NewProjectScreen(), self._on_new_project_result)
+
+    def _on_new_project_result(self, request: ProjectCreateRequest | None) -> None:
+        """Create the project requested by the modal form."""
+        if request is None:
+            return
+        try:
+            active_mode = self.gateway.set_runtime_mode(request.runtime_mode)
+            result = self.gateway.create_project(request)
+        except (ServiceError, ValueError, FileNotFoundError) as exc:
+            # Refresh first (a partial create may have registered the project),
+            # then set the error last so it is not overwritten by the render.
+            self.action_refresh()
+            self._update_context(
+                "Create Project failed\n\n"
+                f"{exc}\n\n"
+                "For real mode, confirm API credentials are configured, then retry."
+            )
+            return
+        self.active_project_id = result.project_id
+        self._update_context(
+            f"{result.message or 'Project created.'}\n"
+            f"project: {result.project_id}\n"
+            f"phase: {result.current_phase or 'none'}\n"
+            f"runtime mode: {active_mode}"
+        )
+        self.action_open_tab("dashboard")
+        self.action_refresh()
+
+    def action_revise_idea(self) -> None:
+        """Open the Revise Idea modal for the active project."""
+        if not self.active_project_id:
+            self._update_context("No active project. Create one first with n.")
+            return
+        current_idea = ""
+        snapshot = self.snapshot
+        if snapshot and snapshot.dashboard:
+            current_idea = str(getattr(snapshot.dashboard, "idea", "") or "")
+        self.push_screen(
+            ReviseIdeaScreen(project_id=self.active_project_id, current_idea=current_idea),
+            self._on_revise_idea_result,
+        )
+
+    def _on_revise_idea_result(self, idea: str | None) -> None:
+        """Submit a revised idea and re-run intake."""
+        if idea is None:
+            return
+        try:
+            result = self.gateway.submit_idea(self.active_project_id, idea)
+        except (ServiceError, ValueError, FileNotFoundError) as exc:
+            self._update_context(f"Revise idea failed\n\n{exc}")
+            return
+        self._update_context(
+            f"{result.message or 'Idea submitted.'}\nCurrent phase: {result.current_phase}"
+        )
+        self.action_refresh()
+
+    def action_run_validation(self) -> None:
+        """Run validators on demand against the active project's current phase."""
+        if not self.active_project_id:
+            self._update_context("No active project.")
+            return
+        try:
+            workspace = self.gateway.run_validation(self.active_project_id)
+        except (ServiceError, ValueError, FileNotFoundError) as exc:
+            self._update_context(f"Run validation failed\n\n{exc}")
+            return
+        # Refresh first so the validation tables reflect the fresh run, then set
+        # the summary last so it is not overwritten by the tab-context render.
+        self.action_refresh()
+        self.action_open_tab("validation")
+        self._update_context(
+            "Validation complete\n\n"
+            f"phase: {workspace.phase or 'none'}\n"
+            f"blocking: {len(workspace.blocking_issues)}\n"
+            f"warnings: {len(workspace.non_blocking_issues)}\n"
+            f"reports: {len(workspace.reports)}\n\n"
+            "Fix blocking issues before approving, then run validation again."
+        )
 
     def _approve_phase_now(self) -> None:
         """Approve the active phase after explicit operator confirmation."""
@@ -467,12 +559,11 @@ class FilmCockpitApp(App[None]):
         elif button_id == "comment_button":
             self.action_add_comment()
         elif button_id == "new_project":
-            self._update_context(
-                "Create Project\n\nUse the command palette with:\n"
-                "create <project_id> | <title> | <idea>\n\n"
-                "The service will auto-fill slug/runtime/workflow defaults."
-            )
-            self._fill_command("create <project_id> | <title> | <idea>")
+            self.action_new_project()
+        elif button_id == "revise_idea_button":
+            self.action_revise_idea()
+        elif button_id == "run_validation_button":
+            self.action_run_validation()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Show selected row detail and make it the active comment target."""
@@ -619,9 +710,13 @@ class FilmCockpitApp(App[None]):
             self.active_project_id = dashboard.project_id
             return dashboard
         except ServiceError:
-            if not projects:
+            # Only auto-activate live, runtime-loaded projects. Folders merely
+            # discovered on disk (status "discovered") require explicit opening
+            # so the cockpit never boots into stale leftover state.
+            live = [project for project in projects if project.status != "discovered"]
+            if not live:
                 return None
-            dashboard = self.gateway.set_active_project(projects[0].project_id)
+            dashboard = self.gateway.set_active_project(live[0].project_id)
             self.active_project_id = dashboard.project_id
             return dashboard
 
@@ -1121,8 +1216,14 @@ class FilmCockpitApp(App[None]):
         if normalized in {"commands", "help", "help commands"}:
             self._show_command_help()
             return
-        if normalized == "create":
-            self._fill_command("create <project_id> | <title> | <idea>")
+        if normalized in {"create", "new", "new project"}:
+            self.action_new_project()
+            return
+        if normalized in {"validate", "run validation", "validation run"}:
+            self.action_run_validation()
+            return
+        if normalized in {"idea", "revise idea", "edit idea"}:
+            self.action_revise_idea()
             return
         tab_aliases = {
             "dashboard": "dashboard",
