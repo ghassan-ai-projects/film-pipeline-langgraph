@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DataTable, Input, Static, TabbedContent
+from textual.widgets import Button, DataTable, Input, Select, Static, TabbedContent, TextArea
 
 from film_pipeline.app.services.errors import ProjectNotFoundError
 from film_pipeline.app.services.models import (
@@ -23,6 +23,7 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.tui.app import FilmCockpitApp
+from film_pipeline.tui.screens import NewProjectScreen, ReviseIdeaScreen
 from film_pipeline.tui.view_models import (
     build_artifact_reader,
     build_asset_action_rows,
@@ -67,6 +68,9 @@ class RecordingGateway:
     comments: list[OperatorComment] | None = None
     active_project_id: str = "field-message"
     extra_projects: list[ProjectListItem] = field(default_factory=list)
+    validation_runs: int = 0
+    runtime_mode: str = "mock"
+    submitted_ideas: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.revision_notes is None:
@@ -102,8 +106,13 @@ class RecordingGateway:
         self.active_project_id = project_id
         return self.get_dashboard(project_id)
 
+    def set_runtime_mode(self, mode: str) -> str:
+        self.runtime_mode = mode
+        return mode
+
     def submit_idea(self, project_id: str, idea: str) -> MutationResult:
         self.active_project_id = project_id
+        self.submitted_ideas.append(idea)
         return MutationResult(ok=True, project_id=project_id, current_phase="intake")
 
     def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
@@ -161,6 +170,10 @@ class RecordingGateway:
                 }
             ],
         )
+
+    def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
+        self.validation_runs += 1
+        return self.get_validation_workspace(project_id)
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self.approved_count += 1
@@ -1807,7 +1820,7 @@ def test_textual_cockpit_commands_command_shows_help_surface() -> None:
     asyncio.run(run())
 
 
-def test_textual_cockpit_create_command_prefills_required_fields() -> None:
+def test_textual_cockpit_create_command_opens_modal() -> None:
     async def run() -> None:
         gateway = RecordingGateway()
         app = FilmCockpitApp(gateway=gateway)
@@ -1815,13 +1828,303 @@ def test_textual_cockpit_create_command_prefills_required_fields() -> None:
             await pilot.pause()
             app._run_command("create")
             await pilot.pause()
+            assert isinstance(app.screen, NewProjectScreen)
 
-            palette = app.query_one("#command_palette", Input)
-            validation = app.query_one("#command_validation", Static).renderable
-            context = app.query_one("#context_panel", Static).renderable
-            assert palette.value == "create <project_id> | <title> | <idea>"
-            assert "incomplete" in str(validation)
-            assert "Command template" in str(context)
+    asyncio.run(run())
+
+
+def test_textual_cockpit_new_project_modal_creates_with_selected_mode() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, NewProjectScreen)
+            screen.query_one("#np_id", Input).value = "lighthouse-keeper"
+            screen.query_one("#np_title", Input).value = "The Lighthouse Keeper"
+            screen.query_one("#np_idea", TextArea).text = "A keeper finds a prophetic bottle."
+            screen.query_one("#np_runtime", Select).value = "real"
+            screen._submit()
+            await pilot.pause()
+
+            assert gateway.created_request is not None
+            assert gateway.created_request.project_id == "lighthouse-keeper"
+            assert gateway.created_request.runtime_mode == "real"
+            assert gateway.runtime_mode == "real"
+            assert app.active_project_id == "lighthouse-keeper"
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_new_project_modal_blocks_missing_fields() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, NewProjectScreen)
+            screen._submit()
+            await pilot.pause()
+
+            assert isinstance(app.screen, NewProjectScreen)
+            assert gateway.created_request is None
+            assert "required" in str(screen.query_one("#np_error", Static).renderable)
+
+    asyncio.run(run())
+
+
+def test_new_project_modal_validates_each_field() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, NewProjectScreen)
+            error = screen.query_one("#np_error", Static)
+
+            screen.query_one("#np_id", Input).value = "has spaces"
+            screen._submit()
+            assert "spaces" in str(error.renderable)
+
+            screen.query_one("#np_id", Input).value = "valid-id"
+            screen._submit()
+            assert "Title is required" in str(error.renderable)
+
+            screen.query_one("#np_title", Input).value = "Valid Title"
+            screen._submit()
+            assert "idea" in str(error.renderable).lower()
+            assert isinstance(app.screen, NewProjectScreen)
+
+    asyncio.run(run())
+
+
+def _press(screen: Any, button_id: str) -> None:
+    button = screen.query_one(f"#{button_id}", Button)
+    screen.on_button_pressed(Button.Pressed(button))
+
+
+def test_new_project_modal_buttons_create_and_cancel() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, NewProjectScreen)
+            screen.query_one("#np_id", Input).value = "btn-film"
+            screen.query_one("#np_title", Input).value = "Button Film"
+            screen.query_one("#np_idea", TextArea).text = "A test idea via button."
+            _press(screen, "np_create")
+            await pilot.pause()
+            assert gateway.created_request is not None
+            assert gateway.created_request.project_id == "btn-film"
+
+    asyncio.run(run())
+
+
+def test_new_project_modal_cancel_button_dismisses() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            _press(app.screen, "np_cancel")
+            await pilot.pause()
+            assert not isinstance(app.screen, NewProjectScreen)
+            assert gateway.created_request is None
+
+    asyncio.run(run())
+
+
+def test_revise_idea_modal_buttons_submit_and_empty_guard() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_revise_idea()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ReviseIdeaScreen)
+
+            screen.query_one("#ri_idea", TextArea).text = ""
+            _press(screen, "ri_submit")
+            await pilot.pause()
+            assert isinstance(app.screen, ReviseIdeaScreen)
+            assert gateway.submitted_ideas == []
+
+            screen.query_one("#ri_idea", TextArea).text = "A revised idea via button."
+            _press(screen, "ri_submit")
+            await pilot.pause()
+            assert gateway.submitted_ideas == ["A revised idea via button."]
+
+            app.action_revise_idea()
+            await pilot.pause()
+            _press(app.screen, "ri_cancel")
+            await pilot.pause()
+            assert not isinstance(app.screen, ReviseIdeaScreen)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_new_project_modal_cancel_is_noop() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_new_project()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, NewProjectScreen)
+            screen.action_cancel()
+            await pilot.pause()
+
+            assert not isinstance(app.screen, NewProjectScreen)
+            assert gateway.created_request is None
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_revise_idea_cancel_is_noop() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_revise_idea()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ReviseIdeaScreen)
+            screen.action_cancel()
+            await pilot.pause()
+
+            assert gateway.submitted_ideas == []
+
+    asyncio.run(run())
+
+
+def test_command_aliases_route_to_new_actions() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            app._run_command("validate")
+            await pilot.pause()
+            assert gateway.validation_runs == 1
+
+            app._run_command("new")
+            await pilot.pause()
+            assert isinstance(app.screen, NewProjectScreen)
+            app.screen.action_cancel()
+            await pilot.pause()
+
+            app._run_command("idea")
+            await pilot.pause()
+            assert isinstance(app.screen, ReviseIdeaScreen)
+            app.screen.action_cancel()
+            await pilot.pause()
+
+    asyncio.run(run())
+
+
+def test_new_actions_guard_without_active_project() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=RecordingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.active_project_id = ""
+
+            app.action_run_validation()
+            await pilot.pause()
+            assert "No active project" in str(app.query_one("#context_panel", Static).renderable)
+
+            app.action_revise_idea()
+            await pilot.pause()
+            assert "No active project" in str(app.query_one("#context_panel", Static).renderable)
+
+    asyncio.run(run())
+
+
+class FailingGateway(RecordingGateway):
+    """Gateway whose mutations raise to exercise error branches."""
+
+    def create_project(self, request: ProjectCreateRequest) -> MutationResult:
+        raise ProjectNotFoundError("create boom")
+
+    def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
+        raise ProjectNotFoundError("validation boom")
+
+    def submit_idea(self, project_id: str, idea: str) -> MutationResult:
+        raise ProjectNotFoundError("idea boom")
+
+
+def test_new_actions_surface_gateway_errors() -> None:
+    async def run() -> None:
+        app = FilmCockpitApp(gateway=FailingGateway())
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+
+            app._on_new_project_result(ProjectCreateRequest(project_id="x", title="X", idea="idea"))
+            await pilot.pause()
+            assert "failed" in str(app.query_one("#context_panel", Static).renderable)
+
+            app.action_run_validation()
+            await pilot.pause()
+            assert "failed" in str(app.query_one("#context_panel", Static).renderable)
+
+            app._on_revise_idea_result("a fresh idea")
+            await pilot.pause()
+            assert "failed" in str(app.query_one("#context_panel", Static).renderable)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_run_validation_action() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_run_validation()
+            await pilot.pause()
+
+            assert gateway.validation_runs == 1
+            assert app.query_one("#tabs", TabbedContent).active == "validation"
+            assert "Validation complete" in str(app.query_one("#context_panel", Static).renderable)
+
+    asyncio.run(run())
+
+
+def test_textual_cockpit_revise_idea_action_resubmits() -> None:
+    async def run() -> None:
+        gateway = RecordingGateway()
+        app = FilmCockpitApp(gateway=gateway)
+        async with app.run_test(size=(140, 42)) as pilot:
+            await pilot.pause()
+            app.action_revise_idea()
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ReviseIdeaScreen)
+            screen.query_one("#ri_idea", TextArea).text = "A sharper, tighter logline."
+            screen._submit()
+            await pilot.pause()
+
+            assert gateway.submitted_ideas == ["A sharper, tighter logline."]
 
     asyncio.run(run())
 

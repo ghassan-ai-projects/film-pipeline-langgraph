@@ -32,6 +32,9 @@ class InProcessStudioGateway:
     def set_active_project(self, project_id: str) -> DashboardSummary:
         return self._service.set_active_project(project_id)
 
+    def set_runtime_mode(self, mode: str) -> str:
+        return self._service.set_runtime_mode(mode)
+
     def submit_idea(self, project_id: str, idea: str) -> MutationResult:
         return self._service.submit_idea(project_id, idea)
 
@@ -43,6 +46,9 @@ class InProcessStudioGateway:
 
     def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
         return self._service.get_validation_workspace(project_id)
+
+    def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
+        return self._service.run_validation(project_id)
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         return self._service.approve_phase(project_id)
