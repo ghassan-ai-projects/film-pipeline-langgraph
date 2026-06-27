@@ -25,6 +25,7 @@ from film_pipeline.app.services.models import (
     ReviewWorkspace,
     ValidationWorkspace,
 )
+from film_pipeline.artifacts.manifest import read_manifest
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.router import compute_actions
 from film_pipeline.schemas._base import FilmPhase
@@ -270,15 +271,39 @@ class OperatorService:
             return []
         phase_filter: FilmPhase | None = FilmPhase(phase) if phase else None
         artifacts = store.list_artifacts(str(state["project_id"]), phase_filter)
+        rows: list[dict[str, Any]] = []
+        for artifact in artifacts:
+            rows.append(
+                {
+                    "artifact_id": artifact.artifact_id,
+                    "artifact_type": str(artifact.artifact_type.value),
+                    "phase": str(artifact.phase.value),
+                    "version": artifact.version,
+                    "status": str(artifact.status.value),
+                }
+            )
+        return rows
+
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """List generated/reference assets from the project asset manifest."""
+        state = self._state_for_project(project_id)
+        root = self._artifact_root()
+        if root is None:
+            return []
+        manifest = read_manifest(str(state["project_id"]), root=root)
+        if manifest is None:
+            return []
         return [
             {
-                "artifact_id": artifact.artifact_id,
-                "artifact_type": str(artifact.artifact_type.value),
-                "phase": str(artifact.phase.value),
-                "version": artifact.version,
-                "status": str(artifact.status.value),
+                "asset_id": entry.asset_id,
+                "kind": entry.kind,
+                "scene_id": entry.scene_id,
+                "shot_id": entry.shot_id,
+                "take": entry.take,
+                "active": entry.active,
+                "path": entry.path,
             }
-            for artifact in artifacts
+            for entry in manifest.entries
         ]
 
     def inspect_artifact(

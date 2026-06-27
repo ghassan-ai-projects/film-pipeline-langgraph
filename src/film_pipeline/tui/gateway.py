@@ -68,6 +68,9 @@ class StudioGateway(Protocol):
     ) -> list[dict[str, object]]:
         """List artifacts."""
 
+    def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
+        """List generated/reference assets."""
+
     def inspect_artifact(
         self,
         artifact_id: str,

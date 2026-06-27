@@ -11,6 +11,7 @@ class AssetEntry:
     asset_id: str
     path: str
     kind: str  # reference_sheet, generated_clip, last_frame, mid_frame, audio_stem
+    scene_id: str = ""
     shot_id: str = ""
     take: int = 1
     active: bool = True
@@ -34,6 +35,12 @@ class AssetManifest:
 
     def list_by_kind(self, kind: str) -> list[AssetEntry]:
         return [e for e in self.entries if e.kind == kind]
+
+    def list_by_scene(self, scene_id: str) -> list[AssetEntry]:
+        return [e for e in self.entries if e.scene_id == scene_id]
+
+    def list_by_shot(self, shot_id: str) -> list[AssetEntry]:
+        return [e for e in self.entries if e.shot_id == shot_id]
 
 
 def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManifest | None:

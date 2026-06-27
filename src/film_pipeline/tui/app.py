@@ -204,6 +204,7 @@ class FilmCockpitApp(App[None]):
         Binding("g,c", "open_tab('checkpoints')", "Checkpoints"),
         Binding("g,u", "open_tab('audit')", "Audit"),
         Binding("a", "approve_phase", "Approve"),
+        Binding("y", "confirm_approval", "Confirm"),
         Binding("r", "request_revision", "Revise"),
         Binding("c", "add_comment", "Comment"),
         Binding("/", "toggle_command_palette", "Command"),
@@ -280,6 +281,11 @@ class FilmCockpitApp(App[None]):
                         with Horizontal():
                             yield Button("Add Comment", id="comment_button", variant="primary")
                             yield Button("Approve Phase", id="approve_button", variant="success")
+                            yield Button(
+                                "Confirm Approval",
+                                id="confirm_approve_button",
+                                variant="success",
+                            )
                             yield Button(
                                 "Request Revision",
                                 id="revision_button",
@@ -371,7 +377,14 @@ class FilmCockpitApp(App[None]):
 
     def action_approve_phase(self) -> None:
         """Prepare explicit approval confirmation for the active phase."""
+        if self.pending_confirmation == "approve":
+            self._approve_phase_now()
+            return
         self._prepare_approval_confirmation()
+
+    def action_confirm_approval(self) -> None:
+        """Commit a prepared approval confirmation."""
+        self._confirm_approval()
 
     def _approve_phase_now(self) -> None:
         """Approve the active phase after explicit operator confirmation."""
@@ -447,6 +460,8 @@ class FilmCockpitApp(App[None]):
             self.action_refresh()
         elif button_id == "approve_button":
             self.action_approve_phase()
+        elif button_id == "confirm_approve_button":
+            self.action_confirm_approval()
         elif button_id == "revision_button":
             self.action_request_revision()
         elif button_id == "comment_button":
@@ -500,8 +515,11 @@ class FilmCockpitApp(App[None]):
             self._switch_project(str(row.get("project", "")))
         if table_id == "guide_table":
             self._show_guide_step(row)
+        if table_id == "scene_table" and selection.target_id:
+            self._open_scene(selection.target_id)
+            return
         if selection.target_type == "artifact" and selection.target_id:
-            self._try_load_artifact_detail(selection)
+            self._open_artifact(selection.target_id)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Run simple command palette commands."""
@@ -526,6 +544,8 @@ class FilmCockpitApp(App[None]):
         review = self.gateway.get_review_workspace(project_id) if project_id else None
         validation = self.gateway.get_validation_workspace(project_id) if project_id else None
         artifacts = self.gateway.list_artifacts(project_id) if project_id else []
+        artifacts = self._enrich_artifact_rows(artifacts, project_id) if project_id else artifacts
+        assets = self.gateway.list_assets(project_id) if project_id else []
         checkpoints = self.gateway.list_checkpoints(project_id) if project_id else []
         providers = self.gateway.list_provider_status()
         audit_events = self.gateway.get_audit_feed(project_id, limit=30) if project_id else []
@@ -538,6 +558,7 @@ class FilmCockpitApp(App[None]):
             review=review,
             validation=validation,
             artifacts=artifacts,
+            assets=assets,
             checkpoints=checkpoints,
             providers=providers,
             audit_events=audit_events,
@@ -558,6 +579,37 @@ class FilmCockpitApp(App[None]):
                 providers=providers,
             ),
         )
+
+    def _enrich_artifact_rows(
+        self,
+        artifacts: list[dict[str, object]],
+        project_id: str,
+    ) -> list[dict[str, object]]:
+        enriched: list[dict[str, object]] = []
+        for artifact in artifacts:
+            row = dict(artifact)
+            artifact_id = str(row.get("artifact_id", ""))
+            phase = str(row.get("phase", ""))
+            version_value = row.get("version", 1)
+            try:
+                version = (
+                    version_value if isinstance(version_value, int) else int(str(version_value))
+                )
+                detail = self.gateway.inspect_artifact(artifact_id, phase, version, project_id)
+            except (ServiceError, ValueError, FileNotFoundError):
+                enriched.append(row)
+                continue
+            scene_ids = [
+                str(index_row.get("target_id", ""))
+                for index_row in build_reader_index_rows(detail)
+                if str(index_row.get("target_type", "")) == "scene"
+                and str(index_row.get("target_id", ""))
+            ]
+            if scene_ids:
+                row["scene_ids"] = sorted(set(scene_ids))
+                row["scene_count"] = len(set(scene_ids))
+            enriched.append(row)
+        return enriched
 
     def _load_dashboard(self, projects: list[ProjectListItem]) -> DashboardSummary | None:
         if self.active_project_id:
@@ -822,21 +874,28 @@ class FilmCockpitApp(App[None]):
 
     def _render_scenes(self, snapshot: CockpitSnapshot) -> None:
         self.query_one("#scene_summary", Static).update(
-            "Scene workspace derives scene targets from matrix rows and validation issues.\n"
-            "Use comments in Review to request targeted scene changes."
+            "Scene workspace derives scene targets from artifacts, matrix rows, and validation.\n"
+            "Select a row to read script, camera, references, assets, and linked issues."
         )
         self._set_table(
             "#scene_table",
             ["scene", "phase", "status", "validation", "action"],
-            build_scene_rows(snapshot.matrix_rows),
+            self._scene_rows(snapshot),
         )
 
     def _render_assets(self, snapshot: CockpitSnapshot) -> None:
-        self._set_table(
-            "#asset_table",
-            ["artifact_id", "artifact_type", "phase", "version", "status"],
-            snapshot.artifacts,
-        )
+        if snapshot.assets:
+            self._set_table(
+                "#asset_table",
+                ["asset_id", "kind", "scene_id", "shot_id", "take", "active", "path"],
+                snapshot.assets,
+            )
+        else:
+            self._set_table(
+                "#asset_table",
+                ["artifact_id", "artifact_type", "phase", "version", "status"],
+                snapshot.artifacts,
+            )
         self._set_table(
             "#asset_action_table",
             ["artifact_id", "action", "phase", "purpose", "command"],
@@ -1192,8 +1251,49 @@ class FilmCockpitApp(App[None]):
             f"mode: {dashboard.workflow_mode}/{dashboard.runtime_mode}\n"
             f"blocking validation issues: {blocking}\n\n"
             "Approval will promote the current candidate phase and resume the pipeline. "
-            "Type 'confirm approve' to continue."
+            "Click Confirm Approval, press y, or press a again to continue."
         )
+
+    def _scene_rows(self, snapshot: CockpitSnapshot) -> list[dict[str, object]]:
+        rows = build_scene_rows(snapshot.matrix_rows, artifacts=snapshot.artifacts)
+        seen = {str(row.get("scene", "")) for row in rows}
+        if snapshot.dashboard is None:
+            return rows
+        for artifact_row in snapshot.artifacts:
+            artifact_id = str(artifact_row.get("artifact_id", ""))
+            phase = str(artifact_row.get("phase", ""))
+            version_value = artifact_row.get("version", 1)
+            try:
+                version = (
+                    version_value if isinstance(version_value, int) else int(str(version_value))
+                )
+                detail = self.gateway.inspect_artifact(
+                    artifact_id,
+                    phase,
+                    version,
+                    snapshot.dashboard.project_id,
+                )
+            except (ServiceError, ValueError, FileNotFoundError):
+                continue
+            for index_row in build_reader_index_rows(detail):
+                scene_id = str(index_row.get("target_id", ""))
+                if (
+                    str(index_row.get("target_type", "")) != "scene"
+                    or not scene_id
+                    or scene_id in seen
+                ):
+                    continue
+                seen.add(scene_id)
+                rows.append(
+                    {
+                        "scene": scene_id,
+                        "phase": phase,
+                        "status": str(artifact_row.get("status", "")),
+                        "validation": "passing/unknown",
+                        "action": "open scene",
+                    }
+                )
+        return rows
 
     def _confirm_approval(self) -> None:
         if self.pending_confirmation != "approve":
@@ -1272,6 +1372,7 @@ class FilmCockpitApp(App[None]):
         if snapshot is None or snapshot.dashboard is None:
             self._update_context("No active project.")
             return
+        scene_readers: list[tuple[ArtifactDetail, ReaderView]] = []
         for artifact_row in snapshot.artifacts:
             artifact_id = str(artifact_row.get("artifact_id", ""))
             phase = str(artifact_row.get("phase", ""))
@@ -1293,21 +1394,80 @@ class FilmCockpitApp(App[None]):
                 scene_id=scene_id,
             )
             if reader.metadata.get("scene_id") == scene_id:
-                self.selected_artifact = detail
-                self.reader = reader
-                self.selected_target = TargetSelection(
-                    target_type="scene",
-                    target_id=scene_id,
-                    phase=detail.phase,
-                    source="scene_command",
-                    detail=dict(reader.metadata),
-                )
-                self.action_open_tab("scenes")
-                self._render_reader(reader)
-                self.query_one("#scene_reader", Static).update(self._reader_context(reader))
-                self._update_context(self._reader_context(reader))
-                return
+                scene_readers.append((detail, reader))
+        if scene_readers:
+            first_detail = scene_readers[0][0]
+            combined = self._combine_scene_readers(
+                scene_id,
+                scene_readers,
+                assets=snapshot.assets,
+            )
+            self.selected_artifact = first_detail
+            self.reader = combined
+            self.selected_target = TargetSelection(
+                target_type="scene",
+                target_id=scene_id,
+                phase=first_detail.phase,
+                source="scene_command",
+                detail=dict(combined.metadata),
+            )
+            self.action_open_tab("scenes")
+            self._render_reader(combined)
+            self.query_one("#scene_reader", Static).update(self._reader_context(combined))
+            self._update_context(self._reader_context(combined))
+            return
         self._update_context(f"Scene '{scene_id}' was not found in current artifacts.")
+
+    @staticmethod
+    def _combine_scene_readers(
+        scene_id: str,
+        readers: list[tuple[ArtifactDetail, ReaderView]],
+        *,
+        assets: list[dict[str, object]],
+    ) -> ReaderView:
+        first_reader = readers[0][1]
+        artifact_ids = [detail.artifact_id for detail, _reader in readers]
+        outline: list[str] = []
+        body_sections: list[str] = []
+        comments_by_id = {}
+        validation_by_key: dict[tuple[str, str, str], dict[str, object]] = {}
+        for detail, reader in readers:
+            label = f"{detail.artifact_id}:v{detail.version}"
+            outline.append(label)
+            outline.extend(f"  {line}" for line in reader.outline)
+            body_sections.append(f"## {label}\n{reader.body}")
+            for comment in reader.linked_comments:
+                comments_by_id[comment.comment_id] = comment
+            for issue in reader.linked_validation:
+                key = (
+                    str(issue.get("severity", "")),
+                    str(issue.get("validator_id", "")),
+                    str(issue.get("message", "")),
+                )
+                validation_by_key[key] = issue
+        scene_assets = [asset for asset in assets if str(asset.get("scene_id", "")) == scene_id]
+        if scene_assets:
+            outline.append("assets")
+            body_sections.append(
+                "## Manifest Assets\n" + "\n".join(_asset_line(asset) for asset in scene_assets)
+            )
+        metadata = {
+            "scene_id": scene_id,
+            "artifact_ids": artifact_ids,
+            "artifact_count": len(artifact_ids),
+            "asset_count": len(scene_assets),
+            "phase": first_reader.metadata.get("phase", ""),
+            "status": first_reader.metadata.get("status", ""),
+        }
+        return ReaderView(
+            title=first_reader.title,
+            subtitle=f"scene {scene_id} across {len(artifact_ids)} artifact(s)",
+            outline=outline,
+            body="\n\n".join(body_sections),
+            metadata=metadata,
+            linked_comments=list(comments_by_id.values()),
+            linked_validation=list(validation_by_key.values()),
+        )
 
     def _comment_from_command(self, payload: str) -> None:
         parts = [part.strip() for part in payload.split("|", maxsplit=1)]
@@ -1539,7 +1699,7 @@ class FilmCockpitApp(App[None]):
             {
                 "step": 2,
                 "goal": "Approve intake through script gates",
-                "command": "next -> approve -> confirm approve",
+                "command": "next -> approve -> approve",
                 "validation": "Repeat until current phase reaches visual_dev or blockers appear.",
             },
             {
@@ -1557,7 +1717,7 @@ class FilmCockpitApp(App[None]):
             {
                 "step": 5,
                 "goal": "Reach generation planning and generation",
-                "command": "phase gen_planning; approve; confirm approve",
+                "command": "phase gen_planning; approve; approve",
                 "validation": "Generation artifacts appear under Assets and Matrix.",
             },
             {
@@ -2145,6 +2305,17 @@ class FilmCockpitApp(App[None]):
         if isinstance(value, dict):
             return pretty(value)
         return str(value)
+
+
+def _asset_line(asset: dict[str, object]) -> str:
+    return (
+        f"- {asset.get('asset_id', '')} | "
+        f"{asset.get('kind', '')} | "
+        f"shot={asset.get('shot_id', '') or 'none'} | "
+        f"take={asset.get('take', '')} | "
+        f"active={asset.get('active', '')} | "
+        f"{asset.get('path', '')}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -16,8 +16,8 @@ import yaml
 
 from film_pipeline.mcp.contract import make_registry
 
-MANIFEST_PATH = Path("docs/product-completion/acceptance-manifest.yaml")
-PLAN_MANIFEST_PATH = Path("docs/product-completion-plan/acceptance-manifest.yaml")
+MANIFEST_PATH = Path("documentation/product-completion/acceptance-manifest.yaml")
+PLAN_MANIFEST_PATH = Path("documentation/product-completion-plan/acceptance-manifest.yaml")
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ class ProductGateReport:
         if self.plan_manifest_missing:
             lines.append(
                 "Product-completion plan manifest missing — "
-                "docs/product-completion-plan/acceptance-manifest.yaml"
+                "documentation/product-completion-plan/acceptance-manifest.yaml"
             )
         return lines
 

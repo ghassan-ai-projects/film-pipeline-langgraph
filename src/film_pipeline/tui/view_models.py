@@ -40,6 +40,7 @@ class CockpitSnapshot:
     review: ReviewWorkspace | None
     validation: ValidationWorkspace | None
     artifacts: list[dict[str, object]]
+    assets: list[dict[str, object]]
     checkpoints: list[dict[str, str]]
     providers: list[dict[str, object]]
     audit_events: list[AuditEvent]
@@ -943,13 +944,35 @@ def build_comment_thread_rows(comments: list[OperatorComment]) -> list[dict[str,
     return rows
 
 
-def build_scene_rows(matrix_rows: list[dict[str, object]]) -> list[dict[str, object]]:
+def build_scene_rows(
+    matrix_rows: list[dict[str, object]],
+    *,
+    artifacts: list[dict[str, object]] | None = None,
+) -> list[dict[str, object]]:
     """Extract scene-oriented rows from the smart matrix."""
     scene_rows: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for artifact in artifacts or []:
+        for scene_id in _scene_ids_from_summary(artifact):
+            if scene_id in seen:
+                continue
+            seen.add(scene_id)
+            scene_rows.append(
+                {
+                    "scene": scene_id,
+                    "phase": artifact.get("phase", ""),
+                    "status": artifact.get("status", ""),
+                    "validation": "passing/unknown",
+                    "action": "open scene",
+                }
+            )
     for row in matrix_rows:
         target = str(row.get("target", ""))
         kind = str(row.get("kind", ""))
         if _is_scene_id(target) or kind in {"scene", "scene_script", "scene_issue"}:
+            if target in seen:
+                continue
+            seen.add(target)
             scene_rows.append(
                 {
                     "scene": target,
@@ -1146,6 +1169,14 @@ def format_fix_draft(suggestion: ValidationFixSuggestion) -> str:
 
 def selection_from_row(source: str, row: dict[str, object]) -> TargetSelection:
     """Infer a typed selection from a rendered table row."""
+    if source == "asset_table" and row.get("asset_id"):
+        return TargetSelection(
+            target_type="asset",
+            target_id=str(row.get("asset_id", "")),
+            phase=str(row.get("scene_id", "")),
+            source=source,
+            detail=row,
+        )
     if source in {"asset_table", "review_artifacts", "dashboard_artifacts"}:
         target_id = str(row.get("artifact_id", row.get("artifact", "")))
         return TargetSelection(
@@ -1557,6 +1588,7 @@ def build_command_options(
             ]
             if _is_scene_id(value)
         }
+        | {scene_id for artifact in artifacts for scene_id in _scene_ids_from_summary(artifact)}
     )
     provider_ids = sorted(
         {
@@ -1609,6 +1641,40 @@ def _all_issues(validation: ValidationWorkspace | None) -> list[dict[str, Any]]:
     if validation is None:
         return []
     return [*validation.blocking_issues, *validation.non_blocking_issues]
+
+
+def _scene_ids_from_summary(artifact: dict[str, object]) -> list[str]:
+    raw_values: list[object] = [
+        artifact.get("scene_id", ""),
+        artifact.get("scene_ids", []),
+        artifact.get("scenes", []),
+    ]
+    body = artifact.get("body")
+    if isinstance(body, dict):
+        raw_values.extend(
+            [
+                body.get("scene_id", ""),
+                body.get("scene_ids", []),
+                body.get("scenes", []),
+            ]
+        )
+        scene_list = body.get("scene_list")
+        if isinstance(scene_list, dict):
+            raw_values.append(scene_list.get("scenes", []))
+
+    scene_ids: list[str] = []
+    for raw in raw_values:
+        if isinstance(raw, str) and _is_scene_id(raw):
+            scene_ids.append(raw)
+        elif isinstance(raw, list):
+            for item in raw:
+                if isinstance(item, str) and _is_scene_id(item):
+                    scene_ids.append(item)
+                elif isinstance(item, dict):
+                    value = str(item.get("scene_id", ""))
+                    if _is_scene_id(value):
+                        scene_ids.append(value)
+    return sorted(set(scene_ids))
 
 
 def _issues_by_target(issues: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -1792,6 +1858,12 @@ def _artifact_outline(body: dict[str, Any]) -> list[str]:
             for scene in body["scene_list"]["scenes"]
             if isinstance(scene, dict)
         ]
+    if isinstance(body.get("rows"), list):
+        return [
+            f"{row.get('scene_id', '?')}: {row.get('shot_id', row.get('story_function', ''))}"
+            for row in body["rows"]
+            if isinstance(row, dict)
+        ]
     return [str(key) for key in body]
 
 
@@ -1803,6 +1875,9 @@ def _render_artifact_body(body: dict[str, Any]) -> str:
     if isinstance(body.get("scenes"), list):
         scenes = [scene for scene in body["scenes"] if isinstance(scene, dict)]
         return "\n\n".join(_render_scene(scene) for scene in scenes)
+    if isinstance(body.get("rows"), list):
+        rows = [row for row in body["rows"] if isinstance(row, dict)]
+        return "\n\n".join(_render_scene(row) for row in rows)
     return _compact_dict(body)
 
 
@@ -1817,7 +1892,7 @@ def _artifact_scenes(body: dict[str, Any]) -> list[dict[str, Any]]:
     scene_list = body.get("scene_list", {})
     nested_scenes = scene_list.get("scenes", []) if isinstance(scene_list, dict) else []
     scenes: list[dict[str, Any]] = []
-    for container in (body.get("scenes"), nested_scenes):
+    for container in (body.get("scenes"), nested_scenes, body.get("rows")):
         if isinstance(container, list):
             scenes.extend(scene for scene in container if isinstance(scene, dict))
     return scenes
@@ -1825,16 +1900,48 @@ def _artifact_scenes(body: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _scene_outline(scene: dict[str, Any]) -> list[str]:
     outline = [str(scene.get("scene_id", "scene"))]
-    for key in ("scene_heading", "dramatic_function", "emotional_shift", "conflict", "outcome"):
+    for key in (
+        "scene_heading",
+        "dramatic_function",
+        "story_function",
+        "emotional_shift",
+        "conflict",
+        "outcome",
+        "environment",
+        "camera_profile",
+        "movement",
+        "camera_movement",
+    ):
         if scene.get(key):
             outline.append(f"{key}: {scene[key]}")
     return outline
 
 
 def _render_scene(scene: dict[str, Any]) -> str:
-    if "scene_heading" not in scene:
-        return _compact_dict(scene)
-    lines = [str(scene.get("scene_heading", ""))]
+    lines: list[str] = []
+    heading = str(scene.get("scene_heading", scene.get("scene_id", "Scene")))
+    if heading:
+        lines.append(heading)
+    for key in (
+        "dramatic_function",
+        "story_function",
+        "conflict",
+        "emotional_shift",
+        "outcome",
+        "environment",
+        "environment_zone",
+        "environment_state",
+        "lighting_state",
+        "viewpoint",
+        "camera_profile",
+        "camera_movement",
+        "movement",
+        "coverage_role",
+        "story_moment",
+        "continuity_event",
+    ):
+        if scene.get(key):
+            lines.append(f"{key}: {scene[key]}")
     for action in scene.get("action_lines", []):
         lines.append(str(action))
     for dialogue in scene.get("dialogue", []):
@@ -1848,7 +1955,20 @@ def _render_scene(scene: dict[str, Any]) -> str:
         if direction:
             lines.append(f"({direction})")
         lines.append(line)
+    _append_scene_collection(lines, "characters", scene.get("characters"))
+    _append_scene_collection(lines, "assets", scene.get("asset_refs", scene.get("assets")))
+    _append_scene_collection(lines, "references", scene.get("reference_refs"))
+    _append_scene_collection(lines, "validation", scene.get("validation_refs"))
+    if len(lines) <= 1:
+        return _compact_dict(scene)
     return "\n".join(line for line in lines if line != "")
+
+
+def _append_scene_collection(lines: list[str], label: str, value: object) -> None:
+    if isinstance(value, list) and value:
+        lines.append(f"{label}: {', '.join(str(item) for item in value)}")
+    elif isinstance(value, str) and value:
+        lines.append(f"{label}: {value}")
 
 
 def _comments_for_target(
