@@ -448,3 +448,59 @@ class TestOperatorService:
         service.runtime.services = None
         with pytest.raises(BackendOperationError, match="artifact store is not configured"):
             service.inspect_artifact("x", "constitution", project_id="inspect")
+
+    def test_run_validation_refreshes_workspace_and_audits(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="validate-me",
+                title="Validate Me",
+                idea="A courier crosses three fields to deliver one warning.",
+            )
+        )
+
+        workspace = service.run_validation("validate-me")
+
+        assert workspace.project_id == "validate-me"
+        assert isinstance(workspace.blocking_issues, list)
+        audit = service.get_audit_feed("validate-me", limit=20)
+        assert any(event.action == "run_validation" for event in audit)
+
+    def test_run_validation_requires_a_phase(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="no-phase", title="No Phase"))
+
+        with pytest.raises(BackendOperationError, match="Submit an idea"):
+            service.run_validation("no-phase")
+
+    def test_set_runtime_mode_guards_injected_runtime(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+
+        assert service.set_runtime_mode("mock") == "mock"
+        with pytest.raises(BackendOperationError, match="Runtime mode is fixed"):
+            service.set_runtime_mode("real")
+
+
+class TestProviderHealthSeeding:
+    def test_seed_mock_runtime_advertises_mock_providers(self) -> None:
+        runtime = create_runtime("mock")
+        runtime.seed_default_provider_health()
+
+        health = runtime.get_all_health()
+        assert set(health) == {"mock-image-provider", "mock-video-provider"}
+        assert all(entry["status"] == "healthy" for entry in health.values())
+
+    def test_seed_is_idempotent_and_preserves_existing(self) -> None:
+        runtime = create_runtime("mock")
+        runtime.set_provider_health("veo", "degraded", "quota")
+        runtime.seed_default_provider_health()
+
+        assert runtime.get_all_health() == {"veo": {"status": "degraded", "reason": "quota"}}
+
+    def test_seed_real_runtime_lists_live_providers(self) -> None:
+        runtime = create_runtime("real")
+        runtime.seed_default_provider_health()
+
+        health = runtime.get_all_health()
+        assert set(health) == {"seedance-openrouter", "veo-fast", "gemini-imagen-4"}
+        assert all(entry["status"] in {"healthy", "unconfigured"} for entry in health.values())

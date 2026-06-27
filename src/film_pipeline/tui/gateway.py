@@ -30,6 +30,9 @@ class StudioGateway(Protocol):
     def set_active_project(self, project_id: str) -> DashboardSummary:
         """Set the active project."""
 
+    def set_runtime_mode(self, mode: str) -> str:
+        """Switch the session runtime mode (``mock``/``real``); return active mode."""
+
     def submit_idea(self, project_id: str, idea: str) -> MutationResult:
         """Submit or replace the active project idea."""
 
@@ -41,6 +44,9 @@ class StudioGateway(Protocol):
 
     def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
         """Return validation reports and issues."""
+
+    def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
+        """Run validators on demand and return the refreshed validation workspace."""
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         """Approve the active phase."""
