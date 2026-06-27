@@ -1,6 +1,6 @@
 """Application bootstrap, health checks, product gates, smoke tests, version metadata.
 
-See docs/implementation-plan/16-productization-release.md
+See documentation/implementation-plan/16-productization-release.md
 """
 
 from __future__ import annotations

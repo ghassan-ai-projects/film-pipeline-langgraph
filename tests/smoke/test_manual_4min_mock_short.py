@@ -1,6 +1,5 @@
 """Manual reference smoke test for a 4-minute mock short film.
 
-This is the executable companion to ``documentation/manual-4min-mock-short.md``.
 It drives the real MCP workflow through the supported pre-generation path and
 stops before actual clip execution.
 """

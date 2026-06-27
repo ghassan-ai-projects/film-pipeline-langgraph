@@ -131,13 +131,10 @@ for mock-mode project creation.
 
 Practical docs live in [documentation/README.md](documentation/README.md).
 
-- Product overview: [documentation/product-overview.md](documentation/product-overview.md)
-- Getting started: [documentation/getting-started.md](documentation/getting-started.md)
-- Repository structure: [documentation/repository-structure.md](documentation/repository-structure.md)
-- Code onboarding: [documentation/onboarding.md](documentation/onboarding.md)
-- Manual 4-minute mock short: [documentation/manual-4min-mock-short.md](documentation/manual-4min-mock-short.md)
+- Architecture blueprint: [documentation/architecture-blueprint.md](documentation/architecture-blueprint.md)
+- OpenClaw MCP operator guide: [documentation/openclaw-mcp-operator-guide.md](documentation/openclaw-mcp-operator-guide.md)
 
-Hard acceptance and product-completion docs remain in [docs/product-completion/README.md](docs/product-completion/README.md) and [docs/product-completion-plan/README.md](docs/product-completion-plan/README.md).
+Hard acceptance and product-completion docs live in [documentation/product-completion/README.md](documentation/product-completion/README.md) and [documentation/product-completion-plan/README.md](documentation/product-completion-plan/README.md).
 
 ## MCP Surface
 

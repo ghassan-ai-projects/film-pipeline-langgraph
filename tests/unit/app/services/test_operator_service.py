@@ -11,6 +11,7 @@ from film_pipeline.app.runtime import create_runtime
 from film_pipeline.app.services.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.app.services.models import OperatorCommentRequest, ProjectCreateRequest
 from film_pipeline.app.services.operator import OperatorService
+from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -406,6 +407,36 @@ class TestOperatorService:
         assert detail.artifact_id == "film_constitution"
         assert detail.phase == "constitution"
         assert detail.body["theme"] == "Memory heals through action."
+
+    def test_list_assets_returns_scene_and_shot_manifest_rows(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="assets", title="Assets"))
+        assert service.runtime.services is not None
+        manifest = AssetManifest(project_id="assets")
+        manifest.add(
+            AssetEntry(
+                asset_id="clip_SC_001_shot_001_take_001",
+                path="07-generated-assets/scenes/SC_001/shot_001/take_001.mp4",
+                kind="generated_clip",
+                scene_id="SC_001",
+                shot_id="shot_001",
+                take=1,
+                active=True,
+            )
+        )
+        write_manifest(manifest, root=service.runtime.services.artifact_store._root)
+
+        assert service.list_assets("assets") == [
+            {
+                "asset_id": "clip_SC_001_shot_001_take_001",
+                "kind": "generated_clip",
+                "scene_id": "SC_001",
+                "shot_id": "shot_001",
+                "take": 1,
+                "active": True,
+                "path": "07-generated-assets/scenes/SC_001/shot_001/take_001.mp4",
+            }
+        ]
 
     def test_inspect_artifact_validates_inputs_and_store(self, tmp_path: Path) -> None:
         service = _service(tmp_path)
