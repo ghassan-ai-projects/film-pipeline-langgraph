@@ -71,6 +71,56 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
+# Upstream context a phase cannot do good work without. If one of these refs is
+# set but failed to load, the agent ran context-blind — block instead of
+# silently shipping weak output.
+_CRITICAL_CONTEXT: dict[str, list[str]] = {
+    "development": ["constitution_ref"],
+    "script": ["constitution_ref", "treatment_ref", "scene_list_ref"],
+}
+
+
+def _critical_context_issues(state: dict[str, Any], phase: str) -> list[dict[str, Any]]:
+    """Blocking issues for critical upstream context that failed to load."""
+    required = _CRITICAL_CONTEXT.get(phase, [])
+    if not required:
+        return []
+    failures = set(state.get("_context_load_failures", []) or [])
+    issues: list[dict[str, Any]] = []
+    for key in required:
+        ref = str(state.get(key, "") or "").strip()
+        if ref and key in failures:
+            issues.append(
+                {
+                    "issue_id": f"ctx_unavailable_{key}",
+                    "severity": "blocking",
+                    "code": "critical_context_unavailable",
+                    "message": (
+                        f"Required upstream artifact '{key}' ({ref}) could not be "
+                        f"loaded for the {phase} phase. The agent would write "
+                        "context-blind; resolve the upstream artifact before continuing."
+                    ),
+                }
+            )
+    return issues
+
+
+def _coerce_user_runtime(state: dict[str, Any]) -> int:
+    """Return the user-supplied target runtime (seconds), or 0 if not provided.
+
+    Seeded into state before the graph runs by the create/submit entry points.
+    When > 0 it is authoritative and overrides any model-estimated runtime.
+    """
+    raw = state.get("target_runtime_seconds")
+    if raw is None or isinstance(raw, bool):
+        return 0
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return value if value > 0 else 0
+
+
 def _require_human_approval(state: dict[str, Any]) -> bool:
     """Read ``require_human_approval`` from resolved config.
 
@@ -328,9 +378,17 @@ def _run_agent(
             "validator_issues": "",
             "target_runtime_seconds": "",
             "film_type": "",
+            "pacing_style": "",
+            "target_scene_count": "",
+            "min_scene_count": "",
+            "target_shot_count": "",
             "budget_cap": "",
             "preferred_providers": "",
+            "provider_pricing": "",
         }
+        from film_pipeline.providers.pricing import pricing_prompt_block
+
+        context_vars["provider_pricing"] = pricing_prompt_block()
         for key in (
             "constitution_ref",
             "treatment_ref",
@@ -344,8 +402,15 @@ def _run_agent(
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
-        # Populate numeric/typed state fields
-        for key in ("target_runtime_seconds", "film_type"):
+        # Populate numeric/typed state fields (incl. Story Scope Contract targets)
+        for key in (
+            "target_runtime_seconds",
+            "film_type",
+            "pacing_style",
+            "target_scene_count",
+            "min_scene_count",
+            "target_shot_count",
+        ):
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
@@ -383,6 +448,7 @@ def _run_agent(
                 context_vars["script_scene_count"] = "0"
 
         resolved_profile = _AGENT_PROFILE_MAP.get(resolved_agent_id, "operations_triage")
+        model_overrides = _model_overrides_for(state, resolved_profile)
         model_output, template_id, _ = services.prompt_runner.run_from_template(
             template,
             kb,
@@ -390,6 +456,7 @@ def _run_agent(
             context_vars=context_vars,
             model_profile=resolved_profile,
             agent_id=resolved_agent_id,
+            model_overrides=model_overrides,
         )
     else:
         # Non-critical agent: generic RCTCO assembly (not in critical path)
@@ -559,6 +626,7 @@ def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
 
 _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
     "ProjectProfile": "project_config",
+    "StoryScopeContract": "project_config",
     "FilmConstitution": "film_constitution",
     "Treatment": "treatment",
     "SceneList": "scene_list",
@@ -628,8 +696,39 @@ def _inject_artifact_context(
                 data,
                 max_chars=_artifact_context_max_chars(state),
             )
-        except (FileNotFoundError, ValueError, KeyError):
+        except (FileNotFoundError, ValueError, KeyError) as exc:
+            # Do NOT swallow silently — a missing upstream artifact means the
+            # agent would run context-blind (a hidden cause of weak output).
+            # Log it and record the failure so the phase gate can block.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Could not load upstream artifact for prompt context: %s=%s (%s)",
+                ref_key,
+                ref,
+                exc,
+            )
+            failures = state.setdefault("_context_load_failures", [])
+            if ref_key not in failures:
+                failures.append(ref_key)
             continue
+
+
+def _model_overrides_for(state: dict[str, Any], model_profile: str) -> dict[str, Any] | None:
+    """Return per-profile model overrides from resolved config, if any.
+
+    Profiles may declare a ``model_profiles`` map to swap the model or sampling
+    params for a logical profile (e.g. festival → a stronger model for the
+    ``creative_writer`` profile) without any code change.
+    """
+    resolved_config = state.get("resolved_config", {})
+    if not isinstance(resolved_config, dict):
+        return None
+    model_profiles = resolved_config.get("model_profiles", {})
+    if not isinstance(model_profiles, dict):
+        return None
+    override = model_profiles.get(model_profile)
+    return override if isinstance(override, dict) and override else None
 
 
 def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) -> None:
@@ -692,31 +791,86 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     }
     new_refs: list[str] = []
 
+    # User-supplied runtime (seeded before the graph ran) is authoritative.
+    user_runtime = _coerce_user_runtime(new_state)
+    runtime_clause = (
+        f" The user REQUIRES a target runtime of {user_runtime} seconds — adopt it "
+        "exactly as target_runtime_seconds; do not estimate your own."
+        if user_runtime > 0
+        else " Estimate a realistic runtime from the story's scope."
+    )
+
     result = _run_agent(
         new_state,
         agent_id="intake-classifier-agent",
         phase="intake",
         task=(
             "Classify the user's film idea: determine genre, tone, audience, "
-            "realistic runtime estimate, aspect ratio, and delivery format. "
+            "aspect ratio, and delivery format." + runtime_clause + " "
             "Identify risks and produce a structured project profile."
         ),
     )
     profile = result.get("profile")
     if profile is not None:
+        # Authority override: lock the user's runtime onto the saved profile so the
+        # persisted artifact and downstream state agree.
+        if user_runtime > 0 and hasattr(profile, "model_copy"):
+            profile = profile.model_copy(update={"target_runtime_seconds": user_runtime})
         ref = _save_artifact(new_state, profile, "project_profile", "intake")
         if ref:
             updates["profile_ref"] = ref
             new_refs.append(ref)
-        if hasattr(profile, "target_runtime_seconds"):
+        if user_runtime > 0:
+            updates["target_runtime_seconds"] = user_runtime
+        elif hasattr(profile, "target_runtime_seconds"):
             updates["target_runtime_seconds"] = profile.target_runtime_seconds
         if hasattr(profile, "film_type"):
             updates["film_type"] = str(profile.film_type)
+
+    # ── Derive the Story Scope Contract (deterministic, forward-looking) ──
+    _attach_scope_contract(new_state, updates, new_refs)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
     return updates
+
+
+def _attach_scope_contract(
+    state: dict[str, Any],
+    updates: dict[str, Any],
+    new_refs: list[str],
+) -> None:
+    """Compute and persist the Story Scope Contract from runtime x film style.
+
+    Uses the authoritative runtime (user value already locked into ``updates``),
+    the classified film_type, and the profile's pacing. Stores concrete scene/
+    shot targets in state so prep prompts and gates can enforce them.
+    """
+    from film_pipeline.graph.scope_contract import derive_scope_contract, pacing_from_config
+
+    runtime = int(
+        updates.get("target_runtime_seconds", state.get("target_runtime_seconds", 0)) or 0
+    )
+    if runtime <= 0:
+        return
+    film_type = str(updates.get("film_type", state.get("film_type", "narrative")) or "narrative")
+    pacing = pacing_from_config(state.get("resolved_config"))
+
+    contract = derive_scope_contract(
+        project_id=str(state.get("project_id", "")),
+        target_runtime_seconds=runtime,
+        film_type=film_type,
+        pacing=pacing,
+    )
+    ref = _save_artifact(state, contract, "scope_contract", "intake")
+    if ref:
+        updates["scope_contract_ref"] = ref
+        new_refs.append(ref)
+    updates["pacing_style"] = contract.pacing_style
+    updates["target_scene_count"] = contract.target_scene_count
+    updates["min_scene_count"] = contract.min_scene_count
+    updates["target_shot_count"] = contract.target_shot_count
 
 
 # ── Constitution ─────────────────────────────────────────────────────────────
@@ -787,11 +941,26 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             updates["treatment_ref"] = ref
             new_refs.append(ref)
+
+    # ── Gate: surface context-blind runs (WS-I) ──────────────────────────
+    node_issues: list[dict[str, Any]] = _critical_context_issues(new_state, "development")
+
     if scene_list is not None:
         ref = _save_artifact(new_state, scene_list, "scene_list", "development")
         if ref:
             updates["scene_list_ref"] = ref
             new_refs.append(ref)
+
+        # ── Gate S: scene count must meet the Scope Contract floor ────────
+        from film_pipeline.graph.orchestrator_validators import validate_scene_count
+
+        scene_count = len(getattr(scene_list, "scenes", []) or [])
+        node_issues += validate_scene_count(new_state, scene_count)
+
+    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
+    if fresh_issues:
+        updates["issues"] = fresh_issues
+        _withhold_auto_approval_on_blockers(updates, auto, fresh_issues)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
@@ -830,16 +999,81 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             updates["story_bible_ref"] = ref
             new_refs.append(ref)
+
+    # ── Gate: surface context-blind runs (WS-I) ──────────────────────────
+    node_issues: list[dict[str, Any]] = _critical_context_issues(new_state, "script")
+
     if script is not None:
         ref = _save_artifact(new_state, script, "script", "script")
         if ref:
             updates["script_ref"] = ref
             new_refs.append(ref)
 
+        # ── Gate S: script must preserve development scenes and meet floor ─
+        from film_pipeline.graph.orchestrator_validators import (
+            validate_script_scene_preservation,
+        )
+
+        script_scene_count = len(getattr(script, "scenes", []) or [])
+        dev_scene_count = _development_scene_count(new_state)
+        node_issues += validate_script_scene_preservation(
+            new_state, script_scene_count, dev_scene_count
+        )
+
+    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
+    if fresh_issues:
+        updates["issues"] = fresh_issues
+        _withhold_auto_approval_on_blockers(updates, auto, fresh_issues)
+
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
     return updates
+
+
+def _withhold_auto_approval_on_blockers(
+    updates: dict[str, Any],
+    auto: bool,
+    issues: list[dict[str, Any]],
+) -> None:
+    """In auto/headless mode, do not auto-approve a phase that has blocking issues.
+
+    Without this, a blocking gate issue is ignored in headless runs because the
+    phase auto-approves and ``await_approval`` short-circuits. Setting
+    ``approved=False`` routes the phase into the bounded repair loop instead;
+    ``await_approval``/``after_approval`` terminate the run cleanly on stall
+    rather than pausing on a human interrupt.
+    """
+    if not auto:
+        return
+    if any(i.get("severity") == "blocking" for i in issues):
+        updates["approved"] = False
+        updates["human_approval_required"] = False
+
+
+def _development_scene_count(state: dict[str, Any]) -> int:
+    """Count scenes in the approved development scene list (0 if unavailable)."""
+    services = _get_services(state)
+    ref = str(state.get("scene_list_ref", "") or "")
+    if services is None or not ref:
+        return 0
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        parsed = _parse_ref(ref)
+        data = services.artifact_store.load(
+            str(state.get("project_id", "")),
+            FilmPhase("development"),
+            parsed.artifact_id,
+            parsed.version,
+        )
+    except (FileNotFoundError, ValueError, KeyError):
+        return 0
+    if isinstance(data, dict):
+        scenes = data.get("scenes", [])
+        if isinstance(scenes, list):
+            return len(scenes)
+    return 0
 
 
 # ── Remaining phases (flag-only, pending agent implementations) ──────────────
@@ -1672,6 +1906,18 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         allowed_actions.append("escalate")
     else:
         allowed_actions.append("request_revision")
+
+    # ── Headless / auto-approve: no human to gate on ───────────────────
+    # Approve when clean; otherwise hand off to the bounded repair loop
+    # (after_approval routes not-approved + issues → repair) and let
+    # after_approval end the run cleanly on stall — never pause on interrupt().
+    if not _require_human_approval(state):
+        if blocking_count == 0:
+            return approve_phase_node(state)
+        new_state = deepcopy(state)
+        new_state["approved"] = False
+        new_state["human_approval_required"] = False
+        return new_state
 
     payload: dict[str, Any] = {
         "project_id": state.get("project_id", ""),

@@ -17,6 +17,7 @@ class ProjectCreateRequest:
     runtime_mode: str = "mock"
     workflow_mode: str = "manual"
     project_kind: str = "production"
+    target_runtime_seconds: int = 0  # 0 = not specified; intake will estimate
 
 
 @dataclass(frozen=True)

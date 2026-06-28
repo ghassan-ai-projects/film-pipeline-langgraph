@@ -117,8 +117,9 @@ def validate_execution_brief(
         )
         return issues
 
-    pacing_avgs = {"slow_cinema": 12.5, "standard": 7.5, "dynamic": 3.5}
-    avg_duration = pacing_avgs.get(brief.pacing_style, 7.5)
+    from film_pipeline.graph.scope_contract import avg_shot_duration_for
+
+    avg_duration = avg_shot_duration_for(brief.pacing_style)
     estimated_runtime = total_shots * avg_duration
     target = brief.target_runtime_seconds
     tolerance = target * 0.20  # 20% tolerance for estimated runtime
@@ -194,6 +195,70 @@ def validate_execution_brief(
             except (FileNotFoundError, ValueError, KeyError):
                 pass
 
+    return issues
+
+
+# ── Gate S: Prep structural checks (development + script) ──────────────────
+
+
+def _blocking_with_id(issue_id: str, code: str, message: str) -> dict[str, Any]:
+    return {
+        "issue_id": issue_id,
+        "severity": IssueSeverity.BLOCKING.value,
+        "code": code,
+        "message": message,
+    }
+
+
+def validate_scene_count(state: dict[str, Any], scene_count: int) -> list[dict[str, Any]]:
+    """Gate S (development): scene count must meet the Scope Contract floor.
+
+    Directly targets the "not enough scenes" symptom: the development phase can
+    no longer pass with a thin scene list when the contract demands more.
+    """
+    min_scenes = int(state.get("min_scene_count", 0) or 0)
+    target = int(state.get("target_scene_count", 0) or 0)
+    runtime = int(state.get("target_runtime_seconds", 0) or 0)
+    if min_scenes and scene_count < min_scenes:
+        return [
+            _blocking_with_id(
+                "gate_s_scene_floor",
+                "scene_count_below_floor",
+                f"Development produced {scene_count} scenes, but the Scope Contract "
+                f"requires at least {min_scenes} (target {target}) for the {runtime}s "
+                "runtime. Add scenes that earn their place until the floor is met.",
+            )
+        ]
+    return []
+
+
+def validate_script_scene_preservation(
+    state: dict[str, Any],
+    script_scene_count: int,
+    development_scene_count: int,
+) -> list[dict[str, Any]]:
+    """Gate S (script): the script must not silently drop or under-fill scenes."""
+    issues: list[dict[str, Any]] = []
+    min_scenes = int(state.get("min_scene_count", 0) or 0)
+    if development_scene_count and script_scene_count < development_scene_count:
+        issues.append(
+            _blocking_with_id(
+                "gate_s_script_dropped",
+                "script_dropped_scenes",
+                f"Script has {script_scene_count} scenes but the approved development "
+                f"scene list has {development_scene_count}. Every scene intent must "
+                "become at least one script scene — none may be dropped or merged away.",
+            )
+        )
+    if min_scenes and script_scene_count < min_scenes:
+        issues.append(
+            _blocking_with_id(
+                "gate_s_script_floor",
+                "script_below_floor",
+                f"Script has {script_scene_count} scenes, below the Scope Contract "
+                f"floor of {min_scenes}.",
+            )
+        )
     return issues
 
 

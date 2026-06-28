@@ -35,6 +35,12 @@ class StudioGraphState(TypedDict, total=False):
     idea: str
     film_type: str
     target_runtime_seconds: int
+    # ── Story Scope Contract (derived at intake, enforced in prep) ────────
+    pacing_style: str
+    target_scene_count: int
+    min_scene_count: int
+    target_shot_count: int
+    scope_contract_ref: str
     profile_ref: str
     constitution_ref: str
     treatment_ref: str

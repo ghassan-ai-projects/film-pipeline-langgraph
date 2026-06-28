@@ -28,12 +28,25 @@ class TestModelRouter:
         model = router.fallback("creative_writer")
         assert model in ("deepseek/deepseek-chat", "google/gemini-3-flash-preview")
 
+    def test_fallback_unknown_profile_raises(self) -> None:
+        router = ModelRouter()
+        with pytest.raises(ModelResolutionError, match="not defined"):
+            router.fallback("nonexistent")
+
     def test_cost_ranked(self) -> None:
         router = ModelRouter()
         ranked = router.cost_ranked("creative_writer")
         assert len(ranked) == 2
         assert "google/gemini-3-flash-preview" in ranked
         assert "deepseek/deepseek-chat" in ranked
+
+    def test_cost_ranked_unknown_profile_returns_empty(self) -> None:
+        router = ModelRouter()
+        assert router.cost_ranked("nonexistent") == []
+
+    def test_cost_ranked_same_primary_and_fallback(self) -> None:
+        router = ModelRouter(profiles={"solo": {"primary": "x/y", "fallback": "x/y"}})
+        assert router.cost_ranked("solo") == ["x/y"]
 
     def test_cost_ranked_single(self) -> None:
         router = ModelRouter()
@@ -72,6 +85,11 @@ class TestModelRouter:
         assert temperature == 0.1
         assert top_p == 0.95
         assert freq_pen == 0.0
+
+    def test_resolve_model_params_unknown_profile_raises(self) -> None:
+        router = ModelRouter()
+        with pytest.raises(ModelResolutionError, match="not defined"):
+            router.resolve_model_params("nonexistent")
 
     def test_custom_profiles(self) -> None:
         router = ModelRouter(

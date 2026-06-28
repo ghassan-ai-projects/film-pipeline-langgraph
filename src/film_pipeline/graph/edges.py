@@ -12,6 +12,16 @@ from typing import Any
 from film_pipeline.graph.router import compute_actions
 
 
+def _is_auto_mode(state: dict[str, Any]) -> bool:
+    """True when the resolved config disables human approval (headless runs)."""
+    cfg = state.get("resolved_config", {})
+    if isinstance(cfg, dict):
+        studio = cfg.get("studio", {})
+        if isinstance(studio, dict):
+            return not bool(studio.get("require_human_approval", True))
+    return False
+
+
 def after_phase(state: dict[str, Any]) -> str:
     """Route after a phase node completes.
 
@@ -96,6 +106,11 @@ def after_approval(state: dict[str, Any]) -> str:
                     ),
                 }
             )
+        # Headless mode has no human to intervene — end the run with the blocker
+        # recorded instead of looping the approval gate forever.
+        if _is_auto_mode(state):
+            state["completed"] = True
+            return "end"
         return "await_approval"
 
     if state.get("issues"):

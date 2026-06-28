@@ -126,14 +126,26 @@ class ModelRouter:
     def list_profiles(self) -> list[str]:
         return list(self.profiles.keys())
 
-    def resolve_model_params(self, profile_name: str) -> tuple[str, int, float, float, float]:
-        """Resolve full model params.
+    def resolve_model_params(
+        self,
+        profile_name: str,
+        overrides: dict[str, object] | None = None,
+    ) -> tuple[str, int, float, float, float]:
+        """Resolve full model params, applying per-call config overrides.
+
+        ``overrides`` (from a project's resolved config, keyed under
+        ``model_profiles.<profile_name>``) may set any of ``primary``,
+        ``max_tokens``, ``temperature``, ``top_p``, ``frequency_penalty`` to
+        change the model/params for this profile without a code edit.
 
         Returns (model_id, max_tokens, temperature, top_p, frequency_penalty).
         """
-        profile = self.profiles.get(profile_name)
-        if profile is None:
+        base = self.profiles.get(profile_name)
+        if base is None:
             raise ModelResolutionError(f"Model profile '{profile_name}' is not defined.")
+        profile = dict(base)
+        if overrides:
+            profile.update({k: v for k, v in overrides.items() if v is not None})
         model_id = str(profile["primary"])
         max_tokens = int(str(profile.get("max_tokens", 4096)))
         temperature = float(str(profile.get("temperature", 0.7)))

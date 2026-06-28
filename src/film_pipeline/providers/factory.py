@@ -103,10 +103,8 @@ def _default_capabilities(provider_id: str, provider_type: str) -> ProviderCapab
 
 
 def _default_cost_profile(provider_id: str) -> CostProfile:
-    if provider_id == "seedance-openrouter":
-        return CostProfile(unit="second", estimated_rate_usd=0.18)
-    if provider_id in {"veo-fast", "veo-3.1-fast"}:
-        return CostProfile(unit="second", estimated_rate_usd=0.10)
-    if provider_id in {"gemini-imagen-4", "imagen-4"}:
-        return CostProfile(unit="image", estimated_rate_usd=0.0)
+    from film_pipeline.providers.pricing import PROVIDER_PRICING, rate_for, unit_for
+
+    if provider_id in PROVIDER_PRICING:
+        return CostProfile(unit=unit_for(provider_id), estimated_rate_usd=rate_for(provider_id))
     return CostProfile(unit="second", estimated_rate_usd=0.0)

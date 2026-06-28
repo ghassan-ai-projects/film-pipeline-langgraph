@@ -83,6 +83,11 @@ class OperatorService:
         state["project_kind"] = self._normalize_project_kind(request.project_kind)
         self.runtime.set_active(request.project_id.strip())
 
+        if request.target_runtime_seconds > 0:
+            # User-supplied runtime is authoritative — seed it before intake runs
+            # so the classifier adopts it instead of guessing.
+            state["target_runtime_seconds"] = request.target_runtime_seconds
+
         if request.idea.strip():
             state["idea"] = request.idea.strip()
             state = self.runtime.run_graph(state)
@@ -122,13 +127,21 @@ class OperatorService:
         self.runtime.set_active(project_id)
         return self.get_dashboard(project_id)
 
-    def submit_idea(self, project_id: str, idea: str) -> MutationResult:
-        """Attach an idea to a project and run intake."""
+    def submit_idea(
+        self, project_id: str, idea: str, target_runtime_seconds: int = 0
+    ) -> MutationResult:
+        """Attach an idea to a project and run intake.
+
+        ``target_runtime_seconds`` (> 0) is the user-supplied expected length and
+        is authoritative — seeded before intake so the classifier adopts it.
+        """
         if not idea.strip():
             raise BackendOperationError("idea is required.")
         state = self._require_project(project_id)
         self.runtime.set_active(project_id)
         state["idea"] = idea.strip()
+        if target_runtime_seconds > 0:
+            state["target_runtime_seconds"] = target_runtime_seconds
         next_state = self.runtime.run_graph(state)
         self.runtime.projects[project_id] = next_state
         return MutationResult(
