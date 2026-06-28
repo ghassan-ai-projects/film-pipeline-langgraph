@@ -1223,13 +1223,15 @@ def _orchestrator_review() -> PromptTemplate:
             "{consistency_warnings}"
         ),
         constraints=(
-            "Choose exactly ONE action. If revising, give ONE specific suggestion — "
-            "not a list. Reference actual elements from the output (scene IDs, "
-            "character names, specific descriptions). Say what to preserve, not just "
-            "what to change. Be creative and editorial, not mechanical. "
-            "Do not reject output just because a number is lower than some formula — "
-            "assess whether the content can support the runtime. "
-            "If the content is rich enough despite fewer scenes, approve it."
+            "Choose exactly ONE action. Judge on craft — story, character, emotion, "
+            "scene quality — not mechanics. Reference actual elements from the output "
+            "(scene IDs, character names, specific descriptions) and say what to "
+            "preserve, not just what to change. When revising, lead with the single "
+            "most impactful change; you may note secondary issues briefly. "
+            "Structural floors (scene count, runtime) are enforced separately by the "
+            "Scope Contract and its gates — do NOT approve away a structural shortfall, "
+            "and do not spend your judgment re-deriving counts. Focus on whether the "
+            "writing is good enough to earn the runtime it fills."
         ),
         output_format=(
             "Respond with valid JSON:\n"
