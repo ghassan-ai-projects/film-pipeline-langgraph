@@ -960,6 +960,7 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
     fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
     if fresh_issues:
         updates["issues"] = fresh_issues
+        _withhold_auto_approval_on_blockers(updates, auto, fresh_issues)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
@@ -1022,11 +1023,32 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
     fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
     if fresh_issues:
         updates["issues"] = fresh_issues
+        _withhold_auto_approval_on_blockers(updates, auto, fresh_issues)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
     return updates
+
+
+def _withhold_auto_approval_on_blockers(
+    updates: dict[str, Any],
+    auto: bool,
+    issues: list[dict[str, Any]],
+) -> None:
+    """In auto/headless mode, do not auto-approve a phase that has blocking issues.
+
+    Without this, a blocking gate issue is ignored in headless runs because the
+    phase auto-approves and ``await_approval`` short-circuits. Setting
+    ``approved=False`` routes the phase into the bounded repair loop instead;
+    ``await_approval``/``after_approval`` terminate the run cleanly on stall
+    rather than pausing on a human interrupt.
+    """
+    if not auto:
+        return
+    if any(i.get("severity") == "blocking" for i in issues):
+        updates["approved"] = False
+        updates["human_approval_required"] = False
 
 
 def _development_scene_count(state: dict[str, Any]) -> int:
@@ -1884,6 +1906,18 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         allowed_actions.append("escalate")
     else:
         allowed_actions.append("request_revision")
+
+    # ── Headless / auto-approve: no human to gate on ───────────────────
+    # Approve when clean; otherwise hand off to the bounded repair loop
+    # (after_approval routes not-approved + issues → repair) and let
+    # after_approval end the run cleanly on stall — never pause on interrupt().
+    if not _require_human_approval(state):
+        if blocking_count == 0:
+            return approve_phase_node(state)
+        new_state = deepcopy(state)
+        new_state["approved"] = False
+        new_state["human_approval_required"] = False
+        return new_state
 
     payload: dict[str, Any] = {
         "project_id": state.get("project_id", ""),
