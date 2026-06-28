@@ -71,6 +71,40 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
+# Upstream context a phase cannot do good work without. If one of these refs is
+# set but failed to load, the agent ran context-blind — block instead of
+# silently shipping weak output.
+_CRITICAL_CONTEXT: dict[str, list[str]] = {
+    "development": ["constitution_ref"],
+    "script": ["constitution_ref", "treatment_ref", "scene_list_ref"],
+}
+
+
+def _critical_context_issues(state: dict[str, Any], phase: str) -> list[dict[str, Any]]:
+    """Blocking issues for critical upstream context that failed to load."""
+    required = _CRITICAL_CONTEXT.get(phase, [])
+    if not required:
+        return []
+    failures = set(state.get("_context_load_failures", []) or [])
+    issues: list[dict[str, Any]] = []
+    for key in required:
+        ref = str(state.get(key, "") or "").strip()
+        if ref and key in failures:
+            issues.append(
+                {
+                    "issue_id": f"ctx_unavailable_{key}",
+                    "severity": "blocking",
+                    "code": "critical_context_unavailable",
+                    "message": (
+                        f"Required upstream artifact '{key}' ({ref}) could not be "
+                        f"loaded for the {phase} phase. The agent would write "
+                        "context-blind; resolve the upstream artifact before continuing."
+                    ),
+                }
+            )
+    return issues
+
+
 def _coerce_user_runtime(state: dict[str, Any]) -> int:
     """Return the user-supplied target runtime (seconds), or 0 if not provided.
 
@@ -658,7 +692,21 @@ def _inject_artifact_context(
                 data,
                 max_chars=_artifact_context_max_chars(state),
             )
-        except (FileNotFoundError, ValueError, KeyError):
+        except (FileNotFoundError, ValueError, KeyError) as exc:
+            # Do NOT swallow silently — a missing upstream artifact means the
+            # agent would run context-blind (a hidden cause of weak output).
+            # Log it and record the failure so the phase gate can block.
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Could not load upstream artifact for prompt context: %s=%s (%s)",
+                ref_key,
+                ref,
+                exc,
+            )
+            failures = state.setdefault("_context_load_failures", [])
+            if ref_key not in failures:
+                failures.append(ref_key)
             continue
 
 
@@ -889,6 +937,10 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             updates["treatment_ref"] = ref
             new_refs.append(ref)
+
+    # ── Gate: surface context-blind runs (WS-I) ──────────────────────────
+    node_issues: list[dict[str, Any]] = _critical_context_issues(new_state, "development")
+
     if scene_list is not None:
         ref = _save_artifact(new_state, scene_list, "scene_list", "development")
         if ref:
@@ -899,11 +951,11 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
         from film_pipeline.graph.orchestrator_validators import validate_scene_count
 
         scene_count = len(getattr(scene_list, "scenes", []) or [])
-        gate_issues = [
-            i for i in validate_scene_count(new_state, scene_count) if _is_new_issue(i, state)
-        ]
-        if gate_issues:
-            updates["issues"] = gate_issues
+        node_issues += validate_scene_count(new_state, scene_count)
+
+    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
+    if fresh_issues:
+        updates["issues"] = fresh_issues
 
     if new_refs:
         updates["artifact_refs"] = new_refs
@@ -942,6 +994,10 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
         if ref:
             updates["story_bible_ref"] = ref
             new_refs.append(ref)
+
+    # ── Gate: surface context-blind runs (WS-I) ──────────────────────────
+    node_issues: list[dict[str, Any]] = _critical_context_issues(new_state, "script")
+
     if script is not None:
         ref = _save_artifact(new_state, script, "script", "script")
         if ref:
@@ -955,15 +1011,13 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
         script_scene_count = len(getattr(script, "scenes", []) or [])
         dev_scene_count = _development_scene_count(new_state)
-        gate_issues = [
-            i
-            for i in validate_script_scene_preservation(
-                new_state, script_scene_count, dev_scene_count
-            )
-            if _is_new_issue(i, state)
-        ]
-        if gate_issues:
-            updates["issues"] = gate_issues
+        node_issues += validate_script_scene_preservation(
+            new_state, script_scene_count, dev_scene_count
+        )
+
+    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
+    if fresh_issues:
+        updates["issues"] = fresh_issues
 
     if new_refs:
         updates["artifact_refs"] = new_refs
