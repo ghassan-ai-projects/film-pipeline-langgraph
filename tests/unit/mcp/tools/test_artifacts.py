@@ -191,34 +191,24 @@ def test_inspect_scene_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 
 
 def test_list_shots_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # NOTE: the shot_bible phase persists its artifact under artifact_id
-    # "shot_matrix" (with a "rows" key), but list_shots looks up artifact_id
-    # "shot_bible" with a "shots"/"scenes" key. This mismatch is pre-existing
-    # in the production code (present before this refactor, moved verbatim),
-    # so the lookup always misses and list_shots falls back to its
-    # empty-list path even after the shot bible has been generated. This
-    # test locks in that actual (not aspirational) behavior.
     rt = _build_runtime_through_shot_bible(tmp_path, "proj-artifacts-12")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
     result = asyncio.run(list_shots({}))
     assert result["ok"] is True
-    assert result["shots"] == []
-    assert result["note"] == "Shot bible not yet generated."
+    shots = cast(list[dict[str, object]], result["shots"])
+    assert len(shots) >= 1
+    assert shots[0]["shot_id"] == "shot_0001"
 
 
 def test_inspect_shot_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    # See note in test_list_shots_success: the shot_bible/shot_matrix
-    # artifact id mismatch means inspect_shot can never find a real shot
-    # today, so it always reports "Shot bible not yet generated." This locks
-    # in that pre-existing behavior rather than asserting a success path the
-    # current implementation cannot reach.
     rt = _build_runtime_through_shot_bible(tmp_path, "proj-artifacts-13")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(inspect_shot({"shot_id": "S001"}))
-    assert result["ok"] is False
-    assert result["error"] == "Shot bible not yet generated."
+    result = asyncio.run(inspect_shot({"shot_id": "shot_0001"}))
+    assert result["ok"] is True
+    shot = cast(dict[str, object], result["shot"])
+    assert shot["shot_id"] == "shot_0001"
 
 
 def test_inspect_shot_not_found(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
