@@ -10,6 +10,36 @@ not good enough) at the root by replacing "measure the story after the fact" wit
 **forward, profile-driven, user-anchored Scope Contract**, and by removing dead
 config so profiles mean what they say.
 
+---
+
+## Build status (autonomous session, 2026-06-28)
+
+Implemented on this branch, each its own commit; full unit + integration suite
+(1150 tests) green.
+
+| Workstream | Status | Commit theme |
+| --- | --- | --- |
+| WS-K — creator prompt overhaul + render fix | ✅ done | `feat(prompts)` |
+| WS-A — runtime as user input | ✅ done | `feat(intake)` |
+| WS-B/C/D — Scope Contract + prep gates | ✅ done | `feat(scope)` |
+| WS-G — config-driven model routing | ✅ done | `feat(routing)` |
+| WS-I — fail loud on context-blind runs | ✅ done | `feat(prep)` |
+| WS-H — single-source pricing | ✅ done | `feat(pricing)` |
+| WS-F (review) — orchestrator no longer approves shortfalls | ✅ done | `fix(review)` |
+| WS-F (style fields) — wire/remove dialogue_weight, visual_style, camera_default | ⏸ deferred | low value |
+| WS-J — multi-model review for story phases | ⏸ deferred | large surface |
+| WS-E — variable act structure (un-hardcode 3 acts) | ⏸ deferred | schema-touching, risky |
+
+**Deferred rationale:** WS-E changes the `ActMap` schema and ripples through agents,
+prompts, and validators — too risky to land unattended; kept 3-act with
+contract-driven counts. WS-J (true multi-model panel for the story) is a larger
+build; the single-model orchestrator review was instead corrected so it no longer
+undermines the gates. The remaining dead style fields are low-value tidy.
+
+Default decisions taken (you can override): runtime = explicit user field, intake
+honors it, no silent 300 override; no-runtime-given → intake still estimates (no hard
+error); 3-act kept.
+
 **Guiding decisions (confirmed with the user):**
 - **Runtime is user input.** The operator supplies the expected length *with the
   idea*. It is the single authority. No profile constant, no LLM guess, no silent
