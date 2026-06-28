@@ -94,8 +94,8 @@ class TestSeedanceAdapter:
     def test_cancel(self, entry: ProviderRegistryEntry) -> None:
         provider = _make_provider(entry)
         provider._http_opener = _mock_opener({"ok": True})
-        job = provider.submit(provider.build_payload("test"), "S001")
         with mock.patch("time.sleep"):
+            job = provider.submit(provider.build_payload("test"), "S001")
             assert provider.cancel(job) is True
             assert job.status == "cancelled"
 
