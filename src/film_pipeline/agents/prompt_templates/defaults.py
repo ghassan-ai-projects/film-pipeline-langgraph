@@ -163,12 +163,19 @@ def _intake_classifier() -> PromptTemplate:
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
             "Classify the user's film idea and produce a detailed project profile. "
-            "Determine the genre, target audience, realistic runtime estimate "
-            "(based on story complexity), aspect ratio, and delivery mode. "
+            "Determine the genre, target audience, aspect ratio, and delivery mode. "
+            "RUNTIME: if a 'Requested runtime' is given in context, you MUST set "
+            "target_runtime_seconds to exactly that value — it is the user's "
+            "decision, not yours. Only when it is blank do you estimate a realistic "
+            "runtime from the story's scope. "
             "Identify any ambiguities and flag risks: IP conflicts, "
             "sensitivity concerns, budget concerns, production complexity."
         ),
-        context_template=("User idea: {idea}\nProject ID: {project_id}\nKB refs: {kb_refs}"),
+        context_template=(
+            "User idea: {idea}\n"
+            "Requested runtime (seconds, blank = you estimate): {target_runtime_seconds}\n"
+            "Project ID: {project_id}\nKB refs: {kb_refs}"
+        ),
         constraints=(
             "Genre classification must be specific (not just 'sci-fi' but "
             "'grounded sci-fi drama' or 'cyberpunk noir thriller'). "
