@@ -344,6 +344,10 @@ def _run_agent(
             "validator_issues": "",
             "target_runtime_seconds": "",
             "film_type": "",
+            "pacing_style": "",
+            "target_scene_count": "",
+            "min_scene_count": "",
+            "target_shot_count": "",
             "budget_cap": "",
             "preferred_providers": "",
         }
@@ -360,8 +364,15 @@ def _run_agent(
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
-        # Populate numeric/typed state fields
-        for key in ("target_runtime_seconds", "film_type"):
+        # Populate numeric/typed state fields (incl. Story Scope Contract targets)
+        for key in (
+            "target_runtime_seconds",
+            "film_type",
+            "pacing_style",
+            "target_scene_count",
+            "min_scene_count",
+            "target_shot_count",
+        ):
             val = state.get(key)
             if val:
                 context_vars[key] = str(val)
@@ -575,6 +586,7 @@ def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
 
 _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
     "ProjectProfile": "project_config",
+    "StoryScopeContract": "project_config",
     "FilmConstitution": "film_constitution",
     "Treatment": "treatment",
     "SceneList": "scene_list",
@@ -744,10 +756,50 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
         if hasattr(profile, "film_type"):
             updates["film_type"] = str(profile.film_type)
 
+    # ── Derive the Story Scope Contract (deterministic, forward-looking) ──
+    _attach_scope_contract(new_state, updates, new_refs)
+
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
     return updates
+
+
+def _attach_scope_contract(
+    state: dict[str, Any],
+    updates: dict[str, Any],
+    new_refs: list[str],
+) -> None:
+    """Compute and persist the Story Scope Contract from runtime x film style.
+
+    Uses the authoritative runtime (user value already locked into ``updates``),
+    the classified film_type, and the profile's pacing. Stores concrete scene/
+    shot targets in state so prep prompts and gates can enforce them.
+    """
+    from film_pipeline.graph.scope_contract import derive_scope_contract, pacing_from_config
+
+    runtime = int(
+        updates.get("target_runtime_seconds", state.get("target_runtime_seconds", 0)) or 0
+    )
+    if runtime <= 0:
+        return
+    film_type = str(updates.get("film_type", state.get("film_type", "narrative")) or "narrative")
+    pacing = pacing_from_config(state.get("resolved_config"))
+
+    contract = derive_scope_contract(
+        project_id=str(state.get("project_id", "")),
+        target_runtime_seconds=runtime,
+        film_type=film_type,
+        pacing=pacing,
+    )
+    ref = _save_artifact(state, contract, "scope_contract", "intake")
+    if ref:
+        updates["scope_contract_ref"] = ref
+        new_refs.append(ref)
+    updates["pacing_style"] = contract.pacing_style
+    updates["target_scene_count"] = contract.target_scene_count
+    updates["min_scene_count"] = contract.min_scene_count
+    updates["target_shot_count"] = contract.target_shot_count
 
 
 # ── Constitution ─────────────────────────────────────────────────────────────
@@ -824,6 +876,16 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
             updates["scene_list_ref"] = ref
             new_refs.append(ref)
 
+        # ── Gate S: scene count must meet the Scope Contract floor ────────
+        from film_pipeline.graph.orchestrator_validators import validate_scene_count
+
+        scene_count = len(getattr(scene_list, "scenes", []) or [])
+        gate_issues = [
+            i for i in validate_scene_count(new_state, scene_count) if _is_new_issue(i, state)
+        ]
+        if gate_issues:
+            updates["issues"] = gate_issues
+
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
@@ -867,10 +929,52 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
             updates["script_ref"] = ref
             new_refs.append(ref)
 
+        # ── Gate S: script must preserve development scenes and meet floor ─
+        from film_pipeline.graph.orchestrator_validators import (
+            validate_script_scene_preservation,
+        )
+
+        script_scene_count = len(getattr(script, "scenes", []) or [])
+        dev_scene_count = _development_scene_count(new_state)
+        gate_issues = [
+            i
+            for i in validate_script_scene_preservation(
+                new_state, script_scene_count, dev_scene_count
+            )
+            if _is_new_issue(i, state)
+        ]
+        if gate_issues:
+            updates["issues"] = gate_issues
+
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates)
     return updates
+
+
+def _development_scene_count(state: dict[str, Any]) -> int:
+    """Count scenes in the approved development scene list (0 if unavailable)."""
+    services = _get_services(state)
+    ref = str(state.get("scene_list_ref", "") or "")
+    if services is None or not ref:
+        return 0
+    try:
+        from film_pipeline.schemas._base import FilmPhase
+
+        parsed = _parse_ref(ref)
+        data = services.artifact_store.load(
+            str(state.get("project_id", "")),
+            FilmPhase("development"),
+            parsed.artifact_id,
+            parsed.version,
+        )
+    except (FileNotFoundError, ValueError, KeyError):
+        return 0
+    if isinstance(data, dict):
+        scenes = data.get("scenes", [])
+        if isinstance(scenes, list):
+            return len(scenes)
+    return 0
 
 
 # ── Remaining phases (flag-only, pending agent implementations) ──────────────
