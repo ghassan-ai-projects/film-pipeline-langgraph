@@ -1,0 +1,127 @@
+"""Review package generation, approval, and revision tools."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import film_pipeline.mcp.tools as tools_pkg
+
+from .helpers import _error, _ok, _services
+
+
+async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
+    """Build a review package for the current phase with orchestrator recommendations.
+
+    Returns a structured ReviewPackage instead of a plain artifact list.
+    The package includes candidate vs approved diffs, validation results,
+    open issues, risks, cost impact, and recommended next actions.
+    """
+    rt = tools_pkg.get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+    phase = str(args.get("phase", active.get("current_phase", "")))
+    if not phase:
+        return _error("No phase specified and no active phase.")
+    project_id = str(active["project_id"])
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        fp = FilmPhase(phase)
+    except ValueError:
+        return _error(f"Unknown phase: {phase}")
+
+    store = _services(rt).artifact_store
+    artifacts = store.list_artifacts(project_id, fp)
+    artifact_list = [
+        {
+            "artifact_id": a.artifact_id,
+            "artifact_type": a.artifact_type,
+            "phase": str(a.phase.value),
+            "version": a.version,
+            "status": a.status,
+        }
+        for a in artifacts
+    ]
+
+    # Build a review package using the ReviewPackageGenerator
+    from film_pipeline.graph import orchestrator_state as ostate
+    from film_pipeline.graph.router import compute_actions
+    from film_pipeline.review.generator import ReviewPackageGenerator
+
+    ostate.ensure_orchestrator_state(active)
+
+    router_result = compute_actions(active)
+    blocking_issues = [i for i in active.get("issues", []) if i.get("severity") == "blocking"]
+
+    try:
+        generator = ReviewPackageGenerator()
+        pkg = generator.build(
+            project_id=project_id,
+            phase=fp,
+            summary=f"Review package for {phase} phase",
+            current_artifacts=[a["artifact_id"] for a in artifact_list],
+            validation_results=[
+                r.get("validator_id", "") for r in active.get("_validation_reports", [])
+            ],
+            open_issues=[i.get("message", "") for i in blocking_issues],
+            orchestrator_recommendation=_build_orchestrator_recommendation(active, router_result),
+            has_blocking_issues=len(blocking_issues) > 0,
+        )
+    except Exception:
+        # Fallback to simple artifact list if generator fails
+        return _ok(artifacts=artifact_list, phase=phase)
+
+    return _ok(
+        review_package=pkg.model_dump(mode="json"),
+        phase=phase,
+        router=router_result.__dict__,
+    )
+
+
+def _build_orchestrator_recommendation(state: dict[str, Any], router_result: Any) -> str:
+    """Build a human-readable orchestrator recommendation for a review package."""
+    action = router_result.next_action
+    if action == "wait_for_human":
+        return f"Review the {router_result.human_gate} package and approve or request revision."
+    if action == "handle_blockers":
+        return "Blocking issues detected. Resolve before advancing."
+    if action == "escalate_to_human":
+        return "Pipeline requires human decision — budget, provider, or quality threshold reached."
+    if action == "escalate_to_failure_handler":
+        return "Provider error requires triage by failure-handling agent."
+    if action == "continue_unrelated_work":
+        return (
+            "Generation is blocked (provider health or failure), "
+            "but planning and validation can continue."
+        )
+    if action == "present_review_package":
+        return "Review the candidate artifacts and approve or request revision."
+    if action == "revise":
+        return "Pending revision must be resolved before approval."
+    if action.startswith("advance_to_"):
+        next_phase = action[len("advance_to_") :]
+        return f"Phase complete. Ready to advance to {next_phase}."
+    return f"Current action: {action}."
+
+
+async def approve_phase(args: dict[str, object]) -> dict[str, object]:
+    rt = tools_pkg.get_runtime()
+    try:
+        state = rt.approve_phase()
+        return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
+    except ValueError as e:
+        return _error(str(e))
+
+
+async def request_revision(args: dict[str, object]) -> dict[str, object]:
+    rt = tools_pkg.get_runtime()
+    try:
+        state = rt.request_revision(note=str(args.get("note", "")))
+        return _ok(
+            project_id=state["project_id"],
+            current_phase=state.get("current_phase"),
+            issues=state.get("issues", []),
+        )
+    except ValueError as e:
+        return _error(str(e))
