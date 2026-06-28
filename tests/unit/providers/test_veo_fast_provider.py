@@ -40,6 +40,17 @@ def test_api_key_requires_google_key(
         provider._api_key()
 
 
+def test_api_key_returns_key_when_present(
+    entry: ProviderRegistryEntry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "film_pipeline.providers.adapters.veo_fast.lookup", lambda _id: "secret-key"
+    )
+    provider = VeoFastProvider(entry)
+
+    assert provider._api_key() == "secret-key"
+
+
 def test_build_payload_uses_prompt_duration_and_aspect_ratio(entry: ProviderRegistryEntry) -> None:
     provider = VeoFastProvider(entry)
 

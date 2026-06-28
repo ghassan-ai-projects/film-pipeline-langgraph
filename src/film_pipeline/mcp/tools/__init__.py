@@ -113,6 +113,10 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
         state["resolved_config_sources"] = resolved_config["sources"]
         state["config_conflicts"] = conflicts
+        user_runtime = _coerce_runtime_arg(args)
+        if user_runtime > 0:
+            # User-supplied expected length is authoritative for the whole pipeline.
+            state["target_runtime_seconds"] = user_runtime
         _register_project_providers(
             rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
@@ -126,6 +130,31 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         return _ok(project_id=project_id, state=state)
     except ValueError as e:
         return _error(str(e))
+
+
+def _coerce_runtime_arg(args: dict[str, object]) -> int:
+    """Read the user-supplied expected length from tool args.
+
+    Accepts ``target_runtime_seconds`` (preferred) or ``target_runtime_minutes``.
+    Returns 0 when unspecified (intake will then estimate from the idea).
+    """
+    raw_seconds = args.get("target_runtime_seconds")
+    if raw_seconds is not None:
+        try:
+            seconds = int(float(str(raw_seconds)))
+            if seconds > 0:
+                return seconds
+        except (TypeError, ValueError):
+            pass
+    raw_minutes = args.get("target_runtime_minutes")
+    if raw_minutes is not None:
+        try:
+            minutes = float(str(raw_minutes))
+            if minutes > 0:
+                return int(minutes * 60)
+        except (TypeError, ValueError):
+            pass
+    return 0
 
 
 def _collect_profile_providers(args: dict[str, object]) -> list[str]:
@@ -271,6 +300,9 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
         return _error("idea is required")
     # Inject the idea and run the graph through intake_node
     active["idea"] = idea
+    user_runtime = _coerce_runtime_arg(args)
+    if user_runtime > 0:
+        active["target_runtime_seconds"] = user_runtime
     state = rt.run_graph(active)
     # Update stored state
     rt.projects[active["project_id"]] = state

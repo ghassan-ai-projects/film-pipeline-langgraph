@@ -50,6 +50,7 @@ dev = [
   "pre-commit>=4.3",
   "pytest>=8.4",
   "pytest-cov>=6.2",
+  "pytest-xdist>=3.8.0",
   "ruff>=0.12",
 ]
 
@@ -68,6 +69,7 @@ include = [
 [tool.pytest.ini_options]
 addopts = [
   "-q",
+  "-n", "auto",
   "--import-mode=importlib",
   "--strict-config",
   "--strict-markers",
@@ -75,6 +77,7 @@ addopts = [
   "--cov=film_pipeline",
   "--cov-report=term-missing",
   "--cov-fail-under=90",
+  "--cov-precision=2",
 ]
 testpaths = ["tests"]
 xfail_strict = true

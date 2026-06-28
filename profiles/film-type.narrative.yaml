@@ -2,7 +2,6 @@ film_type: narrative
 writing_style: drama
 visual_style: naturalistic
 pacing: character_driven
-target_runtime_seconds: 300
 camera_default: observational
 story_structure: three_act
 dialogue_weight: medium

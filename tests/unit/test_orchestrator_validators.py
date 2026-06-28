@@ -301,12 +301,14 @@ class TestApprovalEnforcement:
 
 class TestValidateExecutionBrief:
     def test_passes_valid_brief(self) -> None:
+        # 33 shots at slow_cinema (avg 9.0s) ~= 297s, within tolerance of 300s.
+        # Counts come from the single-source density model (graph.scope_contract).
         brief = _brief(
             runtime=300,
             movements=[
-                MovementSpec(movement_id="act_1", shot_count=8, duration_range_seconds=(10, 15)),
-                MovementSpec(movement_id="act_2", shot_count=8, duration_range_seconds=(10, 15)),
-                MovementSpec(movement_id="act_3", shot_count=8, duration_range_seconds=(10, 15)),
+                MovementSpec(movement_id="act_1", shot_count=11, duration_range_seconds=(8, 10)),
+                MovementSpec(movement_id="act_2", shot_count=11, duration_range_seconds=(8, 10)),
+                MovementSpec(movement_id="act_3", shot_count=11, duration_range_seconds=(8, 10)),
             ],
         )
         state: dict[str, Any] = {}

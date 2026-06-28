@@ -66,4 +66,6 @@ class VeoFastProvider(BaseProviderAdapter):
 
     def estimate_cost(self, duration: float, model: str | None = None) -> float:
         _ = model
-        return duration * 0.10  # placeholder rate
+        from film_pipeline.providers.pricing import rate_for
+
+        return duration * rate_for("veo-3.1-fast")
