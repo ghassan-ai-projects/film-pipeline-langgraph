@@ -27,6 +27,9 @@ class TestCredentials:
     def test_env_var_for_unknown_provider(self) -> None:
         assert _env_var_for("unknown") is None
 
+    def test_lookup_returns_none_for_unknown_provider(self) -> None:
+        assert lookup("totally-unknown-provider") is None
+
     def test_lookup_returns_key(self) -> None:
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-1234"}):
             assert lookup("seedance-openrouter") == "sk-test-1234"

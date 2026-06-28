@@ -9,12 +9,15 @@ Seedance's $0.18/s was duplicated in three places.
 
 from __future__ import annotations
 
-# unit is "second" for video, "image" for stills.
+# unit is "second" for video, "image" for stills. "veo-3.1-fast"/"veo-fast" and
+# "gemini-imagen-4"/"imagen-4" are alias ids for the same real provider, so they
+# intentionally share one label — pricing_prompt_block() dedupes by label so the
+# planner prompt shows one price line per real provider, not one per alias.
 PROVIDER_PRICING: dict[str, dict[str, object]] = {
     "seedance-openrouter": {"unit": "second", "rate_usd": 0.18, "label": "Seedance 2.0"},
-    "veo-3.1-fast": {"unit": "second", "rate_usd": 0.10, "label": "Veo 3.1 Fast (rate TBD)"},
+    "veo-3.1-fast": {"unit": "second", "rate_usd": 0.10, "label": "Veo Fast (rate TBD)"},
     "veo-fast": {"unit": "second", "rate_usd": 0.10, "label": "Veo Fast (rate TBD)"},
-    "gemini-imagen-4": {"unit": "image", "rate_usd": 0.02, "label": "Gemini Imagen 4 (fast)"},
+    "gemini-imagen-4": {"unit": "image", "rate_usd": 0.02, "label": "Imagen 4 (fast)"},
     "imagen-4": {"unit": "image", "rate_usd": 0.02, "label": "Imagen 4 (fast)"},
 }
 
