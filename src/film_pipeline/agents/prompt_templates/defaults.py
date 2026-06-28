@@ -56,9 +56,9 @@ def load_all(reg: PromptTemplateRegistry) -> None:
 
 def _structure_extractor() -> PromptTemplate:
     return PromptTemplate(
-        template_id="structure-extractor-v2",
+        template_id="structure-extractor-v3",
         agent_id="structure-extractor-agent",
-        version=2,
+        version=3,
         role=(
             "You are the structure-extractor-agent (Film Structure Extractor). "
             "Your role is to extract the structural metadata from an approved "
@@ -108,13 +108,11 @@ def _structure_extractor() -> PromptTemplate:
         constraints=(
             "Every movement MUST use act_1, act_2, act_3 as movement_ids — "
             "match the 3-act structure in the StoryBible. "
-            "Shot counts MUST be positive integers. "
-            "Total shots across all acts * avg_shot_duration MUST approximately "
-            "equal target_runtime_seconds (±15%). "
-            "If the story states explicit shot counts, use them exactly. "
-            "If not, derive counts from: scene distribution * runtime / avg_duration. "
-            "Duration ranges must match the pacing style — "
-            "slow_cinema=[10,15], standard=[5,10], dynamic=[2,5]. "
+            "Shot counts MUST be positive integers, and their sum across all "
+            "movements MUST equal the Scope Contract total_shots exactly — do not "
+            "derive your own total or apply a tolerance. "
+            "Per-shot duration ranges must stay within a single generatable clip "
+            "(<= 10s): slow_cinema=[8,10], standard=[5,8], dynamic=[3,5]. "
             "Mandatory anchors must include every named character, key object, "
             "and visual motif mentioned in the story text. "
             "Environment progression must be ordered chronologically. "
@@ -130,19 +128,19 @@ def _structure_extractor() -> PromptTemplate:
             "      {\n"
             '        "movement_id": "act_1",\n'
             '        "shot_count": 5,\n'
-            '        "duration_range_seconds": [10, 15],\n'
+            '        "duration_range_seconds": [8, 10],\n'
             '        "description": "Setup — barren wasteland"\n'
             "      },\n"
             "      {\n"
             '        "movement_id": "act_2",\n'
             '        "shot_count": 5,\n'
-            '        "duration_range_seconds": [10, 15],\n'
+            '        "duration_range_seconds": [8, 10],\n'
             '        "description": "Confrontation — green valley"\n'
             "      },\n"
             "      {\n"
             '        "movement_id": "act_3",\n'
             '        "shot_count": 4,\n'
-            '        "duration_range_seconds": [10, 15],\n'
+            '        "duration_range_seconds": [8, 10],\n'
             '        "description": "Resolution — golden field"\n'
             "      }\n"
             "    ],\n"
@@ -158,9 +156,9 @@ def _structure_extractor() -> PromptTemplate:
 
 def _intake_classifier() -> PromptTemplate:
     return PromptTemplate(
-        template_id="intake-classifier-v2",
+        template_id="intake-classifier-v3",
         agent_id="intake-classifier-agent",
-        version=2,
+        version=3,
         role="You are the intake-classifier-agent (Intake Classifier). "
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
@@ -640,9 +638,9 @@ def _shot_bible_creator() -> PromptTemplate:
 
 def _generation_planner() -> PromptTemplate:
     return PromptTemplate(
-        template_id="generation-planner-v2",
+        template_id="generation-planner-v3",
         agent_id="provider-planning-agent",
-        version=2,
+        version=3,
         role="You are the generation-planner-agent (Generation Planner). "
         "Your role is to plan the generation batch for the shot matrix, "
         "respecting the structural requirements in the Execution Brief.",
@@ -1185,9 +1183,9 @@ def _delivery_completeness_validator() -> PromptTemplate:
 
 def _orchestrator_review() -> PromptTemplate:
     return PromptTemplate(
-        template_id="orchestrator-review-v1",
+        template_id="orchestrator-review-v2",
         agent_id="orchestrator-agent",
-        version=1,
+        version=2,
         role=(
             "You are the orchestrator-agent (Autonomous Quality Reviewer). "
             "Your role is to review creative output against the film's target "
