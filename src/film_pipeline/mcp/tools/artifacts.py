@@ -77,9 +77,9 @@ async def list_shots(args: dict[str, object]) -> dict[str, object]:
 
     try:
         data = _services(rt).artifact_store.load(
-            project_id, FilmPhase("shot_bible"), "shot_bible", 1
+            project_id, FilmPhase("shot_bible"), "shot_matrix", 1
         )
-        shots = data.get("shots", data.get("scenes", []))
+        shots = data.get("rows", [])
         return _ok(shots=shots)
     except (FileNotFoundError, ValueError):
         return _ok(shots=[], note="Shot bible not yet generated.")
@@ -99,9 +99,9 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
 
     try:
         data = _services(rt).artifact_store.load(
-            project_id, FilmPhase("shot_bible"), "shot_bible", 1
+            project_id, FilmPhase("shot_bible"), "shot_matrix", 1
         )
-        shots = data.get("shots", data.get("scenes", []))
+        shots = data.get("rows", [])
         match = next(
             (s for s in shots if str(s.get("shot_id", s.get("scene_id", ""))) == shot_id), None
         )
