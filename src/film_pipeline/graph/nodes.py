@@ -71,6 +71,22 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
+def _coerce_user_runtime(state: dict[str, Any]) -> int:
+    """Return the user-supplied target runtime (seconds), or 0 if not provided.
+
+    Seeded into state before the graph runs by the create/submit entry points.
+    When > 0 it is authoritative and overrides any model-estimated runtime.
+    """
+    raw = state.get("target_runtime_seconds")
+    if raw is None or isinstance(raw, bool):
+        return 0
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return value if value > 0 else 0
+
+
 def _require_human_approval(state: dict[str, Any]) -> bool:
     """Read ``require_human_approval`` from resolved config.
 
@@ -692,23 +708,38 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     }
     new_refs: list[str] = []
 
+    # User-supplied runtime (seeded before the graph ran) is authoritative.
+    user_runtime = _coerce_user_runtime(new_state)
+    runtime_clause = (
+        f" The user REQUIRES a target runtime of {user_runtime} seconds — adopt it "
+        "exactly as target_runtime_seconds; do not estimate your own."
+        if user_runtime > 0
+        else " Estimate a realistic runtime from the story's scope."
+    )
+
     result = _run_agent(
         new_state,
         agent_id="intake-classifier-agent",
         phase="intake",
         task=(
             "Classify the user's film idea: determine genre, tone, audience, "
-            "realistic runtime estimate, aspect ratio, and delivery format. "
+            "aspect ratio, and delivery format." + runtime_clause + " "
             "Identify risks and produce a structured project profile."
         ),
     )
     profile = result.get("profile")
     if profile is not None:
+        # Authority override: lock the user's runtime onto the saved profile so the
+        # persisted artifact and downstream state agree.
+        if user_runtime > 0 and hasattr(profile, "model_copy"):
+            profile = profile.model_copy(update={"target_runtime_seconds": user_runtime})
         ref = _save_artifact(new_state, profile, "project_profile", "intake")
         if ref:
             updates["profile_ref"] = ref
             new_refs.append(ref)
-        if hasattr(profile, "target_runtime_seconds"):
+        if user_runtime > 0:
+            updates["target_runtime_seconds"] = user_runtime
+        elif hasattr(profile, "target_runtime_seconds"):
             updates["target_runtime_seconds"] = profile.target_runtime_seconds
         if hasattr(profile, "film_type"):
             updates["film_type"] = str(profile.film_type)
