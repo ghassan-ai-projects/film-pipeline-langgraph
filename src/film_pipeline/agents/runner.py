@@ -129,6 +129,7 @@ class PromptRunner:
         *,
         model_profile: str = "operations_triage",
         agent_id: str | None = None,
+        model_overrides: dict[str, object] | None = None,
     ) -> dict[str, Any]:
         """Call the model. Uses mock if a canned response is registered.
 
@@ -169,7 +170,7 @@ class PromptRunner:
 
         _logger = logging.getLogger(__name__)
         model_id, max_tokens, temperature, top_p, frequency_penalty = (
-            self.model_router.resolve_model_params(model_profile)
+            self.model_router.resolve_model_params(model_profile, model_overrides)
         )
         rendered_prompt = prompt.rendered
 
@@ -238,9 +239,14 @@ class PromptRunner:
             else:
                 raise
 
-        # --- Attempt 3: fallback model ---
+        # --- Attempt 3: fallback model (config override wins) ---
         try:
-            fallback_model = self.model_router.fallback(model_profile)
+            override_fallback = (model_overrides or {}).get("fallback")
+            fallback_model = (
+                str(override_fallback)
+                if override_fallback
+                else self.model_router.fallback(model_profile)
+            )
         except Exception:
             fallback_model = model_id
         if fallback_model == model_id:
@@ -313,11 +319,14 @@ class PromptRunner:
         model_profile: str = "operations_triage",
         context_vars: dict[str, str] | None = None,
         agent_id: str | None = None,
+        model_overrides: dict[str, object] | None = None,
     ) -> tuple[dict[str, Any], str, str]:
         """Run using a dedicated prompt template. Returns (output, template_id, model_profile).
 
         This is the REQUIRED path for critical-agent execution. Generic RCTCO
         assembly via ``run()`` is forbidden for critical-path agents.
+        ``model_overrides`` lets a project's resolved config swap the model/params
+        for this profile without a code edit.
         """
         # Render the dedicated template
         rendered_text = template.render(**(context_vars or {}))
@@ -332,7 +341,12 @@ class PromptRunner:
         )
         prompt.rendered = rendered_text
 
-        raw = self.call_model(prompt, model_profile=model_profile, agent_id=agent_id)
+        raw = self.call_model(
+            prompt,
+            model_profile=model_profile,
+            agent_id=agent_id,
+            model_overrides=model_overrides,
+        )
         if not isinstance(raw, dict):
             raise ValueError(f"Model output is not a dict: {type(raw)}")
         return raw, template.template_id, model_profile

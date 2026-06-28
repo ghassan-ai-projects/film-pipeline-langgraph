@@ -410,6 +410,7 @@ def _run_agent(
                 context_vars["script_scene_count"] = "0"
 
         resolved_profile = _AGENT_PROFILE_MAP.get(resolved_agent_id, "operations_triage")
+        model_overrides = _model_overrides_for(state, resolved_profile)
         model_output, template_id, _ = services.prompt_runner.run_from_template(
             template,
             kb,
@@ -417,6 +418,7 @@ def _run_agent(
             context_vars=context_vars,
             model_profile=resolved_profile,
             agent_id=resolved_agent_id,
+            model_overrides=model_overrides,
         )
     else:
         # Non-critical agent: generic RCTCO assembly (not in critical path)
@@ -658,6 +660,23 @@ def _inject_artifact_context(
             )
         except (FileNotFoundError, ValueError, KeyError):
             continue
+
+
+def _model_overrides_for(state: dict[str, Any], model_profile: str) -> dict[str, Any] | None:
+    """Return per-profile model overrides from resolved config, if any.
+
+    Profiles may declare a ``model_profiles`` map to swap the model or sampling
+    params for a logical profile (e.g. festival → a stronger model for the
+    ``creative_writer`` profile) without any code change.
+    """
+    resolved_config = state.get("resolved_config", {})
+    if not isinstance(resolved_config, dict):
+        return None
+    model_profiles = resolved_config.get("model_profiles", {})
+    if not isinstance(model_profiles, dict):
+        return None
+    override = model_profiles.get(model_profile)
+    return override if isinstance(override, dict) and override else None
 
 
 def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) -> None:
