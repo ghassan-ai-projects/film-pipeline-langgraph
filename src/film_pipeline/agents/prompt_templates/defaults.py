@@ -666,12 +666,7 @@ def _generation_planner() -> PromptTemplate:
         ),
         constraints=(
             "Shots must be grouped by provider compatibility. "
-            "Use these approximate prices for cost estimates:\n"
-            "- Seedance 2.0: $0.18/second (fast generation)\n"
-            "- Veo 3.1 Fast: $0.50/second (standard quality)\n"
-            "- Veo 3.1 Lite: $0.25/second (budget option)\n"
-            "- Gemini Imagen: $0.02/image (reference generation only)\n"
-            "Cost per shot = duration_seconds * provider_rate.\n"
+            "{provider_pricing}\n"
             "Dependency ordering must prevent generation of a shot before "
             "its prerequisites. Flag shots that exceed budget or require "
             "unavailable providers.\n"

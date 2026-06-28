@@ -158,7 +158,9 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
 
     def estimate_cost(self, duration: float, model: str | None = None) -> float:
         _ = model
-        return duration * 0.18  # $0.18/second for Seedance 2.0
+        from film_pipeline.providers.pricing import rate_for
+
+        return duration * rate_for("seedance-openrouter")
 
     def cancel(self, job: ProviderJob) -> bool:
         try:
