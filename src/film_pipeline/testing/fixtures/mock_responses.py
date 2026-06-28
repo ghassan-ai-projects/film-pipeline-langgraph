@@ -16,10 +16,14 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                     "title": "Demo Film",
                     "aliases": [],
                 },
-                "target_runtime_seconds": 300,
+                # A compact 2-scene / 2-shot demo (~20s of footage). The runtime is
+                # set to match that content so it satisfies the Story Scope Contract
+                # floor — the old value (300s for 2 scenes) was the exact thin-output
+                # mismatch the contract now guards against.
+                "target_runtime_seconds": 20,
                 "aspect_ratio": "16:9",
                 "delivery_modes": ["mp4"],
-                "classified_input": "A demo film project.",
+                "classified_input": "A compact demo film project.",
             }
         },
         "film-constitution-agent": {
