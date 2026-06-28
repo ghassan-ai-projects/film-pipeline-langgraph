@@ -384,7 +384,11 @@ def _run_agent(
             "target_shot_count": "",
             "budget_cap": "",
             "preferred_providers": "",
+            "provider_pricing": "",
         }
+        from film_pipeline.providers.pricing import pricing_prompt_block
+
+        context_vars["provider_pricing"] = pricing_prompt_block()
         for key in (
             "constitution_ref",
             "treatment_ref",
