@@ -42,6 +42,15 @@ def test_submit_idea_success() -> None:
     assert result["current_phase"] == "intake"
 
 
+def test_submit_idea_propagates_target_scene_count() -> None:
+    _make_active_project("intake-scene-count-1")
+    asyncio.run(submit_idea({"idea": "A 12-scene mystery.", "target_scene_count": 12}))
+    rt = gr()
+    active = rt.get_active()
+    assert active is not None
+    assert active.get("target_scene_count") == 12
+
+
 def test_get_intake_analysis_requires_active_project() -> None:
     rt = gr()
     rt.active_project_id = ""

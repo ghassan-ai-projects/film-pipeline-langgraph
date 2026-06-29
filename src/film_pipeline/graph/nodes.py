@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import contextvars
 import json
+import re
 from copy import deepcopy
 from typing import Any, cast
 
@@ -42,6 +43,62 @@ def _get_template_registry() -> Any:
     from film_pipeline.agents.prompt_templates.registry import get_registry
 
     return get_registry()
+
+
+_NUMBER_WORDS: dict[str, int] = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
+
+
+def _extract_target_scene_count(state: dict[str, Any]) -> int | None:
+    """Return an explicit user scene-count if one was provided or mentioned.
+
+    Priority:
+    1. A value already set in state (e.g. from the ``submit_idea`` tool).
+    2. A number in the idea text such as ``12 scenes`` or ``twelve scenes``.
+    """
+    explicit = state.get("target_scene_count")
+    if isinstance(explicit, int) and explicit > 0:
+        return explicit
+
+    idea = str(state.get("idea", ""))
+    if not idea:
+        return None
+
+    # Digits first: "12 scenes", "12-scene", "12 scenes,"
+    digit_match = re.search(r"(\d+)\s*[-]?\s*(?:scene|scenes)\b", idea, re.IGNORECASE)
+    if digit_match:
+        count = int(digit_match.group(1))
+        if count > 0:
+            return count
+
+    # Number words: "twelve scenes"
+    lowered = idea.lower()
+    for word, value in _NUMBER_WORDS.items():
+        pattern = rf"\b{word}\b\s*[-]?\s*(?:scene|scenes)\b"
+        if re.search(pattern, lowered):
+            return value
+
+    return None
 
 
 _AGENT_PROFILE_MAP: dict[str, str] = {
@@ -895,12 +952,14 @@ def _attach_scope_contract(
         return
     film_type = str(updates.get("film_type", state.get("film_type", "narrative")) or "narrative")
     pacing = pacing_from_config(state.get("resolved_config"))
+    user_scene_count = _extract_target_scene_count(state) or _extract_target_scene_count(updates)
 
     contract = derive_scope_contract(
         project_id=str(state.get("project_id", "")),
         target_runtime_seconds=runtime,
         film_type=film_type,
         pacing=pacing,
+        user_scene_count=user_scene_count,
     )
     ref = _save_artifact(state, contract, "scope_contract", "intake")
     if ref:
@@ -1153,6 +1212,118 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
+def _ensure_matrix_scene_coverage(
+    state: dict[str, Any],
+    shot_matrix: Any,
+) -> Any:
+    """Guarantee every scene_id in the script appears in at least one matrix row.
+
+    LLM shot designers sometimes concentrate shots in a subset of scenes. This
+    deterministic back-fill creates placeholder rows for any missing scenes so
+    downstream generation planning never drops a scene entirely. Rows added here
+    are flagged with ``auto_filled=True`` so operators can spot them.
+    """
+    script_ref = state.get("script_ref")
+    if not script_ref or not isinstance(script_ref, str):
+        return shot_matrix
+
+    services = _get_services(state)
+    if services is None:
+        return shot_matrix
+
+    parts = script_ref.split(":")
+    if len(parts) < 3:
+        return shot_matrix
+    artifact_id = parts[1]
+    try:
+        version = int(parts[2].removeprefix("v"))
+    except ValueError:
+        return shot_matrix
+
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        script_raw = services.artifact_store.load(
+            str(state.get("project_id", "")),
+            FilmPhase("script"),
+            artifact_id,
+            version,
+        )
+    except Exception:
+        return shot_matrix
+
+    script_scenes = script_raw.get("scenes", []) if isinstance(script_raw, dict) else []
+    if not script_scenes:
+        return shot_matrix
+
+    # Support both raw dicts and Pydantic models from the agent output.
+    from pydantic import BaseModel
+
+    is_model = isinstance(shot_matrix, BaseModel)
+    if is_model:
+        rows: list[Any] = list(getattr(shot_matrix, "rows", []))
+    else:
+        rows = list(shot_matrix.get("rows", []))
+    if not rows:
+        return shot_matrix
+
+    def _scene_id(row: Any) -> str:
+        if isinstance(row, BaseModel):
+            return str(getattr(row, "scene_id", ""))
+        return str(row.get("scene_id", ""))
+
+    def _shot_id(row: Any) -> str:
+        if isinstance(row, BaseModel):
+            return str(getattr(row, "shot_id", ""))
+        return str(row.get("shot_id", ""))
+
+    covered_scene_ids = {_scene_id(row) for row in rows}
+    template_row = rows[-1]
+    existing_shot_ids = {_shot_id(row) for row in rows}
+
+    from film_pipeline.schemas.matrix import MasterFilmMatrixRow
+
+    for idx, scene in enumerate(script_scenes):
+        scene_id = str(scene.get("scene_id", ""))
+        if not scene_id or scene_id in covered_scene_ids:
+            continue
+
+        # Determine a likely act from the scene's position (thirds).
+        position = idx / max(len(script_scenes), 1)
+        if position < 0.33:
+            act_id = "act_1"
+        elif position < 0.66:
+            act_id = "act_2"
+        else:
+            act_id = "act_3"
+
+        # Create a unique shot_id.
+        candidate = f"s_auto_{scene_id}"
+        if candidate in existing_shot_ids:
+            candidate = f"{candidate}_1"
+        existing_shot_ids.add(candidate)
+
+        if isinstance(template_row, BaseModel):
+            row_data = template_row.model_dump()
+        else:
+            row_data = dict(template_row)
+        row_data["shot_id"] = candidate
+        row_data["scene_id"] = scene_id
+        row_data["act_id"] = act_id
+        row_data["generation_order"] = len(rows) + 1
+        row_data["auto_filled"] = True
+
+        new_row = MasterFilmMatrixRow(**row_data)
+        rows.append(new_row)
+        covered_scene_ids.add(scene_id)
+
+    if is_model:
+        # Frozen model: return a copy with the updated rows list.
+        return shot_matrix.model_copy(update={"rows": rows})
+    shot_matrix["rows"] = rows
+    return shot_matrix
+
+
 def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state  # keep reference for diff computation
@@ -1204,6 +1375,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     )
     shot_matrix = result.get("shot_matrix")
     if shot_matrix is not None:
+        shot_matrix = _ensure_matrix_scene_coverage(new_state, shot_matrix)
         ref = _save_artifact(new_state, shot_matrix, "shot_matrix", "shot_bible")
         if ref:
             new_state["shot_matrix_ref"] = ref
@@ -1907,7 +2079,7 @@ def _run_script_validators(
                 router=getattr(services.prompt_runner, "model_router", None),
                 template_registry=_get_template_registry(),
             )
-            report = instance.run(artifact)
+            report = instance.run(artifact, context=state)
         except Exception:
             continue
         _append_validator_report(report, issues, state)
