@@ -18,6 +18,12 @@ make setup      # uv sync --group dev
 make ci-check   # format + lint + test (90% coverage) + build + product-gate
 ```
 
+Run the pipeline headlessly from an idea file:
+
+```bash
+uv run film-pipeline-run my-idea.txt
+```
+
 Run the terminal operator console:
 
 ```bash
@@ -126,6 +132,31 @@ Basic create-from-idea flow:
 The first implementation uses the in-process gateway over the shared
 application service layer. It does not require network access or provider keys
 for mock-mode project creation.
+
+### Headless CLI
+
+`film-pipeline-run` drives the full pipeline from a single idea file with no
+human gates. It creates a project, submits the idea, and auto-approves every
+phase gate until the requested target phase.
+
+Supported idea file formats: `.txt`, `.md`, `.pdf`.
+
+```bash
+# Mock mode (default) — fast, zero-cost
+uv run film-pipeline-run my-idea.txt
+
+# Real providers — requires configured keys and explicit confirmation
+uv run film-pipeline-run my-idea.md --runtime-mode real --confirm-real
+
+# Custom target phase, runtime, and scene count
+uv run film-pipeline-run my-idea.pdf \
+  --target-phase shot_bible \
+  --target-runtime-seconds 180 \
+  --target-scene-count 12
+```
+
+By default the CLI stops after `shot_bible`, producing candidate artifacts
+across intake, constitution, development, script, visual_dev, and shot_bible.
 
 ## Documentation
 
