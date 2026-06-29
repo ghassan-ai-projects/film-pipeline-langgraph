@@ -44,6 +44,21 @@ def test_save_artifact_with_services(tmp_path: Path) -> None:
     assert ref == "artifact:script:v1"
 
 
+def test_save_artifact_records_kb_context_ref(tmp_path: Path) -> None:
+    store = ArtifactStore(root=tmp_path / "artifacts")
+    services = GraphServices(artifact_store=store)
+    state = {
+        "project_id": "p1",
+        "_last_kb_context_ref": "kbctx:p1:agent:test-1234",
+        SERVICES_KEY: services,
+    }
+    ref = _save_artifact(state, Script(project_id="p1", title="T", scenes=[]), "script", "script")
+    assert ref is not None
+    metas = store.list_artifacts("p1", FilmPhase("script"))
+    assert len(metas) == 1
+    assert metas[0].kb_context_ref == "kbctx:p1:agent:test-1234"
+
+
 def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) -> None:
     services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
     state: dict[str, object] = {

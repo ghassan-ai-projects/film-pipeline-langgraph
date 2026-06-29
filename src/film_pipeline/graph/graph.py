@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Hashable
+from typing import Any, cast
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from film_pipeline.graph.edges import after_approval
+from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.nodes import (
     approve_phase_node,
     await_approval_node,
@@ -78,21 +79,35 @@ def build_graph() -> CompiledStateGraph:
         },
     )
 
-    # Phase → consistency_check (non-blocking staleness detection)
-    for phase_node in [
-        "intake_node",
-        "constitution_node",
-        "development_node",
-        "script_node",
-        "visual_dev_node",
-        "shot_bible_node",
-        "gen_planning_node",
-        "generation_node",
-        "qc_node",
-        "post_node",
-        "delivery_node",
-    ]:
-        builder.add_edge(phase_node, "consistency_check")
+    _PHASE_TO_NODE: dict[str, str] = {
+        "intake": "intake_node",
+        "constitution": "constitution_node",
+        "development": "development_node",
+        "script": "script_node",
+        "visual_dev": "visual_dev_node",
+        "shot_bible": "shot_bible_node",
+        "gen_planning": "gen_planning_node",
+        "generation": "generation_node",
+        "qc": "qc_node",
+        "post": "post_node",
+        "delivery": "delivery_node",
+    }
+    _AFTER_PHASE_DESTINATIONS: dict[str, str] = {
+        "consistency_check": "consistency_check",
+        "await_approval": "await_approval",
+        "repair": "repair",
+        "end": "end",
+        **_PHASE_TO_NODE,
+    }
+
+    # Phase → dynamic routing via compute_actions()/after_phase()
+    after_phase_destinations = cast(dict[Hashable, str], _AFTER_PHASE_DESTINATIONS)
+    for phase_node in _PHASE_TO_NODE.values():
+        builder.add_conditional_edges(
+            phase_node,
+            after_phase,
+            after_phase_destinations,
+        )
 
     # Consistency → await_approval (always passes through)
     builder.add_edge("consistency_check", "await_approval")

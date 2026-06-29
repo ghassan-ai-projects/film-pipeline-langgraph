@@ -118,24 +118,25 @@ class DeliveryPackagingAgent:
 
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.delivery import DeliveryPackage as DeliveryPackageModel
 
         artifact_id = "delivery_package"
-        data = {
-            "package_id": package.package_id,
-            "project_id": package.project_id,
-            "files": package.files,
-            "format_version": package.format_version,
-            "subtitles_included": package.subtitles_included,
-            "audio_stems_included": package.audio_stems_included,
-            "stills_included": package.stills_included,
-            "prompt_archive_included": package.prompt_archive_included,
-            "validation_report_included": package.validation_report_included,
-            "cost_report_included": package.cost_report_included,
-            "credits_included": package.credits_included,
-            "is_complete": package.is_complete,
-            "missing_items": package.missing_items,
-            "notes": package.notes,
-        }
+        model = DeliveryPackageModel(
+            package_id=package.package_id,
+            project_id=package.project_id,
+            files=package.files,
+            format_version=package.format_version,
+            subtitles_included=package.subtitles_included,
+            audio_stems_included=package.audio_stems_included,
+            stills_included=package.stills_included,
+            prompt_archive_included=package.prompt_archive_included,
+            validation_report_included=package.validation_report_included,
+            cost_report_included=package.cost_report_included,
+            credits_included=package.credits_included,
+            is_complete=package.is_complete,
+            missing_items=package.missing_items,
+            notes=package.notes,
+        )
         meta = ArtifactMetadata(
             artifact_id=artifact_id,
             artifact_type=ArtifactType.DELIVERY_PACKAGE,
@@ -147,7 +148,7 @@ class DeliveryPackagingAgent:
             created_by="delivery-packaging-agent",
             created_at=datetime.now(UTC),
         )
-        artifact_store.save_dict(data, meta)
+        artifact_store.save(model, meta)
         return f"artifact:{artifact_id}:v1"
 
     def validate(

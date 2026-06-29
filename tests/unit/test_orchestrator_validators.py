@@ -212,7 +212,12 @@ class TestGateBPlanningCompleteness:
 class TestGateCDispatchReadiness:
     def test_passes_when_requests_are_dispatchable(self) -> None:
         requests = [
-            {"shot_id": "s_001", "provider": "seedance", "model": "v2", "prompt": "test"},
+            {
+                "shot_id": "s_001",
+                "provider": "seedance",
+                "model": "v2",
+                "prompt_payload": {"resolved_prompt": "A cinematic test prompt."},
+            },
         ]
         issues = validate_dispatch_readiness({}, requests)
         assert issues == []
@@ -235,9 +240,22 @@ class TestGateCDispatchReadiness:
         assert len(issues) == 1
         assert "undispatchable" in issues[0]["code"]
 
-    def test_passes_when_dict_requests_have_prompt_payload(self) -> None:
+    def test_blocks_when_resolved_prompt_missing(self) -> None:
         requests = [
             {"shot_id": "s_001", "provider": "s", "model": "m", "prompt_payload": {}},
+        ]
+        issues = validate_dispatch_readiness({}, requests)
+        assert len(issues) == 1
+        assert "undispatchable" in issues[0]["code"]
+
+    def test_passes_when_dict_requests_have_prompt_payload(self) -> None:
+        requests = [
+            {
+                "shot_id": "s_001",
+                "provider": "s",
+                "model": "m",
+                "prompt_payload": {"resolved_prompt": "prompt text"},
+            },
         ]
         issues = validate_dispatch_readiness({}, requests)
         assert issues == []

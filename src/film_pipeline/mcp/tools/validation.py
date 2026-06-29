@@ -5,6 +5,7 @@ from __future__ import annotations
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import (
+    _active_project_id,
     _error,
     _load_artifact,
     _load_latest_reference_index,
@@ -107,27 +108,29 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     by the QC node). Falls back to live validator runs if no stored reports.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    state = rt.get_project(project_id)
+    if state is None:
         return _error("No active project.")
 
     # Check stored reports first (from QC node) — works even without a
     # current phase because the data is already persisted in state.
-    stored = active.get("_validation_reports")
+    stored = state.get("_validation_reports")
     if stored and isinstance(stored, list):
         return _ok(
-            phase=str(active.get("current_phase", "")),
+            phase=str(state.get("current_phase", "")),
             reports=list(stored),
             source="qc_node",
             message=f"{len(stored)} validation report(s) from QC node.",
         )
 
-    phase_str = str(active.get("current_phase", ""))
+    phase_str = str(state.get("current_phase", ""))
     if not phase_str:
         return _error("No active phase to validate (and no stored reports).")
 
     # Fallback: run validators live
-    project_id = str(active["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -152,7 +155,7 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
                 reports.append(_report_summary(report))
 
     elif phase_str == "visual_dev":
-        art_data = _load_latest_reference_index(rt, project_id, active)
+        art_data = _load_latest_reference_index(rt, project_id, state)
         if art_data is not None:
             from film_pipeline.validation.impl.reference_usability import (
                 ReferenceUsabilityValidator,
@@ -209,12 +212,15 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
     Reads from stored ``issues`` in project state (populated by QC node).
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    state = rt.get_project(project_id)
+    if state is None:
         return _error("No active project.")
 
     # Read from stored issues first — works even without a current phase.
-    stored_issues = active.get("issues", [])
+    stored_issues = state.get("issues", [])
     issues: list[dict[str, object]] = []
     if isinstance(stored_issues, list):
         for issue in stored_issues:
@@ -230,12 +236,12 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
 
     if issues:
         return _ok(
-            phase=str(active.get("current_phase", "")),
+            phase=str(state.get("current_phase", "")),
             issues=issues,
             message=f"{len(issues)} issue(s) found.",
         )
 
-    phase_str = str(active.get("current_phase", ""))
+    phase_str = str(state.get("current_phase", ""))
     if not phase_str:
         return _ok(phase="", issues=[], message="No active phase and no stored issues.")
 

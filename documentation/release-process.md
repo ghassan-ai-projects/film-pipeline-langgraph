@@ -31,7 +31,7 @@ make test-e2e
 # - README.md is up to date
 
 # 6. No secrets in code, docs, or artifacts
-uv run --python 3.12 --group dev pytest tests/integration/providers/test_secret_redaction.py -v
+#    (verify manually and via `git grep` for keys)
 
 # 7. Build succeeds
 make build
@@ -56,7 +56,7 @@ uv run twine upload dist/*
 `.github/workflows/ci.yml` runs:
 - Python 3.12 + 3.13 matrix
 - `uv sync --group dev --frozen`
-- `make ci-check` (format-check → lint → mypy strict → pytest 90% → build)
+- `make ci-check` (format-check → lint → typecheck → pytest 90% → build → product-gate)
 - Pre-commit hooks on push (ruff format, lint, mypy) and pre-push (pytest + build)
 
 ## Release Notes

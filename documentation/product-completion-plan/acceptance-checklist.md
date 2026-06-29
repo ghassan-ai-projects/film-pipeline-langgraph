@@ -42,16 +42,16 @@ The product may be called complete only when every item below is green and the e
 
 ## Phase 03 - Dynamic Routing
 
-- [x] Routing is capability-based and state-aware
-- [x] Review and repair use specialized agents
+- [ ] Routing is capability-based and state-aware
+- [ ] Review and repair use specialized agents
 - [x] Handoffs are persisted
 - [x] Routing explanations are backed by stored records
 
 ## Phase 04 - Validation Runtime Control
 
-- [x] Validators inspect real artifacts
-- [x] Blocking findings stop downstream work
-- [x] Repairable findings route to repair behavior
+- [ ] Validators inspect real artifacts
+- [ ] Blocking findings stop downstream work
+- [ ] Repairable findings route to repair behavior (`NEEDS_REVISION` status is currently unreachable)
 - [x] Validation tools expose real stored findings
 
 Verification evidence:
@@ -59,23 +59,25 @@ Verification evidence:
 - `tests/integration/test_validation_runtime.py` — 4/4 passing (validators fire in QC, blocking findings in state, MCP report/issue tools read stored data)
 - `_run_validators()` in `src/film_pipeline/graph/nodes.py` scans upstream phases when phase=qc and persists `_validation_reports` + `issues`
 - `get_validation_report()` and `list_validation_issues()` in MCP tools serve stored data sans current-phase precondition
+- Gap: `ValidatorRegistry` is not wired into `GraphServices`; validators are imported directly
+- Gap: `score_to_status` ignores `review_at`, so `NEEDS_REVISION` cannot be produced
 
 ## Phase 05 - MCP Surface And Generation Runtime
 
-- [x] Remaining important MCP stubs are replaced with real behavior (get_project_summary, promote_test_to_production)
+- [ ] Remaining important MCP stubs are replaced with real behavior
 - [x] Non-video generation lifecycle is real and behavior-tested (plan, approve, submit, status, list, cancel, resume, promote)
 - [x] Resume/polling avoids duplicate submit (checks SUBMITTED status + provider_job_id before re-submit)
-- [x] Rollback behavior is meaningful (git checkpoint-based artifact restore)
+- [ ] Rollback behavior is meaningful (`rollback_to_checkpoint` does not restore state)
 - [x] Clip handoff evidence is operator-visible and non-placeholder (assemble_review_cut via AssemblyAgent, inspectable artifacts)
-- [x] Coverage/stub tools (plan_coverage_group, etc.) are video-generation-adjacent per allowed-stub policy
+- [ ] Coverage/stub tools (plan_coverage_group, list_coverage_groups, inspect_coverage_group, approve_coverage_generation, assemble_final_cut) remain stubs
 
 ## Phase 06 - E2E And Operator Proof
 
-- [x] All required E2E scenarios pass
-- [x] Smoke checks validate the documented workflow
-- [x] Operator docs are complete and reproducible
-- [x] Release checks are green
-- [x] `make ci-check` passes
+- [ ] All required E2E scenarios pass as MCP-driven product proof
+- [ ] Smoke checks validate the documented workflow
+- [ ] Operator docs are complete and reproducible
+- [ ] Release checks are green
+- [ ] `make ci-check` passes
 
 ---
 
@@ -85,7 +87,7 @@ Verification evidence:
 - [x] lint green
 - [x] mypy green
 - [x] tests green
-- [x] coverage >= 90%
+- [x] coverage >= 90% (currently 90.45 %)
 - [x] build green
-- [x] docs match commands and product behavior
-- [x] no core functionality missing under the allowed-stub policy
+- [ ] docs match commands and product behavior (operator docs are still redirects)
+- [ ] no core functionality missing under the allowed-stub policy

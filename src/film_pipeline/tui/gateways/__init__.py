@@ -1,5 +1,8 @@
 """TUI gateway implementations."""
 
-from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
+from __future__ import annotations
 
-__all__ = ["InProcessStudioGateway"]
+from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
+from film_pipeline.tui.gateways.mcp import MCPStudioGateway, default_gateway
+
+__all__ = ["InProcessStudioGateway", "MCPStudioGateway", "default_gateway"]

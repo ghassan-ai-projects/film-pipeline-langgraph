@@ -26,37 +26,43 @@ def after_phase(state: dict[str, Any]) -> str:
     """Route after a phase node completes.
 
     Maps the orchestrator's next_action to a graph node name.
-    Actions that should pause for a human gate map to ``await_approval``.
+    Actions that should pause for a human gate map to ``consistency_check``,
+    which always flows into ``await_approval``.
     """
     result = compute_actions(state)
     action = result.next_action
 
-    # Actions that route to the human gate
+    # Actions that route through the consistency check to the human gate
     if action in (
         "wait_for_human",
         "present_review_package",
         "escalate_to_human",
         "continue_unrelated_work",
     ):
-        return "await_approval"
+        return "consistency_check"
 
     # Actions that route to automatic repair
     if action in ("handle_blockers",):
         return "repair"
 
-    # Actions that route to a phase node (keep advance_to_ prefix for
-    # compatibility with existing tests and graph node routing)
+    # Actions that route to a phase node — strip the prefix so the returned
+    # value is the phase key used by the conditional-edge destination map.
     if action.startswith("advance_to_"):
-        if action == "advance_to_end":
+        target = action[len("advance_to_") :]
+        if target == "end":
             return "end"
-        return action
+        return target
+
+    # Final phase completion
+    if action == "wrap":
+        return "end"
 
     # Actions that stay in the current phase
     if action in ("repair", "revise"):
         return "await_approval"
 
     # Fallback: treat as human gate
-    return "await_approval"
+    return "consistency_check"
 
 
 def after_approval(state: dict[str, Any]) -> str:

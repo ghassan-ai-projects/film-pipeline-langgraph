@@ -7,7 +7,7 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok, _services
+from .helpers import _active_project_id, _error, _ok, _services
 
 
 async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
@@ -148,10 +148,9 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
@@ -173,10 +172,9 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
 async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     """List active (non-terminal) generation rows."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas._base import GenerationStatus
 

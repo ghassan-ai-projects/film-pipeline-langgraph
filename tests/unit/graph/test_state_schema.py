@@ -41,13 +41,13 @@ class TestStudioGraphState:
         state["current_phase"] = "constitution"
         assert state["current_phase"] == "constitution"
 
-    def test_services_key_is_runtime_only(self) -> None:
-        """Graph services are runtime context, not part of typed graph state."""
+    def test_services_key_is_declared(self) -> None:
+        """Graph services are declared in state but optional/injected by runtime."""
         from film_pipeline.graph.state_schema import StudioGraphState
 
         state: StudioGraphState = {"project_id": "test"}
         assert state["project_id"] == "test"
-        assert "_services" not in StudioGraphState.__annotations__
+        assert "_services" in StudioGraphState.__annotations__
 
     def test_partial_update_preserves_other_keys(self) -> None:
         """Merging partial update dict preserves unmodified keys."""
@@ -90,8 +90,8 @@ class TestTypedStateKeys:
         assert "issues" in StudioGraphState.__annotations__
         assert "validation_report_refs" in StudioGraphState.__annotations__
 
-    def test_services_key_not_in_schema(self) -> None:
-        """_services key is NOT in the typed schema."""
+    def test_services_key_is_in_schema(self) -> None:
+        """_services key is declared as an optional runtime-only field."""
         from film_pipeline.graph.state_schema import StudioGraphState
 
-        assert "_services" not in StudioGraphState.__annotations__
+        assert "_services" in StudioGraphState.__annotations__

@@ -261,6 +261,16 @@ class BaseValidator(ABC):
         warnings = [i for i in issues if i.severity != "blocking"]
         status = score_to_status(score, self.entry.thresholds)
 
+        # Four-status contract: BLOCKED must have at least one blocking issue.
+        if status == ValidationStatus.BLOCKED and not blocking:
+            blocking = [
+                ValidationIssue(
+                    code="score_below_threshold",
+                    message=f"Score {score:.1f} is below the block threshold.",
+                    severity="blocking",
+                )
+            ]
+
         return ValidationReport(
             validation_id=f"validation:{self.entry.validator_id}:{uuid4().hex[:8]}",
             validator_id=self.entry.validator_id,
@@ -295,6 +305,8 @@ def _recommended_actions(
         return []
     if status == ValidationStatus.PASS_WITH_NOTES:
         return ["Review warnings before proceeding."]
+    if status == ValidationStatus.NEEDS_REVISION:
+        return ["Revise the artifact and resubmit for validation."]
     if blocking:
         return [f"Resolve: {i.code} — {i.message}" for i in blocking]
     return ["Review and revise before resubmitting."]

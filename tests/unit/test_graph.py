@@ -227,7 +227,7 @@ class TestEdges:
                     "issues": [],
                 }
             )
-            == "await_approval"
+            == "consistency_check"
         )
 
     def test_after_approval_next(self) -> None:

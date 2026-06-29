@@ -31,6 +31,23 @@ def _error(message: str, **extra: object) -> dict[str, object]:
     return {"ok": False, "error": message, **extra}
 
 
+def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
+    """Return the project id for the current request.
+
+    Prefers the project resolved from ``project_ref`` in the request envelope,
+    then falls back to the runtime's active project. Returns ``None`` when no
+    project can be determined.
+    """
+    envelope = args.get("_envelope")
+    resolved = getattr(envelope, "resolved_project_id", None) if envelope is not None else None
+    if resolved:
+        return str(resolved)
+    active = rt.get_active()
+    if active is not None:
+        return str(active["project_id"])
+    return None
+
+
 def _services(rt: object) -> Any:
     """Assert services are initialized and return them."""
     assert hasattr(rt, "services") and rt.services is not None

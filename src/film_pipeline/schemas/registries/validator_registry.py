@@ -12,11 +12,11 @@ from film_pipeline.schemas._base import (
 
 
 class ValidatorThresholds(SchemaBase):
-    """Score thresholds that determine pass / review / block."""
+    """Score thresholds that determine the four-status validation contract."""
 
     pass_at: float = Field(default=85.0, ge=0, le=100)
     review_at: float = Field(default=75.0, ge=0, le=100)
-    block_below: float = Field(default=75.0, ge=0, le=100)
+    block_below: float = Field(default=65.0, ge=0, le=100)
 
 
 class ValidatorRegistryEntry(SchemaBase):

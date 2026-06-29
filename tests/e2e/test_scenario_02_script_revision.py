@@ -24,14 +24,14 @@ class TestScriptRevision:
         invoke_tool(rt, "submit_idea", idea="A film about second chances.")
 
         # Advance to script
-        invoke_tool(rt, "approve_intake")
-        invoke_tool(rt, "approve_phase")  # constitution
-        invoke_tool(rt, "approve_phase")  # development
+        invoke_tool(rt, "approve_intake", confirmed=True)
+        invoke_tool(rt, "approve_phase", confirmed=True)  # constitution
+        invoke_tool(rt, "approve_phase", confirmed=True)  # development
 
         cps_before = len(rt.checkpoints)
 
         # Request revision with a note
-        result = invoke_tool(rt, "request_revision", note="Dialogue too formal.")
+        result = invoke_tool(rt, "request_revision", note="Dialogue too formal.", confirmed=True)
         assert result["ok"] is True
         assert result.get("current_phase") == "script", "Revision should stay in script phase"
 
@@ -54,11 +54,11 @@ class TestScriptRevision:
         invoke_tool(rt, "create_film_project", project_id="e2e-reapprove", title="Reapprove Test")
         invoke_tool(rt, "set_active_project", project_ref="e2e-reapprove")
         invoke_tool(rt, "submit_idea", idea="A documentary about silence.")
-        invoke_tool(rt, "approve_intake")
-        invoke_tool(rt, "approve_phase")  # constitution
+        invoke_tool(rt, "approve_intake", confirmed=True)
+        invoke_tool(rt, "approve_phase", confirmed=True)  # constitution
 
         # Request revision at development
-        result = invoke_tool(rt, "request_revision", note="Needs darker tone.")
+        result = invoke_tool(rt, "request_revision", note="Needs darker tone.", confirmed=True)
         assert result["ok"] is True
 
         # Verify issues contain REVISION_REQUESTED
@@ -80,16 +80,16 @@ class TestScriptRevision:
         invoke_tool(rt, "create_film_project", project_id="e2e-audit-rev", title="Audit Revision")
         invoke_tool(rt, "set_active_project", project_ref="e2e-audit-rev")
         invoke_tool(rt, "submit_idea", idea="Short story.")
-        invoke_tool(rt, "approve_intake")
-        invoke_tool(rt, "approve_phase")
-        invoke_tool(rt, "approve_phase")
+        invoke_tool(rt, "approve_intake", confirmed=True)
+        invoke_tool(rt, "approve_phase", confirmed=True)
+        invoke_tool(rt, "approve_phase", confirmed=True)
 
         # Count audit events before revision
         result = invoke_tool(rt, "get_audit_log", limit=100)
         events_before = len(result.get("events", []))
 
         # Request revision
-        invoke_tool(rt, "request_revision", note="Make it punchier.")
+        invoke_tool(rt, "request_revision", note="Make it punchier.", confirmed=True)
 
         # Verify audit grew
         result = invoke_tool(rt, "get_audit_log", limit=100)
