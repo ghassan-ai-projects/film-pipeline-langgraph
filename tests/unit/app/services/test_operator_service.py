@@ -16,6 +16,7 @@ from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.film_constitution import FilmConstitution
+from film_pipeline.schemas.story_bible import SceneList
 
 
 def _service(tmp_path: Path) -> OperatorService:
@@ -80,8 +81,8 @@ class TestOperatorService:
         assert service.runtime.services is not None
         service.runtime.services.artifact_store = ArtifactStore(root=tmp_path / "projects")
         store = service.runtime.services.artifact_store
-        store.save_dict(
-            {"artifact_id": "scene_list", "scenes": []},
+        store.save(
+            SceneList(scenes=[]),
             ArtifactMetadata(
                 artifact_id="scene_list",
                 artifact_type=ArtifactType.SCENE_LIST,
@@ -93,8 +94,8 @@ class TestOperatorService:
                 created_at=datetime.now(UTC),
             ),
         )
-        store.save_dict(
-            {"artifact_id": "scene_list", "scenes": []},
+        store.save(
+            SceneList(scenes=[]),
             ArtifactMetadata(
                 artifact_id="scene_list",
                 artifact_type=ArtifactType.SCENE_LIST,
@@ -118,8 +119,8 @@ class TestOperatorService:
     def test_set_active_project_hydrates_discovered_artifact_folder(self, tmp_path: Path) -> None:
         service = _service(tmp_path)
         assert service.runtime.services is not None
-        service.runtime.services.artifact_store.save_dict(
-            {"artifact_id": "scene_list", "scenes": []},
+        service.runtime.services.artifact_store.save(
+            SceneList(scenes=[]),
             ArtifactMetadata(
                 artifact_id="scene_list",
                 artifact_type=ArtifactType.SCENE_LIST,
@@ -177,8 +178,10 @@ class TestOperatorService:
         assert result.ok is True
         assert result.current_phase == "constitution"
         checkpoints = service.list_checkpoints("gate-test")
-        assert len(checkpoints) == 1
-        assert checkpoints[0]["phase"] == "constitution"
+        # Intake submission now auto-checkpoints, so at least one post-approval
+        # checkpoint at constitution must exist.
+        assert len(checkpoints) >= 1
+        assert checkpoints[-1]["phase"] == "constitution"
 
     def test_validation_workspace_splits_blocking_and_non_blocking_issues(
         self, tmp_path: Path

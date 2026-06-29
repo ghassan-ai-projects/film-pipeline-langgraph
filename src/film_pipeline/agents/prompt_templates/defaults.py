@@ -52,6 +52,7 @@ def load_all(reg: PromptTemplateRegistry) -> None:
     reg.register(_structure_extractor())
     reg.register(_assembly_agent())
     reg.register(_orchestrator_review())
+    reg.register(_generation_planner())
 
 
 def _structure_extractor() -> PromptTemplate:

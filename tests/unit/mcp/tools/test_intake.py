@@ -64,7 +64,7 @@ def test_get_intake_analysis_falls_back_to_raw_idea_or_errors() -> None:
 def test_approve_intake_requires_active_project() -> None:
     rt = gr()
     rt.active_project_id = ""
-    result = asyncio.run(approve_intake({}))
+    result = asyncio.run(approve_intake({"confirmed": True}))
     assert result["ok"] is False
 
 
@@ -77,7 +77,7 @@ def test_approve_intake_rejects_wrong_phase() -> None:
     active["current_phase"] = "script"
     rt.projects["intake-approve-wrong-1"] = active
 
-    result = asyncio.run(approve_intake({}))
+    result = asyncio.run(approve_intake({"confirmed": True}))
     assert result["ok"] is False
     assert "not intake" in cast(str, result["error"])
 
@@ -86,6 +86,6 @@ def test_approve_intake_success() -> None:
     _make_active_project("intake-approve-ok-1")
     asyncio.run(submit_idea({"idea": "A garden that grows memories instead of flowers."}))
 
-    result = asyncio.run(approve_intake({}))
+    result = asyncio.run(approve_intake({"confirmed": True}))
     assert result["ok"] is True
     assert result["project_id"] == "intake-approve-ok-1"

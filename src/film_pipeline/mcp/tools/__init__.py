@@ -64,7 +64,13 @@ from film_pipeline.mcp.tools.checkpoints import (
     rollback_artifact,
     rollback_to_checkpoint,
 )
-from film_pipeline.mcp.tools.config import get_runtime_mode, inspect_profile, list_profiles
+from film_pipeline.mcp.tools.config import (
+    approve_profile_change,
+    get_runtime_mode,
+    inspect_profile,
+    list_profiles,
+    propose_profile_change,
+)
 from film_pipeline.mcp.tools.generation import (
     approve_generation_spend,
     cancel_generation_request,
@@ -82,6 +88,7 @@ from film_pipeline.mcp.tools.kb import (
     kb_get_item,
     kb_search,
 )
+from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
 from film_pipeline.mcp.tools.planning import generate_plan, initialize_budget
 from film_pipeline.mcp.tools.projects import (
     create_film_project,
@@ -113,10 +120,12 @@ from film_pipeline.mcp.tools.validation import (
 )
 
 __all__ = [
+    "add_operator_comment",
     "approve_coverage_generation",
     "approve_generation_spend",
     "approve_intake",
     "approve_phase",
+    "approve_profile_change",
     "assemble_final_cut",
     "assemble_review_cut",
     "cancel_generation_request",
@@ -167,6 +176,7 @@ __all__ = [
     "list_artifacts",
     "list_checkpoints",
     "list_coverage_groups",
+    "list_operator_comments",
     "list_profiles",
     "list_projects",
     "list_providers",
@@ -175,6 +185,7 @@ __all__ = [
     "plan_coverage_group",
     "plan_generation_batch",
     "promote_test_to_production",
+    "propose_profile_change",
     "register_all_tools",
     "request_revision",
     "resolve_provider_block",

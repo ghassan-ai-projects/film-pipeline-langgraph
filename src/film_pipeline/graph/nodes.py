@@ -6,6 +6,7 @@ and persist artifacts. Remaining phases are flag-only pending fan-out.
 
 from __future__ import annotations
 
+import contextlib
 import contextvars
 import json
 from copy import deepcopy
@@ -134,6 +135,37 @@ def _require_human_approval(state: dict[str, Any]) -> bool:
         if isinstance(studio, dict):
             return bool(studio.get("require_human_approval", True))
     return True
+
+
+def _apply_external_state(
+    state: dict[str, Any],
+    external_state: dict[str, Any],
+) -> dict[str, Any]:
+    """Replay external MCP mutations into graph state before processing a resume.
+
+    MCP tools update the active project state outside the graph (e.g. planning
+    a generation batch). The resumed checkpoint predates those mutations, so
+    we carry them in ``Command(resume={"_external_state": ...})`` and merge
+    them here. Returns a partial update dict for LangGraph to merge.
+    """
+    updates: dict[str, Any] = {}
+    incoming_requests = external_state.get("generation_requests")
+    if incoming_requests:
+        existing = state.get("generation_requests", []) or []
+        existing_ids = {
+            str(r.get("generation_request_id", r.get("generation_id", "")))
+            for r in existing
+            if isinstance(r, dict)
+        }
+        new_requests = [
+            r
+            for r in incoming_requests
+            if isinstance(r, dict)
+            and str(r.get("generation_request_id", r.get("generation_id", ""))) not in existing_ids
+        ]
+        if new_requests:
+            updates["generation_requests"] = new_requests
+    return updates
 
 
 def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
@@ -339,6 +371,8 @@ def _run_agent(
         agent_id=resolved_agent_id,
         task=task,
     )
+    # Capture the KB context id so saved artifacts can reference it.
+    state["_last_kb_context_ref"] = kb.kb_context_id
 
     # Build prompt, call model, execute agent
     # Critical-path agents (those in agent_map) require dedicated prompt templates.
@@ -540,6 +574,7 @@ def _save_artifact(
     *,
     change_summary: str = "",
     built_from: dict[str, str] | None = None,
+    kb_context_ref: str | None = None,
 ) -> str | None:
     """Persist an artifact via ArtifactStore and return its ref string.
 
@@ -575,6 +610,9 @@ def _save_artifact(
     if built_from is None:
         built_from = _build_dependency_map(state)
 
+    if kb_context_ref is None:
+        kb_context_ref = state.get("_last_kb_context_ref")
+
     meta = ArtifactMetadata(
         artifact_id=artifact_id,
         artifact_type=atype,
@@ -584,6 +622,7 @@ def _save_artifact(
         status=ArtifactStatus.CANDIDATE,
         parents=parents,
         created_by="graph_node",
+        kb_context_ref=kb_context_ref,
         created_at=datetime.now(UTC),
         built_from=built_from,
         change_summary=change_summary,
@@ -1329,6 +1368,164 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
+# ── Generation helpers ───────────────────────────────────────────────────────
+
+
+def _load_artifact_data(
+    state: dict[str, Any],
+    services: GraphServices,
+    ref: str,
+    phase_guesses: list[str] | None = None,
+) -> Any:
+    """Load artifact data by ref, trying a list of candidate phases."""
+    if not ref or ":" not in ref:
+        return None
+    parsed = _parse_ref(ref)
+    project_id = str(state.get("project_id", ""))
+    if not project_id:
+        return None
+    from film_pipeline.schemas._base import FilmPhase
+
+    phases = phase_guesses or ["gen_planning", "shot_bible", "visual_dev", "script"]
+    for phase in phases:
+        try:
+            return services.artifact_store.load(
+                project_id, FilmPhase(phase), parsed.artifact_id, parsed.version
+            )
+        except (FileNotFoundError, ValueError, KeyError):
+            continue
+    return None
+
+
+def _load_matrix_rows(
+    state: dict[str, Any],
+    services: GraphServices,
+) -> list[dict[str, Any]]:
+    """Load rows from the master film matrix artifact."""
+    shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
+    if not shot_matrix_ref:
+        return []
+    data = _load_artifact_data(state, services, shot_matrix_ref, ["shot_bible"])
+    if not isinstance(data, dict):
+        return []
+    rows = data.get("rows", [])
+    if isinstance(rows, list):
+        return [r if isinstance(r, dict) else r.model_dump() for r in rows]
+    return []
+
+
+def _find_matrix_row(rows: list[dict[str, Any]], shot_id: str) -> dict[str, Any] | None:
+    for row in rows:
+        if str(row.get("shot_id", "")) == shot_id:
+            return row
+    return None
+
+
+def _build_prompt_from_matrix_row(
+    state: dict[str, Any],
+    services: GraphServices,
+    row: dict[str, Any],
+) -> str:
+    """Build a structured generation prompt from the shot matrix row."""
+    from film_pipeline.generation.prompt_builder import build_structured_prompt
+
+    characters = row.get("characters") or []
+    environment = str(row.get("environment", "") or "")
+    subject_type = "environment" if not characters else "character"
+    subject_id = environment if not characters else str(characters[0])
+
+    entry: dict[str, Any] = {
+        "subject_type": subject_type,
+        "subject_id": subject_id,
+        "frame_role": str(row.get("camera_profile", "") or ""),
+        "prompt_text": str(row.get("story_function", "") or ""),
+        "lighting": str(row.get("lighting_state", "") or ""),
+        "notes": str(row.get("environment_state", "") or ""),
+    }
+
+    constitution_ref = str(state.get("constitution_ref", "") or "")
+    constitution = (
+        _load_artifact_data(state, services, constitution_ref, ["constitution"])
+        if constitution_ref
+        else None
+    )
+    constitution = constitution if isinstance(constitution, dict) else None
+
+    character_bible: dict[str, Any] | None = None
+    environment_bible: dict[str, Any] | None = None
+    project_id = str(state.get("project_id", ""))
+    from film_pipeline.schemas._base import FilmPhase
+
+    if characters:
+        try:
+            character_bible = services.artifact_store.load(
+                project_id, FilmPhase("visual_dev"), "character_bible", 1
+            )
+        except (FileNotFoundError, ValueError, KeyError):
+            character_bible = None
+        character_bible = character_bible if isinstance(character_bible, dict) else None
+    elif environment:
+        try:
+            environment_bible = services.artifact_store.load(
+                project_id, FilmPhase("visual_dev"), "environment_bible", 1
+            )
+        except (FileNotFoundError, ValueError, KeyError):
+            environment_bible = None
+        environment_bible = environment_bible if isinstance(environment_bible, dict) else None
+
+    return build_structured_prompt(
+        entry,
+        character_bible=character_bible,
+        constitution=constitution,
+    )
+
+
+def _resolve_prompt_for_request(
+    state: dict[str, Any],
+    services: GraphServices,
+    req: dict[str, Any],
+    matrix_rows: list[dict[str, Any]],
+) -> str:
+    """Resolve a generation request's prompt_ref to actual prompt text."""
+    prompt_ref = str(req.get("prompt_ref", "") or "")
+    shot_id = str(req.get("shot_id", "") or "")
+
+    if prompt_ref and services:
+        data = _load_artifact_data(state, services, prompt_ref, ["gen_planning", "shot_bible"])
+        if isinstance(data, dict):
+            entries = data.get("entries") or []
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                if str(entry.get("shot_id", "")) == shot_id:
+                    rendered = str(entry.get("rendered_prompt", "") or "")
+                    if rendered:
+                        return rendered
+                    rctco = entry.get("rctco")
+                    if isinstance(rctco, dict):
+                        parts: list[str] = []
+                        if rctco.get("r"):
+                            parts.append(str(rctco["r"]))
+                        if rctco.get("c1"):
+                            parts.append(str(rctco["c1"]))
+                        constraints = rctco.get("c2") or []
+                        if constraints:
+                            parts.append("Constraints:")
+                            parts.extend(f"- {c}" for c in constraints)
+                        context = rctco.get("t") or {}
+                        if context:
+                            parts.append("Context:")
+                            for key, value in context.items():
+                                parts.append(f"- {key}: {value}")
+                        return "\n\n".join(parts)
+
+    row = _find_matrix_row(matrix_rows, shot_id)
+    if row is not None:
+        return _build_prompt_from_matrix_row(state, services, row)
+
+    return str(req.get("prompt", "") or "")
+
+
 def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
     original = state
@@ -1337,6 +1534,96 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state["approved"] = auto
     new_state["human_approval_required"] = not auto
     new_state["human_approval_phase"] = "generation_batch"
+
+    services = _get_services(new_state)
+    gen_requests = new_state.get("generation_requests")
+
+    # ── Ledger-backed dispatch preparation ───────────────────────────────
+    if gen_requests and services is not None:
+        from collections import defaultdict
+
+        from film_pipeline.generation.ledger import GenerationLedgerManager
+        from film_pipeline.schemas._base import GenerationMode
+
+        project_id = str(new_state.get("project_id", ""))
+        mgr = GenerationLedgerManager(services.artifact_store)
+        matrix_rows = _load_matrix_rows(new_state, services)
+
+        # Resolve prompt_ref to actual prompt text for every request.
+        resolved_requests: list[dict[str, Any]] = []
+        for req in gen_requests:
+            if not isinstance(req, dict):
+                continue
+            req = dict(req)
+            resolved_prompt = _resolve_prompt_for_request(new_state, services, req, matrix_rows)
+            req.setdefault("prompt_payload", {})["resolved_prompt"] = resolved_prompt
+            resolved_requests.append(req)
+        new_state["generation_requests"] = resolved_requests
+
+        # Plan the batch: group by (provider, model, mode, prompt_ref).
+        groups: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
+        for req in resolved_requests:
+            shot_id = str(req.get("shot_id", ""))
+            if not shot_id:
+                continue
+            provider = str(req.get("provider", "mock-video-provider") or "mock-video-provider")
+            model = str(req.get("model", "mock-fast") or "mock-fast")
+            mode_str = str(req.get("mode", "test") or "test")
+            mode = GenerationMode.TEST
+            with contextlib.suppress(ValueError):
+                mode = GenerationMode(mode_str)
+            prompt_ref = str(req.get("prompt_ref", "") or "")
+            groups[(provider, model, str(mode.value), prompt_ref)].append(shot_id)
+
+        for (provider, model, mode_str, prompt_ref), shot_ids in groups.items():
+            mode = GenerationMode.TEST
+            with contextlib.suppress(ValueError):
+                mode = GenerationMode(mode_str)
+            mgr.plan_batch(
+                project_id=project_id,
+                shot_ids=shot_ids,
+                provider=provider,
+                model=model,
+                prompt_ref=prompt_ref,
+                mode=mode,
+            )
+
+        # Approve spend with a budget ceiling derived from the cost estimate.
+        max_cost_usd = -1.0
+        cost_estimate_ref = str(new_state.get("cost_estimate_ref", "") or "")
+        if cost_estimate_ref:
+            ce_data = _load_artifact_data(new_state, services, cost_estimate_ref, ["gen_planning"])
+            if isinstance(ce_data, dict):
+                raw_cost = ce_data.get("estimated_cost_usd")
+                if raw_cost is not None:
+                    with contextlib.suppress(TypeError, ValueError):
+                        max_cost_usd = float(raw_cost) * 1.1
+
+        try:
+            mgr.approve_spend(project_id, max_cost_usd=max_cost_usd)
+        except ValueError as exc:
+            new_state.setdefault("issues", []).append(
+                {
+                    "severity": "blocking",
+                    "code": "generation_budget_exceeded",
+                    "message": str(exc),
+                }
+            )
+
+        # Persist the ledger as a versioned artifact and store its ref.
+        ledger = mgr.load(project_id)
+        ledger_ref = _save_artifact(
+            new_state,
+            ledger,
+            "generation_ledger",
+            "generation",
+            artifact_type="generation_ledger",
+        )
+        if ledger_ref:
+            new_state["generation_ledger_ref"] = ledger_ref
+            new_state.setdefault("artifact_refs", []).append(ledger_ref)
+
+        gen_requests = resolved_requests
 
     # ── Gate C: validate dispatch readiness ──────────────────────────────
     gen_requests = new_state.get("generation_requests")
@@ -1351,11 +1638,25 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     if gen_requests and shot_matrix_ref:
         from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 
+        # Map shot_id -> ledger row for asset references.
+        ledger_rows_by_shot: dict[str, str] = {}
+        if services is not None:
+            from film_pipeline.generation.ledger import GenerationLedgerManager
+
+            mgr = GenerationLedgerManager(services.artifact_store)
+            project_id = str(new_state.get("project_id", ""))
+            for row in mgr.load(project_id).rows:
+                ledger_rows_by_shot[row.shot_id] = row.generation_id
+
         row_updates: list[Any] = []
         for req in gen_requests:
             if isinstance(req, dict):
                 sid = str(req.get("shot_id", ""))
-                asset_ref = str(req.get("asset_ref", req.get("output_ref", "")))
+                asset_ref = str(
+                    req.get("asset_ref")
+                    or req.get("output_ref")
+                    or ledger_rows_by_shot.get(sid, "")
+                )
                 if sid:
                     row_updates.append(
                         MatrixRowUpdate(
@@ -1392,9 +1693,18 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
         "human_approval_required": not auto,
         "human_approval_phase": "generation_batch",
     }
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
+    for key in ("generation_ledger_ref", "generation_patch_ref"):
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    if "generation_requests" in new_state:
+        updates["generation_requests"] = new_state["generation_requests"]
     _propagate_side_effects(new_state, updates)
     return updates
 
@@ -1858,9 +2168,15 @@ def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
 def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     """Pause the graph for human review. Resumes via Command(resume=decision).
 
-    The orchestrator agent runs first — it decides approve/revise autonomously.
-    Only escalates to human when the agent is unavailable, returns escalate,
-    or the phase is stalled.
+    When ``require_human_approval`` is enabled (the default), the node always
+    calls LangGraph's ``interrupt()`` so the human gate cannot be silently
+    bypassed. The orchestrator agent may produce a recommendation, but it is
+    only advisory and is surfaced inside the interrupt payload.
+
+    In headless / auto-approve mode the orchestrator agent may act
+    autonomously; when it is unavailable or escalates, clean phases are
+    approved and phases with blocking issues are routed to the bounded repair
+    loop.
 
     Short-circuits when ``approved`` is already ``True`` — the phase node
     auto-approved (e.g. headless/auto-approve profile). The downstream
@@ -1869,36 +2185,57 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     if state.get("approved"):
         return state
 
-    # ── Try autonomous orchestrator agent first ────────────────────────
     from film_pipeline.graph.orchestrator_state import is_stalled
 
     phase = str(state.get("current_phase", ""))
     stalled = is_stalled(state, phase)
+    require_human = _require_human_approval(state)
 
+    # ── Headless / auto-approve mode ───────────────────────────────────
+    if not require_human:
+        if not stalled:
+            orch_decision = _run_orchestrator_agent(state)
+            if orch_decision is not None:
+                action = orch_decision.get("action", "escalate")
+                if action == "approve":
+                    return approve_phase_node(state)
+                if action == "revise":
+                    state["_repair_feedback"] = orch_decision.get("feedback", "")
+                    preserve = orch_decision.get("preserve", [])
+                    if preserve:
+                        state["_repair_feedback"] += "\n\nPreserve: " + "; ".join(
+                            str(p) for p in preserve
+                        )
+                    return request_revision_node(state)
+                # escalate: fall through to clean/buggy fallback below
+
+        issues: list[dict[str, Any]] = state.get("issues", [])
+        blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
+        if blocking_count == 0:
+            return approve_phase_node(state)
+        new_state = deepcopy(state)
+        new_state["approved"] = False
+        new_state["human_approval_required"] = False
+        return new_state
+
+    # ── Human gate (default) ───────────────────────────────────────────
+    # The orchestrator may prepare a recommendation, but the human decides.
+    recommendation: dict[str, Any] | None = None
     if not stalled:
         orch_decision = _run_orchestrator_agent(state)
         if orch_decision is not None:
-            action = orch_decision.get("action", "escalate")
-            if action == "approve":
-                return approve_phase_node(state)
-            if action == "revise":
-                state["_repair_feedback"] = orch_decision.get("feedback", "")
-                preserve = orch_decision.get("preserve", [])
-                if preserve:
-                    state["_repair_feedback"] += "\n\nPreserve: " + "; ".join(
-                        str(p) for p in preserve
-                    )
-                return request_revision_node(state)
-            # escalate: fall through to human gate
+            recommendation = {
+                "action": orch_decision.get("action", "escalate"),
+                "feedback": orch_decision.get("feedback", ""),
+                "preserve": orch_decision.get("preserve", []),
+            }
 
-    # ── Human gate (fallback) ──────────────────────────────────────────
     from langgraph.types import interrupt
 
     gate = str(state.get("human_approval_phase", ""))
-    issues: list[dict[str, Any]] = state.get("issues", [])
+    issues = state.get("issues", [])
     blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
 
-    # Determine allowed actions
     allowed_actions: list[str] = []
     if blocking_count == 0:
         allowed_actions.append("approve_phase")
@@ -1906,18 +2243,6 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         allowed_actions.append("escalate")
     else:
         allowed_actions.append("request_revision")
-
-    # ── Headless / auto-approve: no human to gate on ───────────────────
-    # Approve when clean; otherwise hand off to the bounded repair loop
-    # (after_approval routes not-approved + issues → repair) and let
-    # after_approval end the run cleanly on stall — never pause on interrupt().
-    if not _require_human_approval(state):
-        if blocking_count == 0:
-            return approve_phase_node(state)
-        new_state = deepcopy(state)
-        new_state["approved"] = False
-        new_state["human_approval_required"] = False
-        return new_state
 
     payload: dict[str, Any] = {
         "project_id": state.get("project_id", ""),
@@ -1927,14 +2252,19 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         "blocking_issue_count": blocking_count,
         "stalled": stalled,
         "allowed_actions": allowed_actions,
+        "recommendation": recommendation,
     }
 
     decision = interrupt(payload)
+    state_updates: dict[str, Any] = {}
 
     # Normalize the decision
     if isinstance(decision, dict):
         action = str(decision.get("action", ""))
         note = str(decision.get("note", ""))
+        external_state = decision.get("_external_state")
+        if isinstance(external_state, dict):
+            state_updates = _apply_external_state(state, external_state)
     elif isinstance(decision, str):
         action = decision
         note = ""
@@ -1942,11 +2272,15 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         action = "await"
 
     if action in ("approve", "approve_phase"):
-        return approve_phase_node(state)
+        result = approve_phase_node(state)
+        result.update(state_updates)
+        return result
     if action in ("revise", "request_revision"):
         if note:
             state["_revision_note"] = note
-        return request_revision_node(state)
+        result = request_revision_node(state)
+        result.update(state_updates)
+        return result
     return state
 
 

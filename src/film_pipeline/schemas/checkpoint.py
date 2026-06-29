@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import Field
 
 from film_pipeline.schemas._base import FilmPhase, MutableSchemaBase, SchemaBase
+
+
+class CheckpointState(MutableSchemaBase):
+    """Persisted graph state for checkpoint resume."""
+
+    state: dict[str, Any] = Field(default_factory=dict)
 
 
 class CheckpointMetadata(SchemaBase):

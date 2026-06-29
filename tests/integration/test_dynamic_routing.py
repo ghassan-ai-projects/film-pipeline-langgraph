@@ -1,160 +1,212 @@
-"""Integration test: dynamic routing — capability-based agent selection.
-
-Proves that the routing system selects different agents for create, review,
-and repair tasks, and that routing decisions are persisted as handoff records
-queryable through the MCP tool.
-"""
+"""Integration tests for state-driven routing via compute_actions()/after_phase()."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.router import AgentRouteResult, route_agent
+import pytest
+
+from film_pipeline.graph.edges import after_approval, after_phase
+from film_pipeline.graph.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
 
 
-class TestRouteAgent:
-    """Prove route_agent() selects different agents for create/review/repair."""
+@pytest.mark.integration
+class TestComputeActions:
+    """Router selects the right action given runtime state."""
 
-    def test_create_path_returns_default_agent(self) -> None:
-        rt = StudioRuntime()
-        rt.create_project("route-test", "Route Test")
-        rt.set_active("route-test")
+    def test_human_approval_required_waits(self) -> None:
+        state = _base_state(phase="constitution")
+        state["human_approval_required"] = True
+        result = compute_actions(state)
+        assert result.next_action == "wait_for_human"
+        assert result.human_gate == APPROVAL_GATES["constitution"]
+        assert "approve_phase" in result.eligible
 
-        state = rt.get_active() or {}
-        result = route_agent(state, "script", task_type="create")
-
-        assert isinstance(result, AgentRouteResult)
-        assert result.agent_id == "screenwriter-agent"
-        assert "create path" in result.routing_reason
-        assert result.fallback is False
-
-    def test_repair_path_selects_operator(self) -> None:
-        rt = StudioRuntime()
-        rt.create_project("route-test", "Route Test")
-        rt.set_active("route-test")
-
-        state = rt.get_active() or {}
-        assert rt.services is not None
-        result = route_agent(
-            state,
-            "script",
-            task_type="repair",
-            registry=rt.services.agent_registry,
+    def test_blocking_failure_with_safe_continue(self) -> None:
+        state = _base_state(phase="gen_planning")
+        state["_orchestrator__failure_decisions"].append(
+            {
+                "severity": "blocking",
+                "human_message": "provider down",
+                "safe_to_continue_other_work": True,
+            }
         )
+        result = compute_actions(state)
+        assert result.next_action == "continue_unrelated_work"
+        assert "advance_to_generation" in {b["action"] for b in result.blocked}
 
-        assert isinstance(result, AgentRouteResult)
-        # Repair selects failure-handling-agent (OPERATOR role, the repair agent)
-        assert result.agent_id == "failure-handling-agent"
-        assert "repair" in result.routing_reason.lower()
-        assert result.fallback is False
-
-    def test_review_path_selects_reviewer(self) -> None:
-        rt = StudioRuntime()
-        rt.create_project("route-test", "Route Test")
-        rt.set_active("route-test")
-
-        state = rt.get_active() or {}
-        assert rt.services is not None
-        result = route_agent(
-            state,
-            "script",
-            task_type="review",
-            registry=rt.services.agent_registry,
+    def test_blocking_failure_without_safe_continue_escalates(self) -> None:
+        state = _base_state(phase="generation")
+        state["_orchestrator__failure_decisions"].append(
+            {
+                "severity": "blocking",
+                "human_message": "fatal",
+                "safe_to_continue_other_work": False,
+            }
         )
+        result = compute_actions(state)
+        assert result.next_action == "escalate_to_failure_handler"
 
-        assert isinstance(result, AgentRouteResult)
-        # Review selects clip-validator (VALIDATOR role, the QC agent)
-        assert result.agent_id == "clip-validator"
-        assert "review" in result.routing_reason.lower()
-        assert result.fallback is False
+    def test_provider_blocked_generation_phase_reroutes(self) -> None:
+        state = _base_state(phase="generation")
+        state["_orchestrator__provider_health_snapshot"] = {
+            "mock-video-provider": {"status": "blocked_quota"},
+        }
+        result = compute_actions(state)
+        assert result.next_action == "continue_unrelated_work"
+        assert "advance_to_generation" in {b["action"] for b in result.blocked}
 
-    def test_different_phases_default_to_different_agents(self) -> None:
-        """Each phase routes to its own default agent."""
-        cases = [
-            ("intake", "intake-classifier-agent"),
-            ("constitution", "film-constitution-agent"),
-            ("script", "screenwriter-agent"),
-            ("shot_bible", "shot-design-agent"),
-            ("qc", "clip-validator"),
-        ]
-        for phase, expected_agent in cases:
-            result = route_agent({}, phase, task_type="create")
-            assert result.agent_id == expected_agent, (
-                f"Phase '{phase}' should route to '{expected_agent}', got '{result.agent_id}'"
+    def test_provider_blocked_before_generation_blocks_advance(self) -> None:
+        state = _base_state(phase="gen_planning", approved=True)
+        state["_orchestrator__provider_health_snapshot"] = {
+            "mock-video-provider": {"status": "blocked_quota"},
+        }
+        result = compute_actions(state)
+        assert result.next_action == "continue_unrelated_work"
+        assert "advance_to_generation" in {b["action"] for b in result.blocked}
+
+    def test_budget_blocked_escalates(self) -> None:
+        state = _base_state(phase="generation", approved=True)
+        state["_orchestrator__budget_snapshot"]["threshold_exceeded"] = True
+        result = compute_actions(state)
+        assert result.next_action == "escalate_to_human"
+        assert "advance_phase" in {b["action"] for b in result.blocked}
+
+    def test_blocking_issues_route_to_repair(self) -> None:
+        state = _base_state(phase="shot_bible")
+        state["issues"].append(
+            {"severity": "blocking", "code": "shot_count_mismatch", "message": "too few shots"}
+        )
+        result = compute_actions(state)
+        assert result.next_action == "handle_blockers"
+        assert "repair" in result.eligible
+
+    def test_pending_revision_routes_to_revise(self) -> None:
+        state = _base_state(phase="script")
+        state["_orchestrator__pending_revisions"].append(
+            {"artifact_refs": ["artifact:script:v1"], "resolved": False}
+        )
+        result = compute_actions(state)
+        assert result.next_action == "revise"
+        assert "revise" in result.eligible
+
+    def test_unapproved_phase_presents_review_package(self) -> None:
+        state = _base_state(phase="visual_dev", approved=False)
+        result = compute_actions(state)
+        assert result.next_action == "present_review_package"
+        assert result.human_gate == APPROVAL_GATES["visual_dev"]
+
+    def test_approved_phase_advances(self) -> None:
+        state = _base_state(phase="constitution", approved=True)
+        result = compute_actions(state)
+        assert result.next_action == "advance_to_development"
+
+    def test_approved_final_phase_wraps(self) -> None:
+        state = _base_state(phase="delivery", approved=True)
+        result = compute_actions(state)
+        assert result.next_action == "wrap"
+
+
+def _base_state(*, phase: str = "intake", approved: bool = False) -> dict[str, Any]:
+    return {
+        "current_phase": phase,
+        "approved": approved,
+        "human_approval_required": False,
+        "issues": [],
+        "_orchestrator__candidate_refs": {},
+        "_orchestrator__approved_refs": {},
+        "_orchestrator__active_review_cycles": [],
+        "_orchestrator__pending_revisions": [],
+        "_orchestrator__routing_decisions": [],
+        "_orchestrator__convergence": {},
+        "_orchestrator__failure_decisions": [],
+        "_orchestrator__provider_health_snapshot": {},
+        "_orchestrator__budget_snapshot": {
+            "cap_usd": 0.0,
+            "spent_usd": 0.0,
+            "remaining_usd": 0.0,
+            "threshold_exceeded": False,
+        },
+        "_orchestrator__execution_brief": {},
+    }
+
+
+@pytest.mark.integration
+class TestAfterPhaseEdges:
+    """after_phase() maps RouterResult actions to graph node names."""
+
+    def test_wait_for_human_goes_to_consistency_check(self) -> None:
+        state = _base_state(phase="constitution")
+        state["human_approval_required"] = True
+        assert after_phase(state) == "consistency_check"
+
+    def test_handle_blockers_goes_to_repair(self) -> None:
+        state = _base_state(phase="shot_bible")
+        state["issues"].append(
+            {"severity": "blocking", "code": "shot_count_mismatch", "message": "x"}
+        )
+        assert after_phase(state) == "repair"
+
+    def test_advance_goes_to_phase_node(self) -> None:
+        state = _base_state(phase="generation", approved=True)
+        assert after_phase(state) == "qc"
+
+    def test_advance_to_end_goes_to_end(self) -> None:
+        state = _base_state(phase="delivery", approved=True)
+        assert after_phase(state) == "end"
+
+    def test_repair_action_goes_to_await_approval(self) -> None:
+        state = _base_state(phase="script")
+        state["_orchestrator__pending_revisions"].append(
+            {"artifact_refs": ["artifact:script:v1"], "resolved": False}
+        )
+        assert after_phase(state) == "await_approval"
+
+    def test_unknown_action_defaults_to_consistency_check(self) -> None:
+        state = _base_state(phase="constitution", approved=False)
+        # present_review_package is not in the explicit action map, so the
+        # fallback path should still route through the human gate.
+        assert after_phase(state) == "consistency_check"
+
+
+@pytest.mark.integration
+class TestAfterApprovalEdges:
+    """after_approval() maps post-approval state to the next node."""
+
+    def test_approved_intake_advances_to_constitution(self) -> None:
+        assert after_approval({"current_phase": "intake", "approved": True}) == "constitution"
+
+    def test_unapproved_with_issues_routes_to_repair(self) -> None:
+        assert (
+            after_approval(
+                {"current_phase": "intake", "approved": False, "issues": [{"severity": "blocking"}]}
             )
+            == "repair"
+        )
 
-    def test_repair_without_registry_falls_back_to_default(self) -> None:
-        """Without a registry, repair/review return default create agent."""
-        result = route_agent({}, "script", task_type="repair")
-        assert result.agent_id == "screenwriter-agent"
-        assert result.fallback is False
+    def test_stalled_stays_at_gate(self) -> None:
+        assert (
+            after_approval(
+                {
+                    "current_phase": "shot_bible",
+                    "approved": False,
+                    "issues": [{"severity": "blocking"}],
+                    "_orchestrator__convergence": {
+                        "shot_bible": {"round_count": 5, "stalled": True, "escalation_reason": "x"},
+                    },
+                }
+            )
+            == "await_approval"
+        )
 
-    def test_preferred_capability_maps_task_type_without_registry(self) -> None:
-        """preferred_capability infers task_type even when registry is None."""
-        result = route_agent({}, "script", preferred_capability="review")
-        assert result.agent_id == "screenwriter-agent"
-
-
-class TestRoutingDecisions:
-    """Prove routing decisions are persisted in state."""
-
-    def test_routing_persisted_after_agent_run(self, tmp_path: Path) -> None:
-        rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-        rt.create_project("route-test", "Route Test")
-        rt.set_active("route-test")
-
-        # Run intake — should record a routing decision
-        state = rt._run_phase_node(rt.get_active() or {}, "intake")
-
-        decisions = state.get("_routing_decisions", [])
-        assert len(decisions) >= 1, f"Expected routing decisions, got {list(state.keys())}"
-        first = decisions[0]
-        assert first["agent_id"] == "intake-classifier-agent"
-        assert "create path" in first["routing_reason"]
-        assert first["phase"] == "intake"
-        assert "output_keys" in first
-        assert "input_refs" in first
-
-    def test_multiple_phases_accumulate_decisions(self, tmp_path: Path) -> None:
-        rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-        rt.create_project("route-test", "Route Test")
-        rt.set_active("route-test")
-
-        state = rt._run_phase_node(rt.get_active() or {}, "intake")
-        state = rt._run_phase_node(state, "constitution")
-        state = rt._run_phase_node(state, "development")
-
-        decisions = state.get("_routing_decisions", [])
-        assert len(decisions) >= 3
-        agent_ids = [d["agent_id"] for d in decisions]
-        assert "intake-classifier-agent" in agent_ids
-        assert "film-constitution-agent" in agent_ids
-        assert "treatment-agent" in agent_ids
+    def test_final_phase_ends(self) -> None:
+        assert after_approval({"current_phase": "delivery", "approved": True}) == "end"
 
 
-class TestExplainRoutingMCP:
-    """Prove routing decisions are queryable from project state."""
+@pytest.mark.integration
+class TestPhaseOrderContract:
+    """Phase order is stable and gates exist for every phase."""
 
-    def test_no_decisions_in_fresh_project(self, tmp_path: Path) -> None:
-        rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-        rt.create_project("empty-test", "Empty")
-        rt.set_active("empty-test")
-
-        active = rt.get_active()
-        assert active is not None
-        assert active.get("_routing_decisions", []) == []
-
-    def test_decisions_populated_after_agent_run(self, tmp_path: Path) -> None:
-        rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-        rt.create_project("explain-test", "Explain Test")
-        rt.set_active("explain-test")
-
-        state = rt._run_phase_node(rt.get_active() or {}, "intake")
-        rt.projects["explain-test"] = state
-
-        decisions = state.get("_routing_decisions", [])
-        assert len(decisions) >= 1
-        assert decisions[0]["agent_id"] == "intake-classifier-agent"
-        summary = decisions[0].get("routing_reason", "")
-        assert "create path" in summary
+    def test_approval_gate_for_every_phase(self) -> None:
+        for phase in PHASE_ORDER:
+            assert phase in APPROVAL_GATES, f"Missing approval gate for {phase}"

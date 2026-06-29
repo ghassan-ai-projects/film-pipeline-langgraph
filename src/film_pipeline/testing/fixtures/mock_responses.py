@@ -171,6 +171,45 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                 "total_dialogue_lines": 2,
             },
         },
+        "structure-extractor-agent": {
+            "execution_brief": {
+                "project_id": "demo",
+                "target_runtime_seconds": 240,
+                "movements": [
+                    {
+                        "movement_id": "act_1",
+                        "shot_count": 5,
+                        "duration_range_seconds": [8, 10],
+                        "description": "Setup",
+                    },
+                    {
+                        "movement_id": "act_2",
+                        "shot_count": 5,
+                        "duration_range_seconds": [8, 10],
+                        "description": "Confrontation",
+                    },
+                    {
+                        "movement_id": "act_3",
+                        "shot_count": 4,
+                        "duration_range_seconds": [8, 10],
+                        "description": "Resolution",
+                    },
+                ],
+                "mandatory_anchors": ["mara", "elias"],
+                "environment_progression": ["wasteland", "outpost"],
+                "pacing_style": "standard",
+            }
+        },
+        "orchestrator-agent": {
+            "orchestrator_decision": {
+                "action": "approve",
+                "feedback": "Looks good — proceed.",
+                "preserve": [],
+                "reasoning": "No blocking issues detected.",
+                "quality_score": 4,
+                "critical_issues": [],
+            }
+        },
         "reference-strategy-planner": {
             "visual_dev": {
                 "project_id": "demo",

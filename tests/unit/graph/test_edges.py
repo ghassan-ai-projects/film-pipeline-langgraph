@@ -23,25 +23,25 @@ def _routed(next_action: str) -> str:
 
 
 class TestAfterPhaseHumanGateActions:
-    def test_wait_for_human_routes_to_gate(self) -> None:
-        assert _routed("wait_for_human") == "await_approval"
+    def test_wait_for_human_routes_to_consistency_check(self) -> None:
+        assert _routed("wait_for_human") == "consistency_check"
 
-    def test_present_review_package_routes_to_gate(self) -> None:
-        assert _routed("present_review_package") == "await_approval"
+    def test_present_review_package_routes_to_consistency_check(self) -> None:
+        assert _routed("present_review_package") == "consistency_check"
 
-    def test_escalate_to_human_routes_to_gate(self) -> None:
-        assert _routed("escalate_to_human") == "await_approval"
+    def test_escalate_to_human_routes_to_consistency_check(self) -> None:
+        assert _routed("escalate_to_human") == "consistency_check"
 
-    def test_continue_unrelated_work_routes_to_gate(self) -> None:
-        assert _routed("continue_unrelated_work") == "await_approval"
+    def test_continue_unrelated_work_routes_to_consistency_check(self) -> None:
+        assert _routed("continue_unrelated_work") == "consistency_check"
 
 
 class TestAfterPhaseRepairAndAdvance:
     def test_handle_blockers_routes_to_repair(self) -> None:
         assert _routed("handle_blockers") == "repair"
 
-    def test_advance_to_phase_passes_through(self) -> None:
-        assert _routed("advance_to_constitution") == "advance_to_constitution"
+    def test_advance_to_phase_returns_phase_key(self) -> None:
+        assert _routed("advance_to_constitution") == "constitution"
 
     def test_advance_to_end_routes_to_end_node(self) -> None:
         assert _routed("advance_to_end") == "end"
@@ -52,8 +52,11 @@ class TestAfterPhaseRepairAndAdvance:
     def test_literal_revise_stays_at_gate(self) -> None:
         assert _routed("revise") == "await_approval"
 
-    def test_unknown_action_falls_back_to_gate(self) -> None:
-        assert _routed("something_unrecognized") == "await_approval"
+    def test_wrap_routes_to_end(self) -> None:
+        assert _routed("wrap") == "end"
+
+    def test_unknown_action_falls_back_to_consistency_check(self) -> None:
+        assert _routed("something_unrecognized") == "consistency_check"
 
 
 class TestAfterPhaseRealRouterOutcomes:
@@ -67,4 +70,4 @@ class TestAfterPhaseRealRouterOutcomes:
             "issues": [],
             "_orchestrator": {"revisions": {"script": [{"note": "x"}]}},
         }
-        assert after_phase(state) == "await_approval"
+        assert after_phase(state) == "consistency_check"

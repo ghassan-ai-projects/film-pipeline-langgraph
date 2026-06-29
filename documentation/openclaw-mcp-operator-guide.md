@@ -689,7 +689,92 @@ These behaviors are aligned:
 - **candidate→approved promotion**: `approve_phase` promotes all candidate refs to approved baselines
 - **consensus reports**: QC phase produces `ConsensusReport` artifacts with agreement levels
 
-## What Is Resolved (as of 2026-06-21)
+## Mid-Project Profile Changes
+
+The profile stack can be changed after project creation, but the change must be
+proposed, reviewed, and explicitly approved. This prevents silent drift in
+quality, provider, or review settings.
+
+### Propose A Change
+
+```json
+{
+  "tool": "propose_profile_change",
+  "reason": "Switch to draft quality for faster iteration",
+  "quality_profile": "quality.draft"
+}
+```
+
+The tool resolves the projected configuration, computes a diff, and stores a
+pending `ProfileChangeProposal` artifact. The change is **not** applied yet.
+
+### Approve A Change
+
+```json
+{
+  "tool": "approve_profile_change",
+  "proposal_id": "profile-change:abc123",
+  "confirmed": true,
+  "approved_by": "operator-name",
+  "note": "Approved for iteration pass."
+}
+```
+
+Approval:
+
+- bumps `profile_version` on the project
+- re-resolves and stores a new `project_config` artifact
+- registers providers from the new stack
+- creates an invalidation report for downstream artifacts
+- stores a `ProfileChangeApproval` artifact
+
+Because `approve_profile_change` mutates project configuration, it requires
+`confirmed: true`.
+
+## Operator Comments
+
+Target-scoped operator notes are persisted per project:
+
+```json
+{
+  "tool": "add_operator_comment",
+  "target_type": "scene",
+  "target_id": "SC_004",
+  "body": "Dialogue voice drifts here — tighten Mara's diction.",
+  "phase": "script",
+  "source": "openclaw"
+}
+```
+
+List comments:
+
+```json
+{
+  "tool": "list_operator_comments",
+  "include_resolved": false
+}
+```
+
+## TUI As MCP Consumer
+
+The terminal UI can run through the same MCP tool surface as OpenClaw.
+
+- Default: `MCPStudioGateway` spawns the MCP server over stdio JSON-RPC
+- Legacy: set `FILM_PIPELINE_TUI_GATEWAY=inprocess` to use the in-process service gateway
+
+```bash
+# Default — TUI calls MCP tools
+FILM_PIPELINE_TUI_GATEWAY=mcp uv run --python 3.12 --group dev python -m film_pipeline.tui.app
+
+# Legacy — TUI calls services directly
+FILM_PIPELINE_TUI_GATEWAY=inprocess uv run --python 3.12 --group dev python -m film_pipeline.tui.app
+```
+
+When using the MCP gateway, every TUI action (create project, submit idea,
+approve phase, add comment, list checkpoints, etc.) is dispatched through the
+same `tools/call` JSON-RPC endpoint that OpenClaw uses.
+
+## What Is Resolved (as of 2026-06-29)
 
 These previously-missing items are now implemented:
 
@@ -703,16 +788,17 @@ These previously-missing items are now implemented:
 - **Convergence tracking**: 5-round stall detection with escalation
 - **Review packages**: `review_phase_artifacts` returns structured `ReviewPackage` with orchestrator recommendations
 - **Expanded orchestrator summary**: `get_orchestrator_summary` includes route reason, candidate/approved refs, pending revisions, review cycles, provider health, budget, and failure status
+- **Versioned profile changes**: `propose_profile_change` and `approve_profile_change` implement approved mid-project profile changes with configuration diffing and downstream invalidation
+- **Operator comments over MCP**: `add_operator_comment` and `list_operator_comments` persist target-scoped notes through the MCP surface
+- **TUI MCP gateway**: `MCPStudioGateway` lets the terminal UI consume the same MCP tool surface as OpenClaw
 
 ## What Is Still Missing
 
-- resolved config not yet exposed as a dedicated first-class MCP artifact
 - live-provider health polling is manual (operator must call tools); no automated health-check loop
 - audit proof for live model/provider execution is still limited
 - delta regeneration has no dedicated MCP tool — it runs internally during `generate_reference_images` but OpenClaw cannot request targeted tile-level retries independently
 - composite validation results (failing tiles, bad reference tags) are computed during generation but not surfaced as a callable MCP artifact — they only appear in the Gemini response logged to the console
 - `get_validation_report` for `visual_dev` uses the pre-existing ReferenceUsabilityValidator (macro-level checks) rather than the Gemini per-frame and composite review scores; individual frame scores are accessible via `inspect_reference` per-entry
-- bible generation tools (CharacterBible, EnvironmentBible, CameraLanguageBible, StyleBible) are planned but not yet implemented
 - shot bible, generation plan, QC, post, and delivery nodes are all flag-only — see implementation plan phases 06-10
 - frame metadata sidecars, sheet manifests, and additional composite templates are planned — see implementation plan phases 03-05
 - multi-model parallel dispatch (running validators simultaneously on different models) is wired at the profile/strategy level but actual parallel model execution requires provider-level work

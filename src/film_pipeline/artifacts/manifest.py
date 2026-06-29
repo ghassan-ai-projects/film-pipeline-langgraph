@@ -1,13 +1,15 @@
-"""Asset manifolds for generated media, references, frames, and delivery."""
+"""Asset manifests for generated media, references, frames, and delivery."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, Field
 
-@dataclass
-class AssetEntry:
+
+class AssetEntry(BaseModel):
+    """A single generated or reference asset in a project."""
+
     asset_id: str
     path: str
     kind: str  # reference_sheet, generated_clip, last_frame, mid_frame, audio_stem
@@ -17,12 +19,11 @@ class AssetEntry:
     active: bool = True
 
 
-@dataclass
-class AssetManifest:
+class AssetManifest(BaseModel):
     """Flat manifest of all assets in a project."""
 
     project_id: str
-    entries: list[AssetEntry] = field(default_factory=list)
+    entries: list[AssetEntry] = Field(default_factory=list)
 
     def add(self, entry: AssetEntry) -> None:
         self.entries.append(entry)
@@ -47,23 +48,13 @@ def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManife
     manifest_path = root / project_id / "asset-manifest.json"
     if not manifest_path.exists():
         return None
-    import json
 
-    data = json.loads(manifest_path.read_text())
-    return AssetManifest(
-        project_id=project_id,
-        entries=[AssetEntry(**e) for e in data.get("entries", [])],
-    )
+    data = manifest_path.read_text()
+    manifest = AssetManifest.model_validate_json(data)
+    return manifest.model_copy(update={"project_id": project_id})
 
 
 def write_manifest(manifest: AssetManifest, root: Path = Path("projects")) -> None:
-    import json
-
     manifest_path = root / manifest.project_id / "asset-manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(
-        json.dumps(
-            {"project_id": manifest.project_id, "entries": [vars(e) for e in manifest.entries]},
-            indent=2,
-        )
-    )
+    manifest_path.write_text(manifest.model_dump_json(indent=2))

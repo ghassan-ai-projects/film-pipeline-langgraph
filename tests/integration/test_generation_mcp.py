@@ -92,7 +92,7 @@ class TestGenerationMCPTools:
                 }
             )
         )
-        result = asyncio.run(approve_generation_spend({}))
+        result = asyncio.run(approve_generation_spend({"confirmed": True}))
         assert result.get("ok") is True
         assert result.get("approved") == 1
 

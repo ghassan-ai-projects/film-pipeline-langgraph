@@ -42,7 +42,7 @@ class TestManualFourMinuteMockShort:
         result = invoke_tool(rt, "submit_idea", idea=idea)
         assert result["ok"] is True, f"submit_idea failed: {result}"
 
-        result = invoke_tool(rt, "approve_intake")
+        result = invoke_tool(rt, "approve_intake", confirmed=True)
         assert result["ok"] is True, f"approve_intake failed: {result}"
 
         expected_phase_progression = [
@@ -53,7 +53,7 @@ class TestManualFourMinuteMockShort:
             "gen_planning",
         ]
         for expected_phase in expected_phase_progression:
-            result = invoke_tool(rt, "approve_phase")
+            result = invoke_tool(rt, "approve_phase", confirmed=True)
             assert result["ok"] is True, f"approve_phase failed before {expected_phase}: {result}"
             phase_result = invoke_tool(rt, "get_current_phase")
             assert phase_result["ok"] is True
@@ -75,17 +75,17 @@ class TestManualFourMinuteMockShort:
         assert result["ok"] is True, f"plan_generation_batch failed: {result}"
         assert result.get("planned", 0) >= 1
 
-        result = invoke_tool(rt, "approve_generation_spend", max_cost_usd=25.0)
+        result = invoke_tool(rt, "approve_generation_spend", max_cost_usd=25.0, confirmed=True)
         assert result["ok"] is True, f"approve_generation_spend failed: {result}"
         assert result.get("approved", 0) >= 1
 
-        result = invoke_tool(rt, "approve_phase")
+        result = invoke_tool(rt, "approve_phase", confirmed=True)
         assert result["ok"] is True, f"approve_phase gen_planning->generation failed: {result}"
         phase_result = invoke_tool(rt, "get_current_phase")
         assert phase_result["current_phase"] == "generation"
 
         # Stop before actual clip execution, but still advance into QC-ready state.
-        result = invoke_tool(rt, "approve_phase")
+        result = invoke_tool(rt, "approve_phase", confirmed=True)
         assert result["ok"] is True, f"approve_phase generation->qc failed: {result}"
         phase_result = invoke_tool(rt, "get_current_phase")
         assert phase_result["current_phase"] == "qc"

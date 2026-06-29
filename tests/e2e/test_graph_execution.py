@@ -125,7 +125,7 @@ class TestGraphExecution:
                     "issues": [],
                 }
             )
-            == "await_approval"
+            == "consistency_check"
         )
 
         assert after_approval({"current_phase": "intake", "approved": True}) == "constitution"
@@ -154,7 +154,7 @@ class TestGraphExecution:
                 "issues": [],
             }
         )
-        assert "advance_to" in result or result == "await_approval"
+        assert result == "visual_dev"
 
     def test_after_approval_repair_path(self) -> None:
         """Not approved but has issues → repair."""

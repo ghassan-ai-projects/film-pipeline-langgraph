@@ -83,12 +83,13 @@ class AssemblyAgent:
 
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.assembly import AssemblyPlanArtifact
 
         artifact_id = "assembly_manifest"
-        data = {
-            "plan_id": plan.plan_id,
-            "project_id": plan.project_id,
-            "clip_order": [
+        model = AssemblyPlanArtifact(
+            plan_id=plan.plan_id,
+            project_id=plan.project_id,
+            clip_order=[
                 {
                     "shot_id": path.split("/")[-1].rsplit(".", 1)[0],
                     "source_asset_ref": path,
@@ -97,16 +98,16 @@ class AssemblyAgent:
                 }
                 for i, path in enumerate(plan.clips)
             ],
-            "clips": plan.clips,
-            "total_duration_seconds": plan.total_duration_seconds,
-            "clip_count": plan.clip_count,
-            "missing_assets": plan.missing_assets,
-            "transitions": [
+            clips=plan.clips,
+            total_duration_seconds=plan.total_duration_seconds,
+            clip_count=plan.clip_count,
+            missing_assets=plan.missing_assets,
+            transitions=[
                 {"from_shot_id": t["from"], "to_shot_id": t["to"], "transition_type": t["type"]}
                 for t in plan.transition_points
             ],
-            "notes": plan.notes,
-        }
+            notes=plan.notes,
+        )
         meta = ArtifactMetadata(
             artifact_id=artifact_id,
             artifact_type=ArtifactType.ASSEMBLY_MANIFEST,
@@ -118,7 +119,7 @@ class AssemblyAgent:
             created_by="assembly-agent",
             created_at=datetime.now(UTC),
         )
-        artifact_store.save_dict(data, meta)
+        artifact_store.save(model, meta)
         return f"artifact:{artifact_id}:v1"
 
     def validate_plan(self, plan: AssemblyPlan) -> list[str]:

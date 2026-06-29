@@ -196,6 +196,31 @@ def test_generate_character_bible_success(tmp_path: Path, monkeypatch: pytest.Mo
     assert active["character_bible_ref"] == result["character_bible_ref"]
 
 
+def test_generate_character_bible_creates_new_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_id = "bible-char-version"
+    rt = _build_runtime_through_script(tmp_path, project_id)
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result1 = asyncio.run(
+        generate_character_bible({"character_id": "leo", "character_name": "Leo"})
+    )
+    assert result1["ok"] is True
+
+    result2 = asyncio.run(
+        generate_character_bible({"character_id": "leo", "character_name": "Leo"})
+    )
+    assert result2["ok"] is True
+
+    assert rt.services is not None
+    store = rt.services.artifact_store
+    meta1 = store.load_metadata(project_id, "visual_dev", "character_bible", 1)
+    meta2 = store.load_metadata(project_id, "visual_dev", "character_bible", 2)
+    assert meta1.version == 1
+    assert meta2.version == 2
+
+
 def test_generate_environment_bible_requires_environment_id(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
