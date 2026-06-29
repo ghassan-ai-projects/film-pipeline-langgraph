@@ -57,9 +57,9 @@ def load_all(reg: PromptTemplateRegistry) -> None:
 
 def _structure_extractor() -> PromptTemplate:
     return PromptTemplate(
-        template_id="structure-extractor-v3",
+        template_id="structure-extractor-v4",
         agent_id="structure-extractor-agent",
-        version=3,
+        version=4,
         role=(
             "You are the structure-extractor-agent (Film Structure Extractor). "
             "Your role is to extract the structural metadata from an approved "
@@ -94,7 +94,7 @@ def _structure_extractor() -> PromptTemplate:
             "action/thriller."
         ),
         context_template=(
-            "=== SCOPE CONTRACT (authoritative totals) ===\n"
+            "{constraints}\n\n" + "=== SCOPE CONTRACT (authoritative totals) ===\n"
             "target_runtime_seconds: {target_runtime_seconds}\n"
             "total_shots (use exactly): {target_shot_count}\n"
             "pacing_style: {pacing_style}\n"
@@ -157,9 +157,9 @@ def _structure_extractor() -> PromptTemplate:
 
 def _intake_classifier() -> PromptTemplate:
     return PromptTemplate(
-        template_id="intake-classifier-v3",
+        template_id="intake-classifier-v4",
         agent_id="intake-classifier-agent",
-        version=3,
+        version=4,
         role="You are the intake-classifier-agent (Intake Classifier). "
         "Your role is to classify the user's film idea and produce a project profile.",
         core_task=(
@@ -173,7 +173,7 @@ def _intake_classifier() -> PromptTemplate:
             "sensitivity concerns, budget concerns, production complexity."
         ),
         context_template=(
-            "User idea: {idea}\n"
+            "{constraints}\n\n" + "User idea: {idea}\n"
             "Requested runtime (seconds, blank = you estimate): {target_runtime_seconds}\n"
             "Project ID: {project_id}\nKB refs: {kb_refs}"
         ),
@@ -227,9 +227,9 @@ def _intake_classifier() -> PromptTemplate:
 
 def _constitution_creator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="constitution-creator-v3",
+        template_id="constitution-creator-v4",
         agent_id="film-constitution-agent",
-        version=3,
+        version=4,
         role=(
             "You are a visionary director and showrunner writing the creative bible "
             "for a new film — the document every other artist on the production will "
@@ -251,7 +251,7 @@ def _constitution_creator() -> PromptTemplate:
             "8. Taboo mistakes: concrete violations that must never appear."
         ),
         context_template=(
-            "Project idea: {idea}\n"
+            "{constraints}\n\n" + "Project idea: {idea}\n"
             "FILM TYPE: {film_type} — let it drive the visual language and tone "
             "(visual_poetry → painterly, image-led; narrative → grounded; "
             "experimental → abstract; commercial → bold, immediate).\n"
@@ -295,9 +295,9 @@ def _constitution_creator() -> PromptTemplate:
 
 def _development_creator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="development-creator-v3",
+        template_id="development-creator-v4",
         agent_id="treatment-agent",
-        version=3,
+        version=4,
         role=(
             "You are a seasoned film development executive and story editor. You turn "
             "a creative constitution into a treatment with a spine of strong, "
@@ -323,7 +323,7 @@ def _development_creator() -> PromptTemplate:
             "finalizing, and add scenes that earn their place if it falls short."
         ),
         context_template=(
-            "=== ORIGINAL USER IDEA (source of truth for story beats) ===\n"
+            "{constraints}\n\n" + "=== ORIGINAL USER IDEA (source of truth for story beats) ===\n"
             "{idea}\n\n"
             "=== FILM CONSTITUTION (creative law) ===\n"
             "Constitution ref: {constitution_ref}\n"
@@ -378,9 +378,9 @@ def _development_creator() -> PromptTemplate:
 
 def _screenwriter() -> PromptTemplate:
     return PromptTemplate(
-        template_id="screenwriter-v3",
+        template_id="screenwriter-v4",
         agent_id="screenwriter-agent",
-        version=3,
+        version=4,
         role=(
             "You are an award-winning screenwriter and script doctor. You have "
             "written and rewritten produced features. You think in images and "
@@ -418,7 +418,7 @@ def _screenwriter() -> PromptTemplate:
             "his coffee down a half-inch too hard and says nothing."
         ),
         context_template=(
-            "FILM TYPE: {film_type} — match its voice and dialogue weight "
+            "{constraints}\n\n" + "FILM TYPE: {film_type} — match its voice and dialogue weight "
             "(visual_poetry → sparse or wordless; narrative → naturalistic; "
             "commercial → punchy). Let this shape the writing, not just the content.\n\n"
             "=== ORIGINAL USER IDEA (source of truth for story beats) ===\n"
@@ -499,9 +499,9 @@ def _screenwriter() -> PromptTemplate:
 
 def _visual_development_creator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="visual-dev-creator-v1",
+        template_id="visual-dev-creator-v2",
         agent_id="reference-strategy-planner",
-        version=1,
+        version=2,
         role="You are the visual-dev-agent (Visual Development Creator). "
         "Your role is to design the visual look of the film.",
         core_task=(
@@ -518,7 +518,7 @@ def _visual_development_creator() -> PromptTemplate:
             "reference count accordingly."
         ),
         context_template=(
-            "Script ref: {script_ref}\n"
+            "{constraints}\n\n" + "Script ref: {script_ref}\n"
             "Script content:\n{script_content}\n"
             "Story bible ref: {story_bible_ref}\n"
             "Story bible content:\n{story_bible_content}\n"
@@ -571,9 +571,9 @@ def _visual_development_creator() -> PromptTemplate:
 
 def _shot_bible_creator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="shot-bible-creator-v3",
+        template_id="shot-bible-creator-v4",
         agent_id="shot-design-agent",
-        version=3,
+        version=4,
         role=(
             "You are the shot-bible-agent (Shot Bible Creator). "
             "Your PRIMARY job is to produce exactly the right number of shot "
@@ -597,7 +597,7 @@ def _shot_bible_creator() -> PromptTemplate:
             "the count."
         ),
         context_template=(
-            "=== EXECUTION BRIEF (YOUR STRUCTURAL CONTRACT) ===\n"
+            "{constraints}\n\n" + "=== EXECUTION BRIEF (YOUR STRUCTURAL CONTRACT) ===\n"
             "{execution_brief_content}\n"
             "=== END BRIEF ===\n\n"
             "=== SCENE LIST (every scene must be covered) ===\n"
@@ -662,9 +662,9 @@ def _shot_bible_creator() -> PromptTemplate:
 
 def _generation_planner() -> PromptTemplate:
     return PromptTemplate(
-        template_id="generation-planner-v3",
+        template_id="generation-planner-v4",
         agent_id="provider-planning-agent",
-        version=3,
+        version=4,
         role="You are the generation-planner-agent (Generation Planner). "
         "Your role is to plan the generation batch for the shot matrix, "
         "respecting the structural requirements in the Execution Brief.",
@@ -678,7 +678,7 @@ def _generation_planner() -> PromptTemplate:
             "number of shots — not a placeholder."
         ),
         context_template=(
-            "Execution Brief (film structure):\n{execution_brief_content}\n\n"
+            "{constraints}\n\n" + "Execution Brief (film structure):\n{execution_brief_content}\n\n"
             "Shot matrix ref: {shot_matrix_ref}\n"
             "Shot matrix content:\n{shot_matrix_content}\n"
             "Budget cap: {budget_cap}\n"
@@ -730,9 +730,9 @@ def _generation_planner() -> PromptTemplate:
 
 def _qc_synthesizer() -> PromptTemplate:
     return PromptTemplate(
-        template_id="qc-synthesizer-v2",
+        template_id="qc-synthesizer-v3",
         agent_id="clip-validator",
-        version=2,
+        version=3,
         role="You are the qc-synthesis-agent (QC Synthesizer). "
         "Your role is to synthesize validation findings from all phases "
         "into a unified quality report with consensus scoring.",
@@ -749,7 +749,7 @@ def _qc_synthesizer() -> PromptTemplate:
             "to advance, retry, or escalate."
         ),
         context_template=(
-            "Validator findings (issues from all phases):\n"
+            "{constraints}\n\n" + "Validator findings (issues from all phases):\n"
             "{validator_issues}\n\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"
@@ -785,9 +785,9 @@ def _qc_synthesizer() -> PromptTemplate:
 
 def _assembly_agent() -> PromptTemplate:
     return PromptTemplate(
-        template_id="assembly-agent-v2",
+        template_id="assembly-agent-v3",
         agent_id="failure-handling-agent",
-        version=2,
+        version=3,
         role="You are the assembly-agent (Post-Production Assembly). "
         "Your role is to assemble the final cut from generated media.",
         core_task=(
@@ -799,7 +799,7 @@ def _assembly_agent() -> PromptTemplate:
             "5. Compute total duration from clip in/out points."
         ),
         context_template=(
-            "Shot matrix ref: {shot_matrix_ref}\n"
+            "{constraints}\n\n" + "Shot matrix ref: {shot_matrix_ref}\n"
             "Shot matrix content:\n{shot_matrix_content}\n"
             "Script ref: {script_ref}\n"
             "Script content:\n{script_content}\n"
@@ -854,9 +854,9 @@ def load_validator_templates(reg: PromptTemplateRegistry) -> None:
 
 def _script_structure_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="script-structure-v1",
+        template_id="script-structure-v2",
         agent_id="scene-writing-validator",
-        version=1,
+        version=2,
         role=(
             "You are a senior script editor with 20 years of experience in dramatic "
             "screenwriting. You can spot structural weakness in a scene within the "
@@ -878,7 +878,7 @@ def _script_structure_validator() -> PromptTemplate:
             "action without context."
         ),
         context_template=(
-            "SCRIPT CONTENT:\n{script_content}\n\n"
+            "{constraints}\n\n" + "SCRIPT CONTENT:\n{script_content}\n\n"
             "SCENE INTENTS:\n{scene_intents}\n\n"
             "FILM CONSTITUTION:\n{film_constitution}\n\n"
             "TARGET RUNTIME: {target_runtime_seconds}s\n"
@@ -909,9 +909,9 @@ def _script_structure_validator() -> PromptTemplate:
 
 def _dialogue_voice_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="dialogue-voice-v1",
+        template_id="dialogue-voice-v2",
         agent_id="dialogue-voice-validator",
-        version=1,
+        version=2,
         role=(
             "You are a dialogue coach and dramaturg who has worked with Academy "
             "Award-winning actors. You can hear a character's voice in your head "
@@ -934,7 +934,7 @@ def _dialogue_voice_validator() -> PromptTemplate:
             "dialogue has characters saying one thing while meaning another."
         ),
         context_template=(
-            "SCRIPT DIALOGUE:\n{script_content}\n\n"
+            "{constraints}\n\n" + "SCRIPT DIALOGUE:\n{script_content}\n\n"
             "CHARACTER DOSSIERS:\n{character_dossiers}\n\n"
             "CHARACTER VOICE NOTES:\n{voice_notes}"
         ),
@@ -962,9 +962,9 @@ def _dialogue_voice_validator() -> PromptTemplate:
 
 def _prompt_readiness_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="prompt-readiness-v1",
+        template_id="prompt-readiness-v2",
         agent_id="prompt-readiness-validator",
-        version=1,
+        version=2,
         role=(
             "You are a prompt engineer who has designed thousands of LLM prompts "
             "for production systems. You know the difference between a good prompt "
@@ -987,7 +987,7 @@ def _prompt_readiness_validator() -> PromptTemplate:
             "well-defined?"
         ),
         context_template=(
-            "PROMPT ENTRIES:\n{prompt_entries}\n\n"
+            "{constraints}\n\n" + "PROMPT ENTRIES:\n{prompt_entries}\n\n"
             "EXPECTED OUTPUT SCHEMA: {output_schema}\n\n"
             "AVAILABLE CONTEXT VARIABLES: {context_variables}\n"
             "ENTRY COUNT: {entry_count}"
@@ -1015,9 +1015,9 @@ def _prompt_readiness_validator() -> PromptTemplate:
 
 def _reference_usability_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="reference-usability-v1",
+        template_id="reference-usability-v2",
         agent_id="reference-usability-validator",
-        version=1,
+        version=2,
         role=(
             "You are an art director at a major animation studio. You review "
             "hundreds of reference images daily. You can spot a subject mismatch "
@@ -1035,7 +1035,7 @@ def _reference_usability_validator() -> PromptTemplate:
             "direction? Photorealistic 3D render for an ink-wash project = mismatch."
         ),
         context_template=(
-            "SUBJECT DESCRIPTION:\n{subject_description}\n\n"
+            "{constraints}\n\n" + "SUBJECT DESCRIPTION:\n{subject_description}\n\n"
             "VISUAL STYLE DIRECTION:\n{style_direction}\n\n"
             "REFERENCE STRATEGY:\n{reference_strategy}"
         ),
@@ -1061,9 +1061,9 @@ def _reference_usability_validator() -> PromptTemplate:
 
 def _scene_continuity_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="scene-continuity-v1",
+        template_id="scene-continuity-v2",
         agent_id="scene-continuity-validator",
-        version=1,
+        version=2,
         role=(
             "You are a continuity supervisor with experience on 50+ feature films. "
             "You track hair position, clothing wrinkles, prop placement, liquid "
@@ -1084,7 +1084,7 @@ def _scene_continuity_validator() -> PromptTemplate:
             "direction consistent, eyelines match, correct blocking."
         ),
         context_template=(
-            "You are viewing {frame_count} consecutive frames.\n\n"
+            "{constraints}\n\n" + "You are viewing {frame_count} consecutive frames.\n\n"
             "CHARACTER DESCRIPTIONS:\n{character_descriptions}\n\n"
             "SCENE DESCRIPTION:\n{scene_descriptions}\n\n"
             "SHOT METADATA:\n{shot_metadata}"
@@ -1113,9 +1113,9 @@ def _scene_continuity_validator() -> PromptTemplate:
 
 def _assembly_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="assembly-v1",
+        template_id="assembly-v2",
         agent_id="assembly-validator",
-        version=1,
+        version=2,
         role=(
             "You are a film editor who has cut award-winning features across "
             "drama, action, and documentary. Editing is invisible storytelling — "
@@ -1134,7 +1134,7 @@ def _assembly_validator() -> PromptTemplate:
             "Rising tension, turning points, release."
         ),
         context_template=(
-            "ASSEMBLY MANIFEST:\n{assembly_manifest}\n\n"
+            "{constraints}\n\n" + "ASSEMBLY MANIFEST:\n{assembly_manifest}\n\n"
             "SHOT BIBLE:\n{shot_bible}\n\n"
             "STORY STRUCTURE:\n{story_structure}\n\n"
             "TARGET RUNTIME: {target_runtime_seconds}s\n"
@@ -1162,9 +1162,9 @@ def _assembly_validator() -> PromptTemplate:
 
 def _delivery_completeness_validator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="delivery-completeness-v1",
+        template_id="delivery-completeness-v2",
         agent_id="delivery-completeness-validator",
-        version=1,
+        version=2,
         role=(
             "You are a post-production supervisor responsible for final delivery "
             "QC. Before any project goes to the client, you review every file. "
@@ -1181,7 +1181,7 @@ def _delivery_completeness_validator() -> PromptTemplate:
             "Not 'output_final_v3.mp4'. Logical package structure?"
         ),
         context_template=(
-            "DELIVERY MANIFEST:\n{delivery_manifest}\n\n"
+            "{constraints}\n\n" + "DELIVERY MANIFEST:\n{delivery_manifest}\n\n"
             "FILE LISTING:\n{file_listing}\n\n"
             "PROJECT METADATA:\n{project_metadata}"
         ),
@@ -1207,9 +1207,9 @@ def _delivery_completeness_validator() -> PromptTemplate:
 
 def _orchestrator_review() -> PromptTemplate:
     return PromptTemplate(
-        template_id="orchestrator-review-v2",
+        template_id="orchestrator-review-v3",
         agent_id="orchestrator-agent",
-        version=2,
+        version=3,
         role=(
             "You are the orchestrator-agent (Autonomous Quality Reviewer). "
             "Your role is to review creative output against the film's target "
@@ -1229,7 +1229,7 @@ def _orchestrator_review() -> PromptTemplate:
             "Only escalate when you cannot provide useful creative direction."
         ),
         context_template=(
-            "TARGET FILM:\n"
+            "{constraints}\n\n" + "TARGET FILM:\n"
             "  Runtime: {target_runtime_seconds}s\n"
             "  Film type: {film_type}\n"
             "  Pacing: {pacing_style}\n\n"

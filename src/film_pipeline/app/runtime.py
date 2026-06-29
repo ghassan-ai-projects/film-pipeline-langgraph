@@ -72,6 +72,7 @@ class StudioRuntime:
             "approved": False,
             "human_approval_required": False,
             "human_approval_phase": "",
+            "constraints_hints": {},
             "issues": [],
         }
         self.projects[project_id] = state

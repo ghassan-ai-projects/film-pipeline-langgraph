@@ -48,6 +48,10 @@ class StudioGraphState(TypedDict, total=False):
     min_scene_count: int
     target_shot_count: int
     scope_contract_ref: str
+    # ── User-intent constraints (extracted at intake, propagated to prompts) ─
+    constraints_hints: dict[str, Any]
+    constraints: dict[str, Any] | None
+    constraints_ref: str
     profile_ref: str
     constitution_ref: str
     treatment_ref: str
