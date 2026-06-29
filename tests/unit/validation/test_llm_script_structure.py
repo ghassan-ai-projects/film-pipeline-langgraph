@@ -86,6 +86,16 @@ def _make_validator(
     return validator
 
 
+def _valid_scene(scene_id: str = "sc_001") -> dict[str, Any]:
+    """Return a scene that passes rule-based structural checks."""
+    return {
+        "scene_id": scene_id,
+        "intent_ref": f"s_{scene_id[-3:]}",
+        "dialogue": [],
+        "action_lines": ["They argue, the tension clear."],
+    }
+
+
 def test_llm_path_produces_score() -> None:
     """LLM validation returns score and issues from the model response."""
     adapter = FakeAdapter(_llm_response(85, []))
@@ -93,7 +103,7 @@ def test_llm_path_produces_score() -> None:
     registry.register(_make_template())
 
     validator = _make_validator(adapter, FakeRouter(), registry)
-    raw = validator.validate({"scenes": [{"scene_id": "sc_001", "dialogue": []}]})
+    raw = validator.validate({"scenes": [_valid_scene()]})
 
     assert raw["score"] == 85
     assert raw["passed"] is True
@@ -122,12 +132,12 @@ def test_llm_path_includes_issues() -> None:
     registry.register(_make_template())
 
     validator = _make_validator(adapter, FakeRouter(), registry)
-    raw = validator.validate({"scenes": [{"scene_id": "sc_001", "dialogue": []}]})
+    raw = validator.validate({"scenes": [_valid_scene()]})
 
     assert raw["score"] == 60
-    assert len(raw["issues"]) == 1
-    assert raw["issues"][0]["code"] == "no_conflict"
-    assert "suggestion" in raw["issues"][0]
+    assert any(i["code"] == "no_conflict" for i in raw["issues"])
+    no_conflict = next(i for i in raw["issues"] if i["code"] == "no_conflict")
+    assert "suggestion" in no_conflict
 
 
 def test_extract_issues_maps_suggestion_fields() -> None:
@@ -152,7 +162,7 @@ def test_extract_issues_maps_suggestion_fields() -> None:
     registry.register(_make_template())
 
     validator = _make_validator(adapter, FakeRouter(), registry)
-    raw = validator.validate({"scenes": []})
+    raw = validator.validate({"scenes": [_valid_scene()]})
     issues = validator.extract_issues(raw)
 
     assert len(issues) == 1
@@ -270,9 +280,50 @@ def test_full_run_produces_report_with_suggestions() -> None:
     registry.register(_make_template())
 
     validator = _make_validator(adapter, FakeRouter(), registry)
-    report = validator.run({"scenes": []})
+    report = validator.run({"scenes": [_valid_scene()]})
 
     assert report.score == 72
     assert len(report.blocking_issues) == 1
     assert report.blocking_issues[0].suggestion == "Add a disagreement."
     assert report.blocking_issues[0].affected_entity == "sc_001"
+
+
+def test_rule_based_scene_count_blocking_when_under_min() -> None:
+    """Validator blocks when script scene count is below the contract minimum."""
+    validator = ScriptStructureValidator()
+    validator.llm_enabled = False
+    artifact: dict[str, Any] = {
+        "scenes": [
+            {"scene_id": "sc_001", "intent_ref": "s_001", "dialogue": [], "action_lines": ["A"]}
+            for _ in range(8)
+        ]
+    }
+    context = {"target_scene_count": 12, "min_scene_count": 12}
+
+    raw = validator.validate(artifact, context=context)
+
+    assert any(i["code"] == "scene_count_under_min" for i in raw["issues"])
+    assert raw["scenes_count"] == 8
+
+
+def test_rule_based_scene_count_passes_when_at_target() -> None:
+    """Validator passes scene count when script meets the contract minimum."""
+    validator = ScriptStructureValidator()
+    validator.llm_enabled = False
+    artifact: dict[str, Any] = {
+        "scenes": [
+            {
+                "scene_id": f"sc_{i:03d}",
+                "intent_ref": f"s_{i:03d}",
+                "dialogue": [],
+                "action_lines": ["A"],
+            }
+            for i in range(1, 13)
+        ]
+    }
+    context = {"target_scene_count": 12, "min_scene_count": 12}
+
+    raw = validator.validate(artifact, context=context)
+
+    assert not any(i["code"] == "scene_count_under_min" for i in raw["issues"])
+    assert raw["scenes_count"] == 12

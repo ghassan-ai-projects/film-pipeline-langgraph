@@ -72,8 +72,13 @@ def derive_scope_contract(
     target_runtime_seconds: int,
     film_type: str,
     pacing: str | None,
+    user_scene_count: int | None = None,
 ) -> StoryScopeContract:
     """Derive concrete scene/shot targets from runtime x film style.
+
+    When ``user_scene_count`` is supplied (e.g. parsed from the user's idea or
+    set explicitly via ``submit_idea``), it overrides the runtime-derived scene
+    count so the pipeline honors an explicit creative request.
 
     Deterministic: the same inputs always yield the same contract.
     """
@@ -82,10 +87,16 @@ def derive_scope_contract(
     avg_shot, sec_per_scene = _DENSITY.get(canonical, _DENSITY[STANDARD])
 
     target_shot_count = max(1, round(runtime / avg_shot))
-    target_scene_count = max(1, round(runtime / sec_per_scene))
+    if user_scene_count is not None and user_scene_count > 0:
+        target_scene_count = user_scene_count
+        # When the user fixed the scene count, hold the line at that count.
+        min_scene_count = target_scene_count
+    else:
+        target_scene_count = max(1, round(runtime / sec_per_scene))
+        min_scene_count = max(1, math.ceil(target_scene_count * _MIN_SCENE_FRACTION))
+
     # Never plan fewer shots than scenes (each scene needs >= 1 shot).
     target_shot_count = max(target_shot_count, target_scene_count)
-    min_scene_count = max(1, math.ceil(target_scene_count * _MIN_SCENE_FRACTION))
 
     shots_per_scene = target_shot_count / target_scene_count
     shots_per_scene_low = max(1, math.floor(shots_per_scene))

@@ -243,6 +243,7 @@ __marimo__/
 !/film-knowledge-base/index/
 
 /.qwen
+/.claude
 # Test artifacts (temp dirs used in tests)
 projects/
 .DS_Store

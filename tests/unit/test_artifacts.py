@@ -5,6 +5,9 @@ from __future__ import annotations
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from film_pipeline.artifacts.index import ArtifactIndex
 from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
@@ -17,7 +20,7 @@ from film_pipeline.artifacts.paths import (
 )
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.artifacts.versioning import approve, create_version, supersede
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 
 
@@ -178,13 +181,114 @@ class TestArtifactStore:
 
             assert store.next_version("p1", "script", "artifact:a") == 1
 
-    def test_save_dict_writes_scene_markdown_for_filesystem_review(self) -> None:
+    def test_approve_updates_status_and_approval_ref(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             store = ArtifactStore(root=Path(tmp))
-            path = store.save_dict(
-                {
-                    "artifact_id": "shot_matrix",
-                    "rows": [
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+                status=ArtifactStatus.CANDIDATE,
+            )
+            store.save(art, meta)
+            updated = store.approve("p1", "script", "artifact:a", 1, approval_ref="approval-123")
+            assert updated.status == ArtifactStatus.APPROVED
+            assert updated.approval_ref == "approval-123"
+            reloaded = store.load_metadata("p1", "script", "artifact:a", 1)
+            assert reloaded.status == ArtifactStatus.APPROVED
+            assert reloaded.approval_ref == "approval-123"
+
+    def test_approve_rejects_non_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+                status=ArtifactStatus.APPROVED,
+                approval_ref="approval-123",
+            )
+            store.save(art, meta)
+            with pytest.raises(ValueError, match="expected candidate"):
+                store.approve("p1", "script", "artifact:a", 1, approval_ref="approval-456")
+
+    def test_supersede_updates_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+                status=ArtifactStatus.APPROVED,
+                approval_ref="approval-123",
+            )
+            store.save(art, meta)
+            updated = store.supersede("p1", "script", "artifact:a", 1)
+            assert updated.status == ArtifactStatus.SUPERSEDED
+            reloaded = store.load_metadata("p1", "script", "artifact:a", 1)
+            assert reloaded.status == ArtifactStatus.SUPERSEDED
+
+    def test_supersede_rejects_non_approved(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+                status=ArtifactStatus.CANDIDATE,
+            )
+            store.save(art, meta)
+            with pytest.raises(ValueError, match="expected approved"):
+                store.supersede("p1", "script", "artifact:a", 1)
+
+    def test_approve_updates_current_meta_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+            from film_pipeline.schemas.project import ProjectIdentity
+
+            art = ProjectIdentity(project_id="p1", slug="s", title="T")
+            meta = _meta(
+                artifact_id="artifact:a",
+                project_id="p1",
+                phase=FilmPhase.SCRIPT,
+                artifact_type=ArtifactType.SCRIPT,
+                status=ArtifactStatus.CANDIDATE,
+            )
+            store.save(art, meta)
+            store.approve("p1", "script", "artifact:a", 1, approval_ref="approval-123")
+            listed = store.list_artifacts("p1", FilmPhase.SCRIPT)
+            assert len(listed) == 1
+            assert listed[0].status == ArtifactStatus.APPROVED
+            assert listed[0].approval_ref == "approval-123"
+
+    def test_save_writes_scene_markdown_for_filesystem_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            store = ArtifactStore(root=Path(tmp))
+
+            class _ShotMatrix(SchemaBase):
+                artifact_id: str
+                rows: list[dict[str, Any]]
+
+            path = store.save(
+                _ShotMatrix(
+                    artifact_id="shot_matrix",
+                    rows=[
                         {
                             "scene_id": "SC_001",
                             "shot_id": "shot_001",
@@ -204,7 +308,7 @@ class TestArtifactStore:
                             "reference_refs": ["platform_ref"],
                         }
                     ],
-                },
+                ),
                 _meta(
                     artifact_id="shot_matrix",
                     project_id="p1",

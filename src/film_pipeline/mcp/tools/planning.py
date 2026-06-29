@@ -6,7 +6,7 @@ from typing import cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok, _services
+from .helpers import _error, _latest_artifact_version, _ok, _services
 
 
 async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
@@ -38,12 +38,16 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
             max_auto_approved_cost_usd=1.0,
             human_approval_above_usd=5.0,
         )
+        next_version = (
+            _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), "budget_state")
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="budget_state",
             artifact_type=ArtifactType.BUDGET_STATE,
             project_id=project_id,
             phase=FilmPhase("gen_planning"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.initialize_budget",
@@ -104,12 +108,18 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(
+                store, project_id, FilmPhase("gen_planning"), "generation_plan"
+            )
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="generation_plan",
             artifact_type=ArtifactType.GENERATION_PLAN,
             project_id=project_id,
             phase=FilmPhase("gen_planning"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_plan",

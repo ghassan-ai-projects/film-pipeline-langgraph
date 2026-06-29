@@ -37,7 +37,6 @@ from film_pipeline.schemas import (
     ContinuityLedger,
     ContinuityLedgerEntry,
     CoverageGroup,
-    DeliveryManifest,
     DeliveryPackage,
     EmotionalArc,
     EnvironmentBible,
@@ -810,14 +809,14 @@ def test_agent_registration() -> None:
 
 
 def test_delivery_package() -> None:
-    m = DeliveryManifest(package_id="d1", project_id="p")
     pkg = DeliveryPackage(
         package_id="d1",
         project_id="p",
-        final_video_ref="final.mp4",
-        manifest=m,
+        files=[{"path": "final.mp4", "type": "video"}],
+        is_complete=True,
     )
-    assert pkg.final_video_ref == "final.mp4"
+    assert pkg.is_complete is True
+    assert pkg.subtitles_included is False
 
 
 # --- Registries ----------------------------------------------------------

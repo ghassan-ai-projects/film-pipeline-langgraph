@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok, _services
+from .helpers import _error, _latest_artifact_version, _ok, _services
 
 
 def _extract_script_text(script_data: dict[str, object] | None) -> str:
@@ -208,12 +208,16 @@ Return ONLY valid JSON. No markdown fences, no commentary.
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "character_bible")
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="character_bible",
             artifact_type=ArtifactType.CHARACTER_BIBLE,
             project_id=project_id,
             phase=FilmPhase("visual_dev"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_character_bible",
@@ -377,12 +381,18 @@ Return ONLY valid JSON:
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(
+                store, project_id, FilmPhase("visual_dev"), "environment_bible"
+            )
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="environment_bible",
             artifact_type=ArtifactType.ENVIRONMENT_BIBLE,
             project_id=project_id,
             phase=FilmPhase("visual_dev"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_environment_bible",
@@ -481,12 +491,18 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
 
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(
+                store, project_id, FilmPhase("visual_dev"), "camera_language_bible"
+            )
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="camera_language_bible",
             artifact_type=ArtifactType.CAMERA_LANGUAGE_BIBLE,
             project_id=project_id,
             phase=FilmPhase("visual_dev"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_camera_bible",
@@ -578,12 +594,15 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
 
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "style_bible") + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="style_bible",
             artifact_type=ArtifactType.STYLE_BIBLE,
             project_id=project_id,
             phase=FilmPhase("visual_dev"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_style_bible",
@@ -657,12 +676,18 @@ def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str
             project_id=project_id,
             entries=entries,
         )
+        next_version = (
+            _latest_artifact_version(
+                store, project_id, FilmPhase("shot_bible"), "continuity_ledger"
+            )
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="continuity_ledger",
             artifact_type=ArtifactType.CONTINUITY_LEDGER,
             project_id=project_id,
             phase=FilmPhase("shot_bible"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_shot_bible",
@@ -764,12 +789,18 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
 
         from film_pipeline.schemas.artifact import ArtifactMetadata
 
+        next_version = (
+            _latest_artifact_version(
+                store, project_id, FilmPhase("shot_bible"), "master_film_matrix"
+            )
+            + 1
+        )
         meta = ArtifactMetadata(
             artifact_id="master_film_matrix",
             artifact_type=ArtifactType.MASTER_FILM_MATRIX,
             project_id=project_id,
             phase=FilmPhase("shot_bible"),
-            version=1,
+            version=next_version,
             status=ArtifactStatus.CANDIDATE,
             parents=[],
             created_by="mcp.generate_shot_bible",

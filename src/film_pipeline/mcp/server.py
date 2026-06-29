@@ -53,7 +53,7 @@ class MCPServer:
                 ),
             )
 
-        if reg.contract.mutates_state and envelope.project_ref:
+        if envelope.project_ref:
             try:
                 project = self.projects.resolve_or_raise(envelope.project_ref)
                 envelope = RequestEnvelope(
@@ -67,7 +67,8 @@ class MCPServer:
                     actor_type=envelope.actor_type,
                     received_at=envelope.received_at,
                 )
-                self.active_project_id = project.project_id
+                if reg.contract.mutates_state:
+                    self.active_project_id = project.project_id
             except AmbiguousProjectError as exc:
                 return MCPResponse(
                     success=False,
@@ -110,7 +111,8 @@ class MCPServer:
                         title=str(rt_project.get("title", pid)),
                     )
                     self.projects.register(record)
-                    self.active_project_id = pid
+                    if reg.contract.mutates_state:
+                        self.active_project_id = pid
                     envelope = RequestEnvelope(
                         request_id=envelope.request_id,
                         project_ref=envelope.project_ref,
@@ -128,6 +130,20 @@ class MCPServer:
                         request_id=envelope.request_id,
                         error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
                     )
+
+        if reg.contract.requires_confirmation and not arguments.get("confirmed"):
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.CONFIRMATION_REQUIRED,
+                    message=(
+                        f"Tool '{tool_name}' requires explicit confirmation. "
+                        "Pass 'confirmed': true to proceed."
+                    ),
+                    details={"tool": tool_name},
+                ),
+            )
 
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
         handler = reg.handler

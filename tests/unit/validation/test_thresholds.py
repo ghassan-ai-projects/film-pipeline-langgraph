@@ -20,30 +20,37 @@ class TestScoreToStatus:
         assert score_to_status(84) == ValidationStatus.PASS_WITH_NOTES
         assert score_to_status(75) == ValidationStatus.PASS_WITH_NOTES
 
+    def test_needs_revision(self) -> None:
+        assert score_to_status(74) == ValidationStatus.NEEDS_REVISION
+        assert score_to_status(65) == ValidationStatus.NEEDS_REVISION
+
     def test_blocked(self) -> None:
-        assert score_to_status(74) == ValidationStatus.BLOCKED
+        assert score_to_status(64) == ValidationStatus.BLOCKED
         assert score_to_status(0) == ValidationStatus.BLOCKED
 
     def test_custom_thresholds(self) -> None:
-        thresholds = ValidatorThresholds(pass_at=90, review_at=80, block_below=80)
+        thresholds = ValidatorThresholds(pass_at=90, review_at=80, block_below=70)
         assert score_to_status(91, thresholds) == ValidationStatus.PASS
         assert score_to_status(85, thresholds) == ValidationStatus.PASS_WITH_NOTES
-        assert score_to_status(79, thresholds) == ValidationStatus.BLOCKED
+        assert score_to_status(75, thresholds) == ValidationStatus.NEEDS_REVISION
+        assert score_to_status(69, thresholds) == ValidationStatus.BLOCKED
 
 
 class TestIsBlocking:
     def test_blocking(self) -> None:
         assert is_blocking(50) is True
-        assert is_blocking(74) is True
+        assert is_blocking(64) is True
 
     def test_not_blocking(self) -> None:
         assert is_blocking(85) is False
         assert is_blocking(75) is False
+        assert is_blocking(65) is False
 
 
 class TestNeedsHumanReview:
     def test_needs_review(self) -> None:
         assert needs_human_review(50) is True  # BLOCKED
+        assert needs_human_review(70) is True  # NEEDS_REVISION
         # PASS_WITH_NOTES does NOT require human review per this function
         assert needs_human_review(80) is False
 

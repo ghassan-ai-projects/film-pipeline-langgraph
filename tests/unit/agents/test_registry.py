@@ -126,7 +126,7 @@ class TestAgentRegistry:
     def test_register_many(self) -> None:
         registry = AgentRegistry()
         registry.register_many(MVP_AGENTS)
-        assert len(registry) == 20
+        assert len(registry) == 11
 
     def test_lookup_by_id(self) -> None:
         registry = AgentRegistry()
@@ -158,9 +158,7 @@ class TestAgentRegistry:
         registry = AgentRegistry()
         registry.register_many(MVP_AGENTS)
         agents = registry.lookup_by_family(AgentFamily.QC)
-        assert (
-            len(agents) == 3
-        )  # clip-validator, scene-continuity-validator, full-movie-flow-validator
+        assert len(agents) == 1  # clip-validator
 
     def test_lookup_by_role(self) -> None:
         registry = AgentRegistry()
@@ -173,7 +171,7 @@ class TestAgentRegistry:
         registry = AgentRegistry()
         registry.register_many(MVP_AGENTS)
         agents = registry.lookup_by_role(AgentRole.VALIDATOR)
-        assert len(agents) == 3
+        assert len(agents) == 1  # clip-validator
 
     def test_creator_and_validator_separate(self) -> None:
         registry = AgentRegistry()

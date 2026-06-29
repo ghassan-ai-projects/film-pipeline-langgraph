@@ -6,6 +6,7 @@ In production, this would be a proper session/process manager.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -139,7 +140,61 @@ class StudioRuntime:
         pid = str(result.get("project_id", ""))
         if pid:
             self._save_graph_state(dict(result), pid)
+            self._auto_checkpoint(result)
         return result
+
+    def _auto_checkpoint(self, state: dict[str, Any]) -> None:
+        """Create a checkpoint after a graph step completes."""
+        project_id = str(state.get("project_id", ""))
+        if not project_id or project_id not in self.projects:
+            return
+        manager = self.checkpoint_managers.get(project_id)
+        if manager is None:
+            return
+        phase = str(state.get("current_phase", "") or "intake")
+        if not phase:
+            return
+
+        graph_state_ref = ""
+        if self.services is not None:
+            store = self.services.artifact_store
+            try:
+                from datetime import UTC, datetime
+
+                from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+                from film_pipeline.schemas.artifact import ArtifactMetadata
+                from film_pipeline.schemas.checkpoint import CheckpointState
+
+                version = store.next_version(project_id, "intake", "graph_state")
+                meta = ArtifactMetadata(
+                    artifact_id="graph_state",
+                    artifact_type=ArtifactType.CHECKPOINT,
+                    project_id=project_id,
+                    phase=FilmPhase("intake"),
+                    version=version,
+                    status=ArtifactStatus.CANDIDATE,
+                    created_by="runtime_auto_checkpoint",
+                    created_at=datetime.now(UTC),
+                )
+                safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
+                store.save(CheckpointState(state=safe_state), meta)
+                graph_state_ref = f"artifact:graph_state:v{version}"
+            except Exception:
+                pass
+
+        from film_pipeline.graph.orchestrator_state import get_candidate_refs
+
+        candidate_refs = get_candidate_refs(state)
+        artifact_versions = dict(candidate_refs)
+
+        with contextlib.suppress(Exception):
+            self.create_checkpoint(
+                project_id=project_id,
+                phase=phase,
+                reason="auto: graph step completed",
+                artifact_versions=artifact_versions,
+                graph_state_ref=graph_state_ref,
+            )
 
     def _save_graph_state(self, state: dict[str, Any], project_id: str) -> None:
         """Persist graph state to disk for crash recovery."""
@@ -150,16 +205,6 @@ class StudioRuntime:
         state_path = root / ".graph_state.json"
         safe = {k: v for k, v in state.items() if not k.startswith("_services")}
         state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
-
-    def _load_graph_state(self, project_id: str) -> dict[str, Any] | None:
-        """Load persisted graph state from disk, if it exists."""
-        root = self.project_roots.get(project_id)
-        if root is None:
-            return None
-        state_path = root / ".graph_state.json"
-        if not state_path.exists():
-            return None
-        return cast(dict[str, Any], json.loads(state_path.read_text()))
 
     def approve_phase(self) -> dict[str, Any]:
         """Approve the current phase and advance.
@@ -191,7 +236,7 @@ class StudioRuntime:
         token = _gn._SERVICES_CTX.set(self.services)
         try:
             state = graph.invoke(
-                Command(resume={"action": "approve"}),
+                Command(resume=_build_resume_payload("approve", active)),
                 config,
             )
             _preserve_external_generation_requests(state, active)
@@ -294,7 +339,7 @@ class StudioRuntime:
         token = _gn._SERVICES_CTX.set(self.services)
         try:
             state = graph.invoke(
-                Command(resume={"action": "revise", "note": note}),
+                Command(resume=_build_resume_payload("revise", active, note=note)),
                 config,
             )
         finally:
@@ -320,6 +365,9 @@ class StudioRuntime:
         project_id: str,
         phase: str,
         reason: str,
+        *,
+        artifact_versions: dict[str, str] | None = None,
+        graph_state_ref: str = "",
     ) -> CheckpointMetadata:
         project = self.projects.get(project_id)
         if project is None:
@@ -332,6 +380,8 @@ class StudioRuntime:
             project_id=project_id,
             phase=FilmPhase(phase or "intake"),
             reason=reason,
+            artifact_versions=artifact_versions,
+            graph_state_ref=graph_state_ref,
         )
         self.checkpoints[meta.checkpoint_id] = meta
         self._record_audit(
@@ -503,14 +553,6 @@ class StudioRuntime:
         project_root.mkdir(parents=True, exist_ok=True)
         state_path = project_root / STATE_FILENAME
         state_path.write_text(json.dumps(project, indent=2, sort_keys=True, default=str))
-
-    def _approve_current_phase(self, state: dict[str, Any]) -> dict[str, Any]:
-        from film_pipeline.graph.nodes import approve_phase_node
-
-        approved_state = approve_phase_node(state)
-        self.projects[state["project_id"]] = approved_state
-        self._persist_project_state(state["project_id"])
-        return approved_state
 
     def _advance_to_next_phase(self, state: dict[str, Any]) -> dict[str, Any]:
         current_phase = str(state.get("current_phase", ""))
@@ -690,6 +732,31 @@ def _strip_stale_generation_request_blockers(state: dict[str, Any]) -> None:
         for issue in issues
         if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
     ]
+
+
+def _build_resume_payload(
+    action: str,
+    active: dict[str, Any],
+    note: str = "",
+) -> dict[str, Any]:
+    """Build a Command resume payload, carrying external MCP state into the graph.
+
+    MCP tools such as ``plan_generation_batch`` update the active project state
+    after the graph checkpoint was created. Without replaying those mutations,
+    a resumed checkpoint sees stale state (e.g. empty generation requests) and
+    loops on repair. The ``_external_state`` key is applied by ``await_approval_node``
+    before the approval/revision action is processed.
+    """
+    payload: dict[str, Any] = {"action": action}
+    if note:
+        payload["note"] = note
+    external_state: dict[str, Any] = {}
+    generation_requests = active.get("generation_requests")
+    if generation_requests:
+        external_state["generation_requests"] = generation_requests
+    if external_state:
+        payload["_external_state"] = external_state
+    return payload
 
 
 def _configured_server_mode() -> str:

@@ -94,3 +94,22 @@ class TestPacingFromConfig:
         assert pacing_from_config({}) is None
         assert pacing_from_config(None) is None
         assert pacing_from_config({"pacing": ""}) is None
+
+
+class TestUserSceneCountOverride:
+    def test_user_scene_count_overrides_runtime_derivation(self) -> None:
+        c = derive_scope_contract("p", 180, "narrative", "standard", user_scene_count=12)
+        assert c.target_scene_count == 12
+        assert c.min_scene_count == 12
+        assert c.target_shot_count >= 12
+
+    def test_user_scene_count_increases_shot_count_to_match(self) -> None:
+        c = derive_scope_contract("p", 60, "narrative", "standard", user_scene_count=20)
+        assert c.target_scene_count == 20
+        assert c.target_shot_count >= 20
+
+    def test_none_user_scene_count_uses_runtime_derivation(self) -> None:
+        c_with = derive_scope_contract("p", 180, "narrative", "standard", user_scene_count=12)
+        c_without = derive_scope_contract("p", 180, "narrative", "standard")
+        assert c_with.target_scene_count == 12
+        assert c_without.target_scene_count == 8

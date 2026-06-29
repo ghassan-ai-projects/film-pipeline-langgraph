@@ -8,8 +8,7 @@ from uuid import uuid4
 from film_pipeline.kb.conflicts import KBConflictDetector
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.retrieval import KBRetrieval
-from film_pipeline.schemas._base import KbAuthority
-from film_pipeline.schemas.kb import KBContextPacket, KBExcludedRef, KBItemMetadata
+from film_pipeline.schemas.kb import KBContextPacket, KBExcludedRef
 
 
 @dataclass
@@ -95,14 +94,3 @@ class KBContextPacketBuilder:
             excluded_refs=all_excluded,
             payload=payload,
         )
-
-
-def _authority_sort_key(item: KBItemMetadata) -> int:
-    """Sort items by authority rank (higher first)."""
-    rank = {
-        KbAuthority.CANONICAL: 4,
-        KbAuthority.ACTIVE_PLAYBOOK: 3,
-        KbAuthority.CASE_STUDY: 2,
-        KbAuthority.RAW_ARCHIVE: 1,
-    }
-    return rank.get(item.authority, 0)

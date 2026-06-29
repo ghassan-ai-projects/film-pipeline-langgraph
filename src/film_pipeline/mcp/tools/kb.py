@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok
+from .helpers import _active_project_id, _error, _ok
 
 
 async def kb_search(args: dict[str, object]) -> dict[str, object]:
@@ -72,8 +72,11 @@ async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
 
 async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    state = rt.get_project(project_id)
+    if state is None:
         return _error("No active project.")
     from film_pipeline.kb.packets import KBContextPacketBuilder
 
@@ -87,8 +90,8 @@ async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
         manifest = KBManifest.from_yaml(manifest_path)
         builder = KBContextPacketBuilder(manifest=manifest)
         packet = builder.build(
-            project_id=active["project_id"],
-            phase=str(args.get("phase", active.get("current_phase", "intake"))),
+            project_id=state["project_id"],
+            phase=str(args.get("phase", state.get("current_phase", "intake"))),
             agent_id=str(args.get("agent_id", "orchestrator")),
             task=str(args.get("task", "current phase")),
         )

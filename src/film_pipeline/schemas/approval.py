@@ -1,15 +1,16 @@
-"""Approval records, revision requests, and review packages."""
+"""Approval records, revision requests, review packages, and profile changes."""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
 from film_pipeline.schemas._base import FilmPhase, SchemaBase
 
 ApprovalAction = Literal["approve", "request_revision", "reject", "escalate"]
+ProfileChangeStatus = Literal["pending", "approved", "rejected", "superseded"]
 
 
 class ApprovalRecord(SchemaBase):
@@ -59,3 +60,33 @@ class ReviewPackage(SchemaBase):
     orchestrator_recommendation: str
     available_actions: list[str] = Field(default_factory=list)
     blocked_actions: list[str] = Field(default_factory=list)
+
+
+class ProfileChangeProposal(SchemaBase):
+    """A proposed mid-project change to the profile stack."""
+
+    proposal_id: str
+    project_id: str
+    proposed_by: str
+    reason: str
+    previous_profile_stack: dict[str, str] = Field(default_factory=dict)
+    proposed_profile_stack: dict[str, str] = Field(default_factory=dict)
+    previous_profile_version: int = Field(default=0, ge=0)
+    projected_config_diff: dict[str, Any] = Field(default_factory=dict)
+    status: ProfileChangeStatus = "pending"
+    created_at: datetime
+
+
+class ProfileChangeApproval(SchemaBase):
+    """Human approval of a profile-change proposal."""
+
+    approval_id: str
+    proposal_id: str
+    project_id: str
+    approved_by: str
+    note: str = ""
+    profile_version: int = Field(ge=1)
+    new_profile_stack: dict[str, str] = Field(default_factory=dict)
+    new_resolved_config_ref: str = ""
+    invalidation_report_ref: str = ""
+    created_at: datetime

@@ -14,7 +14,7 @@ from film_pipeline.app.services.models import ArtifactDetail
 from film_pipeline.tui.app_base import AppCockpitBase
 from film_pipeline.tui.formatting import pretty
 from film_pipeline.tui.gateway import StudioGateway
-from film_pipeline.tui.gateways import InProcessStudioGateway
+from film_pipeline.tui.gateways import default_gateway
 from film_pipeline.tui.view_models import (
     CockpitSnapshot,
     MatrixImpact,
@@ -177,7 +177,7 @@ class AppShell(AppCockpitBase):
         start_create: bool = False,
     ) -> None:
         super().__init__()
-        self.gateway = gateway or InProcessStudioGateway()
+        self.gateway = gateway or default_gateway()
         self.start_create = start_create
         self.active_project_id = ""
         self.snapshot: CockpitSnapshot | None = None

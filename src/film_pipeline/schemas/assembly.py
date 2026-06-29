@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import Field
 
 from film_pipeline.schemas._base import SchemaBase
@@ -60,3 +62,17 @@ class AssemblyManifest(SchemaBase):
     duration_total_seconds: float = Field(default=0.0, ge=0)
     missing_assets: list[str] = Field(default_factory=list)
     delivery_mode: str = Field(default="mp4")
+
+
+class AssemblyPlanArtifact(SchemaBase):
+    """Artifact persisted by the post-production assembly agent."""
+
+    plan_id: str
+    project_id: str
+    clip_order: list[dict[str, Any]] = Field(default_factory=list)
+    clips: list[str] = Field(default_factory=list)
+    total_duration_seconds: float = Field(default=0.0, ge=0)
+    clip_count: int = Field(default=0, ge=0)
+    missing_assets: list[str] = Field(default_factory=list)
+    transitions: list[dict[str, str]] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)

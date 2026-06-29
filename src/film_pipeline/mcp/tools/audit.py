@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _ok
+from .helpers import _active_project_id, _ok
 
 
 async def get_audit_log(args: dict[str, object]) -> dict[str, object]:
@@ -33,12 +33,13 @@ async def explain_last_decision(args: dict[str, object]) -> dict[str, object]:
 
 async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
+    project_id = _active_project_id(args, rt)
+    state = rt.get_project(project_id) if project_id is not None else rt.get_active()
 
-    if active is None:
+    if state is None:
         return _ok(decisions=[], message="No active project. Routing data is session-scoped.")
 
-    routing_decisions = active.get("_routing_decisions", [])
+    routing_decisions = state.get("_routing_decisions", [])
 
     if not routing_decisions:
         return _ok(

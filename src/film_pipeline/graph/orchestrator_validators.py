@@ -562,7 +562,19 @@ def validate_dispatch_readiness(
             payload_val = _row_attr(req, "prompt_payload", None)
             has_prompt = prompt_val is not None or payload_val is not None
 
-        if not (has_provider and has_model and has_prompt):
+        # Accept a plain prompt or a resolved prompt inside a payload.
+        resolved_prompt = ""
+        if isinstance(req, dict):
+            payload = req.get("prompt_payload") or {}
+            if isinstance(payload, dict):
+                resolved_prompt = str(payload.get("resolved_prompt", "") or "")
+        else:
+            payload = _row_attr(req, "prompt_payload", {})
+            if isinstance(payload, dict):
+                resolved_prompt = str(payload.get("resolved_prompt", "") or "")
+        has_resolved_prompt = bool(resolved_prompt)
+
+        if not (has_provider and has_model and has_prompt and has_resolved_prompt):
             undispatchable.append(shot_id)
 
     if undispatchable:

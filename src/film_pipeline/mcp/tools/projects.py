@@ -7,6 +7,7 @@ from typing import Any, cast
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import (
+    _active_project_id,
     _canonicalize_profile_stack,
     _coerce_runtime_arg,
     _collect_profile_models,
@@ -142,19 +143,25 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
 
 async def get_active_project(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project set")
-    return _ok(project_id=active["project_id"], current_phase=active.get("current_phase"))
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project set")
+    return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project.")
+    project_id = str(state["project_id"])
 
     # Gather all artifacts across phases
     from film_pipeline.schemas._base import FilmPhase
@@ -178,17 +185,17 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
             continue
 
     # Collect routing decisions
-    routing = active.get("_routing_decisions", [])
+    routing = state.get("_routing_decisions", [])
 
     return _ok(
         project_id=project_id,
-        title=active.get("title", active.get("idea", ""))[:200],
-        slug=active.get("slug", ""),
-        current_phase=active.get("current_phase", ""),
-        approved=active.get("approved"),
+        title=state.get("title", state.get("idea", ""))[:200],
+        slug=state.get("slug", ""),
+        current_phase=state.get("current_phase", ""),
+        approved=state.get("approved"),
         artifact_count=len(artifact_summary),
         artifacts=artifact_summary,
-        issue_count=len(active.get("issues", [])),
+        issue_count=len(state.get("issues", [])),
         routing_decisions_count=len(routing),
-        has_blockers=any(i.get("severity") == "blocking" for i in active.get("issues", [])),
+        has_blockers=any(i.get("severity") == "blocking" for i in state.get("issues", [])),
     )
