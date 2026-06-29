@@ -73,6 +73,10 @@ class MasterFilmMatrixRow(SchemaBase):
     asset_refs: list[str] = Field(default_factory=list)
     post_refs: list[str] = Field(default_factory=list)
     status: str = "planned"
+    auto_filled: bool = Field(
+        default=False,
+        description="True when this row was added by deterministic coverage back-fill.",
+    )
 
 
 class MasterFilmMatrix(SchemaBase):

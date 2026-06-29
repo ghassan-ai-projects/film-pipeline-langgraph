@@ -98,7 +98,7 @@ class TestFull3MinuteFlowMock:
         result = invoke_tool(rt, "set_active_project", project_ref=project_id)
         assert result["ok"] is True, f"set_active_project failed: {result}"
 
-        result = invoke_tool(rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA)
+        result = invoke_tool(rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA, target_scene_count=12)
         assert result["ok"] is True, f"submit_idea failed: {result}"
         assert result.get("current_phase") is not None
 
@@ -108,6 +108,9 @@ class TestFull3MinuteFlowMock:
         state = rt.get_active()
         assert state is not None
         assert str(state.get("current_phase", "")) == "shot_bible"
+        # The user-supplied scene count must propagate into the Story Scope Contract.
+        assert state.get("target_scene_count") == 12
+        assert state.get("min_scene_count") == 12
 
         assert rt.services is not None
         store: ArtifactStore = rt.services.artifact_store
@@ -123,9 +126,6 @@ class TestFull3MinuteFlowMock:
         rows = matrix_raw.get("rows", [])
         assert len(rows) >= 1, "Matrix should contain at least one shot row"
 
-        scene_ids = {str(row.get("scene_id", "")) for row in rows if row.get("scene_id")}
-        assert len(scene_ids) >= 1, "Matrix should reference at least one scene"
-
         scene_list_ref = state.get("scene_list_ref", "")
         assert scene_list_ref, "Expected scene_list_ref"
         parts = scene_list_ref.split(":")
@@ -134,6 +134,9 @@ class TestFull3MinuteFlowMock:
         scene_list_raw = store.load(project_id, FilmPhase("development"), artifact_id, version)
         scenes = scene_list_raw.get("scenes", []) if isinstance(scene_list_raw, dict) else []
         assert len(scenes) >= 1, "Scene list should contain scenes"
+
+        script_ref = state.get("script_ref", "")
+        assert script_ref, "Expected script_ref"
 
         result = invoke_tool(rt, "list_checkpoints")
         assert result["ok"] is True
@@ -199,7 +202,9 @@ class TestFull3MinuteFlowReal:
             result = invoke_tool(rt, "set_active_project", project_ref=project_id)
             assert result["ok"] is True
 
-            result = invoke_tool(rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA)
+            result = invoke_tool(
+                rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA, target_scene_count=12
+            )
             assert result["ok"] is True, f"submit_idea failed: {result}"
 
             advance = _approve_to_phase(rt, "shot_bible")
@@ -221,6 +226,11 @@ class TestFull3MinuteFlowReal:
             rows = matrix_raw.get("rows", []) if isinstance(matrix_raw, dict) else []
             assert len(rows) >= 1, "Real run should produce at least one matrix row"
 
+            scene_ids = {str(row.get("scene_id", "")) for row in rows if row.get("scene_id")}
+            assert len(scene_ids) >= 12, (
+                f"Real matrix should reference all 12 scenes, got {len(scene_ids)}"
+            )
+
             scene_list_ref = state.get("scene_list_ref", "")
             assert scene_list_ref
             parts = scene_list_ref.split(":")
@@ -230,7 +240,22 @@ class TestFull3MinuteFlowReal:
                 project_id, FilmPhase("development"), artifact_id, version
             )
             scenes = scene_list_raw.get("scenes", []) if isinstance(scene_list_raw, dict) else []
-            assert len(scenes) >= 1, "Real run should produce scenes"
+            assert len(scenes) >= 12, (
+                f"Real scene list should contain at least 12 scenes, got {len(scenes)}"
+            )
+
+            script_ref = state.get("script_ref", "")
+            assert script_ref, "Expected script_ref"
+            parts = script_ref.split(":")
+            artifact_id = parts[1] if len(parts) > 1 else ""
+            version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+            script_raw = rt.services.artifact_store.load(
+                project_id, FilmPhase("script"), artifact_id, version
+            )
+            script_scenes = script_raw.get("scenes", []) if isinstance(script_raw, dict) else []
+            assert len(script_scenes) >= 12, (
+                f"Real script should contain at least 12 scenes, got {len(script_scenes)}"
+            )
         finally:
             rt_mod._RUNTIME = previous_runtime
             rt_mod._RUNTIME_MODE_OVERRIDE = previous_override

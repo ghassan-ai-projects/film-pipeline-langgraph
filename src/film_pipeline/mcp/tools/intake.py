@@ -20,6 +20,9 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     user_runtime = _coerce_runtime_arg(args)
     if user_runtime > 0:
         active["target_runtime_seconds"] = user_runtime
+    user_scene_count = args.get("target_scene_count")
+    if isinstance(user_scene_count, int) and user_scene_count > 0:
+        active["target_scene_count"] = user_scene_count
     state = rt.run_graph(active)
     # Update stored state
     rt.projects[active["project_id"]] = state
