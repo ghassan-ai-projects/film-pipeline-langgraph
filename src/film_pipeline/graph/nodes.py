@@ -15,10 +15,12 @@ from typing import Any, cast
 
 from film_pipeline.agents.base import BaseAgent
 from film_pipeline.agents.impl.registry import get_agent_class
+from film_pipeline.constraints import extract_constraints, render_constraints
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
+from film_pipeline.schemas.constraints import ProjectConstraints
 
 _SERVICES_CTX: contextvars.ContextVar[GraphServices | None] = contextvars.ContextVar(
     "_film_pipeline_services", default=None
@@ -476,6 +478,7 @@ def _run_agent(
             "budget_cap": "",
             "preferred_providers": "",
             "provider_pricing": "",
+            "constraints": "",
         }
         from film_pipeline.providers.pricing import pricing_prompt_block
 
@@ -507,6 +510,11 @@ def _run_agent(
                 context_vars[key] = str(val)
         _inject_artifact_context(state, services, context_vars)
         _inject_config_context(state, context_vars)
+
+        # Render user-intent constraints into the prompt block.
+        raw_constraints = state.get("constraints")
+        if raw_constraints and isinstance(raw_constraints, (ProjectConstraints, dict)):
+            context_vars["constraints"] = render_constraints(raw_constraints)
 
         # Inject orchestrator review context when this is the orchestrator agent
         if resolved_agent_id == "orchestrator-agent":
@@ -896,6 +904,17 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
         else " Estimate a realistic runtime from the story's scope."
     )
 
+    # ── Extract user-intent constraints before intake classification ──────
+    # This is deterministic/heuristic and runs offline so the intake agent and
+    # scope contract both see explicit creative requirements.
+    idea_text = str(new_state.get("idea", ""))
+    constraints_hints = new_state.get("constraints_hints") or {}
+    constraints = extract_constraints(
+        text=idea_text,
+        project_id=str(new_state.get("project_id", "")),
+        hints=constraints_hints if isinstance(constraints_hints, dict) else {},
+    )
+
     result = _run_agent(
         new_state,
         agent_id="intake-classifier-agent",
@@ -922,6 +941,27 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
             updates["target_runtime_seconds"] = profile.target_runtime_seconds
         if hasattr(profile, "film_type"):
             updates["film_type"] = str(profile.film_type)
+
+    # Merge profile-derived values into constraints where they were not already
+    # supplied explicitly, so the artifact reflects the locked project config.
+    merged_constraints: dict[str, Any] = constraints.model_dump(mode="json", exclude_none=True)
+    if updates.get("target_runtime_seconds") and not merged_constraints.get(
+        "target_runtime_seconds"
+    ):
+        merged_constraints["target_runtime_seconds"] = updates["target_runtime_seconds"]
+    if updates.get("film_type") and not merged_constraints.get("film_type"):
+        merged_constraints["film_type"] = updates["film_type"]
+    # scene count from explicit hints (or extraction) takes precedence over the
+    # runtime-derived default; seed it so the scope contract honors it.
+    if merged_constraints.get("target_scene_count"):
+        updates["target_scene_count"] = merged_constraints["target_scene_count"]
+
+    final_constraints = ProjectConstraints(**merged_constraints)
+    constraints_ref = _save_artifact(new_state, final_constraints, "project_constraints", "intake")
+    if constraints_ref:
+        updates["constraints_ref"] = constraints_ref
+        new_refs.append(constraints_ref)
+    updates["constraints"] = final_constraints.model_dump(mode="json")
 
     # ── Derive the Story Scope Contract (deterministic, forward-looking) ──
     _attach_scope_contract(new_state, updates, new_refs)

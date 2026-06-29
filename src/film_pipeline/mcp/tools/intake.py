@@ -23,6 +23,9 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     user_scene_count = args.get("target_scene_count")
     if isinstance(user_scene_count, int) and user_scene_count > 0:
         active["target_scene_count"] = user_scene_count
+    user_constraints = args.get("constraints")
+    if isinstance(user_constraints, dict):
+        active["constraints_hints"] = user_constraints
     state = rt.run_graph(active)
     # Update stored state
     rt.projects[active["project_id"]] = state

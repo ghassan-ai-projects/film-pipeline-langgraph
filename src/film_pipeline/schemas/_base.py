@@ -29,6 +29,7 @@ class ArtifactType(StrEnum):
     """Catalog of artifact types produced by the studio."""
 
     PROJECT_CONFIG = "project_config"
+    PROJECT_CONSTRAINTS = "project_constraints"
     INTAKE_ANALYSIS = "intake_analysis"
     FILM_CONSTITUTION = "film_constitution"
     LOGLINE = "logline"

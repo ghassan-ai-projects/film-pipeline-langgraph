@@ -360,9 +360,10 @@ def validate_planning_completeness(
 
     # --- Check field completeness per row ---
     # prompt_ref is filled BY gen_planning (via matrix patch), not a prerequisite.
+    # A valid shot needs a camera_profile and at least one subject: either
+    # characters OR environment. Environment-only establishing shots are valid
+    # and should not be blocked for lacking characters.
     REQUIRED_FIELDS = [
-        ("characters", "characters"),
-        ("environment", "environment"),
         ("camera_profile", "camera_profile"),
     ]
 
@@ -374,6 +375,15 @@ def validate_planning_completeness(
             value = _row_attr(row, field_name, None)
             if value is None or (isinstance(value, (str, list)) and not value):
                 missing.append(display_name)
+
+        # Subject: characters OR environment must be populated.
+        characters = _row_attr(row, "characters", None)
+        environment = _row_attr(row, "environment", None)
+        has_characters = isinstance(characters, list) and len(characters) > 0
+        has_environment = isinstance(environment, str) and environment.strip()
+        if not (has_characters or has_environment):
+            missing.append("characters or environment")
+
         if missing:
             incomplete_rows.append(f"{shot_id}: missing {', '.join(missing)}")
 
