@@ -18,6 +18,7 @@ import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
 
 # A concrete 3-minute short with 12 scenes so every phase has material to work on.
@@ -145,10 +146,18 @@ class TestFull3MinuteFlowMock:
         assert len(events) > 0, "Audit log should have events"
 
 
+def _real_credentials_available() -> bool:
+    return bool(
+        os.getenv("RUN_REAL_E2E")
+        and credentials.is_configured("seedance-openrouter")
+        and credentials.is_configured("gemini-imagen-4")
+    )
+
+
 @pytest.mark.e2e
 @pytest.mark.skipif(
-    not os.getenv("RUN_REAL_E2E"),
-    reason="RUN_REAL_E2E not set — real-provider tests are manual-only",
+    not _real_credentials_available(),
+    reason="RUN_REAL_E2E not set or provider credentials missing",
 )
 class TestFull3MinuteFlowReal:
     """Real-provider full flow — manual, may incur cost."""
@@ -157,12 +166,19 @@ class TestFull3MinuteFlowReal:
         """Run the same 3-minute idea through real LLM providers."""
         import film_pipeline.app.runtime as rt_mod
 
-        if not os.getenv("OPENROUTER_API_KEY"):
-            pytest.skip("OPENROUTER_API_KEY not set")
-
+        previous_override = rt_mod._RUNTIME_MODE_OVERRIDE
+        rt_mod._RUNTIME_MODE_OVERRIDE = "real"
         rt = StudioRuntime(server_mode="real", runtime_root=tmp_path / "e2e-real-runtime")
         previous_runtime = rt_mod._RUNTIME
         rt_mod._RUNTIME = rt
+        # Prefer Gemini Flash for real-model calls: it is fast enough for an
+        # E2E run through multiple phases while still exercising the real
+        # OpenRouter adapter path.
+        assert rt.services is not None
+        router = rt.services.prompt_runner.model_router
+        assert router is not None, "ModelRouter is required for real-mode E2E"
+        for profile in router.profiles:
+            router.profiles[profile]["primary"] = "google/gemini-3-flash-preview"
         try:
             from tests.e2e.conftest import invoke_tool
 
@@ -217,3 +233,4 @@ class TestFull3MinuteFlowReal:
             assert len(scenes) >= 1, "Real run should produce scenes"
         finally:
             rt_mod._RUNTIME = previous_runtime
+            rt_mod._RUNTIME_MODE_OVERRIDE = previous_override

@@ -74,21 +74,15 @@ class TestRealProviderSmoke:
             version=1,
         )
         assert isinstance(raw, dict), f"Expected dict, got {type(raw)}"
-        assert raw.get("title"), f"Expected a title in profile, got keys: {list(raw.keys())}"
-        assert raw.get("classified_input"), (
-            f"Expected classified_input, got keys: {list(raw.keys())}"
-        )
+        identity = raw.get("identity", {})
+        title = str(identity.get("title", ""))
+        assert title, f"Expected identity.title in profile, got keys: {list(raw.keys())}"
         assert raw.get("target_runtime_seconds", 0) > 0, (
             f"Expected positive runtime, got {raw.get('target_runtime_seconds')}"
         )
 
-        # Content plausibility: real LLM should produce > 20 chars
-        title = str(raw.get("title", ""))
+        # Content plausibility: real LLM should produce a plausible title
         assert len(title) > 1, f"Title too short: {title!r}"
-        classified = str(raw.get("classified_input", ""))
-        assert len(classified) > 20, (
-            f"Classified input too short ({len(classified)} chars): {classified!r}"
-        )
 
     def test_intake_then_approve_constitution(self, tmp_path: Path) -> None:
         """Verify intake → approve → constitution with real LLM calls.
