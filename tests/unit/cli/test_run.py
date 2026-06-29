@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from film_pipeline.cli.run import _build_parser, _profile_stack, main
 
 
@@ -34,6 +36,17 @@ def test_profile_stack_mock() -> None:
 def test_profile_stack_real_with_confirm() -> None:
     parser = _build_parser()
     args = parser.parse_args(["idea.txt", "--runtime-mode", "real", "--confirm-real"])
+    assert _profile_stack(args) == [
+        "provider.seedance_primary",
+        "quality.studio",
+        "film-type.narrative",
+    ]
+
+
+def test_profile_stack_real_confirmed_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FILM_PIPELINE_CONFIRM_REAL", "1")
+    parser = _build_parser()
+    args = parser.parse_args(["idea.txt", "--runtime-mode", "real"])
     assert _profile_stack(args) == [
         "provider.seedance_primary",
         "quality.studio",
