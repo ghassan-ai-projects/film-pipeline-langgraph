@@ -172,6 +172,25 @@ class TestGateBPlanningCompleteness:
         field_issues = [i for i in issues if "incomplete_shot_rows" in i["code"]]
         assert len(field_issues) == 1
 
+    def test_passes_for_environment_only_shot(self) -> None:
+        """Environment establishing shots may have empty characters."""
+        matrix = FakeMatrix(
+            rows=[
+                FakeRow(
+                    shot_id="s_001",
+                    act_id="act_1",
+                    prompt_ref="p_001",
+                    characters=[],
+                    environment="barren void",
+                    camera_profile="static wide",
+                    generation_order=1,
+                ),
+            ]
+        )
+        cost: dict[str, Any] = {"clip_count": 1, "total_cost_usd": 5.0}
+        issues = validate_planning_completeness({}, matrix, cost)
+        assert all(i["code"] != "incomplete_shot_rows" for i in issues)
+
     def test_blocks_on_zero_clip_count(self) -> None:
         matrix = FakeMatrix(rows=[FakeRow()])
         cost: dict[str, Any] = {"clip_count": 0, "total_cost_usd": 0.0}

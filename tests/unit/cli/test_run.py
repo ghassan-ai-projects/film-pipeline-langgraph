@@ -16,6 +16,16 @@ def test_parser_accepts_file_only(tmp_path: Path) -> None:
     args = _build_parser().parse_args([str(p)])
     assert args.file == p
     assert args.runtime_mode == "mock"
+    assert args.constraints_file is None
+
+
+def test_parser_accepts_constraints_file(tmp_path: Path) -> None:
+    idea = tmp_path / "idea.txt"
+    idea.write_text("A robot learns to paint.", encoding="utf-8")
+    constraints = tmp_path / "constraints.yaml"
+    constraints.write_text("tone: whimsical\ntarget_scene_count: 5\n", encoding="utf-8")
+    args = _build_parser().parse_args([str(idea), "--constraints-file", str(constraints)])
+    assert args.constraints_file == constraints
 
 
 def test_real_mode_requires_confirm_real(tmp_path: Path, capsys: Any) -> None:

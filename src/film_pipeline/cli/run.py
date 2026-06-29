@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from film_pipeline.cli.driver import HeadlessDriverError, run_headless
-from film_pipeline.cli.io import SUPPORTED_EXTENSIONS
+from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -79,6 +79,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory for runtime state and artifacts. Default: .film-pipeline-run.",
     )
     parser.add_argument(
+        "--constraints-file",
+        type=Path,
+        default=None,
+        help="Optional JSON/YAML file with explicit project constraints.",
+    )
+    parser.add_argument(
         "--confirm-real",
         action="store_true",
         help=(
@@ -134,6 +140,9 @@ def main(argv: list[str] | None = None) -> int:
 
     target_runtime_seconds: int | None = args.target_runtime_seconds or None
     target_scene_count: int | None = args.target_scene_count or None
+    constraints: dict[str, Any] | None = None
+    if args.constraints_file is not None:
+        constraints = read_constraints_file(args.constraints_file)
 
     try:
         final_state = _run(
@@ -147,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
             target_phase=args.target_phase,
             target_runtime_seconds=target_runtime_seconds,
             target_scene_count=target_scene_count,
+            constraints=constraints,
         )
     except HeadlessDriverError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -170,6 +180,7 @@ def _run(
     target_phase: str,
     target_runtime_seconds: int | None,
     target_scene_count: int | None,
+    constraints: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Synchronous wrapper around the async headless driver."""
     import asyncio
@@ -186,6 +197,7 @@ def _run(
             target_phase=target_phase,
             target_runtime_seconds=target_runtime_seconds,
             target_scene_count=target_scene_count,
+            constraints=constraints,
         )
     )
 

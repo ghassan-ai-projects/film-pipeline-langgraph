@@ -93,12 +93,15 @@ class HeadlessDriver:
         self,
         file_path: Path,
         target_scene_count: int | None = None,
+        constraints: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Read the idea file and submit it to the active project."""
         idea = read_idea_file(file_path)
         args: dict[str, Any] = {"idea": idea}
         if target_scene_count is not None and target_scene_count > 0:
             args["target_scene_count"] = target_scene_count
+        if constraints:
+            args["constraints"] = constraints
         result = await self._call_tool("submit_idea", **args)
         if not result.get("ok"):
             raise HeadlessDriverError(f"submit_idea failed: {result}")
@@ -135,7 +138,10 @@ class HeadlessDriver:
                     result = await self._call_tool("approve_phase", confirmed=True)
                     if not result.get("ok"):
                         raise HeadlessDriverError(f"approve_phase failed: {result}")
-                return self._active_state()
+                # The graph advances to the next phase on approval. For the
+                # headless target contract, report the target phase as approved
+                # rather than the unapproved next phase the graph landed on.
+                return self._target_met_state(target_index)
 
             result = await self._call_tool("approve_phase", confirmed=True)
             if not result.get("ok"):
@@ -149,6 +155,27 @@ class HeadlessDriver:
             f"after {self.max_phase_iterations} iterations. "
             f"Current phase: {current_phase}, blockers: {_blocker_summary(state)}"
         )
+
+    def _target_met_state(self, target_index: int) -> dict[str, Any]:
+        """Return a state snapshot that reports the target phase as approved.
+
+        Does not mutate the persisted runtime state; the graph is allowed to
+        keep advancing past the target internally.
+        """
+        state = dict(self._active_state())
+        current_phase = str(state.get("current_phase", ""))
+        from film_pipeline.graph.router import PHASE_ORDER
+
+        try:
+            current_index = PHASE_ORDER.index(current_phase)
+        except ValueError:
+            current_index = -1
+
+        if current_index > target_index:
+            state["current_phase"] = PHASE_ORDER[target_index]
+            state["approved"] = True
+            state["human_approval_required"] = False
+        return state
 
     def _active_state(self) -> dict[str, Any]:
         state = self.rt.get_project(self.project_id)
@@ -186,6 +213,7 @@ async def run_headless(
     target_phase: str = "shot_bible",
     target_runtime_seconds: int | None = None,
     target_scene_count: int | None = None,
+    constraints: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """High-level helper: create runtime, project, submit idea, and run to target.
 
@@ -203,5 +231,6 @@ async def run_headless(
     await driver.submit_idea_from_file(
         file_path,
         target_scene_count=target_scene_count,
+        constraints=constraints,
     )
     return await driver.run_to_target()
