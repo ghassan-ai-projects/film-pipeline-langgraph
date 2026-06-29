@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -80,17 +81,28 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--confirm-real",
         action="store_true",
-        help="Confirm that real-mode provider spend is acceptable.",
+        help=(
+            "Confirm that real-mode provider spend is acceptable. "
+            "May also be set via FILM_PIPELINE_CONFIRM_REAL=1."
+        ),
     )
     return parser
+
+
+def _real_mode_confirmed(args: argparse.Namespace) -> bool:
+    """Return True when the user has confirmed real-mode provider spend."""
+    if args.confirm_real:
+        return True
+    return os.getenv("FILM_PIPELINE_CONFIRM_REAL", "").lower() in {"1", "true", "yes"}
 
 
 def _profile_stack(args: argparse.Namespace) -> list[str]:
     """Return the profile stack in the order expected by create_film_project."""
     if args.runtime_mode == "real":
-        if not args.confirm_real:
+        if not _real_mode_confirmed(args):
             raise HeadlessDriverError(
-                "Real mode requires --confirm-real to acknowledge provider spend."
+                "Real mode requires --confirm-real or FILM_PIPELINE_CONFIRM_REAL=1 "
+                "to acknowledge provider spend."
             )
         return [
             args.provider_profile,

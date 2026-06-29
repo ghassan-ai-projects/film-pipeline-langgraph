@@ -142,11 +142,14 @@ phase gate until the requested target phase.
 Supported idea file formats: `.txt`, `.md`, `.pdf`.
 
 ```bash
-# Mock mode (default) — fast, zero-cost
+# Mock mode (default) — fast, zero-cost, no confirmation needed
 uv run film-pipeline-run my-idea.txt
 
 # Real providers — requires configured keys and explicit confirmation
 uv run film-pipeline-run my-idea.md --runtime-mode real --confirm-real
+
+# Or confirm via environment variable (useful in scripts / CI)
+FILM_PIPELINE_CONFIRM_REAL=1 uv run film-pipeline-run my-idea.md --runtime-mode real
 
 # Custom target phase, runtime, and scene count
 uv run film-pipeline-run my-idea.pdf \
