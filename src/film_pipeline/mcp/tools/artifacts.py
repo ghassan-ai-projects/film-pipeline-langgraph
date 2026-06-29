@@ -6,16 +6,15 @@ from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _load_latest_reference_index, _ok, _services
+from .helpers import _active_project_id, _error, _load_latest_reference_index, _ok, _services
 
 
 async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
     """List all artifacts for the active project, optionally filtered by phase."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     phase_str = args.get("phase")
     from film_pipeline.schemas._base import FilmPhase
 
@@ -43,14 +42,16 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
 async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     """Load and return the content of a specific artifact."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project.")
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
         return _error("artifact_id is required.")
-    phase_str = str(args.get("phase", active.get("current_phase", "")))
+    phase_str = str(args.get("phase", state.get("current_phase", "")))
     version_raw = args.get("version", 1)
     version = int(str(version_raw)) if not isinstance(version_raw, int) else version_raw
     from film_pipeline.schemas._base import FilmPhase
@@ -69,10 +70,9 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
 async def list_shots(args: dict[str, object]) -> dict[str, object]:
     """List shots from the shot bible artifact, if available."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -91,10 +91,9 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     if not shot_id:
         return _error("shot_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -118,10 +117,9 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
     if not scene_id:
         return _error("scene_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -141,11 +139,13 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     if not reference_id:
         return _error("reference_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
-    data = _load_latest_reference_index(rt, project_id, active)
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project.")
+    data = _load_latest_reference_index(rt, project_id, state)
     if data is None:
         return _error("Reference index not yet generated.")
     refs = cast(list[Any], data.get("entries", data.get("references", data.get("items", []))))

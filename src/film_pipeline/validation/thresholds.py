@@ -10,16 +10,22 @@ def score_to_status(
     score: float,
     thresholds: ValidatorThresholds | None = None,
 ) -> ValidationStatus:
-    """Classify a score using the given thresholds.
+    """Classify a score into the full four-status contract.
 
-    Default thresholds: pass ≥ 85, review ≥ 75, block < 75.
+    Default thresholds:
+      - pass ≥ 85
+      - pass_with_notes ≥ 75
+      - needs_revision ≥ 65
+      - blocked < 65
     """
     t = thresholds or ValidatorThresholds()
 
     if score >= t.pass_at:
         return ValidationStatus.PASS
-    if score >= t.block_below:
+    if score >= t.review_at:
         return ValidationStatus.PASS_WITH_NOTES
+    if score >= t.block_below:
+        return ValidationStatus.NEEDS_REVISION
     return ValidationStatus.BLOCKED
 
 

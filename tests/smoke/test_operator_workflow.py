@@ -75,13 +75,13 @@ class TestOperatorWorkflow:
         invoke_tool(rt, "submit_idea", idea="A gardener discovers sentient plants.")
 
         # Step 4: Approve intake
-        r = invoke_tool(rt, "approve_intake")
+        r = invoke_tool(rt, "approve_intake", confirmed=True)
         assert r["ok"] is True
         assert r.get("current_phase")
 
         # Step 5: Approve through constitution → development (2 more approvals to reach script)
         for _ in range(2):
-            r = invoke_tool(rt, "approve_phase")
+            r = invoke_tool(rt, "approve_phase", confirmed=True)
             assert r["ok"] is True, f"approve_phase: {r}"
 
         # We're now at script phase — verify artifacts exist
@@ -131,9 +131,9 @@ class TestOperatorWorkflow:
         invoke_tool(rt, "submit_idea", idea="Two rival chefs compete in a cooking duel.")
 
         # Approve through script phase to get artifacts for validation
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
         for _ in range(3):
-            invoke_tool(rt, "approve_phase")
+            invoke_tool(rt, "approve_phase", confirmed=True)
 
         r = invoke_tool(rt, "get_validation_report")
         assert r["ok"] is True
@@ -162,9 +162,9 @@ class TestOperatorWorkflow:
         )
 
         # Approve through script
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
         for _ in range(3):
-            invoke_tool(rt, "approve_phase")
+            invoke_tool(rt, "approve_phase", confirmed=True)
 
         # Step 8: Plan generation batch
         r = invoke_tool(rt, "plan_generation_batch", shot_ids=["shot_0001", "shot_0002"])
@@ -177,7 +177,7 @@ class TestOperatorWorkflow:
         assert r.get("count", 0) >= 1
 
         # Step 8: Approve spend
-        r = invoke_tool(rt, "approve_generation_spend", max_cost_usd=100.00)
+        r = invoke_tool(rt, "approve_generation_spend", max_cost_usd=100.00, confirmed=True)
         assert r["ok"] is True, f"approve_generation_spend: {r}"
         assert r.get("approved", 0) >= 1
 
@@ -191,7 +191,7 @@ class TestOperatorWorkflow:
         assert r.get("ok") is True or "not found" in str(r.get("error", ""))
 
         # Step 9: Promote to production
-        r = invoke_tool(rt, "promote_test_to_production")
+        r = invoke_tool(rt, "promote_test_to_production", confirmed=True)
         assert r["ok"] is True
 
     def test_recovery_and_audit(
@@ -207,7 +207,7 @@ class TestOperatorWorkflow:
         )
         invoke_tool(rt, "set_active_project", project_ref="smoke-5")
         invoke_tool(rt, "submit_idea", idea="A librarian discovers books that write themselves.")
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
 
         # Audit log
         r = invoke_tool(rt, "get_audit_log")

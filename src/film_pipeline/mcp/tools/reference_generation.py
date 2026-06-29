@@ -732,5 +732,30 @@ def _save_reference_index_artifact(
         created_by="mcp.generate_reference_images",
         created_at=datetime.now(UTC),
     )
-    store.save_dict(artifact, meta)
+    from film_pipeline.schemas.reference import ReferenceIndex
+
+    entries = _reference_entries_from_grouped(artifact)
+    reference_index = ReferenceIndex(project_id=project_id, entries=entries)
+    store.save(reference_index, meta)
     return f"artifact:reference_index:v{version}"
+
+
+def _reference_entries_from_grouped(
+    artifact: dict[str, object],
+) -> list[Any]:
+    """Build typed ``ReferenceIndexEntry`` objects from grouped raw entries."""
+    from film_pipeline.schemas.reference import ReferenceIndexEntry
+
+    raw_entries = cast(list[Any], artifact.get("entries", []))
+    entries: list[ReferenceIndexEntry] = []
+    for raw in raw_entries or []:
+        if not isinstance(raw, dict):
+            continue
+        data = dict(raw)
+        data.setdefault("asset_path", "")
+        data.setdefault("asset_type", "")
+        data.setdefault("subject_type", "")
+        data.setdefault("subject_id", "")
+        data.setdefault("quality_score", 0.0)
+        entries.append(ReferenceIndexEntry.model_validate(data))
+    return entries

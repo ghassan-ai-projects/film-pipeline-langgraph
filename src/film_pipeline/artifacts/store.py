@@ -12,7 +12,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from film_pipeline.artifacts.metadata import read_metadata, write_metadata
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.artifacts.paths import artifact_path, current_artifact_path
+from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 
 
@@ -22,30 +23,11 @@ class ArtifactStore:
     def __init__(self, root: Path = Path("projects")) -> None:
         self._root = root
 
-    def _artifact_dir(self, project_id: str, phase: str, artifact_id: str) -> Path:
-        phase_dir_map = {
-            "intake": "intake",
-            "constitution": "01-vision",
-            "development": "02-development",
-            "script": "03-script",
-            "visual_dev": "04-visual-dev",
-            "shot_bible": "05-shot-bible",
-            "gen_planning": "06-generation-plan",
-            "generation": "07-generated-assets",
-            "qc": "08-validation",
-            "post": "09-post",
-            "delivery": "10-delivery",
-        }
-        pdir = phase_dir_map.get(phase, phase)
-        return self._root / project_id / pdir / _safe_artifact_id(artifact_id)
-
     def _artifact_path(self, project_id: str, phase: str, artifact_id: str, version: int) -> Path:
-        return (
-            self._artifact_dir(project_id, phase, artifact_id) / "versions" / f"v{version:03}.json"
-        )
+        return artifact_path(project_id, phase, artifact_id, version, root=self._root)
 
     def _current_path(self, project_id: str, phase: str, artifact_id: str) -> Path:
-        return self._artifact_dir(project_id, phase, artifact_id) / "current.json"
+        return current_artifact_path(project_id, phase, artifact_id, root=self._root)
 
     def save(self, artifact: BaseModel, meta: ArtifactMetadata) -> Path:
         """Save an artifact's content and metadata to disk."""
@@ -56,18 +38,6 @@ class ArtifactStore:
         payload = artifact.model_dump(mode="json")
         content = artifact.model_dump_json(indent=2)
         _write_artifact_files(version_path, current_path, content, payload, meta)
-        return current_path
-
-    def save_dict(self, artifact: dict[str, Any], meta: ArtifactMetadata) -> Path:
-        """Save a plain dict artifact (without Pydantic model wrapping)."""
-        import json
-
-        content = json.dumps(artifact, indent=2)
-        version_path = self._artifact_path(
-            meta.project_id, meta.phase.value, meta.artifact_id, meta.version
-        )
-        current_path = self._current_path(meta.project_id, meta.phase.value, meta.artifact_id)
-        _write_artifact_files(version_path, current_path, content, artifact, meta)
         return current_path
 
     def load(
@@ -86,20 +56,9 @@ class ArtifactStore:
         """List all artifact metadata in a project, optionally filtered by phase."""
         base = self._root / project_id
         if phase is not None:
-            phase_dir_map = {
-                "intake": "intake",
-                "constitution": "01-vision",
-                "development": "02-development",
-                "script": "03-script",
-                "visual_dev": "04-visual-dev",
-                "shot_bible": "05-shot-bible",
-                "gen_planning": "06-generation-plan",
-                "generation": "07-generated-assets",
-                "qc": "08-validation",
-                "post": "09-post",
-                "delivery": "10-delivery",
-            }
-            base = base / phase_dir_map.get(phase.value, phase.value)
+            from film_pipeline.artifacts.paths import phase_dir
+
+            base = phase_dir(project_id, phase.value, root=self._root)
         results: list[ArtifactMetadata] = []
         for meta_path in base.rglob("current.meta.json"):
             results.append(read_metadata(meta_path))
@@ -111,7 +70,9 @@ class ArtifactStore:
         Scans existing artifact files in the phase directory and returns
         max(version) + 1, or 1 if no prior versions exist.
         """
-        version_dir = self._artifact_dir(project_id, phase, artifact_id) / "versions"
+        from film_pipeline.artifacts.paths import artifact_dir
+
+        version_dir = artifact_dir(project_id, phase, artifact_id, root=self._root) / "versions"
         if not version_dir.exists():
             return 1
 
@@ -136,13 +97,58 @@ class ArtifactStore:
         meta_path = _meta_sidecar(content_path)
         return read_metadata(meta_path)
 
+    def approve(
+        self,
+        project_id: str,
+        phase: str,
+        artifact_id: str,
+        version: int,
+        approval_ref: str | None = None,
+    ) -> ArtifactMetadata:
+        """Transition an artifact version from CANDIDATE to APPROVED."""
+        meta = self.load_metadata(project_id, phase, artifact_id, version)
+        if meta.status != ArtifactStatus.CANDIDATE:
+            raise ValueError(
+                f"Cannot approve {artifact_id} v{version}: status is {meta.status.value}, "
+                "expected candidate"
+            )
+        updated = meta.model_copy(
+            update={"status": ArtifactStatus.APPROVED, "approval_ref": approval_ref}
+        )
+        self._write_metadata_for(project_id, phase, artifact_id, version, updated)
+        return updated
+
+    def supersede(
+        self, project_id: str, phase: str, artifact_id: str, version: int
+    ) -> ArtifactMetadata:
+        """Transition an artifact version from APPROVED to SUPERSEDED."""
+        meta = self.load_metadata(project_id, phase, artifact_id, version)
+        if meta.status != ArtifactStatus.APPROVED:
+            raise ValueError(
+                f"Cannot supersede {artifact_id} v{version}: status is {meta.status.value}, "
+                "expected approved"
+            )
+        updated = meta.model_copy(update={"status": ArtifactStatus.SUPERSEDED})
+        self._write_metadata_for(project_id, phase, artifact_id, version, updated)
+        return updated
+
+    def _write_metadata_for(
+        self,
+        project_id: str,
+        phase: str,
+        artifact_id: str,
+        version: int,
+        meta: ArtifactMetadata,
+    ) -> None:
+        """Persist metadata to both the version sidecar and current sidecar."""
+        version_path = self._artifact_path(project_id, phase, artifact_id, version)
+        current_path = self._current_path(project_id, phase, artifact_id)
+        write_metadata(_meta_sidecar(version_path), meta)
+        write_metadata(_meta_sidecar(current_path), meta)
+
 
 def _meta_sidecar(content_path: Path) -> Path:
     return content_path.with_suffix(".meta.json")
-
-
-def _safe_artifact_id(artifact_id: str) -> str:
-    return artifact_id.replace(":", "_").replace("/", "_")
 
 
 def _write_artifact_files(

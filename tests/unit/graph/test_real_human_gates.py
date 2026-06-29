@@ -192,6 +192,45 @@ def _get_actions(payload: dict[str, object]) -> list[str]:
     return cast(list[str], actions) if isinstance(actions, list) else []
 
 
+class TestHumanGateMandatory:
+    """Human gate cannot be bypassed by the orchestrator agent."""
+
+    def test_await_approval_interrupts_even_when_orchestrator_approves(
+        self, monkeypatch: Any
+    ) -> None:
+        """With human gates ON, orchestrator approve recommendation still pauses."""
+        from film_pipeline.graph.nodes import await_approval_node
+
+        called: dict[str, object] = {}
+
+        def fake_interrupt(payload: dict[str, object]) -> dict[str, object]:
+            called["payload"] = payload
+            return {"action": "approve_phase"}
+
+        monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
+        monkeypatch.setattr(
+            "film_pipeline.graph.nodes._run_orchestrator_agent",
+            lambda _state: {"action": "approve", "feedback": "looks good", "preserve": []},
+        )
+
+        state: dict[str, Any] = {
+            "project_id": "test-human-gate",
+            "current_phase": "script",
+            "human_approval_phase": "script",
+            "artifact_refs": [],
+            "issues": [],
+            "resolved_config": {"studio": {"require_human_approval": True}},
+        }
+        result = await_approval_node(state)
+        assert "payload" in called
+        payload = cast(dict[str, object], called["payload"])
+        assert payload.get("phase") == "script"
+        recommendation = payload.get("recommendation")
+        assert isinstance(recommendation, dict)
+        assert recommendation.get("action") == "approve"
+        assert result.get("approved") is True
+
+
 class TestAutoApprove:
     """Phase nodes and await_approval_node behavior when require_human_approval is off."""
 
@@ -272,3 +311,92 @@ class TestAutoApprove:
         updates = intake_node(state)
         assert updates.get("approved") is False
         assert updates.get("human_approval_required") is True
+
+
+class TestExternalStateReplay:
+    """External MCP mutations must be replayed into resumed checkpoints."""
+
+    def test_apply_external_state_adds_new_generation_requests(self) -> None:
+        from film_pipeline.graph.nodes import _apply_external_state
+
+        state: dict[str, Any] = {
+            "generation_requests": [{"generation_request_id": "r1", "shot_id": "s1"}],
+        }
+        external: dict[str, Any] = {
+            "generation_requests": [{"generation_request_id": "r2", "shot_id": "s2"}],
+        }
+        updates = _apply_external_state(state, external)
+        assert len(updates["generation_requests"]) == 1
+        assert updates["generation_requests"][0]["generation_request_id"] == "r2"
+
+    def test_apply_external_state_skips_existing_requests(self) -> None:
+        from film_pipeline.graph.nodes import _apply_external_state
+
+        state: dict[str, Any] = {
+            "generation_requests": [{"generation_request_id": "r1", "shot_id": "s1"}],
+        }
+        external: dict[str, Any] = {
+            "generation_requests": [
+                {"generation_request_id": "r1", "shot_id": "s1"},
+                {"generation_request_id": "r2", "shot_id": "s2"},
+            ],
+        }
+        updates = _apply_external_state(state, external)
+        assert len(updates["generation_requests"]) == 1
+        assert updates["generation_requests"][0]["generation_request_id"] == "r2"
+
+    def test_apply_external_state_empty_when_no_new_requests(self) -> None:
+        from film_pipeline.graph.nodes import _apply_external_state
+
+        state: dict[str, Any] = {"generation_requests": [{"generation_request_id": "r1"}]}
+        external: dict[str, Any] = {"generation_requests": [{"generation_request_id": "r1"}]}
+        updates = _apply_external_state(state, external)
+        assert updates == {}
+
+    def test_build_resume_payload_carries_generation_requests(self) -> None:
+        from film_pipeline.app.runtime import _build_resume_payload
+
+        active: dict[str, Any] = {"generation_requests": [{"generation_request_id": "r1"}]}
+        payload = _build_resume_payload("approve", active)
+        assert payload["action"] == "approve"
+        assert payload["_external_state"]["generation_requests"] == active["generation_requests"]
+
+    def test_build_resume_payload_omits_external_state_when_empty(self) -> None:
+        from film_pipeline.app.runtime import _build_resume_payload
+
+        active: dict[str, Any] = {}
+        payload = _build_resume_payload("approve", active)
+        assert payload == {"action": "approve"}
+
+    def test_await_approval_applies_external_state_on_resume(self, monkeypatch: Any) -> None:
+        from film_pipeline.graph.nodes import await_approval_node
+
+        def fake_interrupt(payload: dict[str, object]) -> dict[str, object]:
+            return {
+                "action": "approve_phase",
+                "_external_state": {
+                    "generation_requests": [
+                        {"generation_request_id": "r2", "shot_id": "s2"},
+                    ],
+                },
+            }
+
+        monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
+        monkeypatch.setattr(
+            "film_pipeline.graph.nodes._run_orchestrator_agent", lambda _state: None
+        )
+
+        state: dict[str, Any] = {
+            "project_id": "test-external",
+            "current_phase": "generation",
+            "human_approval_phase": "generation_batch",
+            "artifact_refs": [],
+            "issues": [],
+            "generation_requests": [{"generation_request_id": "r1", "shot_id": "s1"}],
+        }
+        result = await_approval_node(state)
+        assert result.get("approved") is True
+        # The node returns only the *new* requests as a partial update;
+        # LangGraph's ``add`` reducer appends them to the existing channel.
+        request_ids = {r["generation_request_id"] for r in result.get("generation_requests", [])}
+        assert request_ids == {"r2"}

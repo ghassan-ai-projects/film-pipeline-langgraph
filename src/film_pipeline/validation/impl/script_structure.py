@@ -30,10 +30,30 @@ class ScriptStructureValidator(BaseValidator):
             input_schema="scene_script",
             model_profile="text_validator",
             thresholds=ValidatorThresholds(pass_at=85, review_at=75, block_below=75),
-            blocking_conditions=["missing_scene_intent", "no_conflict"],
+            blocking_conditions=["missing_scene_intent", "no_conflict", "scene_count_under_min"],
             warning_conditions=["dialogue_dense", "scene_too_long"],
         )
         super().__init__(entry)
+
+    def validate(
+        self,
+        artifact: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run rule-based checks, then augment with LLM findings if available."""
+        rule_result = self._validate_rules(artifact, context)
+        if self.llm_enabled and self._has_llm_services():
+            try:
+                llm_result = self._validate_llm(artifact, context)
+            except Exception:
+                return rule_result
+            # Merge LLM issues on top of rule-based issues.
+            rule_result.setdefault("issues", []).extend(llm_result.get("issues", []))
+            # Carry over top-level LLM fields (score, passed, summary, etc.).
+            for key in ("score", "passed", "summary"):
+                if key in llm_result:
+                    rule_result[key] = llm_result[key]
+        return rule_result
 
     def _validate_rules(
         self,
@@ -41,7 +61,6 @@ class ScriptStructureValidator(BaseValidator):
         context: object = None,
     ) -> dict[str, Any]:
         """Inspect the script artifact for structural issues."""
-        _ = context
         scenes: list[dict[str, Any]] = artifact.get("scenes", [])
         issues: list[dict[str, str]] = []
 
@@ -54,6 +73,22 @@ class ScriptStructureValidator(BaseValidator):
                 }
             )
             return {"scenes_count": 0, "issues": issues}
+
+        # Scene-count compliance against the Story Scope Contract.
+        ctx = context if isinstance(context, dict) else {}
+        target_scene_count = ctx.get("target_scene_count")
+        min_scene_count = ctx.get("min_scene_count")
+        if isinstance(min_scene_count, int) and len(scenes) < min_scene_count:
+            issues.append(
+                {
+                    "code": "scene_count_under_min",
+                    "severity": "blocking",
+                    "message": (
+                        f"Script has {len(scenes)} scenes, below the minimum "
+                        f"{min_scene_count}. Target was {target_scene_count}."
+                    ),
+                }
+            )
 
         scenes_without_intent: list[str] = []
         scenes_without_conflict: list[str] = []
@@ -140,7 +175,7 @@ class ScriptStructureValidator(BaseValidator):
 
     def extract_score(self, raw: dict[str, Any]) -> float:
         # LLM path: score is directly in the response
-        if "score" in raw and "scenes_count" not in raw:
+        if "score" in raw:
             return float(raw.get("score", 0))
         # Stub path: compute from issue counts
         issues: list[dict[str, str]] = raw.get("issues", [])

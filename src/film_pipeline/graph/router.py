@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from film_pipeline.graph import orchestrator_state as ostate
+from film_pipeline.schemas._base import ValidationStatus
 
 PHASE_ORDER = [
     "intake",
@@ -87,6 +88,50 @@ class AgentRouteResult:
 _CREATE_CAPABILITIES = {"writing", "analysis", "planning", "composition"}
 _REVIEW_CAPABILITIES = {"review", "validation", "qc", "inspecting"}
 _REPAIR_CAPABILITIES = {"repair", "revision", "replan", "correcting"}
+
+# Severity ordering for the four-status validation contract
+_STATUS_SEVERITY = {
+    ValidationStatus.PASS: 0,
+    ValidationStatus.PASS_WITH_NOTES: 1,
+    ValidationStatus.NEEDS_REVISION: 2,
+    ValidationStatus.BLOCKED: 3,
+    ValidationStatus.ERROR: 4,
+}
+
+
+def _status_from_value(value: str) -> ValidationStatus:
+    """Parse a validation status string, defaulting to ERROR."""
+    try:
+        return ValidationStatus(value)
+    except ValueError:
+        return ValidationStatus.ERROR
+
+
+def _latest_validation_status(state: dict[str, Any]) -> ValidationStatus | None:
+    """Return the most severe validation/consensus status stored in state."""
+    # Prefer an explicit consensus report when available.
+    consensus = state.get("consensus_report")
+    if isinstance(consensus, dict):
+        raw = consensus.get("consensus_status") or consensus.get("status")
+        if raw:
+            return _status_from_value(str(raw))
+
+    reports: list[dict[str, Any]] = state.get("_validation_reports", [])
+    if not reports:
+        return None
+
+    worst: ValidationStatus | None = None
+    worst_rank = -1
+    for report in reports:
+        raw = report.get("status")
+        if not raw:
+            continue
+        status = _status_from_value(str(raw))
+        rank = _STATUS_SEVERITY.get(status, -1)
+        if rank > worst_rank:
+            worst_rank = rank
+            worst = status
+    return worst
 
 
 def compute_actions(state: dict[str, Any]) -> RouterResult:
@@ -202,7 +247,26 @@ def compute_actions(state: dict[str, Any]) -> RouterResult:
         result.next_action = "handle_blockers"
         return result
 
-    # --- 6. Pending revision -------------------------------------------------
+    # --- 6. Validation status-driven routing ---------------------------------
+    val_status = _latest_validation_status(state)
+    if val_status == ValidationStatus.BLOCKED:
+        result.blocked = [{"action": "advance_phase", "reason": "validation consensus is blocked"}]
+        result.eligible = ["repair", "escalate_to_human"]
+        result.next_action = "handle_blockers"
+        return result
+    if val_status == ValidationStatus.NEEDS_REVISION:
+        result.eligible = ["revise", "escalate_to_human"]
+        result.next_action = "revise"
+        result.blocked = [
+            {"action": "approve_phase", "reason": "validation consensus requires revision"}
+        ]
+        return result
+    if val_status == ValidationStatus.PASS_WITH_NOTES:
+        result.blocked.append(
+            {"action": "approve_phase", "reason": "validation passed with notes — review warnings"}
+        )
+
+    # --- 7. Pending revision -------------------------------------------------
     if ostate.has_pending_revision(state):
         result.eligible = ["revise", "escalate_to_human"]
         result.next_action = "revise"
@@ -211,7 +275,7 @@ def compute_actions(state: dict[str, Any]) -> RouterResult:
         ]
         return result
 
-    # --- 7. Not approved → review package ------------------------------------
+    # --- 8. Not approved → review package ------------------------------------
     if not approved and phase in APPROVAL_GATES:
         result.eligible = ["present_review_package", "approve_phase"]
         result.next_action = "present_review_package"

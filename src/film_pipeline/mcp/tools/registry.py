@@ -44,7 +44,13 @@ from .checkpoints import (
     rollback_artifact,
     rollback_to_checkpoint,
 )
-from .config import get_runtime_mode, inspect_profile, list_profiles
+from .config import (
+    approve_profile_change,
+    get_runtime_mode,
+    inspect_profile,
+    list_profiles,
+    propose_profile_change,
+)
 from .generation import (
     approve_generation_spend,
     cancel_generation_request,
@@ -62,6 +68,7 @@ from .kb import (
     kb_get_item,
     kb_search,
 )
+from .operator import add_operator_comment, list_operator_comments
 from .planning import generate_plan, initialize_budget
 from .projects import (
     create_film_project,
@@ -371,6 +378,16 @@ def register_all_tools(registry: ToolRegistry) -> None:
         get_invalidation_report,
     )
 
+    # operator
+    registry.register(
+        _make("add_operator_comment", ToolGroup.OPERATOR, add_operator_comment, mutates=True),
+        add_operator_comment,
+    )
+    registry.register(
+        _make("list_operator_comments", ToolGroup.OPERATOR, list_operator_comments),
+        list_operator_comments,
+    )
+
     # audit
     registry.register(_make("get_audit_log", ToolGroup.AUDIT, get_audit_log), get_audit_log)
     registry.register(
@@ -401,6 +418,25 @@ def register_all_tools(registry: ToolRegistry) -> None:
     registry.register(_make("inspect_profile", ToolGroup.CONFIG, inspect_profile), inspect_profile)
     registry.register(
         _make("get_runtime_mode", ToolGroup.CONFIG, get_runtime_mode), get_runtime_mode
+    )
+    registry.register(
+        _make(
+            "propose_profile_change",
+            ToolGroup.CONFIG,
+            propose_profile_change,
+            mutates=True,
+        ),
+        propose_profile_change,
+    )
+    registry.register(
+        _make(
+            "approve_profile_change",
+            ToolGroup.CONFIG,
+            approve_profile_change,
+            mutates=True,
+            confirm=True,
+        ),
+        approve_profile_change,
     )
 
     # coverage

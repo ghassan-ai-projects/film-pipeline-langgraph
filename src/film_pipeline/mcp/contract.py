@@ -39,6 +39,7 @@ class ToolGroup(StrEnum):
     CONFIG = "config"
     COVERAGE = "coverage"
     ASSEMBLY = "assembly"
+    OPERATOR = "operator"
 
 
 @dataclass(frozen=True)

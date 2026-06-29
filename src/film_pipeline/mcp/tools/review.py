@@ -6,7 +6,7 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok, _services
+from .helpers import _active_project_id, _error, _ok, _services
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
@@ -17,13 +17,16 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     open issues, risks, cost impact, and recommended next actions.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    phase = str(args.get("phase", active.get("current_phase", "")))
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project.")
+    phase = str(args.get("phase", state.get("current_phase", "")))
     if not phase:
         return _error("No phase specified and no active phase.")
-    project_id = str(active["project_id"])
+    project_id = str(state["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -49,10 +52,10 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.graph.router import compute_actions
     from film_pipeline.review.generator import ReviewPackageGenerator
 
-    ostate.ensure_orchestrator_state(active)
+    ostate.ensure_orchestrator_state(state)
 
-    router_result = compute_actions(active)
-    blocking_issues = [i for i in active.get("issues", []) if i.get("severity") == "blocking"]
+    router_result = compute_actions(state)
+    blocking_issues = [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
 
     try:
         generator = ReviewPackageGenerator()
@@ -62,10 +65,10 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
             summary=f"Review package for {phase} phase",
             current_artifacts=[a["artifact_id"] for a in artifact_list],
             validation_results=[
-                r.get("validator_id", "") for r in active.get("_validation_reports", [])
+                r.get("validator_id", "") for r in state.get("_validation_reports", [])
             ],
             open_issues=[i.get("message", "") for i in blocking_issues],
-            orchestrator_recommendation=_build_orchestrator_recommendation(active, router_result),
+            orchestrator_recommendation=_build_orchestrator_recommendation(state, router_result),
             has_blocking_issues=len(blocking_issues) > 0,
         )
     except Exception:

@@ -11,8 +11,10 @@ from film_pipeline.artifacts.manifest import (
 )
 from film_pipeline.artifacts.metadata import read_metadata, write_metadata
 from film_pipeline.artifacts.paths import (
+    artifact_dir,
     artifact_path,
     checkpoint_dir,
+    current_artifact_path,
     generated_asset_dir,
     phase_dir,
     project_dir,
@@ -29,9 +31,11 @@ __all__ = [
     "AssetEntry",
     "AssetManifest",
     "approve",
+    "artifact_dir",
     "artifact_path",
     "checkpoint_dir",
     "create_version",
+    "current_artifact_path",
     "generated_asset_dir",
     "phase_dir",
     "project_dir",

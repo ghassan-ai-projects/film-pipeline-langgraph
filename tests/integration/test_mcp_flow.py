@@ -101,7 +101,7 @@ class TestMCPFlow:
             loop.run_until_complete(submit_idea({"idea": "Test idea."}))
 
             # Approve the intaken idea
-            result = loop.run_until_complete(approve_phase({}))
+            result = loop.run_until_complete(approve_phase({"confirmed": True}))
             assert result["ok"] is True
             assert result["current_phase"] == "constitution"
         finally:
@@ -117,7 +117,7 @@ class TestMCPFlow:
             loop.run_until_complete(submit_idea({"idea": "Test."}))
 
             result = loop.run_until_complete(
-                mcp_request_revision({"note": "Needs more character detail"})
+                mcp_request_revision({"note": "Needs more character detail", "confirmed": True})
             )
             assert result["ok"] is True
             assert len(result["issues"]) >= 1  # type: ignore[arg-type]
@@ -161,12 +161,14 @@ class TestMCPFlow:
             assert r["human_approval_required"] is True
 
             # 4. Request revision
-            r = loop.run_until_complete(mcp_request_revision({"note": "More sci-fi tone"}))
+            r = loop.run_until_complete(
+                mcp_request_revision({"note": "More sci-fi tone", "confirmed": True})
+            )
             assert r["ok"] is True
             assert len(r["issues"]) >= 1  # type: ignore[arg-type]
 
             # 5. Approve after revision
-            r = loop.run_until_complete(approve_phase({}))
+            r = loop.run_until_complete(approve_phase({"confirmed": True}))
             assert r["ok"] is True
             assert r["current_phase"] == "constitution"
 

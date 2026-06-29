@@ -41,6 +41,7 @@ from film_pipeline.schemas.artifact import (
 )
 from film_pipeline.schemas.assembly import (
     AssemblyManifest,
+    AssemblyPlanArtifact,
     AudioPlan,
     ClipOrderEntry,
     ColorPlan,
@@ -140,6 +141,7 @@ from film_pipeline.schemas.story_bible import (
     Treatment,
 )
 from film_pipeline.schemas.style import StyleBible
+from film_pipeline.schemas.subtitle import SubtitleArtifact, SubtitleCue
 from film_pipeline.schemas.validation import (
     ConsensusReport,
     ReviewerScore,
@@ -162,6 +164,7 @@ __all__ = [
     "ArtifactType",
     "ArtifactVersion",
     "AssemblyManifest",
+    "AssemblyPlanArtifact",
     "AudioPlan",
     "AuditLogEntry",
     "BranchMetadata",
@@ -250,6 +253,8 @@ __all__ = [
     "StateRecord",
     "StoryBible",
     "StyleBible",
+    "SubtitleArtifact",
+    "SubtitleCue",
     "TileEntry",
     "TransitionPlan",
     "Treatment",

@@ -55,7 +55,7 @@ class TestHappyPath:
 
         # ── 5. Approve intake → creates checkpoint, advances ──────────
         checkpoints_before = len(rt.checkpoints)
-        result = invoke_tool(rt, "approve_intake")
+        result = invoke_tool(rt, "approve_intake", confirmed=True)
         assert result["ok"] is True, f"approve_intake failed: {result}"
         new_phase = result.get("current_phase", "")
         assert new_phase != "intake", "Should advance past intake"
@@ -64,7 +64,7 @@ class TestHappyPath:
 
         # ── 6. Approve remaining phases to reach script ────────────────
         for expected_phase in ("constitution", "development"):
-            result = invoke_tool(rt, "approve_phase")
+            result = invoke_tool(rt, "approve_phase", confirmed=True)
             assert result["ok"] is True, f"approve_phase failed at {expected_phase}: {result}"
 
         # ── 7. Verify artifacts exist ──────────────────────────────────
@@ -100,7 +100,7 @@ class TestHappyPath:
         invoke_tool(rt, "submit_idea", idea="A story about memory.")
 
         # Approve intake
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
 
         # Re-get active project and verify phase advanced
         result = invoke_tool(rt, "get_active_project")
@@ -135,10 +135,10 @@ class TestHappyPath:
         invoke_tool(rt, "submit_idea", idea="An action film.")
 
         # Advance to script phase (approve_intake then 2 approve_phase)
-        result = invoke_tool(rt, "approve_intake")
+        result = invoke_tool(rt, "approve_intake", confirmed=True)
         assert result["ok"] is True
         for _ in range(2):
-            result = invoke_tool(rt, "approve_phase")
+            result = invoke_tool(rt, "approve_phase", confirmed=True)
             assert result["ok"] is True
 
         # Get validation report (script phase has validators)

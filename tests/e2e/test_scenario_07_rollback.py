@@ -62,7 +62,7 @@ class TestRollback:
         invoke_tool(rt, "create_film_project", project_id="e2e-rollback", title="Rollback Test")
         invoke_tool(rt, "set_active_project", project_ref="e2e-rollback")
         invoke_tool(rt, "submit_idea", idea="A story.")
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
 
         # List checkpoints
         result = invoke_tool(rt, "list_checkpoints")
@@ -72,7 +72,7 @@ class TestRollback:
 
         # Rollback to the first checkpoint
         cp_id = cps[0]["checkpoint_id"]
-        result = invoke_tool(rt, "rollback_to_checkpoint", checkpoint_id=cp_id)
+        result = invoke_tool(rt, "rollback_to_checkpoint", checkpoint_id=cp_id, confirmed=True)
         assert result["ok"] is True
 
     def test_invalidation_report_via_mcp(
@@ -86,7 +86,7 @@ class TestRollback:
         invoke_tool(rt, "create_film_project", project_id="e2e-inval", title="Invalidation Test")
         invoke_tool(rt, "set_active_project", project_ref="e2e-inval")
         invoke_tool(rt, "submit_idea", idea="A short.")
-        invoke_tool(rt, "approve_intake")
+        invoke_tool(rt, "approve_intake", confirmed=True)
 
         result = invoke_tool(rt, "list_checkpoints")
         cps = result.get("checkpoints", [])

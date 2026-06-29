@@ -224,7 +224,12 @@ def test_server_returns_unknown_tool() -> None:
 
 def test_server_blocks_ambiguous_mutation() -> None:
     server = _build_server_with_projects()
-    resp = asyncio.run(server.call("approve_phase", {"project_ref": "memory", "phase": "script"}))
+    resp = asyncio.run(
+        server.call(
+            "approve_phase",
+            {"project_ref": "memory", "phase": "script", "confirmed": True},
+        )
+    )
     assert resp.success is False
     assert resp.error is not None
     assert resp.error.code == MCPErrorCode.AMBIGUOUS_PROJECT
@@ -232,7 +237,12 @@ def test_server_blocks_ambiguous_mutation() -> None:
 
 def test_server_blocks_unknown_project() -> None:
     server = MCPServer()
-    resp = asyncio.run(server.call("approve_phase", {"project_ref": "nope", "phase": "script"}))
+    resp = asyncio.run(
+        server.call(
+            "approve_phase",
+            {"project_ref": "nope", "phase": "script", "confirmed": True},
+        )
+    )
     assert resp.success is False
     assert resp.error is not None
     assert resp.error.code == MCPErrorCode.UNKNOWN_PROJECT
@@ -241,13 +251,45 @@ def test_server_blocks_unknown_project() -> None:
 def test_server_resolves_then_dispatches_mutation() -> None:
     server = _build_server_with_projects()
     resp = asyncio.run(
-        server.call("approve_phase", {"project_ref": "memory-in-rain", "phase": "script"})
+        server.call(
+            "approve_phase",
+            {"project_ref": "memory-in-rain", "phase": "script", "confirmed": True},
+        )
     )
     # approve_phase is wired to runtime — returns ok=False without active project
     assert resp.success is True  # handler didn't raise
     data = cast(dict[str, object], resp.data)
     # Either wired response or stub response
     assert data.get("ok") is not None or data.get("stub") is not None
+
+
+def test_server_rejects_unconfirmed_mutation() -> None:
+    server = _build_server_with_projects()
+    resp = asyncio.run(
+        server.call("approve_phase", {"project_ref": "memory-in-rain", "phase": "script"})
+    )
+    assert resp.success is False
+    assert resp.error is not None
+    assert resp.error.code == MCPErrorCode.CONFIRMATION_REQUIRED
+
+
+def test_server_accepts_confirmed_mutation() -> None:
+    from film_pipeline.app.runtime import get_runtime, reset_runtime
+
+    reset_runtime("mock")
+    rt = get_runtime()
+    rt.create_project("conf-test", "Confirm Test")
+    rt.set_active("conf-test")
+    active = rt.get_active()
+    assert active is not None
+    active["current_phase"] = "intake"
+
+    server = MCPServer()
+    resp = asyncio.run(server.call("approve_phase", {"confirmed": True}))
+    assert resp.success is True
+    assert resp.data is not None
+    data = cast(dict[str, object], resp.data)
+    assert data.get("ok") is True
 
 
 def test_server_handles_handler_exception() -> None:
@@ -530,8 +572,80 @@ def test_active_project_set_after_resolution() -> None:
     # already set by register_project (first registration becomes active)
     assert server.active_project_id == "film_2026_0001"
     # resolving a mutation confirms the active project is retained
-    asyncio.run(server.call("approve_phase", {"project_ref": "memory-in-snow", "phase": "script"}))
+    asyncio.run(
+        server.call(
+            "approve_phase",
+            {"project_ref": "memory-in-snow", "phase": "script", "confirmed": True},
+        )
+    )
     assert server.active_project_id == "film_2026_0002"
+
+
+def test_read_tool_honors_project_ref_without_changing_active() -> None:
+    from film_pipeline.app.runtime import get_runtime, reset_runtime
+
+    reset_runtime("mock")
+    rt = get_runtime()
+    rt.create_project(project_id="project-a", title="Project A", slug="project-a")
+    rt.create_project(project_id="project-b", title="Project B", slug="project-b")
+    rt.set_active("project-a")
+
+    server = MCPServer()
+    server.register_project(ProjectRecord("project-a", "project-a", "Project A"))
+    server.register_project(ProjectRecord("project-b", "project-b", "Project B"))
+    assert server.active_project_id == "project-a"
+
+    resp = asyncio.run(server.call("get_film_state", {"project_ref": "project-b"}))
+    assert resp.success is True
+    data = cast(dict[str, object], resp.data)
+    assert data.get("ok") is True
+    state = cast(dict[str, object], data["state"])
+    assert state["project_id"] == "project-b"
+    # Neither the runtime nor the server active project changed.
+    active = rt.get_active()
+    assert active is not None
+    assert active["project_id"] == "project-a"
+    assert server.active_project_id == "project-a"
+
+
+def test_list_artifacts_honors_project_ref() -> None:
+    from film_pipeline.app.runtime import get_runtime, reset_runtime
+
+    reset_runtime("mock")
+    rt = get_runtime()
+    rt.create_project(project_id="la-a", title="LA A", slug="la-a")
+    rt.create_project(project_id="la-b", title="LA B", slug="la-b")
+    rt.set_active("la-a")
+
+    server = MCPServer()
+    server.register_project(ProjectRecord("la-a", "la-a", "LA A"))
+    server.register_project(ProjectRecord("la-b", "la-b", "LA B"))
+
+    resp = asyncio.run(server.call("list_artifacts", {"project_ref": "la-b"}))
+    assert resp.success is True
+    data = cast(dict[str, object], resp.data)
+    assert data.get("ok") is True
+    assert data.get("artifacts") == []
+    active = rt.get_active()
+    assert active is not None
+    assert active["project_id"] == "la-a"
+    assert server.active_project_id == "la-a"
+
+
+def test_read_tool_returns_unknown_project_for_bad_ref() -> None:
+    server = _build_server_with_projects()
+    resp = asyncio.run(server.call("get_film_state", {"project_ref": "no-such-project"}))
+    assert resp.success is False
+    assert resp.error is not None
+    assert resp.error.code == MCPErrorCode.UNKNOWN_PROJECT
+
+
+def test_read_tool_blocks_ambiguous_project_ref() -> None:
+    server = _build_server_with_projects()
+    resp = asyncio.run(server.call("get_film_state", {"project_ref": "memory"}))
+    assert resp.success is False
+    assert resp.error is not None
+    assert resp.error.code == MCPErrorCode.AMBIGUOUS_PROJECT
 
 
 def test_resolution_result_dataclass() -> None:
@@ -662,7 +776,9 @@ def test_wired_rollback_to_checkpoint() -> None:
     from film_pipeline.mcp.tools import create_checkpoint, rollback_to_checkpoint
 
     cp = asyncio.run(create_checkpoint({"reason": "rollback target"}))
-    result = asyncio.run(rollback_to_checkpoint({"checkpoint_id": cp["checkpoint_id"]}))
+    result = asyncio.run(
+        rollback_to_checkpoint({"checkpoint_id": cp["checkpoint_id"], "confirmed": True})
+    )
     assert result["ok"] is True
     assert result["rollback_target"] == cp["checkpoint_id"]
 
@@ -1116,9 +1232,15 @@ def test_tool_registry_has_config_group() -> None:
     server = MCPServer()
     catalog = server.catalog()
     config_tools = [c for c in catalog if c["group"] == "config"]
-    assert len(config_tools) == 3
+    assert len(config_tools) == 5
     names = {c["name"] for c in config_tools}
-    assert names == {"list_profiles", "inspect_profile", "get_runtime_mode"}
+    assert names == {
+        "list_profiles",
+        "inspect_profile",
+        "get_runtime_mode",
+        "propose_profile_change",
+        "approve_profile_change",
+    }
 
 
 def test_list_providers_real_mode_has_no_mock_fallback() -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _coerce_runtime_arg, _error, _ok, _services
+from .helpers import _active_project_id, _coerce_runtime_arg, _error, _ok, _services
 
 
 async def submit_idea(args: dict[str, object]) -> dict[str, object]:
@@ -20,6 +20,9 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     user_runtime = _coerce_runtime_arg(args)
     if user_runtime > 0:
         active["target_runtime_seconds"] = user_runtime
+    user_scene_count = args.get("target_scene_count")
+    if isinstance(user_scene_count, int) and user_scene_count > 0:
+        active["target_scene_count"] = user_scene_count
     state = rt.run_graph(active)
     # Update stored state
     rt.projects[active["project_id"]] = state
@@ -32,10 +35,12 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
 
 async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
         return _error("No active project.")
-    project_id = str(active["project_id"])
+    state = rt.get_project(project_id)
+    if state is None:
+        return _error("No active project.")
     from film_pipeline.schemas._base import FilmPhase
 
     try:
@@ -45,7 +50,7 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
         return _ok(analysis=data)
     except (FileNotFoundError, ValueError):
         # Fall back to project state idea field
-        idea = active.get("idea", "")
+        idea = state.get("idea", "")
         if idea:
             return _ok(analysis={"raw_idea": idea, "note": "Intake not yet fully analyzed."})
         return _error("No intake analysis found. Submit an idea first.")

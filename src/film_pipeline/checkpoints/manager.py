@@ -31,6 +31,7 @@ class CheckpointManager:
         approval_refs: list[str] | None = None,
         validation_refs: list[str] | None = None,
         budget_state_ref: str = "",
+        graph_state_ref: str = "",
     ) -> CheckpointMetadata:
         checkpoint_id = f"checkpoint:{project_id}:{phase.value}:{uuid4().hex[:8]}"
         tag_name = f"checkpoint/{phase.value}-{uuid4().hex[:6]}"
@@ -49,6 +50,7 @@ class CheckpointManager:
             approval_refs=approval_refs or [],
             validation_refs=validation_refs or [],
             budget_state_ref=budget_state_ref,
+            graph_state_ref=graph_state_ref,
             git_commit=commit_hash,
             git_tag=tag_name,
         )
