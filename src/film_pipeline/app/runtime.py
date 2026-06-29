@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -83,6 +84,31 @@ class StudioRuntime:
 
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         return self.projects.get(project_id)
+
+    def delete_project(self, project_id: str) -> bool:
+        """Remove a project from runtime state and delete its on-disk data.
+
+        Returns ``True`` when the project existed and was removed, ``False``
+        otherwise. Used by tests and CLI cleanup to keep the projects folder
+        clear.
+        """
+        if project_id not in self.projects:
+            return False
+        project_root = self.project_roots.pop(project_id, None)
+        self.checkpoint_managers.pop(project_id, None)
+        self.projects.pop(project_id, None)
+        if self.active_project_id == project_id:
+            self.active_project_id = ""
+        self._record_audit("system", "delete_project", project_id=project_id)
+        if project_root is not None and project_root.exists():
+            shutil.rmtree(project_root, ignore_errors=True)
+        artifact_root = Path("projects")
+        if self.services is not None and hasattr(self.services.artifact_store, "_root"):
+            artifact_root = self.services.artifact_store._root
+        project_artifact_dir = artifact_root / project_id
+        if project_artifact_dir.exists():
+            shutil.rmtree(project_artifact_dir, ignore_errors=True)
+        return True
 
     def set_active(self, project_id: str) -> None:
         if project_id not in self.projects:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
 from film_pipeline.schemas._base import ArtifactType, FilmPhase
@@ -30,3 +32,40 @@ def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
     metas = store.list_artifacts("p5", FilmPhase("intake"))
     assert len(metas) == 1
     assert metas[0].artifact_type == ArtifactType.CHECKPOINT
+
+
+def test_delete_project_removes_state_and_directories(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert rt.services is not None
+    rt.services.artifact_store._root = tmp_path / "projects"
+    rt.create_project("p-delete", title="Delete Me")
+    rt.set_active("p-delete")
+    project_root = rt.project_roots["p-delete"]
+    artifact_dir = rt.services.artifact_store._root / "p-delete"
+
+    deleted = rt.delete_project("p-delete")
+
+    assert deleted is True
+    assert rt.get_project("p-delete") is None
+    assert "p-delete" not in rt.project_roots
+    assert "p-delete" not in rt.checkpoint_managers
+    assert rt.active_project_id == ""
+    assert not project_root.exists()
+    assert not artifact_dir.exists()
+
+
+def test_delete_project_returns_false_when_missing(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert rt.delete_project("missing-project") is False
+
+
+def test_delete_project_clears_active_project_only_when_matching(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt.create_project("p-active", title="Active")
+    rt.create_project("p-other", title="Other")
+    rt.set_active("p-active")
+
+    rt.delete_project("p-other")
+
+    assert rt.active_project_id == "p-active"
+    assert rt.get_project("p-active") is not None
