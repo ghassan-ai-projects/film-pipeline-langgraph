@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, UnsupportedIdeaFileError, read_idea_file
+from film_pipeline.cli.io import (
+    SUPPORTED_EXTENSIONS,
+    UnsupportedIdeaFileError,
+    read_constraints_file,
+    read_idea_file,
+)
 
 
 def test_read_txt_file(tmp_path: Path) -> None:
@@ -61,3 +66,36 @@ def test_missing_file(tmp_path: Path) -> None:
     p = tmp_path / "missing.txt"
     with pytest.raises(FileNotFoundError):
         read_idea_file(p)
+
+
+def test_read_constraints_json(tmp_path: Path) -> None:
+    p = tmp_path / "constraints.json"
+    p.write_text('{"tone": "dark", "target_scene_count": 7}', encoding="utf-8")
+    data = read_constraints_file(p)
+    assert data == {"tone": "dark", "target_scene_count": 7}
+
+
+def test_read_constraints_yaml(tmp_path: Path) -> None:
+    p = tmp_path / "constraints.yaml"
+    p.write_text("tone: whimsical\ntarget_scene_count: 5\n", encoding="utf-8")
+    data = read_constraints_file(p)
+    assert data == {"tone": "whimsical", "target_scene_count": 5}
+
+
+def test_read_constraints_empty_file(tmp_path: Path) -> None:
+    p = tmp_path / "constraints.json"
+    p.write_text("", encoding="utf-8")
+    assert read_constraints_file(p) == {}
+
+
+def test_read_constraints_missing_file(tmp_path: Path) -> None:
+    p = tmp_path / "constraints.yaml"
+    with pytest.raises(FileNotFoundError):
+        read_constraints_file(p)
+
+
+def test_read_constraints_invalid_top_level(tmp_path: Path) -> None:
+    p = tmp_path / "constraints.json"
+    p.write_text('["tone", "dark"]', encoding="utf-8")
+    with pytest.raises(ValueError, match="must contain a single object"):
+        read_constraints_file(p)
