@@ -98,9 +98,10 @@ make build
 
 ### Terminal Operator Console
 
-The TUI is a keyboard-first operator console for creating a project from an idea,
-reviewing generated artifacts, approving phases, requesting revisions, and
-inspecting checkpoints, providers, audit events, and artifacts.
+The TUI is a redesigned, stage-first studio interface for creating a project,
+navigating the pipeline, reviewing artifacts and validation issues, approving
+phases, requesting revisions, and inspecting checkpoints, providers, audit
+events, and assets.
 
 Start it from the repository root:
 
@@ -122,16 +123,22 @@ uv run film-pipeline-tui --create
 
 Basic create-from-idea flow:
 
-1. Choose `1. New project from idea`.
+1. From the **Project gallery**, choose **New Project** (or press `n`).
 2. Enter `project id`, `title`, optional `slug`, runtime mode `mock`,
    workflow mode `manual`, and the film idea.
-3. The console creates the project, submits the idea, runs intake, and opens the dashboard.
-4. Use `4. Review workspace` to inspect the current phase.
-5. Use `5. Approve phase` to advance, or `6. Request revision` to send notes.
+3. The studio creates the project and opens the **Studio workspace**.
+4. The workspace shows the current pipeline stage, artifacts, and validation
+   issues. Use the always-visible **Action bar** to validate, approve, or
+   request a revision.
+5. Press `/` to open the **Command palette** for power-user commands such as
+   `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and `home`.
 
-The first implementation uses the in-process gateway over the shared
-application service layer. It does not require network access or provider keys
-for mock-mode project creation.
+Keyboard shortcuts: `n` new project, `r` refresh, `a` approve phase, `v` run
+validation, `escape` return home, `q` quit.
+
+The default TUI uses the MCP gateway so every action goes through the same
+`tools/call` surface as OpenClaw. Set `FILM_PIPELINE_TUI_GATEWAY=inprocess` to
+use the in-process service gateway instead.
 
 ### Headless CLI
 
