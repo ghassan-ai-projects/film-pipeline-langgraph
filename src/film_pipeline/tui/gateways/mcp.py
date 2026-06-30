@@ -130,16 +130,22 @@ class MCPStudioGateway(StudioGateway):
             return []
         items: list[ProjectListItem] = []
         for pid in projects:
-            summary = self._tool("get_project_summary", {})
+            if not isinstance(pid, str):
+                continue
+            summary = self._tool("get_project_summary", {"project_ref": pid})
+            current_phase = str(summary.get("current_phase", ""))
+            status = str(summary.get("status", ""))
+            if not status:
+                status = "in_progress" if current_phase else "created"
             items.append(
                 ProjectListItem(
-                    project_id=str(pid),
+                    project_id=pid,
                     title=str(summary.get("title", pid)),
                     slug=str(summary.get("slug", pid)),
-                    current_phase=str(summary.get("current_phase", "")),
-                    status="in_progress" if summary.get("current_phase") else "created",
+                    current_phase=current_phase,
+                    status=status,
                     has_blockers=bool(summary.get("has_blockers")),
-                    awaiting_review=False,
+                    awaiting_review=status == "awaiting_review",
                 )
             )
         return items
@@ -157,6 +163,16 @@ class MCPStudioGateway(StudioGateway):
             args["runtime_mode"] = request.runtime_mode
         if request.target_runtime_seconds:
             args["target_runtime_seconds"] = request.target_runtime_seconds
+        if request.film_type_profile:
+            args["film_type_profile"] = request.film_type_profile
+        if request.quality_profile:
+            args["quality_profile"] = request.quality_profile
+        if request.provider_profile:
+            args["provider_profile"] = request.provider_profile
+        if request.review_profile:
+            args["review_profile"] = request.review_profile
+        if request.auto_approve_profile:
+            args["auto_approve_profile"] = request.auto_approve_profile
         r = self._tool("create_film_project", args)
         return MutationResult(
             ok=bool(r.get("ok")),

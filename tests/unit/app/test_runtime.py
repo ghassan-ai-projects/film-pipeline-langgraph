@@ -69,3 +69,36 @@ def test_delete_project_clears_active_project_only_when_matching(tmp_path: Path)
 
     assert rt.active_project_id == "p-active"
     assert rt.get_project("p-active") is not None
+
+
+def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
+    tmp_path: Path,
+) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert rt.services is not None
+    projects_root = tmp_path / "projects"
+    rt.services.artifact_store._root = projects_root
+
+    rt.create_project("persisted", title="Persisted Project")
+    rt._persist_project_state("persisted")
+
+    discovered_root = projects_root / "discovered"
+    (discovered_root / "intake").mkdir(parents=True)
+    (discovered_root / "intake" / "idea.v001.json").write_text("{}")
+
+    fresh = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert fresh.services is not None
+    fresh.services.artifact_store._root = projects_root
+    fresh.load_persistent_projects()
+
+    assert "persisted" in fresh.projects
+    assert fresh.projects["persisted"]["title"] == "Persisted Project"
+    assert "discovered" in fresh.projects
+    assert fresh.projects["discovered"]["current_phase"] == "intake"
+    assert fresh.project_roots["discovered"].exists()
+
+
+def test_load_persistent_projects_skips_empty_runtime_root(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt.load_persistent_projects()
+    assert rt.projects == {}

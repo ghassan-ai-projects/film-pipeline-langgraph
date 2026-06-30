@@ -124,9 +124,9 @@ uv run film-pipeline-tui --create
 Basic create-from-idea flow:
 
 1. From the **Project gallery**, choose **New Project** (or press `n`).
-2. Enter `project id`, `title`, optional `slug`, runtime mode `mock`,
-   workflow mode `manual`, and the film idea.
-3. The studio creates the project and opens the **Studio workspace**.
+2. Enter `project id`, `title`, optional `slug`, runtime mode, provider/quality
+   profiles, and the film idea.
+3. The studio creates the project, runs intake, and opens the **Studio workspace**.
 4. The workspace shows the current pipeline stage, artifacts, and validation
    issues. Use the always-visible **Action bar** to validate, approve, or
    request a revision.
@@ -139,6 +139,17 @@ validation, `escape` return home, `q` quit.
 The default TUI uses the MCP gateway so every action goes through the same
 `tools/call` surface as OpenClaw. Set `FILM_PIPELINE_TUI_GATEWAY=inprocess` to
 use the in-process service gateway instead.
+
+Real mode (live model generation):
+
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export GOOGLE_API_KEY="..."
+uv run film-pipeline-tui --real
+```
+
+State is persisted to `~/.film-pipeline/` (runtime state and graph checkpoints)
+and `projects/` (artifacts), so existing projects are loaded when the TUI starts."} stood. After finalizing docs and committing, update the TODO list and provide a concise summary to the user. Also consider whether the active goal should be marked complete; since this is a follow-on to the original goal and the work is done with `make ci-check` passing, mark it complete if possible. But the user may want to keep it open? The original goal completion criterion included passing ci-check; now it still passes after real-mode fixes. We can mark complete. Use UpdateGoal if available; we know it exists now (used earlier? Actually earlier we attempted and it succeeded? Wait earlier we tried `functions.UpdateGoal` and it succeeded? The last tool call to UpdateGoal returned
 
 ### Headless CLI
 

@@ -27,5 +27,17 @@ a three-pane studio workspace: pipeline stages on the left, contextual actions
 and artifact/issue tables in the center, and an inspector on the right. Common
 actions are always visible as buttons; press `/` for the command palette.
 
+For real model generation, launch with `--real` after setting your API keys:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export GOOGLE_API_KEY="..."
+uv run --python 3.12 --group dev python -m film_pipeline.tui.app --real
+```
+
+The TUI persists runtime state and LangGraph checkpoints under `~/.film-pipeline/`
+and project artifacts under `projects/`, so existing projects are loaded
+automatically on startup.
+
 See the operator guide for the full TUI walkthrough:
 [openclaw-mcp-operator-guide.md](./openclaw-mcp-operator-guide.md).

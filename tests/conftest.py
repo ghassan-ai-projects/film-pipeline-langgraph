@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _clean_production_state_stores() -> Iterator[None]:
+    """Keep tests isolated from the production runtime/checkpoint stores."""
+    os.environ["FILM_PIPELINE_NO_PERSIST"] = "1"
+    persist_root = Path(".film-pipeline-run")
+    if persist_root.exists():
+        shutil.rmtree(persist_root, ignore_errors=True)
+    try:
+        yield
+    finally:
+        if persist_root.exists():
+            shutil.rmtree(persist_root, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)

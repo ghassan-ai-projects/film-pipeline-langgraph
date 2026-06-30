@@ -48,6 +48,7 @@ Issues = "https://github.com/ghassan-ai-projects/film-pipeline-langgraph/issues"
 [dependency-groups]
 dev = [
   "coverage[toml]>=7.8",
+  "langgraph-checkpoint-sqlite>=2.0.11",
   "mypy>=1.18",
   "pre-commit>=4.3",
   "pytest>=8.4",
