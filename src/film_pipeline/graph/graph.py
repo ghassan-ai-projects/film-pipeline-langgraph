@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import sqlite3
 from collections.abc import Hashable
+from pathlib import Path
 from typing import Any, cast
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -31,8 +36,20 @@ from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
 
+_CHECKPOINT_DIR: Path = Path.home() / ".film-pipeline" / "checkpoints"
+_CHECKPOINT_DB: Path = _CHECKPOINT_DIR / "checkpoints.sqlite"
 
-def build_graph() -> CompiledStateGraph:
+
+def _default_checkpointer() -> BaseCheckpointSaver[Any]:
+    """Return a persistent SQLite checkpointer in production, MemorySaver otherwise."""
+    if not os.getenv("FILM_PIPELINE_PERSIST_STATE"):
+        return MemorySaver()
+    _CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(_CHECKPOINT_DB), check_same_thread=False)
+    return SqliteSaver(conn=conn)
+
+
+def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledStateGraph:
     """Construct the supervisor graph with all phases and approval gates."""
     builder = StateGraph(StudioGraphState)
 
@@ -139,7 +156,7 @@ def build_graph() -> CompiledStateGraph:
     builder.add_edge("repair", "await_approval")
     builder.add_edge("end", END)
 
-    return builder.compile(checkpointer=MemorySaver())
+    return builder.compile(checkpointer=checkpointer or _default_checkpointer())
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:

@@ -18,6 +18,11 @@ class ProjectCreateRequest:
     workflow_mode: str = "manual"
     project_kind: str = "production"
     target_runtime_seconds: int = 0  # 0 = not specified; intake will estimate
+    film_type_profile: str = ""
+    quality_profile: str = ""
+    provider_profile: str = ""
+    review_profile: str = ""
+    auto_approve_profile: str = ""
 
 
 @dataclass(frozen=True)

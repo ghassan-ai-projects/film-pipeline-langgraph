@@ -112,6 +112,53 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                 allow_blank=False,
                 id="pf_runtime",
             )
+            yield Label("Film type profile", classes="field-label")
+            yield Select(
+                [
+                    ("narrative", "film-type.narrative"),
+                    ("visual poetry", "film-type.visual_poetry"),
+                ],
+                value="film-type.narrative",
+                allow_blank=False,
+                id="pf_film_type",
+            )
+            yield Label("Quality profile", classes="field-label")
+            yield Select(
+                [
+                    ("draft", "quality.draft"),
+                    ("studio", "quality.studio"),
+                    ("festival", "quality.festival"),
+                ],
+                value="quality.draft",
+                allow_blank=False,
+                id="pf_quality",
+            )
+            yield Label("Provider profile", classes="field-label")
+            yield Select(
+                [
+                    ("mock demo", "mock-demo"),
+                    ("seedance primary", "provider.seedance_primary"),
+                    ("free / low cost", "provider.free_or_low_cost"),
+                    ("local real provider", "local-real-provider"),
+                ],
+                value="mock-demo",
+                allow_blank=False,
+                id="pf_provider",
+            )
+            yield Label("Review profile", classes="field-label")
+            yield Select(
+                [("strict continuity", "review.strict_continuity")],
+                value="review.strict_continuity",
+                allow_blank=False,
+                id="pf_review",
+            )
+            yield Label("Auto-approve profile (optional)", classes="field-label")
+            yield Select(
+                [("none", ""), ("auto-approve", "auto-approve")],
+                value="",
+                allow_blank=False,
+                id="pf_auto_approve",
+            )
             yield Static("", id="pf_error", classes="dialog-error")
             with Horizontal(id="dialog_buttons"):
                 yield Button("Create", id="pf_create", variant="primary")
@@ -131,6 +178,11 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
         title = self.query_one("#pf_title", Input).value.strip()
         idea = self.query_one("#pf_idea", TextArea).text.strip()
         runtime_mode = str(self.query_one("#pf_runtime", Select).value)
+        film_type_profile = str(self.query_one("#pf_film_type", Select).value)
+        quality_profile = str(self.query_one("#pf_quality", Select).value)
+        provider_profile = str(self.query_one("#pf_provider", Select).value)
+        review_profile = str(self.query_one("#pf_review", Select).value)
+        auto_approve_profile = str(self.query_one("#pf_auto_approve", Select).value)
         error = self.query_one("#pf_error", Static)
         if not project_id:
             error.update("Project ID is required.")
@@ -157,6 +209,11 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                 runtime_mode=runtime_mode,
                 workflow_mode="manual",
                 project_kind="production",
+                film_type_profile=film_type_profile,
+                quality_profile=quality_profile,
+                provider_profile=provider_profile,
+                review_profile=review_profile,
+                auto_approve_profile=auto_approve_profile,
             )
         )
 

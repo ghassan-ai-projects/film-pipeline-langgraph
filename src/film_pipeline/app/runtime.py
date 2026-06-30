@@ -26,6 +26,38 @@ from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 STATE_FILENAME = "project-state.json"
 
+_PERSIST_ROOT = Path.home() / ".film-pipeline"
+_RUNTIME_ROOT = _PERSIST_ROOT / "runtime"
+
+
+def _use_persistent_runtime() -> bool:
+    return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE"))
+
+
+def _looks_like_project_dir(project_dir: Path) -> bool:
+    return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
+
+
+def _latest_discovered_phase(project_dir: Path) -> str:
+    phase_order = (
+        ("10-delivery", "delivery"),
+        ("09-post", "post"),
+        ("08-validation", "qc"),
+        ("07-generated-assets", "generation"),
+        ("06-generation-plan", "gen_planning"),
+        ("05-shot-bible", "shot_bible"),
+        ("04-visual-dev", "visual_dev"),
+        ("03-script", "script"),
+        ("02-development", "development"),
+        ("01-vision", "constitution"),
+        ("intake", "intake"),
+    )
+    for dirname, phase in phase_order:
+        candidate = project_dir / dirname
+        if candidate.exists() and any(candidate.rglob("*.json")):
+            return phase
+    return ""
+
 
 @dataclass
 class StudioRuntime:
@@ -55,13 +87,76 @@ class StudioRuntime:
         self.server_mode = _normalize_server_mode(self.server_mode)
         if self.services is None:
             self.services = _build_services_for_mode(self.server_mode)
+        if _use_persistent_runtime():
+            self.runtime_root = _RUNTIME_ROOT
+            self.runtime_root.mkdir(parents=True, exist_ok=True)
+            self.load_persistent_projects()
+
+    # --- Persistence ---
+
+    def load_persistent_projects(self) -> None:
+        """Reload projects from runtime state files and artifact storage.
+
+        Called once at runtime startup when persistence is enabled. Existing
+        runtime state files take precedence; artifact folders that exist without
+        runtime state are registered as discovered projects.
+        """
+        if not self.runtime_root.exists():
+            return
+
+        # 1. Load projects that have a persisted runtime state file.
+        for project_root in sorted(p for p in self.runtime_root.iterdir() if p.is_dir()):
+            state_path = project_root / STATE_FILENAME
+            if not state_path.exists():
+                continue
+            try:
+                state = json.loads(state_path.read_text())
+                project_id = str(state.get("project_id", project_root.name))
+                self.projects[project_id] = state
+                self.project_roots[project_id] = project_root
+                self.checkpoint_managers[project_id] = CheckpointManager(
+                    GitBackend.init_temp(project_root)
+                )
+            except Exception:
+                continue
+
+        # 2. Discover projects that only exist in artifact storage.
+        store_root = self._artifact_root()
+        if store_root is None or not store_root.exists():
+            return
+        known_ids = set(self.projects.keys())
+        for project_dir in sorted(p for p in store_root.iterdir() if p.is_dir()):
+            project_id = project_dir.name
+            if project_id in known_ids or not _looks_like_project_dir(project_dir):
+                continue
+            project_root = self.runtime_root / project_id
+            discovered_state: dict[str, Any] = {
+                "project_id": project_id,
+                "title": project_id.replace("-", " ").replace("_", " ").title(),
+                "slug": project_id,
+                "server_mode": self.server_mode,
+                "current_phase": _latest_discovered_phase(project_dir),
+                "approved": False,
+                "human_approval_required": False,
+                "human_approval_phase": "",
+                "constraints_hints": {},
+                "issues": [],
+                "discovered": True,
+            }
+            self.projects[project_id] = discovered_state
+            self.project_roots[project_id] = project_root
+            project_root.mkdir(parents=True, exist_ok=True)
+            self.checkpoint_managers[project_id] = CheckpointManager(
+                GitBackend.init_temp(project_root)
+            )
+            self._persist_project_state(project_id)
 
     # --- Project management ---
 
     def create_project(self, project_id: str, title: str = "", slug: str = "") -> dict[str, Any]:
         if project_id in self.projects:
             raise ValueError(f"Project '{project_id}' already exists.")
-        project_root = self.runtime_root / f"{project_id}-{uuid4().hex[:8]}"
+        project_root = self.runtime_root / project_id
         git = GitBackend.init_temp(project_root)
         state: dict[str, Any] = {
             "project_id": project_id,
@@ -573,6 +668,11 @@ class StudioRuntime:
             return
         for provider_id in ("mock-image-provider", "mock-video-provider"):
             self.set_provider_health(provider_id, "healthy", "mock runtime")
+
+    def _artifact_root(self) -> Path | None:
+        store = self.services.artifact_store if self.services is not None else None
+        root = getattr(store, "_root", None)
+        return root if isinstance(root, Path) else None
 
     def _persist_project_state(self, project_id: str) -> None:
         project = self.projects[project_id]

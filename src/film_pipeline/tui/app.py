@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import sys
 from dataclasses import dataclass, field
 from typing import ClassVar
@@ -267,9 +268,14 @@ class FilmStudioApp(App[None]):
             await self.switch_screen(ProjectGalleryScreen(id="home_screen"))
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
-        """Create a project and switch to the studio."""
+        """Create a project, run intake if needed, and switch to the studio."""
         result = self.gateway.create_project(request)
         self.active_project_id = result.project_id
+        if request.idea.strip() and not result.current_phase:
+            try:
+                result = self.gateway.submit_idea(request.project_id, request.idea.strip())
+            except Exception as exc:
+                self._set_status(f"Project created, but intake failed: {exc}")
         self.selected_stage = result.current_phase or ""
         self.switch_screen(StudioScreen(id="studio_screen"))
         return result
@@ -393,7 +399,16 @@ def main(argv: list[str] | None = None) -> int:
     """Entry point for the redesigned Textual TUI."""
     parser = argparse.ArgumentParser(description="Run the LangGraph Film Studio TUI.")
     parser.add_argument("--create", action="store_true", help="Open the create-project form.")
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        dest="real_mode",
+        help="Start the MCP server in real mode (live model generation).",
+    )
     args = parser.parse_args(argv)
+    if args.real_mode:
+        os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
+    os.environ["FILM_PIPELINE_PERSIST_STATE"] = "1"
     FilmStudioApp(start_create=args.create).run()
     return 0
 
