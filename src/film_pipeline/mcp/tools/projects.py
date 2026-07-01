@@ -103,7 +103,17 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
             runtime_mode=runtime_mode,
             server_mode=server_mode,
         )
-        return _ok(project_id=project_id, state=state)
+        idea = str(args.get("idea", "")).strip()
+        if idea:
+            rt.set_active(project_id)
+            state["idea"] = idea
+            state = rt.run_graph(state)
+            rt.projects[project_id] = state
+        return _ok(
+            project_id=project_id,
+            current_phase=str(state.get("current_phase", "")),
+            state=state,
+        )
     except ValueError as e:
         return _error(str(e))
 

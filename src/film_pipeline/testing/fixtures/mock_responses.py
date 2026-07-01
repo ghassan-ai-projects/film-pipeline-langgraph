@@ -138,7 +138,11 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                                 "A hatch creaks open. MARA (30s) squints at the first "
                                 "sunlight she's seen in a year."
                             ),
-                            "She climbs out slowly, her hand never leaving the hatch handle.",
+                            (
+                                "She climbs out slowly, her hand never leaving the hatch "
+                                "handle, every muscle tense with the struggle to trust "
+                                "the silence."
+                            ),
                         ],
                         "dialogue": [
                             {
@@ -153,7 +157,10 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                         "scene_id": "sc_002",
                         "scene_heading": "EXT. FACTION OUTPOST - DAY",
                         "action_lines": [
-                            "Mara spots smoke on the horizon. She approaches cautiously.",
+                            (
+                                "Mara spots smoke on the horizon. She approaches "
+                                "cautiously, tension in every step of the standoff."
+                            ),
                         ],
                         "dialogue": [
                             {

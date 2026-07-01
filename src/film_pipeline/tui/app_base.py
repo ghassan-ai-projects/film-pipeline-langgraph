@@ -51,6 +51,7 @@ class AppCockpitBase(App[None]):
     _matrix_pivot: str
     matrix_impact: MatrixImpact | None
     pending_confirmation: str
+    busy_label: str
     _table_rows: dict[str, list[dict[str, object]]]
 
     # AppShell methods used by other mixins.
@@ -74,6 +75,12 @@ class AppCockpitBase(App[None]):
     def _render_snapshot(self, snapshot: CockpitSnapshot) -> None: ...
 
     def _render_projects(self, projects: list[ProjectListItem]) -> None: ...
+
+    def _render_status(
+        self,
+        dashboard: DashboardSummary | None,
+        providers: list[dict[str, object]],
+    ) -> None: ...
 
     def _render_matrix(self, snapshot: CockpitSnapshot) -> None: ...
 
@@ -167,6 +174,23 @@ class AppCockpitBase(App[None]):
     def _artifact_row(self, artifact_id: str) -> dict[str, object] | None: ...
 
     # AppActionsMixin methods used by other mixins.
+    def _run_in_background(
+        self,
+        label: str,
+        work: Any,
+        on_done: Any = None,
+    ) -> None: ...
+
+    def action_run_generation(self) -> None: ...
+
+    def action_plan_generation(self) -> None: ...
+
+    def action_approve_generation_spend(self) -> None: ...
+
+    def action_start_generation(self) -> None: ...
+
+    def action_poll_generation(self) -> None: ...
+
     def action_refresh(self) -> None: ...
 
     def action_open_tab(self, tab_id: str) -> None: ...

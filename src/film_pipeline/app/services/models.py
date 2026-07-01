@@ -90,6 +90,24 @@ class ValidationWorkspace:
 
 
 @dataclass(frozen=True)
+class GenerationWorkspace:
+    """Generation batch status for a project."""
+
+    project_id: str
+    phase: str
+    provider: str
+    model: str
+    estimated_cost_usd: float
+    rows: list[dict[str, Any]] = field(default_factory=list)
+    planned: int = 0
+    submitted: int = 0
+    running: int = 0
+    completed: int = 0
+    failed: int = 0
+    next_step: str = ""
+
+
+@dataclass(frozen=True)
 class OperatorCommentRequest:
     """Operator annotation attached to a concrete project target."""
 
