@@ -27,6 +27,7 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.artifacts.manifest import read_manifest
+from film_pipeline.config import profile_resolver as _profiles
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.router import compute_actions
 from film_pipeline.schemas._base import FilmPhase
@@ -81,6 +82,25 @@ class OperatorService:
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
         state["project_kind"] = self._normalize_project_kind(request.project_kind)
+
+        profile_stack = _profiles.canonicalize_profile_stack(
+            {
+                "film_type_profile": request.film_type_profile,
+                "quality_profile": request.quality_profile,
+                "provider_profile": request.provider_profile,
+                "review_profile": request.review_profile,
+                "auto_approve_profile": request.auto_approve_profile,
+            }
+        )
+        resolved_config = _profiles.resolve_project_config(profile_stack)
+        state["profile_stack"] = profile_stack
+        state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
+        state["resolved_config_sources"] = resolved_config["sources"]
+        state["config_conflicts"] = list(cast(list[Any], resolved_config.get("conflicts", [])))
+        _profiles.register_project_providers(
+            self.runtime, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        )
+
         self.runtime.set_active(request.project_id.strip())
 
         if request.target_runtime_seconds > 0:
@@ -88,15 +108,21 @@ class OperatorService:
             # so the classifier adopts it instead of guessing.
             state["target_runtime_seconds"] = request.target_runtime_seconds
 
-        if request.idea.strip():
+        # When the caller already supplied an idea (e.g. the TUI new-project
+        # form), run intake immediately so the project opens with data. When no
+        # idea is supplied we stay aligned with MCP create_film_project and only
+        # set up state; submit_idea is then responsible for advancing.
+        current_phase = ""
+        if request.idea and request.idea.strip():
             state["idea"] = request.idea.strip()
-            state = self.runtime.run_graph(state)
-            self.runtime.projects[request.project_id.strip()] = state
+            next_state = self.runtime.run_graph(state)
+            self.runtime.projects[request.project_id.strip()] = next_state
+            current_phase = str(next_state.get("current_phase", ""))
 
         return MutationResult(
             ok=True,
             project_id=str(state["project_id"]),
-            current_phase=str(state.get("current_phase", "")),
+            current_phase=current_phase,
             message="Project created.",
         )
 
@@ -182,6 +208,7 @@ class OperatorService:
             checkpoint_count=checkpoint_count,
             has_blockers=self._has_blockers(state),
             stalled_phase=str(state.get("_stalled_phase", "")),
+            profile_stack=dict(cast(Mapping[str, str], state.get("profile_stack", {}))),
         )
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:

@@ -174,12 +174,13 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                     yield Label("Provider", classes="field-label")
                     yield Select(
                         [
+                            ("none", ""),
                             ("mock demo", "mock-demo"),
                             ("seedance primary", "provider.seedance_primary"),
                             ("free / low cost", "provider.free_or_low_cost"),
                             ("local real provider", "local-real-provider"),
                         ],
-                        value="mock-demo",
+                        value="",
                         allow_blank=False,
                         id="pf_provider",
                     )
@@ -234,10 +235,8 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
         """Keep provider profile in sync with the chosen runtime mode."""
         if event.select.id == "pf_runtime":
             provider = self.query_one("#pf_provider", Select)
-            if event.value == "real" and str(provider.value) == "mock-demo":
+            if event.value == "real" and str(provider.value) in {"", "mock-demo"}:
                 provider.value = "local-real-provider"
-            elif event.value == "mock" and str(provider.value) != "mock-demo":
-                provider.value = "mock-demo"
 
     def action_submit(self) -> None:
         """Keyboard shortcut to submit the form."""

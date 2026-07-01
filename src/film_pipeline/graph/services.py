@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -12,6 +14,18 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas.kb import KBContextPacket
+
+
+def _default_artifact_root() -> Path:
+    """Pick a safe artifact root based on the persistence environment."""
+    if os.getenv("FILM_PIPELINE_NO_PERSIST"):
+        return Path(tempfile.gettempdir()) / f"film_pipeline_artifacts_{os.getpid()}"
+    if os.getenv("FILM_PIPELINE_PERSIST_STATE"):
+        return (
+            Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
+            / "artifacts"
+        )
+    return Path("projects")
 
 
 @dataclass
@@ -31,7 +45,7 @@ class GraphServices:
     kb_builder: Any = None  # KBContextPacketBuilder
 
     @classmethod
-    def for_mock_runtime(cls, artifacts_root: str = "projects") -> GraphServices:
+    def for_mock_runtime(cls, artifacts_root: str | None = None) -> GraphServices:
         """Create services wired for mock-mode execution.
 
         Populates the agent registry with all MVP agents, sets up a
@@ -50,12 +64,12 @@ class GraphServices:
         )
         return cls(
             prompt_runner=runner,
-            artifact_store=ArtifactStore(root=Path(artifacts_root)),
+            artifact_store=ArtifactStore(root=Path(artifacts_root or _default_artifact_root())),
             agent_registry=registry,
         )
 
     @classmethod
-    def for_real_runtime(cls, artifacts_root: str = "projects") -> GraphServices:
+    def for_real_runtime(cls, artifacts_root: str | None = None) -> GraphServices:
         """Create services wired for real model execution.
 
         This keeps the same agent registry and artifact store contract as mock
@@ -73,7 +87,7 @@ class GraphServices:
         )
         return cls(
             prompt_runner=runner,
-            artifact_store=ArtifactStore(root=Path(artifacts_root)),
+            artifact_store=ArtifactStore(root=Path(artifacts_root or _default_artifact_root())),
             agent_registry=registry,
         )
 

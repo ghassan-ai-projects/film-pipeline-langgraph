@@ -108,4 +108,4 @@ class StudioGraphState(TypedDict, total=False):
     consistency_warnings: list[str]
     _validation_reports: list[dict[str, Any]]
     _qc_reports: list[dict[str, Any]]
-    _qc_raw_reports: list[dict[str, Any]]
+    _qc_raw_reports: Annotated[list[dict[str, Any]], add]

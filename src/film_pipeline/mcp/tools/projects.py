@@ -5,18 +5,20 @@ from __future__ import annotations
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.config.profile_resolver import (
+    canonicalize_profile_stack,
+    missing_provider_credentials,
+    register_project_providers,
+    resolve_project_config,
+)
 
 from .helpers import (
     _active_project_id,
-    _canonicalize_profile_stack,
     _coerce_runtime_arg,
     _collect_profile_models,
     _collect_profile_providers,
     _error,
-    _missing_provider_credentials,
     _ok,
-    _register_project_providers,
-    _resolve_project_config,
     _services,
 )
 
@@ -57,8 +59,8 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
                 return _error(f"Model '{mid}' is not allowed in real mode.")
 
     try:
-        profile_stack = _canonicalize_profile_stack(args)
-        resolved_config = _resolve_project_config(profile_stack)
+        profile_stack = canonicalize_profile_stack(args)
+        resolved_config = resolve_project_config(profile_stack)
         conflicts = list(cast(list[Any], resolved_config.get("conflicts", [])))
         if conflicts:
             blocking = [c for c in conflicts if c.get("severity") == "blocking"]
@@ -68,7 +70,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
                     conflicts=conflicts,
                 )
         if runtime_mode == "real":
-            missing_credentials = _missing_provider_credentials(
+            missing_credentials = missing_provider_credentials(
                 profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
             )
             if missing_credentials:
@@ -93,7 +95,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         if user_runtime > 0:
             # User-supplied expected length is authoritative for the whole pipeline.
             state["target_runtime_seconds"] = user_runtime
-        _register_project_providers(
+        register_project_providers(
             rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         rt._record_audit(

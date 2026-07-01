@@ -25,9 +25,13 @@ from film_pipeline.tui.screens.review import ReviewGateScreen
 from film_pipeline.tui.screens.studio import RevisionForm, StudioScreen
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
+from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+from film_pipeline.tui.widgets.current_node import CurrentNode
+from film_pipeline.tui.widgets.film_meta import FilmMeta
 from film_pipeline.tui.widgets.inspector import Inspector
 from film_pipeline.tui.widgets.issue_list import IssueList
 from film_pipeline.tui.widgets.project_form import ProjectForm
+from film_pipeline.tui.widgets.scene_browser import SceneBrowser
 from film_pipeline.tui.widgets.stage_nav import StageNav
 from tests.unit.tui.conftest import (
     BrokenArtifactGateway,
@@ -918,7 +922,7 @@ def test_project_form_runtime_switch_syncs_provider() -> None:
 
             runtime.value = "mock"
             await pilot.pause()
-            assert str(provider.value) == "mock-demo"
+            assert str(provider.value) == "local-real-provider"
 
     _run(_body())
 
@@ -1761,5 +1765,75 @@ def test_review_gate_revise_from_home_does_not_crash() -> None:
             await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, ProjectGalleryScreen)
+
+    _run(_body())
+
+
+def test_simplified_view_toggles_and_populates() -> None:
+    class SceneBodyGateway(RecordingGateway):
+        def list_artifacts(
+            self, project_id: str | None = None, phase: str | None = None
+        ) -> list[dict[str, object]]:
+            rows = super().list_artifacts(project_id, phase)
+            for row in rows:
+                if row["artifact_id"] == "script":
+                    row["body"] = {
+                        "scenes": [
+                            {
+                                "scene_id": "SC_004",
+                                "scene_heading": "INT. STATION - DAWN",
+                                "duration_seconds": 45,
+                                "characters": ["MARA"],
+                                "environment": "abandoned station platform",
+                            }
+                        ]
+                    }
+                elif row["artifact_id"] == "scene_matrix":
+                    row["body"] = {
+                        "rows": [
+                            {
+                                "scene_id": "SC_004",
+                                "camera_profile": "slow push-in",
+                                "camera_movement": "dolly forward",
+                            }
+                        ]
+                    }
+            return rows
+
+    async def _body() -> None:
+        gateway = SceneBodyGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, StudioScreen)
+
+            advanced = screen.query_one("#advanced_workspace")
+            simplified = screen.query_one("#simplified_workspace")
+            assert advanced.styles.display != "none"
+            assert simplified.styles.display == "none"
+
+            screen.query_one("#view_toggle", Button).focus()
+            await pilot.press("enter")
+            await pilot.pause()
+
+            assert advanced.styles.display == "none"
+            assert simplified.styles.display != "none"
+
+            current_node = screen.query_one("#current_node", CurrentNode)
+            current_body = current_node.query_one("#current_node_body", Static)
+            assert "script" in str(current_body.renderable).lower()
+
+            film_meta = screen.query_one("#film_meta", FilmMeta)
+            film_body = film_meta.query_one("#film_meta_body", Static)
+            assert "The Field Message" in str(film_body.renderable)
+
+            asset_browser = screen.query_one("#asset_browser", AssetBrowser)
+            assert asset_browser.row_count >= 2
+
+            scene_browser = screen.query_one("#scene_browser", SceneBrowser)
+            assert scene_browser.row_count >= 1
 
     _run(_body())

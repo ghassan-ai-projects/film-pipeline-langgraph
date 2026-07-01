@@ -55,25 +55,25 @@ _VALIDATOR_MAP: dict[str, str] = {
 def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
-    """Run a single validator in parallel and return its report."""
+    """Run a single validator in parallel and append its report to the raw channel."""
     from film_pipeline.graph.nodes import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
         return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "skipped"}],
+            "_qc_raw_reports": [{"validator_id": validator_id, "status": "skipped"}],
         }
 
     validator = _resolve_validator_instance(srv, validator_id)
     if validator is None:
         return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "skipped"}],
+            "_qc_raw_reports": [{"validator_id": validator_id, "status": "skipped"}],
         }
 
     artifact = _load_artifact_for_validator(state)
     if not artifact:
         return {
-            "_qc_reports": [
+            "_qc_raw_reports": [
                 {
                     "validator_id": validator_id,
                     "status": "skipped",
@@ -86,20 +86,20 @@ def _run_validator(
         report = validator.run(artifact)
     except Exception:
         return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "failed"}],
+            "_qc_raw_reports": [{"validator_id": validator_id, "status": "failed"}],
         }
 
     return {
-        "_qc_reports": [
+        "_qc_raw_reports": [
             {
                 "validator_id": validator_id,
                 "score": report.score,
                 "status": str(report.status),
                 "blocking_count": len(report.blocking_issues),
                 "warning_count": len(report.warnings),
+                "raw": report.model_dump(),
             }
         ],
-        "_qc_raw_reports": [report.model_dump()],
     }
 
 
@@ -197,13 +197,30 @@ def fan_out_validators(state: StudioGraphState) -> list[Send]:
 
 
 def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
-    """Collect parallel validator reports into state."""
+    """Collect parallel validator raw reports into a single summary list."""
     raw_raw = state.get("_qc_raw_reports", [])
-    reports_raw = state.get("_qc_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
-    reports: list[dict[str, Any]] = list(reports_raw) if isinstance(reports_raw, list) else []
+    reports: list[dict[str, Any]] = []
+    for entry in raw:
+        if entry.get("status") in {"skipped", "failed"}:
+            reports.append(
+                {
+                    "validator_id": entry["validator_id"],
+                    "status": entry["status"],
+                    "reason": entry.get("reason", ""),
+                }
+            )
+        else:
+            reports.append(
+                {
+                    "validator_id": entry["validator_id"],
+                    "score": entry.get("score", 0),
+                    "status": entry.get("status", "unknown"),
+                    "blocking_count": entry.get("blocking_count", 0),
+                    "warning_count": entry.get("warning_count", 0),
+                }
+            )
     return {
-        "_qc_raw_reports": raw,
         "_qc_reports": reports,
     }
 
