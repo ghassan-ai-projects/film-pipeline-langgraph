@@ -269,7 +269,16 @@ class FilmStudioApp(App[None]):
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
         """Create a project, run intake if needed, and switch to the studio."""
-        result = self.gateway.create_project(request)
+        try:
+            result = self.gateway.create_project(request)
+        except Exception as exc:
+            self._set_status(f"Failed to create project: {exc}")
+            return MutationResult(
+                ok=False,
+                project_id=request.project_id,
+                current_phase="",
+                message=str(exc),
+            )
         self.active_project_id = result.project_id
         if request.idea.strip() and not result.current_phase:
             try:
