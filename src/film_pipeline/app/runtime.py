@@ -26,7 +26,7 @@ from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 STATE_FILENAME = "project-state.json"
 
-_PERSIST_ROOT = Path.home() / ".film-pipeline"
+_PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
 _RUNTIME_ROOT = _PERSIST_ROOT / "runtime"
 
 
