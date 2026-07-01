@@ -68,13 +68,15 @@ def test_reduce_qc_reports_normalizes_missing_lists() -> None:
     state: Any = {"_qc_raw_reports": "bad", "_qc_reports": None}
     reduced = qc.reduce_qc_reports(state)
 
-    assert reduced == {"_qc_raw_reports": [], "_qc_reports": []}
+    assert reduced == {"_qc_reports": []}
 
 
 def test_run_validator_skips_without_services() -> None:
     result = qc._run_validator("script-structure", "ScriptStructureValidator", {})
 
-    assert result == {"_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}]}
+    assert result == {
+        "_qc_raw_reports": [{"validator_id": "script-structure", "status": "skipped"}]
+    }
 
 
 def test_run_validator_skips_when_validator_missing(monkeypatch: Any) -> None:
@@ -87,7 +89,9 @@ def test_run_validator_skips_when_validator_missing(monkeypatch: Any) -> None:
         state,
     )
 
-    assert result == {"_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}]}
+    assert result == {
+        "_qc_raw_reports": [{"validator_id": "script-structure", "status": "skipped"}]
+    }
 
 
 def test_run_validator_skips_without_artifact(monkeypatch: Any) -> None:
@@ -104,7 +108,7 @@ def test_run_validator_skips_without_artifact(monkeypatch: Any) -> None:
     )
 
     assert result == {
-        "_qc_reports": [
+        "_qc_raw_reports": [
             {
                 "validator_id": "script-structure",
                 "status": "skipped",
@@ -129,7 +133,7 @@ def test_run_validator_reports_failure(monkeypatch: Any) -> None:
         state,
     )
 
-    assert result == {"_qc_reports": [{"validator_id": "dialogue-voice", "status": "failed"}]}
+    assert result == {"_qc_raw_reports": [{"validator_id": "dialogue-voice", "status": "failed"}]}
 
 
 def test_run_validator_returns_summary_and_raw_report(monkeypatch: Any) -> None:
@@ -153,16 +157,16 @@ def test_run_validator_returns_summary_and_raw_report(monkeypatch: Any) -> None:
         state,
     )
 
-    assert result["_qc_reports"] == [
+    assert result["_qc_raw_reports"] == [
         {
             "validator_id": "scene-continuity",
             "score": 88.5,
             "status": "needs_revision",
             "blocking_count": 1,
             "warning_count": 1,
+            "raw": {"score": 88.5, "status": "needs_revision"},
         }
     ]
-    assert result["_qc_raw_reports"] == [{"score": 88.5, "status": "needs_revision"}]
 
 
 def test_load_artifact_for_validator_skips_bad_refs_and_returns_copy() -> None:

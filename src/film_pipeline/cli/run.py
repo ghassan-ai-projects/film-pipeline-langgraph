@@ -75,8 +75,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--runtime-root",
         type=Path,
-        default=Path(".film-pipeline-run"),
-        help="Directory for runtime state and artifacts. Default: .film-pipeline-run.",
+        default=Path.home() / ".film-pipeline" / "runs" / "default",
+        help="Directory for runtime state and artifacts. Default: ~/.film-pipeline/runs/default.",
     )
     parser.add_argument(
         "--constraints-file",

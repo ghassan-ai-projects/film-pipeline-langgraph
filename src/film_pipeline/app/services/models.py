@@ -67,6 +67,7 @@ class DashboardSummary:
     checkpoint_count: int = 0
     has_blockers: bool = False
     stalled_phase: str = ""
+    profile_stack: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

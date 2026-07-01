@@ -36,7 +36,14 @@ from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
 
-_CHECKPOINT_DIR: Path = Path.home() / ".film-pipeline" / "checkpoints"
+
+def _checkpoint_dir() -> Path:
+    """Return the checkpoint directory honoring FILM_PIPELINE_PERSIST_ROOT."""
+    root = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
+    return root / "checkpoints"
+
+
+_CHECKPOINT_DIR: Path = _checkpoint_dir()
 _CHECKPOINT_DB: Path = _CHECKPOINT_DIR / "checkpoints.sqlite"
 
 

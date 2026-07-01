@@ -183,6 +183,24 @@ class TestOperatorService:
         assert len(checkpoints) >= 1
         assert checkpoints[-1]["phase"] == "constitution"
 
+    def test_approve_phase_advances_through_pre_generation_phases(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="multi-phase",
+                title="Multi Phase",
+            )
+        )
+        service.submit_idea(
+            "multi-phase",
+            "A projectionist restores a lost frame and discovers it predicts the future.",
+        )
+
+        for expected in ("constitution", "development", "script", "visual_dev", "shot_bible"):
+            result = service.approve_phase("multi-phase")
+            assert result.ok is True
+            assert result.current_phase == expected
+
     def test_validation_workspace_splits_blocking_and_non_blocking_issues(
         self, tmp_path: Path
     ) -> None:
@@ -276,6 +294,28 @@ class TestOperatorService:
 
         with pytest.raises(ProjectNotFoundError, match="No active project"):
             service.get_dashboard()
+
+    def test_create_project_resolves_and_stores_profile_stack(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="profiled",
+                title="Profiled",
+                film_type_profile="narrative",
+                quality_profile="draft",
+                provider_profile="mock-demo",
+            )
+        )
+
+        state = service.runtime.projects["profiled"]
+        assert state["profile_stack"]["film_type_profile"] == "film-type.narrative"
+        assert state["profile_stack"]["quality_profile"] == "quality.draft"
+        assert state["profile_stack"]["provider_profile"] == "mock-demo"
+        assert "resolved_config" in state
+
+        dashboard = service.get_dashboard("profiled")
+        assert dashboard.profile_stack["film_type_profile"] == "film-type.narrative"
+        assert dashboard.profile_stack["quality_profile"] == "quality.draft"
 
     def test_review_workspace_before_phase_recommends_starting_intake(self, tmp_path: Path) -> None:
         service = _service(tmp_path)

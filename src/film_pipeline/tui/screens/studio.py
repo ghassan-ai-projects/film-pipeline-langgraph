@@ -15,11 +15,15 @@ from textual.widgets import Label as ModalLabel
 from textual.widgets import Static as ModalStatic
 from textual.widgets import TextArea as ModalTextArea
 
-from film_pipeline.tui.view_models.models import GRAPH_PHASES
+from film_pipeline.tui.view_models.models import GRAPH_PHASES, ReaderView
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
+from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+from film_pipeline.tui.widgets.current_node import CurrentNode
+from film_pipeline.tui.widgets.film_meta import FilmMeta
 from film_pipeline.tui.widgets.inspector import Inspector
 from film_pipeline.tui.widgets.issue_list import IssueList
+from film_pipeline.tui.widgets.scene_browser import SceneBrowser
 from film_pipeline.tui.widgets.stage_nav import StageNav
 
 _STAGE_EXPLANATIONS: dict[str, str] = {
@@ -99,6 +103,49 @@ class StudioScreen(Screen[None]):
         margin: 0 0 1 0;
         height: 1fr;
     }
+
+    #top_bar {
+        height: auto;
+        margin: 0 0 1 0;
+    }
+
+    #view_toggle {
+        width: auto;
+        margin: 0 0 0 1;
+    }
+
+    #advanced_workspace {
+        height: 1fr;
+    }
+
+    #simplified_workspace {
+        height: 1fr;
+        display: none;
+    }
+
+    #simplified_top {
+        height: auto;
+    }
+
+    #simplified_top CurrentNode {
+        width: 1fr;
+    }
+
+    #simplified_top FilmMeta {
+        width: 1fr;
+    }
+
+    #simplified_bottom {
+        height: 1fr;
+    }
+
+    #simplified_bottom AssetBrowser {
+        width: 1fr;
+    }
+
+    #simplified_bottom SceneBrowser {
+        width: 1fr;
+    }
     """
 
     BINDINGS: ClassVar = [
@@ -124,14 +171,23 @@ class StudioScreen(Screen[None]):
                 with Vertical(id="stage_header"):
                     yield Static("No project loaded", id="stage_name")
                     yield Static("Open or create a project to begin.", id="stage_explanation")
-                yield ActionBar(id="action_bar")
-                with Horizontal(id="stage_body"):
+                with Horizontal(id="top_bar"):
+                    yield ActionBar(id="action_bar")
+                    yield Button("Simplified view", id="view_toggle")
+                with Horizontal(id="advanced_workspace"):
                     with Vertical(id="workspace_left"):
                         yield Static("Artifacts", id="artifact_header", classes="headline")
                         yield ArtifactList(id="artifact_list")
                     with Vertical(id="workspace_right"):
                         yield Static("Issues", id="issue_header", classes="headline")
                         yield IssueList(id="issue_list")
+                with Vertical(id="simplified_workspace"):
+                    with Horizontal(id="simplified_top"):
+                        yield CurrentNode(id="current_node")
+                        yield FilmMeta(id="film_meta")
+                    with Horizontal(id="simplified_bottom"):
+                        yield AssetBrowser(id="asset_browser")
+                        yield SceneBrowser(id="scene_browser")
             with Vertical(id="right_drawer"):
                 yield Inspector(id="inspector")
         yield Static("", id="status_footer")
@@ -173,6 +229,33 @@ class StudioScreen(Screen[None]):
         inspector.update_state(state)
         nav = self.query_one("#stage_nav", StageNav)
         nav.update_state(state)
+        current_node = self.query_one("#current_node", CurrentNode)
+        current_node.update_state(state)
+        film_meta = self.query_one("#film_meta", FilmMeta)
+        film_meta.update_state(state)
+        asset_browser = self.query_one("#asset_browser", AssetBrowser)
+        asset_browser.update_state(state)
+        scene_browser = self.query_one("#scene_browser", SceneBrowser)
+        scene_browser.update_state(state)
+
+        # If the project has just been created and there are no artifacts yet,
+        # surface the idea in the inspector so the intake screen is not blank.
+        if (
+            state.dashboard is not None
+            and state.dashboard.idea
+            and state.reader is None
+            and (not state.snapshot or not state.snapshot.artifacts)
+        ):
+            state.reader = ReaderView(
+                title="Idea",
+                subtitle=state.dashboard.title,
+                body=state.dashboard.idea,
+                outline=[],
+                metadata={},
+                linked_comments=[],
+                linked_validation=[],
+            )
+            inspector.update_state(state)
 
     def action_approve(self) -> None:
         """Keybinding action for approving the current phase."""
@@ -189,6 +272,21 @@ class StudioScreen(Screen[None]):
         if isinstance(self.app, FilmStudioApp):
             await self.app.action_back()
 
+    def action_toggle_view(self) -> None:
+        """Switch between advanced (stage-centric) and simplified (asset/scene) views."""
+        advanced = self.query_one("#advanced_workspace", Horizontal)
+        simplified = self.query_one("#simplified_workspace", Vertical)
+        toggle = self.query_one("#view_toggle", Button)
+        if advanced.styles.display == "none":
+            advanced.styles.display = "block"
+            simplified.styles.display = "none"
+            toggle.label = "Simplified view"
+        else:
+            advanced.styles.display = "none"
+            simplified.styles.display = "block"
+            toggle.label = "Advanced view"
+        self.update_state(self._app_state)
+
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "action_approve":
             self._approve_phase()
@@ -198,6 +296,8 @@ class StudioScreen(Screen[None]):
             self._run_validation()
         elif event.button.id == "action_next":
             self._do_next_action()
+        elif event.button.id == "view_toggle":
+            self.action_toggle_view()
 
     def _approve_phase(self) -> None:
         from film_pipeline.tui.app import AppState, FilmStudioApp
