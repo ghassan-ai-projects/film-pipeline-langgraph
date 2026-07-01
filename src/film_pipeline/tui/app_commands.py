@@ -434,8 +434,8 @@ class AppCommandsMixin(AppCockpitBase):
         if normalized in {"warning", "warnings"}:
             self._filter_validation(severity="warning")
             return
-        if normalized in {"provider", "providers"}:
-            self.action_open_tab("providers")
+        if normalized in {"provider", "providers", "ops"}:
+            self.action_open_tab("ops")
             return
         if normalized in {"comment", "comments"}:
             self.action_open_tab("review")
@@ -446,7 +446,7 @@ class AppCommandsMixin(AppCockpitBase):
         self.action_open_tab("dashboard")
         self._update_context(
             "Dashboard commands\n\n"
-            "dashboard blockers, dashboard warnings, dashboard providers, "
+            "dashboard blockers, dashboard warnings, dashboard ops, "
             "dashboard comments, dashboard phase"
         )
 
@@ -813,6 +813,17 @@ class AppCommandsMixin(AppCockpitBase):
         )
 
     def _open_target(self, target_id: str) -> None:
+        snapshot = self.snapshot
+        if snapshot is not None and any(
+            str(row.get("artifact_id", "")) == target_id for row in snapshot.artifacts
+        ):
+            self.selected_target = TargetSelection(
+                target_type="artifact",
+                target_id=target_id,
+                source="open_target",
+            )
+            self._open_artifact(target_id)
+            return
         selection = self._find_selection_for_target(target_id)
         self.selected_target = selection
         if selection.target_type == "artifact":
