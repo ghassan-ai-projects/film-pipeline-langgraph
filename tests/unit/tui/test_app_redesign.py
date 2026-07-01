@@ -7,7 +7,6 @@ from dataclasses import replace
 from typing import Any
 from unittest.mock import patch
 
-import pytest
 from textual.coordinate import Coordinate
 from textual.widgets import Button, DataTable, Input, Static, TextArea
 
@@ -369,8 +368,9 @@ def test_create_failure_surfaces_status() -> None:
                 workflow_mode="manual",
                 project_kind="production",
             )
-            with pytest.raises(ProjectNotFoundError):
-                app.create_project(request)
+            result = app.create_project(request)
+            assert result.ok is False
+            assert "failed to create project" in app._status_text().lower()
 
     _run(_body())
 
