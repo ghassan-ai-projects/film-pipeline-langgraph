@@ -11,12 +11,20 @@ import pytest
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _clean_production_state_stores() -> Iterator[None]:
-    """Keep tests isolated from the production runtime/checkpoint stores."""
+def _clean_production_state_stores(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[None]:
+    """Keep tests isolated from production runtime/checkpoint stores.
+
+    Tests never write to the user's real ``~/.film-pipeline`` directory.
+    Any code that reads the persistence root checks ``FILM_PIPELINE_PERSIST_ROOT``
+    first, so we point it at a session temp directory and clean only that.
+    """
     os.environ["FILM_PIPELINE_NO_PERSIST"] = "1"
-    persist_root = Path(".film-pipeline-run")
-    if persist_root.exists():
-        shutil.rmtree(persist_root, ignore_errors=True)
+    persist_root = tmp_path_factory.mktemp("film-pipeline")
+    os.environ["FILM_PIPELINE_PERSIST_ROOT"] = str(persist_root)
+    # Legacy tests used ``.film-pipeline-run`` as a scratch directory.  Do not
+    # delete it here — it may contain user projects created by the old CLI.
     try:
         yield
     finally:
