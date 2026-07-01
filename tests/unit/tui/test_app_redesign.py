@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 from textual.coordinate import Coordinate
-from textual.widgets import Button, DataTable, Input, Static, TextArea
+from textual.widgets import Button, Collapsible, DataTable, Input, Select, Static, TextArea
 
 from film_pipeline.app.services.errors import ProjectNotFoundError, ServiceError
 from film_pipeline.app.services.models import (
@@ -895,6 +895,51 @@ def test_project_form_title_and_idea_errors() -> None:
             form.on_button_pressed(Button.Pressed(button=create_button))
             await pilot.pause()
             assert "idea" in str(error.renderable).lower()
+
+    _run(_body())
+
+
+def test_project_form_runtime_switch_syncs_provider() -> None:
+    async def _body() -> None:
+        gateway = RecordingGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.push_screen(ProjectForm())
+            await pilot.pause()
+            form = app.screen
+            assert isinstance(form, ProjectForm)
+            runtime = form.query_one("#pf_runtime", Select)
+            provider = form.query_one("#pf_provider", Select)
+
+            runtime.value = "real"
+            await pilot.pause()
+            assert str(provider.value) == "local-real-provider"
+
+            runtime.value = "mock"
+            await pilot.pause()
+            assert str(provider.value) == "mock-demo"
+
+    _run(_body())
+
+
+def test_project_form_advanced_profiles_collapsible() -> None:
+    async def _body() -> None:
+        gateway = RecordingGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.push_screen(ProjectForm())
+            await pilot.pause()
+            form = app.screen
+            assert isinstance(form, ProjectForm)
+            collapsible = form.query_one(Collapsible)
+            assert "advanced" in str(collapsible.title).lower()
+            # Expand the advanced section so the hidden selects are mounted.
+            collapsible.collapsed = False
+            await pilot.pause()
+            assert form.query_one("#pf_film_type", Select) is not None
+            assert form.query_one("#pf_quality", Select) is not None
 
     _run(_body())
 

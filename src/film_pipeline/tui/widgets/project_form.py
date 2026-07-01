@@ -9,7 +9,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Select, Static, TextArea
+from textual.widgets import Button, Collapsible, Input, Label, Select, Static, TextArea
 
 from film_pipeline.app.services.models import ProjectCreateRequest
 
@@ -73,7 +73,7 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
         height: 3;
     }
 
-    #profile_grid {
+    #runtime_grid {
         grid-size: 2;
         grid-columns: 16 1fr;
         grid-gutter: 0 1;
@@ -81,7 +81,28 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
         margin: 1 0 0 0;
     }
 
-    #profile_grid .field-label {
+    #runtime_grid .field-label {
+        text-align: right;
+        padding: 1 0 0 0;
+    }
+
+    Collapsible {
+        padding: 0;
+        margin: 1 0 0 0;
+    }
+
+    Collapsible > .contents {
+        padding: 0;
+    }
+
+    #advanced_grid {
+        grid-size: 2;
+        grid-columns: 16 1fr;
+        grid-gutter: 0 1;
+        height: auto;
+    }
+
+    #advanced_grid .field-label {
         text-align: right;
         padding: 1 0 0 0;
     }
@@ -101,7 +122,8 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
 
     BINDINGS: ClassVar = [
         Binding("escape", "cancel", "Cancel"),
-        Binding("ctrl+j", "submit", "Create"),
+        Binding("f2", "submit", "Create"),
+        Binding("ctrl+enter", "submit", "Create"),
     ]
 
     _VALID_ID: ClassVar = re.compile(r"^[a-z0-9_-]+$")
@@ -138,7 +160,7 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                 yield Input(placeholder="e.g. The Lighthouse Keeper", id="pf_title")
                 yield Label("Idea / logline", classes="field-label")
                 yield TextArea(self._default_idea, id="pf_idea")
-                with Grid(id="profile_grid"):
+                with Grid(id="runtime_grid"):
                     yield Label("Runtime", classes="field-label")
                     yield Select(
                         [
@@ -149,6 +171,22 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                         allow_blank=False,
                         id="pf_runtime",
                     )
+                    yield Label("Provider", classes="field-label")
+                    yield Select(
+                        [
+                            ("mock demo", "mock-demo"),
+                            ("seedance primary", "provider.seedance_primary"),
+                            ("free / low cost", "provider.free_or_low_cost"),
+                            ("local real provider", "local-real-provider"),
+                        ],
+                        value="mock-demo",
+                        allow_blank=False,
+                        id="pf_provider",
+                    )
+                with (
+                    Collapsible(title="Advanced profiles", collapsed=True),
+                    Grid(id="advanced_grid"),
+                ):
                     yield Label("Film type", classes="field-label")
                     yield Select(
                         [
@@ -169,18 +207,6 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                         value="quality.draft",
                         allow_blank=False,
                         id="pf_quality",
-                    )
-                    yield Label("Provider", classes="field-label")
-                    yield Select(
-                        [
-                            ("mock demo", "mock-demo"),
-                            ("seedance primary", "provider.seedance_primary"),
-                            ("free / low cost", "provider.free_or_low_cost"),
-                            ("local real provider", "local-real-provider"),
-                        ],
-                        value="mock-demo",
-                        allow_blank=False,
-                        id="pf_provider",
                     )
                     yield Label("Review", classes="field-label")
                     yield Select(
@@ -203,6 +229,15 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
 
     def on_mount(self) -> None:
         self.query_one("#pf_id", Input).focus()
+
+    def on_select_changed(self, event: Select.Changed) -> None:
+        """Keep provider profile in sync with the chosen runtime mode."""
+        if event.select.id == "pf_runtime":
+            provider = self.query_one("#pf_provider", Select)
+            if event.value == "real" and str(provider.value) == "mock-demo":
+                provider.value = "local-real-provider"
+            elif event.value == "mock" and str(provider.value) != "mock-demo":
+                provider.value = "mock-demo"
 
     def action_submit(self) -> None:
         """Keyboard shortcut to submit the form."""
