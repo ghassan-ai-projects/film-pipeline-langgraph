@@ -8,6 +8,7 @@ from film_pipeline.app.services.models import (
     ArtifactDetail,
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     OperatorComment,
     OperatorCommentRequest,
@@ -134,6 +135,86 @@ class RecordingGateway:
     def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
         self.validation_runs += 1
         return self.get_validation_workspace(project_id)
+
+    def get_generation_workspace(
+        self, project_id: str | None = None
+    ) -> GenerationWorkspace:
+        return GenerationWorkspace(
+            project_id=project_id or self.active_project_id,
+            phase="generation",
+            provider="mock-video-provider",
+            model="mock-fast",
+            estimated_cost_usd=0.0,
+            rows=[
+                {
+                    "request_id": "req-1",
+                    "shot_id": "shot_SC_004_001",
+                    "scene_id": "SC_004",
+                    "status": "planned",
+                    "provider": "mock-video-provider",
+                    "model": "mock-fast",
+                    "estimated_cost_usd": 0.0,
+                }
+            ],
+            planned=1,
+            next_step="approve_spend",
+        )
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        workspace = self.get_generation_workspace(project_id)
+        return GenerationWorkspace(
+            project_id=workspace.project_id,
+            phase=workspace.phase,
+            provider=workspace.provider,
+            model=workspace.model,
+            estimated_cost_usd=workspace.estimated_cost_usd,
+            rows=workspace.rows,
+            planned=1,
+            next_step="approve_spend",
+        )
+
+    def approve_generation_spend(
+        self, project_id: str | None = None, max_cost_usd: float = -1.0
+    ) -> GenerationWorkspace:
+        workspace = self.get_generation_workspace(project_id)
+        return GenerationWorkspace(
+            project_id=workspace.project_id,
+            phase=workspace.phase,
+            provider=workspace.provider,
+            model=workspace.model,
+            estimated_cost_usd=workspace.estimated_cost_usd,
+            rows=[{**row, "status": "approved"} for row in workspace.rows],
+            planned=1,
+            next_step="start",
+        )
+
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        workspace = self.get_generation_workspace(project_id)
+        return GenerationWorkspace(
+            project_id=workspace.project_id,
+            phase=workspace.phase,
+            provider=workspace.provider,
+            model=workspace.model,
+            estimated_cost_usd=workspace.estimated_cost_usd,
+            rows=[{**row, "status": "submitted"} for row in workspace.rows],
+            planned=1,
+            submitted=1,
+            next_step="poll",
+        )
+
+    def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        workspace = self.get_generation_workspace(project_id)
+        return GenerationWorkspace(
+            project_id=workspace.project_id,
+            phase=workspace.phase,
+            provider=workspace.provider,
+            model=workspace.model,
+            estimated_cost_usd=workspace.estimated_cost_usd,
+            rows=[{**row, "status": "delivered"} for row in workspace.rows],
+            planned=1,
+            completed=1,
+            next_step="approve_phase",
+        )
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self.approved_count += 1

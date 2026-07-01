@@ -22,7 +22,13 @@ from film_pipeline.app.runtime import reset_runtime
 @pytest.fixture(autouse=True)
 def _reset_runtime_to_mock() -> Iterator[None]:
     reset_runtime("mock")
+    # Rebind the package-level accessor so any previous monkeypatch is undone.
+    import film_pipeline.mcp.tools as tools_pkg
+    from film_pipeline.app.runtime import get_runtime
+
+    tools_pkg.get_runtime = get_runtime
     try:
         yield
     finally:
         reset_runtime("mock")
+        tools_pkg.get_runtime = get_runtime

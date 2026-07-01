@@ -66,7 +66,7 @@ def test_profile_stack_real_confirmed_via_env(monkeypatch: pytest.MonkeyPatch) -
 
 def test_main_file_not_found(tmp_path: Path, capsys: Any) -> None:
     missing = tmp_path / "missing.txt"
-    code = main([str(missing)])
+    code = main([str(missing), f"--runtime-root={tmp_path / 'runtime'}"])
     assert code == 1
     captured = capsys.readouterr()
     assert "Idea file not found" in captured.err

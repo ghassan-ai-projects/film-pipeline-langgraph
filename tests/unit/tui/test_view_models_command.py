@@ -181,7 +181,7 @@ def test_command_validation_guides_incomplete_and_pipe_commands() -> None:
         providers=gateway.list_provider_status(),
     )
 
-    assert build_command_validation("", options, suggestions).completion == "open graph"
+    assert build_command_validation("", options, suggestions).completion == "open review"
     assert build_command_validation("create", options, suggestions).status == "incomplete"
     assert build_command_validation("asset", options, suggestions).status == "incomplete"
     assert (

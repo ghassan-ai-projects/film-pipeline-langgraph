@@ -137,7 +137,7 @@ def test_mcp_gateway_default_gateway_selection() -> None:
         os.environ["FILM_PIPELINE_TUI_GATEWAY"] = "inprocess"
         assert isinstance(default_gateway(), InProcessStudioGateway)
         del os.environ["FILM_PIPELINE_TUI_GATEWAY"]
-        assert isinstance(default_gateway(), MCPStudioGateway)
+        assert isinstance(default_gateway(), InProcessStudioGateway)
     finally:
         if prev is None:
             os.environ.pop("FILM_PIPELINE_TUI_GATEWAY", None)
