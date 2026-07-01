@@ -18,6 +18,7 @@ from film_pipeline.app.services.models import (
     ArtifactDetail,
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     OperatorComment,
     OperatorCommentRequest,
@@ -230,6 +231,59 @@ class MCPStudioGateway(StudioGateway):
         self._tool("run_validation", {})
         return self.get_validation_workspace(project_id)
 
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+        self._set_active(project_id)
+        r = self._tool("list_active_generations", {})
+        rows_raw = r.get("rows", [])
+        rows = [dict(row) for row in rows_raw] if isinstance(rows_raw, list) else []
+        running = sum(1 for row in rows if row.get("status") == "running")
+        return GenerationWorkspace(
+            project_id=project_id or "",
+            phase="generation",
+            provider="",
+            model="",
+            estimated_cost_usd=0.0,
+            rows=rows,
+            running=running,
+            next_step="poll" if running else "plan",
+        )
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self._set_active(project_id)
+        result = self._tool("plan_generation_batch", {})
+        if not result.get("ok"):
+            raise RuntimeError(str(result.get("error", "plan_generation_batch failed")))
+        return self.get_generation_workspace(project_id)
+
+    def approve_generation_spend(
+        self, project_id: str | None = None, max_cost_usd: float = -1.0
+    ) -> GenerationWorkspace:
+        self._set_active(project_id)
+        result = self._tool("approve_generation_spend", {"max_cost_usd": max_cost_usd})
+        if not result.get("ok"):
+            raise RuntimeError(str(result.get("error", "approve_generation_spend failed")))
+        return self.get_generation_workspace(project_id)
+
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self._set_active(project_id)
+        result = self._tool("start_generation_batch", {})
+        if not result.get("ok"):
+            raise RuntimeError(str(result.get("error", "start_generation_batch failed")))
+        return self.get_generation_workspace(project_id)
+
+    def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self._set_active(project_id)
+        active = self._tool("list_active_generations", {})
+        rows = active.get("rows", [])
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and row.get("provider_job_id"):
+                    self._tool(
+                        "resume_generation_polling",
+                        {"generation_id": str(row.get("generation_id", ""))},
+                    )
+        return self.get_generation_workspace(project_id)
+
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self._set_active(project_id)
         r = self._tool("approve_phase", {"confirmed": True})
@@ -391,13 +445,15 @@ class MCPStudioGateway(StudioGateway):
 def default_gateway() -> StudioGateway:
     """Return the gateway selected by ``FILM_PIPELINE_TUI_GATEWAY``.
 
-    Defaults to the MCP gateway so the TUI exercises the same tool surface as
-    OpenClaw. Set ``FILM_PIPELINE_TUI_GATEWAY=inprocess`` to use the legacy
-    in-process service gateway.
+    Defaults to the in-process gateway: it is the complete, low-latency
+    surface over the shared application service layer (routing, assets,
+    generation, provider health). Set ``FILM_PIPELINE_TUI_GATEWAY=mcp`` to
+    drive the cockpit through the MCP stdio tool surface instead (parity
+    testing with OpenClaw; reduced feature set).
     """
     from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 
-    mode = os.getenv("FILM_PIPELINE_TUI_GATEWAY", "mcp").lower()
-    if mode == "inprocess":
-        return InProcessStudioGateway()
-    return MCPStudioGateway()
+    mode = os.getenv("FILM_PIPELINE_TUI_GATEWAY", "inprocess").lower()
+    if mode == "mcp":
+        return MCPStudioGateway()
+    return InProcessStudioGateway()

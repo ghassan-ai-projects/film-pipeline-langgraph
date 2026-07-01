@@ -35,7 +35,7 @@ def build_dashboard_kpi_rows(
             "state": dashboard.status,
             "command": f"phase {dashboard.current_phase}"
             if dashboard.current_phase
-            else "open graph",
+            else "open guide",
         },
         {
             "metric": "blockers",
@@ -101,6 +101,16 @@ def build_dashboard_action_rows(
                 "status": "blocked",
                 "reason": str(first.get("message", "")),
                 "command": f"fix {target}" if target else "show blocked",
+            }
+        )
+    if dashboard.current_phase == "generation":
+        rows.append(
+            {
+                "priority": 2,
+                "action": "run generation batch",
+                "status": "available",
+                "reason": "Plan, approve spend, and generate every shot in the matrix.",
+                "command": "gen run",
             }
         )
     if review and "request_revision" in review.available_actions:

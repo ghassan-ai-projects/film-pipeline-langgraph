@@ -8,6 +8,7 @@ from typing import Any
 from film_pipeline.app.services.models import (
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     OperatorComment,
     ProjectListItem,
     ReviewWorkspace,
@@ -47,6 +48,7 @@ class CockpitSnapshot:
     graph_rows: list[dict[str, object]]
     command_suggestions: list[dict[str, object]]
     command_options: CommandOptions
+    generation: GenerationWorkspace | None = None
 
 
 @dataclass(frozen=True)

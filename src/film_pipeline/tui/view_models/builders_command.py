@@ -33,11 +33,6 @@ def build_command_suggestions(
     """Generate command rows that are valid for the current cockpit snapshot."""
     rows: list[dict[str, object]] = [
         {
-            "command": "open graph",
-            "scope": "navigation",
-            "reason": "show pipeline position",
-        },
-        {
             "command": "open review",
             "scope": "navigation",
             "reason": "inspect approval workspace",
@@ -67,10 +62,19 @@ def build_command_suggestions(
         rows.append(
             {
                 "command": f"phase {dashboard.current_phase}",
-                "scope": "graph",
+                "scope": "pipeline",
                 "reason": "inspect current phase",
             }
         )
+        if dashboard.current_phase == "generation":
+            rows.insert(
+                0,
+                {
+                    "command": "gen run",
+                    "scope": "generation",
+                    "reason": "plan, approve, and generate every shot",
+                },
+            )
         if "approve_phase" in dashboard.eligible_actions:
             rows.append(
                 {
@@ -145,8 +149,13 @@ def build_command_help_rows(options: CommandOptions) -> list[dict[str, object]]:
     return [
         {
             "command": "open <page>",
-            "values": "dashboard, graph, matrix, review, scenes, assets, guide, validation",
+            "values": "dashboard, review, generate, scenes, assets, matrix, guide, validation, ops",
             "purpose": "jump between cockpit workspaces",
+        },
+        {
+            "command": "gen <step>",
+            "values": "run, plan, spend, start, poll, status",
+            "purpose": "drive the generation batch (run does all steps)",
         },
         {
             "command": "project <project_id>",
@@ -280,8 +289,14 @@ def build_command_validation(
         "open dashboard",
         "review",
         "open review",
-        "graph",
-        "open graph",
+        "generate",
+        "open generate",
+        "gen run",
+        "gen plan",
+        "gen spend",
+        "gen start",
+        "gen poll",
+        "gen status",
         "matrix",
         "open matrix",
         "validation",
@@ -293,6 +308,8 @@ def build_command_validation(
         "scenes",
         "checkpoints",
         "audit",
+        "ops",
+        "open ops",
         "next",
         "approve",
         "confirm approve",

@@ -37,6 +37,12 @@ class FakeArtifactStore:
     def __init__(self) -> None:
         self.calls: list[tuple[str, FilmPhase, str, int]] = []
 
+    def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
+        _ = project_id
+        if artifact_id == "script" and phase == FilmPhase.SCRIPT.value:
+            return 2
+        return 1
+
     def load(
         self,
         project_id: str,
@@ -68,7 +74,34 @@ def test_reduce_qc_reports_normalizes_missing_lists() -> None:
     state: Any = {"_qc_raw_reports": "bad", "_qc_reports": None}
     reduced = qc.reduce_qc_reports(state)
 
-    assert reduced == {"_qc_raw_reports": [], "_qc_reports": []}
+    assert reduced["_validation_reports"] == []
+    assert reduced["current_phase"] == "qc"
+    assert reduced["human_approval_phase"] == "qc"
+    assert reduced["human_approval_required"] is True
+    assert reduced["approved"] is False
+    assert "issues" not in reduced
+
+
+def test_reduce_qc_reports_translates_findings_into_issues() -> None:
+    state: Any = {
+        "_qc_raw_reports": [
+            {
+                "validator_id": "script-structure",
+                "blocking_issues": [{"code": "no_conflict", "message": "flat scenes"}],
+                "warnings": [{"code": "dense_dialogue", "message": "wordy"}],
+            }
+        ],
+        "_qc_reports": [{"validator_id": "script-structure"}],
+    }
+    reduced = qc.reduce_qc_reports(state)
+
+    issues = reduced["issues"]
+    assert isinstance(issues, list)
+    severities = {(issue["code"], issue["severity"]) for issue in issues}
+    assert severities == {("no_conflict", "blocking"), ("dense_dialogue", "warning")}
+    # Reducer channels must not be re-emitted (they would duplicate).
+    assert "_qc_raw_reports" not in reduced
+    assert "_qc_reports" not in reduced
 
 
 def test_run_validator_skips_without_services() -> None:
@@ -94,7 +127,7 @@ def test_run_validator_skips_without_artifact(monkeypatch: Any) -> None:
     monkeypatch.setattr(
         qc, "_resolve_validator_instance", lambda _srv, _validator_id: FakeValidator()
     )
-    monkeypatch.setattr(qc, "_load_artifact_for_validator", lambda _state: None)
+    monkeypatch.setattr(qc, "_load_artifact_for_validator", lambda _state, _validator_id: None)
     state: Any = {"project_id": "p1", SERVICES_KEY: object()}
 
     result = qc._run_validator(
@@ -120,7 +153,9 @@ def test_run_validator_reports_failure(monkeypatch: Any) -> None:
         "_resolve_validator_instance",
         lambda _srv, _validator_id: FakeValidator(raises=True),
     )
-    monkeypatch.setattr(qc, "_load_artifact_for_validator", lambda _state: {"project_id": "p1"})
+    monkeypatch.setattr(
+        qc, "_load_artifact_for_validator", lambda _state, _validator_id: {"project_id": "p1"}
+    )
     state: Any = {"project_id": "p1", SERVICES_KEY: object()}
 
     result = qc._run_validator(
@@ -144,7 +179,9 @@ def test_run_validator_returns_summary_and_raw_report(monkeypatch: Any) -> None:
         "_resolve_validator_instance",
         lambda _srv, _validator_id: FakeValidator(report),
     )
-    monkeypatch.setattr(qc, "_load_artifact_for_validator", lambda _state: {"project_id": "p1"})
+    monkeypatch.setattr(
+        qc, "_load_artifact_for_validator", lambda _state, _validator_id: {"project_id": "p1"}
+    )
     state: Any = {"project_id": "p1", SERVICES_KEY: object()}
 
     result = qc._run_validator(
@@ -165,32 +202,31 @@ def test_run_validator_returns_summary_and_raw_report(monkeypatch: Any) -> None:
     assert result["_qc_raw_reports"] == [{"score": 88.5, "status": "needs_revision"}]
 
 
-def test_load_artifact_for_validator_skips_bad_refs_and_returns_copy() -> None:
+def test_load_artifact_for_validator_loads_latest_and_returns_copy() -> None:
     store = FakeArtifactStore()
     services = type("Services", (), {"artifact_store": store})()
-    state: Any = {
-        "project_id": "p1",
-        SERVICES_KEY: services,
-        "artifact_refs": [
-            "not-a-ref",
-            "artifact:script:vbad",
-            "artifact:missing:v1",
-            "artifact:script:v1",
-        ],
-    }
+    state: Any = {"project_id": "p1", SERVICES_KEY: services}
 
-    loaded = qc._load_artifact_for_validator(state)
+    loaded = qc._load_artifact_for_validator(state, "script-structure")
 
     assert loaded == {"project_id": "p1", "title": "Loaded"}
     assert loaded is not None
     loaded["title"] = "Mutated"
-    loaded_again = qc._load_artifact_for_validator(state)
+    loaded_again = qc._load_artifact_for_validator(state, "script-structure")
     assert loaded_again == {"project_id": "p1", "title": "Loaded"}
     assert ("p1", FilmPhase.SCRIPT, "script", 1) in store.calls
 
 
+def test_load_artifact_for_validator_skips_when_artifact_absent() -> None:
+    store = FakeArtifactStore()
+    services = type("Services", (), {"artifact_store": store})()
+    state: Any = {"project_id": "p1", SERVICES_KEY: services}
+
+    assert qc._load_artifact_for_validator(state, "assembly") is None
+
+
 def test_load_artifact_for_validator_returns_none_without_services() -> None:
-    assert qc._load_artifact_for_validator({"project_id": "p1"}) is None
+    assert qc._load_artifact_for_validator({"project_id": "p1"}, "script-structure") is None
 
 
 def test_validator_worker_functions_delegate_to_run_validator(monkeypatch: Any) -> None:

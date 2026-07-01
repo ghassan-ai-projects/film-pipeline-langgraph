@@ -65,22 +65,30 @@ class AppCommandsMixin(AppCockpitBase):
             "open dashboard": "dashboard",
             "review": "review",
             "open review": "review",
-            "graph": "graph",
-            "open graph": "graph",
+            "graph": "dashboard",
+            "open graph": "dashboard",
+            "generate": "generate",
+            "open generate": "generate",
+            "generation": "generate",
             "matrix": "matrix",
             "open matrix": "matrix",
             "validation": "validation",
-            "providers": "providers",
+            "providers": "ops",
             "assets": "assets",
             "artifacts": "assets",
             "guide": "guide",
             "open guide": "guide",
             "scenes": "scenes",
-            "checkpoints": "checkpoints",
-            "audit": "audit",
+            "checkpoints": "ops",
+            "audit": "ops",
+            "ops": "ops",
+            "open ops": "ops",
         }
         if normalized in tab_aliases:
             self.action_open_tab(tab_aliases[normalized])
+            return
+        if normalized.startswith("gen ") or normalized == "gen":
+            self._generation_command(normalized.removeprefix("gen").strip())
             return
         if normalized == "next":
             self._open_next_action()
@@ -161,12 +169,33 @@ class AppCommandsMixin(AppCockpitBase):
             return
         self._update_context(
             "Unknown command.\n\n"
-            "Try: next, phase <phase>, open review, open graph, show blocked, approve, "
-            "confirm approve, matrix blocking, matrix pivot status, dashboard blockers, "
+            "Try: next, phase <phase>, open review, open generate, show blocked, approve, "
+            "confirm approve, gen run, gen plan, gen start, matrix blocking, "
             "review issue <id>, thread <target>, reader next, link <target>, "
             "draft <target> | <note>, asset change <id> | <note>, project <id>, "
             "projects test, validator <id>, fix <target>."
         )
+
+    def _generation_command(self, action: str) -> None:
+        """Dispatch ``gen <run|plan|spend|start|poll|status>`` commands."""
+        dispatch = {
+            "": lambda: self.action_open_tab("generate"),
+            "status": lambda: self.action_open_tab("generate"),
+            "run": self.action_run_generation,
+            "plan": self.action_plan_generation,
+            "spend": self.action_approve_generation_spend,
+            "approve": self.action_approve_generation_spend,
+            "start": self.action_start_generation,
+            "poll": self.action_poll_generation,
+        }
+        handler = dispatch.get(action)
+        if handler is None:
+            self._update_context(
+                "Unknown generation command.\n\nTry: gen run, gen plan, gen spend, "
+                "gen start, gen poll, gen status."
+            )
+            return
+        handler()
 
     def _create_project_from_command(self, payload: str) -> None:
         parts = [part.strip() for part in payload.split("|")]
@@ -174,22 +203,28 @@ class AppCommandsMixin(AppCockpitBase):
             self._update_context("Use: create <project_id> | <title> | <idea>")
             return
         project_id, title, idea = parts
-        result = self.gateway.create_project(
-            ProjectCreateRequest(
-                project_id=project_id,
-                title=title,
-                slug=project_id,
-                idea=idea,
-                runtime_mode="mock",
-                workflow_mode="manual",
-                project_kind="production",
+        request = ProjectCreateRequest(
+            project_id=project_id,
+            title=title,
+            slug=project_id,
+            idea=idea,
+            runtime_mode="mock",
+            workflow_mode="manual",
+            project_kind="production",
+        )
+
+        def _done(result: object) -> None:
+            self.active_project_id = getattr(result, "project_id", project_id)
+            self._update_context(
+                f"{getattr(result, 'message', '') or 'Project created.'}\n"
+                f"Current phase: {getattr(result, 'current_phase', '')}"
             )
+
+        self._run_in_background(
+            f"creating {project_id}",
+            lambda: self.gateway.create_project(request),
+            _done,
         )
-        self.active_project_id = result.project_id
-        self._update_context(
-            f"{result.message or 'Project created.'}\nCurrent phase: {result.current_phase}"
-        )
-        self.action_refresh()
 
     def _open_artifact(self, artifact_id: str) -> None:
         snapshot = self.snapshot
@@ -651,7 +686,7 @@ class AppCommandsMixin(AppCockpitBase):
             validation=snapshot.validation,
         )
         if open_tab:
-            self.action_open_tab("graph")
+            self.action_open_tab("dashboard")
         self.query_one("#graph_phase_detail", Static).update(
             "\n".join(
                 [
@@ -662,11 +697,6 @@ class AppCommandsMixin(AppCockpitBase):
                     f"Commands: {', '.join(detail.suggested_commands) or 'none'}",
                 ]
             )
-        )
-        self._set_table(
-            "#graph_artifact_table",
-            ["artifact_id", "artifact_type", "phase", "version", "status"],
-            detail.artifacts,
         )
         if open_tab:
             self.selected_target = TargetSelection(
