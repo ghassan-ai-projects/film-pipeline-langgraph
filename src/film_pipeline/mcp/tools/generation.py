@@ -74,6 +74,26 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     )
 
 
+async def preview_generation_prompts(args: dict[str, object]) -> dict[str, object]:
+    """Resolve the exact prompt each shot will send to its provider.
+
+    Available as soon as the shot matrix exists so the operator can read and
+    validate prompts during gen_planning review — before any spend.
+    """
+    rt = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    from film_pipeline.app.services.errors import ServiceError
+    from film_pipeline.app.services.operator import OperatorService
+
+    try:
+        previews = OperatorService(rt).preview_generation_prompts(project_id)
+    except ServiceError as exc:
+        return _error(str(exc))
+    return _ok(previews=previews)
+
+
 async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
     """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
     rt = tools_pkg.get_runtime()

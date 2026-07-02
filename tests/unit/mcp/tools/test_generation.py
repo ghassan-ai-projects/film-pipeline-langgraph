@@ -27,6 +27,7 @@ from film_pipeline.mcp.tools import (
     get_generation_status,
     list_active_generations,
     plan_generation_batch,
+    preview_generation_prompts,
     promote_test_to_production,
     resume_generation_polling,
     start_generation_batch,
@@ -593,3 +594,66 @@ def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> N
     result = asyncio.run(promote_test_to_production({"shot_ids": ["S001"], "confirmed": True}))
     assert result["ok"] is True
     assert result["promoted"] == 1
+
+
+def test_preview_generation_prompts_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from film_pipeline.app.runtime import get_runtime as gr
+
+    rt2 = gr()
+    rt2.active_project_id = ""
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
+    result = asyncio.run(preview_generation_prompts({}))
+    assert result["ok"] is False
+    assert "active project" in cast(str, result["error"]).lower()
+
+
+def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime) -> None:
+    import asyncio
+    from datetime import UTC, datetime
+
+    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
+
+    assert rt.services is not None
+    store = rt.services.artifact_store
+    matrix = MasterFilmMatrix(
+        project_id="gen-start-test",
+        rows=[
+            MasterFilmMatrixRow(
+                shot_id="shot_0001",
+                act_id="act1",
+                sequence_id="seq_001",
+                scene_id="sc_001",
+                scene_intent_ref="s_001",
+                duration_seconds=8,
+                story_function="inciting image",
+                characters=["mara"],
+                environment="field",
+                camera_profile="wide_establishing",
+            )
+        ],
+    )
+    store.save(
+        matrix,
+        ArtifactMetadata(
+            artifact_id="shot_matrix",
+            artifact_type=ArtifactType.MASTER_FILM_MATRIX,
+            project_id="gen-start-test",
+            phase=FilmPhase.SHOT_BIBLE,
+            version=1,
+            status=ArtifactStatus.CANDIDATE,
+            created_by="test",
+            created_at=datetime.now(UTC),
+        ),
+    )
+
+    result = asyncio.run(preview_generation_prompts({}))
+    assert result["ok"] is True
+    previews = cast(list[dict[str, object]], result["previews"])
+    assert len(previews) == 1
+    assert previews[0]["shot_id"] == "shot_0001"
+    assert previews[0]["provider"] == "mock-video-provider"
+    assert "wide_establishing" in str(previews[0]["prompt"]).lower()
