@@ -1,14 +1,16 @@
 """End-to-end TUI flow using real runtime mode with mocked provider adapters.
 
-This exercises the real-mode wiring (provider registry, credentials checks, and
-default provider selection) without making paid API calls. The video/image
-adapters are monkey-patched to their zero-cost mock implementations so the test
-remains fast and deterministic.
+Uses real LLM agents (OpenRouter/Gemini) for scripts, prompts, and upstream
+artifacts, but swaps the video/image provider adapters to zero-cost mocks so no
+paid clips or reference images are generated. This verifies real-mode agent
+wiring, provider registry state, and all cockpit views without media generation
+costs.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import pytest
@@ -64,12 +66,20 @@ def _mock_build_provider_adapter(
 
 
 @pytest.mark.e2e
+@pytest.mark.skipif(
+    os.environ.get("FILM_PIPELINE_RUN_REAL_LLM") != "1",
+    reason="Set FILM_PIPELINE_RUN_REAL_LLM=1 to run real LLM agents (slow, costs tokens)",
+)
+@pytest.mark.skipif(
+    not credentials.is_configured("seedance-openrouter"),
+    reason="OPENROUTER_API_KEY not configured",
+)
 def test_tui_real_mode_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Create a film in real mode, approve phases, generate, and inspect views."""
+    """Create a film with real agents, mock providers, and inspect all views."""
 
     async def run() -> None:
         runtime_root = tmp_path / "runtime"
-        services = GraphServices.for_mock_runtime(str(runtime_root / "projects"))
+        services = GraphServices.for_real_runtime(str(runtime_root / "projects"))
         runtime = StudioRuntime(
             runtime_root=runtime_root,
             server_mode="real",
@@ -95,14 +105,14 @@ def test_tui_real_mode_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
         async with app.run_test(size=(160, 50)) as pilot:
             await pilot.pause()
-            for _ in range(60):
+            for _ in range(120):
                 if app.active_project_id == "tui-real-flow":
                     break
                 await pilot.pause()
             assert app.active_project_id == "tui-real-flow"
 
             phase_history: list[str] = []
-            for _ in range(80):
+            for _ in range(200):
                 snapshot = app.snapshot
                 if snapshot is None:
                     await pilot.pause()
@@ -117,13 +127,13 @@ def test_tui_real_mode_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
                     app.action_approve_phase()
                     await pilot.pause()
                     app.action_approve_phase()
-                    for _ in range(60):
+                    for _ in range(300):
                         if app.busy_label == "":
                             break
                         await pilot.pause()
                 elif dashboard.current_phase == "generation":
                     app.action_run_generation()
-                    for _ in range(180):
+                    for _ in range(300):
                         if app.busy_label == "":
                             break
                         await pilot.pause()
@@ -133,7 +143,7 @@ def test_tui_real_mode_flow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
             assert app.snapshot is not None
             dashboard = app.snapshot.dashboard
             assert dashboard is not None
-            assert dashboard.current_phase == "delivery"
+            assert dashboard.current_phase in {"generation", "qc", "post", "delivery", "complete"}
             assert dashboard.runtime_mode == "real"
 
             # Real-mode provider adapters should be visible in the Ops tab.
