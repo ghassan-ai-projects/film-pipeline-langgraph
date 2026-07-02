@@ -59,6 +59,7 @@ class OperatorService:
                     status=self._status_for_state(state),
                     has_blockers=has_blockers,
                     awaiting_review=bool(state.get("human_approval_required")),
+                    last_updated_at=self._last_updated_at(project_id),
                     project_kind=self._project_kind_for_state(state, project_id),
                     project_root=str(self.runtime.project_roots.get(project_id, "")),
                 )
@@ -66,6 +67,20 @@ class OperatorService:
         known_ids = {item.project_id for item in items}
         items.extend(self._discover_project_folders(known_ids))
         return items
+
+    def _last_updated_at(self, project_id: str) -> str:
+        """ISO timestamp of the project's last persisted state change."""
+        root = self.runtime.project_roots.get(project_id)
+        if root is None:
+            return ""
+        state_path = root / "project-state.json"
+        try:
+            mtime = state_path.stat().st_mtime
+        except OSError:
+            return ""
+        from datetime import UTC, datetime
+
+        return datetime.fromtimestamp(mtime, tz=UTC).isoformat()
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
         """Create a project, set it active, and optionally submit the idea."""
@@ -344,6 +359,33 @@ class OperatorService:
         executor.poll_once(project_id_value)
         self._sync_generation_requests(state, project_id_value)
         return self.get_generation_workspace(project_id_value)
+
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """Resolve the exact prompt each shot will send to its provider.
+
+        Available as soon as the shot matrix exists so the operator can read
+        and validate prompts during gen_planning review — before any spend.
+        """
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        provider, model = self.runtime.default_video_provider()
+        previews: list[dict[str, Any]] = []
+        for row in executor.load_shot_rows(project_id_value):
+            shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+            if not shot_id:
+                continue
+            previews.append(
+                {
+                    "shot_id": shot_id,
+                    "scene_id": str(row.get("scene_id", "")),
+                    "provider": provider,
+                    "model": model,
+                    "duration_seconds": row.get("duration_seconds", 5),
+                    "prompt": executor.resolve_prompt(project_id_value, shot_id, row),
+                }
+            )
+        return previews
 
     def _generation_executor(self) -> Any:
         from film_pipeline.generation.executor import GenerationExecutor

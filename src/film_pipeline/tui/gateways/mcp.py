@@ -284,6 +284,11 @@ class MCPStudioGateway(StudioGateway):
                     )
         return self.get_generation_workspace(project_id)
 
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        """Prompt previews are not exposed over the MCP tool surface yet."""
+        self._set_active(project_id)
+        return []
+
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self._set_active(project_id)
         r = self._tool("approve_phase", {"confirmed": True})

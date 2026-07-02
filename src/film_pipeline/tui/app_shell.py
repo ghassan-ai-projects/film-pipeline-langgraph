@@ -136,6 +136,28 @@ class AppShell(AppCockpitBase):
         height: 3;
     }
 
+    #review_main {
+        height: 1fr;
+    }
+
+    #review_reading {
+        width: 60%;
+        border: solid #3b4252;
+        padding: 0 1;
+    }
+
+    #review_side {
+        width: 40%;
+    }
+
+    #review_side #review_checklist_table {
+        height: 8;
+    }
+
+    #review_side #comment_thread_table {
+        height: 8;
+    }
+
     #generation_buttons {
         height: 3;
     }
@@ -146,6 +168,10 @@ class AppShell(AppCockpitBase):
 
     #generation_summary {
         height: 5;
+    }
+
+    #generation_detail {
+        height: 12;
     }
 
     #command_palette {
@@ -232,14 +258,14 @@ class AppShell(AppCockpitBase):
                         yield Static("", id="graph_phase_detail", classes="panel")
                     with TabPane("Review", id="review"):
                         yield Static("", id="review_summary", classes="panel")
-                        yield Static("", id="review_intelligence", classes="panel")
-                        yield DataTable(id="review_checklist_table")
-                        yield DataTable(id="review_issue_table")
-                        yield DataTable(id="review_artifacts")
-                        yield Static("Comment Threads", classes="headline")
-                        yield DataTable(id="comment_thread_table")
-                        yield Static("Operator Comments", classes="headline")
-                        yield DataTable(id="comment_table")
+                        with Horizontal(id="review_main"):
+                            with VerticalScroll(id="review_reading"):
+                                yield Static("", id="review_reading_body")
+                            with Vertical(id="review_side"):
+                                yield DataTable(id="review_checklist_table")
+                                yield DataTable(id="review_issue_table")
+                                yield Static("Comment Threads", classes="headline")
+                                yield DataTable(id="comment_thread_table")
                         yield Input(
                             placeholder="Comment on selected scene/artifact/issue, then press r",
                             id="comment_input",
@@ -336,7 +362,6 @@ class AppShell(AppCockpitBase):
             "#generation_table",
             "#matrix_table",
             "#matrix_pivot_table",
-            "#review_artifacts",
             "#review_checklist_table",
             "#review_issue_table",
             "#scene_table",
@@ -351,7 +376,6 @@ class AppShell(AppCockpitBase):
             "#checkpoint_table",
             "#provider_table",
             "#audit_table",
-            "#comment_table",
             "#comment_thread_table",
             "#command_suggestion_table",
             "#command_help_table",

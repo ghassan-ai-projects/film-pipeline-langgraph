@@ -56,6 +56,9 @@ class InProcessStudioGateway:
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         return self._service.poll_generation(project_id)
 
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        return self._service.preview_generation_prompts(project_id)
+
     def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
         return self._service.get_dashboard(project_id)
 
