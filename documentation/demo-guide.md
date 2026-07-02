@@ -94,7 +94,7 @@ tmux capture-pane -t $SESSION -p | sed -n '4,22p'
 
 ## TUI cockpit demo (real mode)
 
-Real mode exercises the live provider adapters. Set keys first:
+Real mode exercises the live LLM agents and provider registry. Set keys first:
 
 ```bash
 export OPENROUTER_API_KEY=...
@@ -102,16 +102,16 @@ export GOOGLE_API_KEY=...
 FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui
 ```
 
-Because real generation costs money and polls for tens of seconds per clip, the
-recommended real-mode demo uses the `local-real-provider` profile with a short
-idea and then triggers `G` in the Generate tab. Watch the Ops tab (`9`) for
-provider health and the Generate tab for batch progress.
-
-For a fast, deterministic real-mode wiring test that does not spend money, run:
+The included real-mode E2E test uses live agents for scripts and prompts but
+swaps the video/image adapters to zero-cost mocks, so no clips or reference
+images are generated:
 
 ```bash
-uv run --python 3.12 --group dev pytest tests/e2e/test_tui_real_mode.py -q -s --no-cov
+FILM_PIPELINE_RUN_REAL_LLM=1 uv run --python 3.12 --group dev \
+  pytest tests/e2e/test_tui_real_mode.py -q -s --no-cov
 ```
 
-This test runs the runtime in `server_mode="real"` with mocked provider adapters
-so all views and the generation batch execute without network calls.
+To exercise actual provider adapters and generate real media, use the
+`local-real-provider` profile, keep the idea short, and trigger `G` in the
+Generate tab. Watch the Ops tab (`9`) for provider health and the Generate tab
+for batch progress. This incurs cost and polling latency.
