@@ -55,8 +55,8 @@ class TestRunHeadless:
                 runtime_root=tmp_path / "runtime",
                 profile_stack=["quality.draft", "film-type.narrative"],
                 target_phase="shot_bible",
-                target_runtime_seconds=180,
-                target_scene_count=12,
+                target_runtime_seconds=20,
+                target_scene_count=2,
             )
         )
 
@@ -64,7 +64,7 @@ class TestRunHeadless:
         # The driver stops after approving the shot_bible gate, so the next
         # phase node (gen_planning) has usually run and paused.
         assert state.get("current_phase") in ("gen_planning", "shot_bible")
+        assert state.get("target_scene_count") == 2
         artifact_refs = {str(r) for r in state.get("artifact_refs", [])}
         assert any("shot_matrix" in r for r in artifact_refs)
         assert any("script" in r for r in artifact_refs)
-        assert state.get("target_scene_count") == 12

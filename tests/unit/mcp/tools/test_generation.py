@@ -195,7 +195,7 @@ def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
         )
     )
     assert result["ok"] is False
-    assert "No shot_ids provided" in cast(str, result["error"])
+    assert "No shot IDs to plan" in cast(str, result["error"])
 
 
 def test_approve_generation_spend_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:

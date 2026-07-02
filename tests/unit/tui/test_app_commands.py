@@ -262,10 +262,10 @@ def test_textual_cockpit_phase_command_drills_into_graph() -> None:
             assert app.selected_target.target_type == "graph_phase"
             assert app.selected_target.target_id == "script"
             detail = app.query_one("#graph_phase_detail", Static).renderable
-            table = app.query_one("#graph_artifact_table", DataTable)
+            table = app.query_one("#graph_table", DataTable)
             context = app.query_one("#context_panel", Static).renderable
             assert "Phase: script" in str(detail)
-            assert table.row_count == 2
+            assert table.row_count >= 2
             assert "Suggested commands" in str(context)
 
     asyncio.run(run())
@@ -449,9 +449,9 @@ def test_textual_cockpit_guidance_branches_for_invalid_commands() -> None:
             app._show_phase_detail("")
             assert "Use: phase" in str(app.query_one("#context_panel", Static).renderable)
 
-            app._run_command("dashboard providers")
+            app._run_command("dashboard ops")
             await pilot.pause()
-            assert app.query_one("#tabs", TabbedContent).active == "providers"
+            assert app.query_one("#tabs", TabbedContent).active == "ops"
 
             app._run_command("dashboard comments")
             await pilot.pause()

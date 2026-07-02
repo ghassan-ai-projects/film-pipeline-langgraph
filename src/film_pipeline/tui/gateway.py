@@ -8,6 +8,7 @@ from film_pipeline.app.services.models import (
     ArtifactDetail,
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     OperatorComment,
     OperatorCommentRequest,
@@ -50,6 +51,23 @@ class StudioGateway(Protocol):
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         """Approve the active phase."""
+
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Return generation ledger status for the project."""
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Plan a generation batch for every shot in the approved shot matrix."""
+
+    def approve_generation_spend(
+        self, project_id: str | None = None, max_cost_usd: float = -1.0
+    ) -> GenerationWorkspace:
+        """Approve spend for planned generation rows."""
+
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Submit approved generation rows to providers."""
+
+    def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Poll running generations once, delivering completed outputs."""
 
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
         """Request a revision with notes."""

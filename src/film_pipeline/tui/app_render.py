@@ -9,6 +9,7 @@ from film_pipeline.app.services.models import DashboardSummary, ProjectListItem
 from film_pipeline.tui.app_base import AppCockpitBase
 from film_pipeline.tui.formatting import pretty
 from film_pipeline.tui.view_models import (
+    GRAPH_PHASES,
     CockpitSnapshot,
     MatrixImpact,
     PhaseDetail,
@@ -51,6 +52,12 @@ class AppRenderMixin(AppCockpitBase):
         artifacts = self.gateway.list_artifacts(project_id) if project_id else []
         artifacts = self._enrich_artifact_rows(artifacts, project_id) if project_id else artifacts
         assets = self.gateway.list_assets(project_id) if project_id else []
+        generation = None
+        if project_id:
+            try:
+                generation = self.gateway.get_generation_workspace(project_id)
+            except (ServiceError, ValueError, FileNotFoundError, NotImplementedError):
+                generation = None
         checkpoints = self.gateway.list_checkpoints(project_id) if project_id else []
         providers = self.gateway.list_provider_status()
         audit_events = self.gateway.get_audit_feed(project_id, limit=30) if project_id else []
@@ -64,6 +71,7 @@ class AppRenderMixin(AppCockpitBase):
             validation=validation,
             artifacts=artifacts,
             assets=assets,
+            generation=generation,
             checkpoints=checkpoints,
             providers=providers,
             audit_events=audit_events,
@@ -140,6 +148,7 @@ class AppRenderMixin(AppCockpitBase):
         self._render_status(dashboard, snapshot.providers)
         self._render_dashboard(snapshot)
         self._render_graph(snapshot)
+        self._render_generation(snapshot)
         self._render_matrix(snapshot)
         self._render_review(snapshot)
         self._render_scenes(snapshot)
@@ -178,25 +187,49 @@ class AppRenderMixin(AppCockpitBase):
         dashboard: DashboardSummary | None,
         providers: list[dict[str, object]],
     ) -> None:
+        busy = f"  ⏳ {self.busy_label}" if getattr(self, "busy_label", "") else ""
         if dashboard is None:
-            text = "No active project | / command palette | New Project"
+            text = f"No active project — press n to create one, or pick from Projects.{busy}"
         else:
             healthy = sum(
                 1 for provider in providers if str(provider.get("status", "")) == "healthy"
             )
+            phases = list(GRAPH_PHASES)
+            phase = dashboard.current_phase
+            position = f"{phases.index(phase) + 1}/{len(phases)}" if phase in phases else "—"
+            next_hint = (
+                "film complete 🎬"
+                if dashboard.status == "complete"
+                else self._humanize_action(dashboard.next_action)
+            )
             text = (
-                f"Project: {dashboard.title} | Phase: {dashboard.current_phase or 'none'} | "
-                f"Status: {dashboard.status} | "
-                f"Mode: {dashboard.workflow_mode}/{dashboard.runtime_mode} | "
-                f"Next: {dashboard.next_action or 'none'} | "
-                f"Providers: {healthy}/{len(providers)} healthy"
+                f"{dashboard.title}  |  phase {position}: {phase or 'not started'} "
+                f"({dashboard.status or 'new'})  |  "
+                f"{dashboard.runtime_mode or 'mock'} mode  |  "
+                f"providers {healthy}/{len(providers)}  |  "
+                f"next: {next_hint}{busy}"
             )
         self.query_one("#status_bar", Static).update(text)
+
+    @staticmethod
+    def _humanize_action(action: str) -> str:
+        if not action:
+            return "none"
+        readable = {
+            "wait_for_human": "review & approve (a)",
+            "present_review_package": "review & approve (a)",
+            "handle_blockers": "resolve blockers (open validation)",
+        }
+        return readable.get(action, action.replace("_", " "))
 
     def _render_dashboard(self, snapshot: CockpitSnapshot) -> None:
         dashboard = snapshot.dashboard
         if dashboard is None:
-            self.query_one("#dashboard_summary", Static).update("No active project.")
+            self.query_one("#dashboard_summary", Static).update(
+                "No active project.\n\n"
+                "Press n to create a new film from an idea,\n"
+                "or select an existing project on the left."
+            )
             self.query_one("#attention_panel", Static).update("Create or select a project.")
             self._set_table("#dashboard_kpi_table", ["metric", "value", "state", "command"], [])
             self._set_table(
@@ -204,12 +237,11 @@ class AppRenderMixin(AppCockpitBase):
                 ["priority", "action", "status", "reason", "command"],
                 [],
             )
-            self._set_table("#dashboard_artifacts", ["artifact", "type", "phase", "status"], [])
             return
         summary = "\n".join(
             [
                 f"Current phase: {dashboard.current_phase or 'none'}",
-                f"Next action: {dashboard.next_action or 'none'}",
+                f"Next action: {self._humanize_action(dashboard.next_action)}",
                 f"Route reason: {dashboard.route_reason or 'none'}",
                 f"Eligible: {', '.join(dashboard.eligible_actions) or 'none'}",
                 f"Blocked: {len(dashboard.blocked_actions)}",
@@ -237,42 +269,61 @@ class AppRenderMixin(AppCockpitBase):
             ["priority", "action", "status", "reason", "command"],
             build_dashboard_action_rows(dashboard, snapshot.review, snapshot.validation),
         )
-        self._set_table(
-            "#dashboard_artifacts",
-            ["artifact", "type", "phase", "status"],
-            [
-                {
-                    "artifact": row.get("artifact_id", ""),
-                    "type": row.get("artifact_type", ""),
-                    "phase": row.get("phase", ""),
-                    "status": row.get("status", ""),
-                }
-                for row in snapshot.artifacts[:12]
-            ],
-        )
 
     def _render_graph(self, snapshot: CockpitSnapshot) -> None:
         dashboard = snapshot.dashboard
         if dashboard is None:
-            self.query_one("#graph_summary", Static).update("No graph state yet.")
             self.query_one("#graph_phase_detail", Static).update("")
-            self._set_table(
-                "#graph_artifact_table",
-                ["artifact_id", "artifact_type", "phase", "version", "status"],
-                [],
-            )
         else:
-            self.query_one("#graph_summary", Static).update(
-                f"You are here: {dashboard.current_phase or 'not started'}\n"
-                f"Router says: {dashboard.next_action or 'none'}\n"
-                f"{dashboard.route_reason or 'No route reason recorded.'}"
-            )
             self._show_phase_detail(dashboard.current_phase, open_tab=False)
         self._set_table(
             "#graph_table",
             ["step", "phase", "status", "next_action"],
             snapshot.graph_rows,
         )
+
+    def _render_generation(self, snapshot: CockpitSnapshot) -> None:
+        generation = snapshot.generation
+        dashboard = snapshot.dashboard
+        columns = ["shot_id", "status", "provider", "model", "polls", "cost_usd", "output", "error"]
+        if generation is None or dashboard is None:
+            self.query_one("#generation_summary", Static).update(
+                "Generation turns approved shots into video clips.\n"
+                "Approve the pipeline through gen_planning first, then plan a batch here."
+            )
+            self._set_table("#generation_table", columns, [])
+            self.query_one("#generation_detail", Static).update("")
+            return
+        step_help = {
+            "plan": "Press Run Generation (or G) to plan every shot in the matrix.",
+            "approve_spend": "Batch is planned. Approve spend to authorize submission.",
+            "start": "Spend approved. Start the batch to submit shots to the provider.",
+            "poll": "Shots are generating. Poll to fetch finished clips.",
+            "review_failures": "Some shots failed. Inspect errors below, then re-plan or revise.",
+            "approve_phase": "All clips delivered. Approve the generation phase (a) to continue.",
+        }
+        summary = (
+            f"Batch: {len(generation.rows)} shot(s) | provider {generation.provider} "
+            f"({generation.model}) | est. cost ${generation.estimated_cost_usd:.2f}\n"
+            f"planned {generation.planned} · approved {generation.submitted} · "
+            f"running {generation.running} · done {generation.completed} · "
+            f"failed {generation.failed}\n"
+            f"Next: {step_help.get(generation.next_step, generation.next_step)}"
+        )
+        self.query_one("#generation_summary", Static).update(summary)
+        self._set_table("#generation_table", columns, generation.rows)
+        failures = [row for row in generation.rows if str(row.get("error", ""))]
+        detail = ""
+        if failures:
+            detail = "Failures:\n" + "\n".join(
+                f"- {row.get('shot_id', '')}: {row.get('error', '')}" for row in failures[:6]
+            )
+        elif generation.completed:
+            detail = (
+                f"{generation.completed} clip(s) delivered to the project asset tree.\n"
+                "Open Assets (5) to inspect them."
+            )
+        self.query_one("#generation_detail", Static).update(detail)
 
     def _render_matrix(self, snapshot: CockpitSnapshot) -> None:
         matrix_rows = filter_matrix_rows(snapshot.matrix_rows, self.matrix_filter)
@@ -581,19 +632,30 @@ class AppRenderMixin(AppCockpitBase):
         if snapshot is None:
             self._update_context("No snapshot loaded.")
             return
-        dashboard = snapshot.dashboard
         if tab_id == "dashboard":
             self._update_context(
                 "Dashboard\n\n"
                 "Dense operating summary: phase, route, blockers, latest artifacts, "
                 "and next action."
             )
-        elif tab_id == "graph" and dashboard is not None:
+        elif tab_id == "generate":
+            generation = snapshot.generation
+            if generation is None:
+                self._update_context(
+                    "Generate\n\nPlan, approve, and run the video generation batch here "
+                    "once the pipeline reaches the generation phase."
+                )
+            else:
+                self._update_context(
+                    "Generate\n\n"
+                    f"Next step: {generation.next_step}\n"
+                    f"Rows: {len(generation.rows)} | running: {generation.running} | "
+                    f"done: {generation.completed} | failed: {generation.failed}\n\n"
+                    "Run Generation drives plan → spend → start → poll automatically."
+                )
+        elif tab_id == "ops":
             self._update_context(
-                "Graph Position\n\n"
-                f"Current phase: {dashboard.current_phase or 'none'}\n"
-                f"Next action: {dashboard.next_action or 'none'}\n"
-                f"Route reason: {dashboard.route_reason or 'none'}"
+                "Ops\n\nProvider health, checkpoint timeline, and the audit trail."
             )
         elif tab_id == "review" and snapshot.review is not None:
             self._update_context(
@@ -691,16 +753,16 @@ class AppRenderMixin(AppCockpitBase):
             },
             {
                 "step": 5,
-                "goal": "Reach generation planning and generation",
-                "command": "phase gen_planning; approve; approve",
-                "validation": "Generation artifacts appear under Assets and Matrix.",
+                "goal": "Generate the clips",
+                "command": "approve until phase generation, then gen run",
+                "validation": "Generated clips appear under Assets and the Generate tab.",
             },
             {
                 "step": 6,
-                "goal": "Review generated images and delivery readiness",
-                "command": "open assets; matrix blocking; open validation",
+                "goal": "Review generated clips and finish delivery",
+                "command": "open assets; open validation; approve through delivery",
                 "validation": (
-                    "Images, sidecars, validation, checkpoints, and audit are inspectable."
+                    "Clips, sidecars, validation, checkpoints, and audit are inspectable."
                 ),
             },
         ]

@@ -34,28 +34,21 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     with contextlib.suppress(ValueError):
         mode = GenerationMode(mode_str)
 
-    # Collect shot IDs — from args, or from shot bible artifact
+    # Collect shot IDs — from args, or from the latest shot matrix artifact
     raw_shot_ids = args.get("shot_ids", [])
     shot_ids: list[str] = []
     if isinstance(raw_shot_ids, list):
-        shot_ids = [str(s) for s in raw_shot_ids]
-    else:
-        # Try the shot bible
-        try:
-            from film_pipeline.schemas._base import FilmPhase
+        shot_ids = [str(s) for s in raw_shot_ids if str(s).strip()]
+    if not shot_ids:
+        from film_pipeline.generation.executor import GenerationExecutor
 
-            data = _services(rt).artifact_store.load(
-                project_id, FilmPhase("shot_bible"), "shot_bible", 1
-            )
-            shot_ids = [
-                str(s.get("shot_id", s.get("scene_id", "")))
-                for s in data.get("shots", data.get("scenes", []))
-            ]
-        except (FileNotFoundError, ValueError):
-            return _error("No shot_ids provided and no shot bible found.")
+        executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
+        shot_ids = executor.shot_ids(project_id)
 
     if not shot_ids:
-        return _error("No shot IDs to plan.")
+        return _error(
+            "No shot IDs to plan. Provide shot_ids or approve shot_bible so the shot matrix exists."
+        )
 
     ledger = mgr.plan_batch(
         project_id=project_id,
