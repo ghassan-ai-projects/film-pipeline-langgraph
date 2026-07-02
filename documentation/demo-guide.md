@@ -41,13 +41,32 @@ The default gateway is in-process and mock-mode requires no API keys.
 
 ### Scripted tmux mock session
 
+A ready-to-run script is included:
+
+```bash
+./scripts/tui_tmux_mock_demo.sh
+```
+
+It launches the TUI in a detached tmux session, creates `tmux-demo`, approves
+through the pipeline, runs generation with `G`, visits Assets/Scenes/Validation/Ops,
+and captures rows 4-22 of the pane. The final capture shows:
+
+```
+phase 11/11: delivery (complete) | mock mode | providers 2/2 | next: film complete 🎬
+```
+
+To drive it manually with `tmux send-keys`:
+
 ```bash
 SESSION=filmtui
-uv run film-pipeline-tui --create &
-sleep 1
-# Fill create form (example sequence; actual field focus order is shown in TUI)
-tmux send-keys -t $SESSION "demo-mock" Tab "Demo Mock" Tab \
-  "A 20-second demo about a lost key." Enter
+tmux new-session -d -s $SESSION "cd $(pwd) && .venv/bin/python -m film_pipeline.tui.app"
+sleep 2
+
+# Create project via command palette
+tmux send-keys -t $SESSION '/'
+tmux send-keys -t $SESSION 'create demo-mock | Demo Mock | A 20-second demo about a lost key.'
+tmux send-keys -t $SESSION Enter
+sleep 6
 
 # Approve phases until generation
 for _ in {1..7}; do
@@ -56,19 +75,20 @@ for _ in {1..7}; do
 done
 
 # Run generation batch
-sleep 1
 tmux send-keys -t $SESSION '3'  # Generate tab
 sleep 1
 tmux send-keys -t $SESSION 'G'  # plan → spend → start → poll
-sleep 10
+sleep 12
+
+# Approve remaining phases
+for _ in {1..5}; do
+  tmux send-keys -t $SESSION 'a' 'a'
+  sleep 4
+done
 
 # Inspect views
-tmux send-keys -t $SESSION '5'  # Assets
-sleep 1
-tmux send-keys -t $SESSION '8'  # Validation
-sleep 1
-tmux send-keys -t $SESSION '9'  # Ops
-sleep 1
+tmux send-keys -t $SESSION '5' '4' '8' '9'
+sleep 2
 tmux capture-pane -t $SESSION -p | sed -n '4,22p'
 ```
 
