@@ -632,7 +632,6 @@ class AppRenderMixin(AppCockpitBase):
         if snapshot is None:
             self._update_context("No snapshot loaded.")
             return
-        dashboard = snapshot.dashboard
         if tab_id == "dashboard":
             self._update_context(
                 "Dashboard\n\n"

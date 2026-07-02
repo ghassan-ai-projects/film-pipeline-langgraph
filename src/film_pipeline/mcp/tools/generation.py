@@ -47,8 +47,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
     if not shot_ids:
         return _error(
-            "No shot IDs to plan. Provide shot_ids or approve shot_bible so the "
-            "shot matrix exists."
+            "No shot IDs to plan. Provide shot_ids or approve shot_bible so the shot matrix exists."
         )
 
     ledger = mgr.plan_batch(

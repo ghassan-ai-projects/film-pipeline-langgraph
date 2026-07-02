@@ -10,6 +10,7 @@ import contextlib
 import json
 import os
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -702,6 +703,7 @@ class StudioRuntime:
         """
         from film_pipeline.providers.factory import build_provider_adapter
 
+        specs: tuple[tuple[str, str], ...]
         if self.server_mode == "real":
             specs = (
                 ("seedance-openrouter", "video"),
@@ -807,7 +809,7 @@ class StudioRuntime:
 
         merged = dict(state)
         merged.update(node_result)
-        reducers = {
+        reducers: dict[str, Callable[[list[Any] | None, list[Any] | None], list[Any]]] = {
             "artifact_refs": merge_unique,
             "issues": merge_issues,
             "validation_report_refs": merge_unique,

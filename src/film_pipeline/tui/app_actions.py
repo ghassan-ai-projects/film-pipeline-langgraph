@@ -60,7 +60,7 @@ class AppActionsMixin(AppCockpitBase):
         def _task() -> None:
             try:
                 result = work()
-            except Exception as exc:  # noqa: BLE001 — a stuck busy flag would wedge the UI
+            except Exception as exc:  # a stuck busy flag would wedge the UI
                 self.call_from_thread(self._finish_background, label, None, exc, on_done)
                 return
             self.call_from_thread(self._finish_background, label, result, None, on_done)
@@ -224,8 +224,7 @@ class AppActionsMixin(AppCockpitBase):
         def _done(result: Any) -> None:
             self.active_project_id = result.project_id
             self._update_context(
-                f"{result.message or 'Phase approved.'}\n"
-                f"Current phase: {result.current_phase}"
+                f"{result.message or 'Phase approved.'}\nCurrent phase: {result.current_phase}"
             )
 
         self._run_in_background(
@@ -251,8 +250,7 @@ class AppActionsMixin(AppCockpitBase):
         def _done(result: Any) -> None:
             self.active_project_id = result.project_id
             self._update_context(
-                f"{result.message or 'Revision requested.'}\n"
-                f"Current phase: {result.current_phase}"
+                f"{result.message or 'Revision requested.'}\nCurrent phase: {result.current_phase}"
             )
 
         self._run_in_background(

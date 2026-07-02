@@ -136,9 +136,7 @@ class RecordingGateway:
         self.validation_runs += 1
         return self.get_validation_workspace(project_id)
 
-    def get_generation_workspace(
-        self, project_id: str | None = None
-    ) -> GenerationWorkspace:
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
         return GenerationWorkspace(
             project_id=project_id or self.active_project_id,
             phase="generation",
