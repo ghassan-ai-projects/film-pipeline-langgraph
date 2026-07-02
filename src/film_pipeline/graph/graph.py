@@ -143,7 +143,10 @@ def build_graph() -> CompiledStateGraph:
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:
-    return state
+    # Routing-only node: returning the full state would re-append every
+    # reducer-channel entry, so return an empty update.
+    _ = state
+    return {}
 
 
 def _route_current_phase(state: dict[str, Any]) -> str:

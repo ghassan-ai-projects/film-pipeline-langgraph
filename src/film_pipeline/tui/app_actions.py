@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+from typing import Any
+
 from textual.widgets import Button, DataTable, Input, TabbedContent
 
 from film_pipeline.app.services.errors import ServiceError
@@ -16,6 +20,8 @@ from film_pipeline.tui.view_models import (
     selection_from_row,
 )
 
+_GATEWAY_ERRORS = (ServiceError, ValueError, FileNotFoundError, RuntimeError)
+
 
 class AppActionsMixin(AppCockpitBase):
     """Keybinding actions and Textual event handlers for the cockpit app."""
@@ -28,6 +34,67 @@ class AppActionsMixin(AppCockpitBase):
         self.action_refresh()
         if self.start_create:
             self.action_new_project()
+
+    # --- Background execution -------------------------------------------
+
+    def _run_in_background(
+        self,
+        label: str,
+        work: Callable[[], Any],
+        on_done: Callable[[Any], None] | None = None,
+    ) -> None:
+        """Run a gateway mutation off the UI thread with a busy indicator.
+
+        Long operations (graph runs, real-mode generation) must not freeze
+        the cockpit. Only one mutation runs at a time; the status bar shows
+        the busy label until it completes, then the snapshot refreshes and
+        ``on_done`` receives the result on the UI thread.
+        """
+        if self.busy_label:
+            self._update_context(
+                f"Still working: {self.busy_label}.\nWait for it to finish, then retry."
+            )
+            return
+        self._set_busy(label)
+
+        def _task() -> None:
+            try:
+                result = work()
+            except Exception as exc:  # a stuck busy flag would wedge the UI
+                self.call_from_thread(self._finish_background, label, None, exc, on_done)
+                return
+            self.call_from_thread(self._finish_background, label, result, None, on_done)
+
+        self.run_worker(_task, thread=True, exclusive=False, group="gateway")
+
+    def _finish_background(
+        self,
+        label: str,
+        result: Any,
+        error: Exception | None,
+        on_done: Callable[[Any], None] | None,
+    ) -> None:
+        self.busy_label = ""
+        self.action_refresh()
+        if error is not None:
+            if isinstance(error, _GATEWAY_ERRORS):
+                self._update_context(f"{label} failed\n\n{error}")
+            else:
+                self._update_context(
+                    f"{label} failed unexpectedly\n\n{type(error).__name__}: {error}"
+                )
+            return
+        if on_done is not None:
+            on_done(result)
+
+    def _set_busy(self, label: str) -> None:
+        self.busy_label = label
+        if self.snapshot is not None:
+            self._render_status(
+                self.snapshot.dashboard,
+                self.snapshot.providers,
+            )
+        self._update_context(f"Working: {label}…")
 
     def action_refresh(self) -> None:
         """Refresh all cockpit pages from the gateway."""
@@ -71,28 +138,25 @@ class AppActionsMixin(AppCockpitBase):
         """Create the project requested by the modal form."""
         if request is None:
             return
-        try:
+
+        def _create() -> tuple[str, Any]:
             active_mode = self.gateway.set_runtime_mode(request.runtime_mode)
-            result = self.gateway.create_project(request)
-        except (ServiceError, ValueError, FileNotFoundError) as exc:
-            # Refresh first (a partial create may have registered the project),
-            # then set the error last so it is not overwritten by the render.
+            return active_mode, self.gateway.create_project(request)
+
+        def _done(created: tuple[str, Any]) -> None:
+            active_mode, result = created
+            self.active_project_id = result.project_id
+            self.action_open_tab("dashboard")
             self.action_refresh()
             self._update_context(
-                "Create Project failed\n\n"
-                f"{exc}\n\n"
-                "For real mode, confirm API credentials are configured, then retry."
+                f"{result.message or 'Project created.'}\n"
+                f"project: {result.project_id}\n"
+                f"phase: {result.current_phase or 'none'}\n"
+                f"runtime mode: {active_mode}\n\n"
+                "Intake has run — open Review (2) to inspect and approve it (a, then y)."
             )
-            return
-        self.active_project_id = result.project_id
-        self._update_context(
-            f"{result.message or 'Project created.'}\n"
-            f"project: {result.project_id}\n"
-            f"phase: {result.current_phase or 'none'}\n"
-            f"runtime mode: {active_mode}"
-        )
-        self.action_open_tab("dashboard")
-        self.action_refresh()
+
+        self._run_in_background(f"creating {request.project_id}", _create, _done)
 
     def action_revise_idea(self) -> None:
         """Open the Revise Idea modal for the active project."""
@@ -112,37 +176,41 @@ class AppActionsMixin(AppCockpitBase):
         """Submit a revised idea and re-run intake."""
         if idea is None:
             return
-        try:
-            result = self.gateway.submit_idea(self.active_project_id, idea)
-        except (ServiceError, ValueError, FileNotFoundError) as exc:
-            self._update_context(f"Revise idea failed\n\n{exc}")
-            return
-        self._update_context(
-            f"{result.message or 'Idea submitted.'}\nCurrent phase: {result.current_phase}"
+        project_id = self.active_project_id
+
+        def _done(result: Any) -> None:
+            self._update_context(
+                f"{result.message or 'Idea submitted.'}\nCurrent phase: {result.current_phase}"
+            )
+
+        self._run_in_background(
+            "re-running intake",
+            lambda: self.gateway.submit_idea(project_id, idea),
+            _done,
         )
-        self.action_refresh()
 
     def action_run_validation(self) -> None:
         """Run validators on demand against the active project's current phase."""
         if not self.active_project_id:
             self._update_context("No active project.")
             return
-        try:
-            workspace = self.gateway.run_validation(self.active_project_id)
-        except (ServiceError, ValueError, FileNotFoundError) as exc:
-            self._update_context(f"Run validation failed\n\n{exc}")
-            return
-        # Refresh first so the validation tables reflect the fresh run, then set
-        # the summary last so it is not overwritten by the tab-context render.
-        self.action_refresh()
-        self.action_open_tab("validation")
-        self._update_context(
-            "Validation complete\n\n"
-            f"phase: {workspace.phase or 'none'}\n"
-            f"blocking: {len(workspace.blocking_issues)}\n"
-            f"warnings: {len(workspace.non_blocking_issues)}\n"
-            f"reports: {len(workspace.reports)}\n\n"
-            "Fix blocking issues before approving, then run validation again."
+        project_id = self.active_project_id
+
+        def _done(workspace: Any) -> None:
+            self.action_open_tab("validation")
+            self._update_context(
+                "Validation complete\n\n"
+                f"phase: {workspace.phase or 'none'}\n"
+                f"blocking: {len(workspace.blocking_issues)}\n"
+                f"warnings: {len(workspace.non_blocking_issues)}\n"
+                f"reports: {len(workspace.reports)}\n\n"
+                "Fix blocking issues before approving, then run validation again."
+            )
+
+        self._run_in_background(
+            "running validation",
+            lambda: self.gateway.run_validation(project_id),
+            _done,
         )
 
     def _approve_phase_now(self) -> None:
@@ -150,13 +218,20 @@ class AppActionsMixin(AppCockpitBase):
         if not self.active_project_id:
             self._update_context("No active project.")
             return
-        result = self.gateway.approve_phase(self.active_project_id)
-        self.active_project_id = result.project_id
+        project_id = self.active_project_id
         self.pending_confirmation = ""
-        self._update_context(
-            f"{result.message or 'Phase approved.'}\nCurrent phase: {result.current_phase}"
+
+        def _done(result: Any) -> None:
+            self.active_project_id = result.project_id
+            self._update_context(
+                f"{result.message or 'Phase approved.'}\nCurrent phase: {result.current_phase}"
+            )
+
+        self._run_in_background(
+            "approving phase",
+            lambda: self.gateway.approve_phase(project_id),
+            _done,
         )
-        self.action_refresh()
 
     def action_request_revision(self) -> None:
         """Request a revision using the review comment field."""
@@ -169,13 +244,110 @@ class AppActionsMixin(AppCockpitBase):
             self.action_open_tab("review")
             return
         targeted_note = format_targeted_revision_note(self.selected_target, note)
-        result = self.gateway.request_revision(targeted_note, self.active_project_id)
-        self.active_project_id = result.project_id
-        self._update_context(
-            f"{result.message or 'Revision requested.'}\nCurrent phase: {result.current_phase}"
-        )
+        project_id = self.active_project_id
         self.query_one("#comment_input", Input).value = ""
-        self.action_refresh()
+
+        def _done(result: Any) -> None:
+            self.active_project_id = result.project_id
+            self._update_context(
+                f"{result.message or 'Revision requested.'}\nCurrent phase: {result.current_phase}"
+            )
+
+        self._run_in_background(
+            "requesting revision",
+            lambda: self.gateway.request_revision(targeted_note, project_id),
+            _done,
+        )
+
+    # --- Generation actions ----------------------------------------------
+
+    def action_plan_generation(self) -> None:
+        """Plan a generation batch for every shot in the shot matrix."""
+        self._generation_step("planning shots", self.gateway.plan_generation)
+
+    def action_approve_generation_spend(self) -> None:
+        """Approve spend for the planned generation batch."""
+        self._generation_step("approving spend", self.gateway.approve_generation_spend)
+
+    def action_start_generation(self) -> None:
+        """Submit approved generation rows to providers."""
+        self._generation_step("starting batch", self.gateway.start_generation)
+
+    def action_poll_generation(self) -> None:
+        """Poll running generations once."""
+        self._generation_step("polling generations", self.gateway.poll_generation)
+
+    def _generation_step(self, label: str, step: Callable[[str], Any]) -> None:
+        if not self.active_project_id:
+            self._update_context("No active project.")
+            return
+        project_id = self.active_project_id
+
+        def _done(workspace: Any) -> None:
+            self.action_open_tab("generate")
+            self._update_context(
+                f"Generation update\n\n"
+                f"planned: {workspace.planned} | approved: {workspace.submitted} | "
+                f"running: {workspace.running}\n"
+                f"done: {workspace.completed} | failed: {workspace.failed}\n"
+                f"next step: {workspace.next_step}"
+            )
+
+        self._run_in_background(label, lambda: step(project_id), _done)
+
+    def action_run_generation(self) -> None:
+        """Drive the whole generation batch: plan → spend → start → poll."""
+        if not self.active_project_id:
+            self._update_context("No active project.")
+            return
+        project_id = self.active_project_id
+
+        def _run_all() -> Any:
+            workspace = self.gateway.get_generation_workspace(project_id)
+            if not workspace.rows:
+                workspace = self.gateway.plan_generation(project_id)
+            if workspace.planned:
+                workspace = self.gateway.approve_generation_spend(project_id)
+            if workspace.submitted:
+                workspace = self.gateway.start_generation(project_id)
+            for _ in range(120):
+                if workspace.running == 0:
+                    break
+                self.call_from_thread(
+                    self._note_generation_progress,
+                    workspace.running,
+                    workspace.completed,
+                )
+                time.sleep(1.0)
+                workspace = self.gateway.poll_generation(project_id)
+            return workspace
+
+        def _done(workspace: Any) -> None:
+            self.action_open_tab("generate")
+            if workspace.failed:
+                self._update_context(
+                    f"Generation finished with failures\n\n"
+                    f"done: {workspace.completed} | failed: {workspace.failed}\n"
+                    "Inspect the errors in the Generate tab, then re-plan or revise."
+                )
+            elif workspace.running:
+                self._update_context(
+                    "Generation is still running.\n\n"
+                    "Press Poll Status (or 'gen poll') to keep checking."
+                )
+            else:
+                self._update_context(
+                    f"Generation complete\n\n"
+                    f"{workspace.completed} clip(s) delivered.\n"
+                    "Open Assets (5) to view them, then approve the phase (a)."
+                )
+
+        self._run_in_background("running generation batch", _run_all, _done)
+
+    def _note_generation_progress(self, running: int, completed: int) -> None:
+        self.busy_label = f"generation: {running} running, {completed} done"
+        if self.snapshot is not None:
+            self._render_status(self.snapshot.dashboard, self.snapshot.providers)
 
     def action_add_comment(self) -> None:
         """Store the review input as a target-scoped operator comment."""
@@ -231,6 +403,16 @@ class AppActionsMixin(AppCockpitBase):
             self.action_revise_idea()
         elif button_id == "run_validation_button":
             self.action_run_validation()
+        elif button_id == "gen_run_button":
+            self.action_run_generation()
+        elif button_id == "gen_plan_button":
+            self.action_plan_generation()
+        elif button_id == "gen_spend_button":
+            self.action_approve_generation_spend()
+        elif button_id == "gen_start_button":
+            self.action_start_generation()
+        elif button_id == "gen_poll_button":
+            self.action_poll_generation()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Show selected row detail and make it the active comment target."""

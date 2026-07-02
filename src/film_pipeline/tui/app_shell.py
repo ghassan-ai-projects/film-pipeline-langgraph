@@ -136,6 +136,18 @@ class AppShell(AppCockpitBase):
         height: 3;
     }
 
+    #generation_buttons {
+        height: 3;
+    }
+
+    #generation_buttons Button {
+        margin: 0 1 0 0;
+    }
+
+    #generation_summary {
+        height: 5;
+    }
+
     #command_palette {
         dock: bottom;
         display: none;
@@ -147,22 +159,24 @@ class AppShell(AppCockpitBase):
     """
 
     BINDINGS: ClassVar = [
-        Binding("g,d", "open_tab('dashboard')", "Dashboard"),
-        Binding("g,r", "open_tab('review')", "Review"),
-        Binding("g,g", "open_tab('graph')", "Graph"),
-        Binding("g,m", "open_tab('matrix')", "Matrix"),
-        Binding("g,s", "open_tab('scenes')", "Scenes"),
-        Binding("g,a", "open_tab('assets')", "Assets"),
-        Binding("g,h", "open_tab('guide')", "Guide"),
-        Binding("g,v", "open_tab('validation')", "Validation"),
-        Binding("g,p", "open_tab('providers')", "Providers"),
-        Binding("g,c", "open_tab('checkpoints')", "Checkpoints"),
-        Binding("g,u", "open_tab('audit')", "Audit"),
+        # Number keys switch workspaces; letters are actions. (In Textual a
+        # comma inside one Binding means alternative keys, not a chord, so
+        # tab navigation must not reuse action letters.)
+        Binding("1", "open_tab('dashboard')", "Dash", show=False),
+        Binding("2", "open_tab('review')", "Review", show=False),
+        Binding("3", "open_tab('generate')", "Generate", show=False),
+        Binding("4", "open_tab('scenes')", "Scenes", show=False),
+        Binding("5", "open_tab('assets')", "Assets", show=False),
+        Binding("6", "open_tab('matrix')", "Matrix", show=False),
+        Binding("7", "open_tab('guide')", "Guide", show=False),
+        Binding("8", "open_tab('validation')", "Validation", show=False),
+        Binding("9", "open_tab('ops')", "Ops", show=False),
         Binding("n", "new_project", "New"),
         Binding("i", "revise_idea", "Idea"),
         Binding("a", "approve_phase", "Approve"),
         Binding("y", "confirm_approval", "Confirm"),
         Binding("r", "request_revision", "Revise"),
+        Binding("G", "run_generation", "Generate"),
         Binding("V", "run_validation", "Validate"),
         Binding("c", "add_comment", "Comment"),
         Binding("/", "toggle_command_palette", "Command"),
@@ -189,6 +203,7 @@ class AppShell(AppCockpitBase):
         self._matrix_pivot = "status"
         self.matrix_impact: MatrixImpact | None = None
         self.pending_confirmation = ""
+        self.busy_label = ""
         self._table_rows: dict[str, list[dict[str, object]]] = {}
 
     def compose(self) -> ComposeResult:
@@ -212,17 +227,9 @@ class AppShell(AppCockpitBase):
                         with Horizontal(id="dashboard_ops"):
                             yield DataTable(id="dashboard_kpi_table")
                             yield DataTable(id="dashboard_action_table")
-                        yield DataTable(id="dashboard_artifacts")
-                    with TabPane("Graph", id="graph"):
-                        yield Static("", id="graph_summary", classes="panel")
+                        yield Static("Pipeline", classes="headline")
                         yield DataTable(id="graph_table")
                         yield Static("", id="graph_phase_detail", classes="panel")
-                        yield DataTable(id="graph_artifact_table")
-                    with TabPane("Matrix", id="matrix"):
-                        yield Static("Smart Matrix", classes="headline")
-                        yield Static("", id="matrix_summary", classes="panel")
-                        yield DataTable(id="matrix_pivot_table")
-                        yield DataTable(id="matrix_table")
                     with TabPane("Review", id="review"):
                         yield Static("", id="review_summary", classes="panel")
                         yield Static("", id="review_intelligence", classes="panel")
@@ -250,6 +257,16 @@ class AppShell(AppCockpitBase):
                                 id="revision_button",
                                 variant="warning",
                             )
+                    with TabPane("Generate", id="generate"):
+                        yield Static("", id="generation_summary", classes="panel")
+                        with Horizontal(id="generation_buttons"):
+                            yield Button("Run Generation", id="gen_run_button", variant="primary")
+                            yield Button("Plan Shots", id="gen_plan_button")
+                            yield Button("Approve Spend", id="gen_spend_button")
+                            yield Button("Start Batch", id="gen_start_button")
+                            yield Button("Poll Status", id="gen_poll_button")
+                        yield DataTable(id="generation_table")
+                        yield Static("", id="generation_detail", classes="panel")
                     with TabPane("Scenes", id="scenes"):
                         yield Static("", id="scene_summary", classes="panel")
                         yield DataTable(id="scene_table")
@@ -267,6 +284,11 @@ class AppShell(AppCockpitBase):
                                 yield Static("", id="reader_metadata", classes="panel")
                         yield DataTable(id="reader_link_table")
                         yield Static("", id="reader_links", classes="panel")
+                    with TabPane("Matrix", id="matrix"):
+                        yield Static("Smart Matrix", classes="headline")
+                        yield Static("", id="matrix_summary", classes="panel")
+                        yield DataTable(id="matrix_pivot_table")
+                        yield DataTable(id="matrix_table")
                     with TabPane("Guide", id="guide"):
                         yield Static("1 Minute Movie Guide", classes="headline")
                         yield Static("", id="guide_summary", classes="panel")
@@ -283,13 +305,11 @@ class AppShell(AppCockpitBase):
                         yield DataTable(id="validation_group_table")
                         yield DataTable(id="validation_fix_table")
                         yield DataTable(id="validation_table")
-                    with TabPane("Checkpoints", id="checkpoints"):
+                    with TabPane("Ops", id="ops"):
+                        yield Static("Providers", classes="headline")
+                        yield DataTable(id="provider_table")
                         yield Static("Checkpoint Timeline", classes="headline")
                         yield DataTable(id="checkpoint_table")
-                    with TabPane("Providers", id="providers"):
-                        yield Static("Provider Operations", classes="headline")
-                        yield DataTable(id="provider_table")
-                    with TabPane("Audit", id="audit"):
                         yield Static("Recent Audit Events", classes="headline")
                         yield DataTable(id="audit_table")
             with VerticalScroll(id="context_drawer"):
@@ -310,11 +330,10 @@ class AppShell(AppCockpitBase):
     def _initialize_tables(self) -> None:
         for selector in (
             "#project_table",
-            "#dashboard_artifacts",
             "#dashboard_kpi_table",
             "#dashboard_action_table",
             "#graph_table",
-            "#graph_artifact_table",
+            "#generation_table",
             "#matrix_table",
             "#matrix_pivot_table",
             "#review_artifacts",

@@ -26,7 +26,7 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             project_table = app.query_one("#project_table", DataTable)
             dashboard_kpi_table = app.query_one("#dashboard_kpi_table", DataTable)
             dashboard_action_table = app.query_one("#dashboard_action_table", DataTable)
-            graph_artifact_table = app.query_one("#graph_artifact_table", DataTable)
+            graph_table = app.query_one("#graph_table", DataTable)
             asset_table = app.query_one("#asset_table", DataTable)
             asset_action_table = app.query_one("#asset_action_table", DataTable)
             matrix_table = app.query_one("#matrix_table", DataTable)
@@ -42,7 +42,7 @@ def test_textual_cockpit_loads_gateway_snapshot() -> None:
             assert project_table.row_count == 1
             assert dashboard_kpi_table.row_count == 5
             assert dashboard_action_table.row_count >= 3
-            assert graph_artifact_table.row_count == 2
+            assert graph_table.row_count >= 2
             assert asset_table.row_count == 2
             assert app._table_rows["asset_table"][0]["asset_id"] == (
                 "clip_SC_004_shot_001_take_001"

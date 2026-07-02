@@ -10,7 +10,7 @@ import contextlib
 import json
 import os
 import shutil
-import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,6 +25,12 @@ from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 STATE_FILENAME = "project-state.json"
+CHECKPOINTS_FILENAME = "checkpoints.json"
+AUDIT_FILENAME = "audit-log.json"
+
+# Keep per-project git checkpoint repos small: media lives in the artifact
+# tree and is tracked by the asset manifest, not by checkpoint commits.
+_PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
 
 @dataclass
@@ -47,22 +53,126 @@ class StudioRuntime:
     provider_health: dict[str, Any] = field(default_factory=dict)
     project_roots: dict[str, Path] = field(default_factory=dict)
     checkpoint_managers: dict[str, CheckpointManager] = field(default_factory=dict)
-    runtime_root: Path = field(
-        default_factory=lambda: Path(tempfile.gettempdir()) / "film_pipeline_runtime"
-    )
+    runtime_root: Path | None = None
 
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
         if self.services is None:
             self.services = _build_services_for_mode(self.server_mode)
+        if self.runtime_root is None:
+            self.runtime_root = self._default_runtime_root()
+        self.load_persisted_projects()
+
+    def _default_runtime_root(self) -> Path:
+        """Durable home for project state: env override, else the artifact root."""
+        env_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
+        if env_root:
+            return Path(env_root)
+        store = self.services.artifact_store if self.services else None
+        root = getattr(store, "_root", None)
+        return root if isinstance(root, Path) else Path("projects")
+
+    # --- Persistence across restarts ---
+
+    def load_persisted_projects(self) -> int:
+        """Restore projects persisted by earlier sessions from the runtime root.
+
+        Returns the number of projects restored. Projects already loaded in
+        memory are never overwritten.
+        """
+        root = self.runtime_root
+        if root is None or not root.is_dir():
+            return 0
+        restored = 0
+        for state_path in sorted(root.glob(f"*/{STATE_FILENAME}")):
+            project_root = state_path.parent
+            project_id = project_root.name
+            if project_id in self.projects or project_id.startswith("."):
+                continue
+            try:
+                state = json.loads(state_path.read_text())
+            except (OSError, json.JSONDecodeError):
+                continue
+            if not isinstance(state, dict) or str(state.get("project_id", "")) != project_id:
+                continue
+            self.projects[project_id] = state
+            self.project_roots[project_id] = project_root
+            self.checkpoint_managers[project_id] = CheckpointManager(
+                _project_git_backend(project_root)
+            )
+            self._restore_checkpoints(project_id, project_root)
+            self._restore_audit_events(project_root)
+            restored += 1
+        return restored
+
+    def _restore_checkpoints(self, project_id: str, project_root: Path) -> None:
+        path = project_root / CHECKPOINTS_FILENAME
+        if not path.exists():
+            return
+        try:
+            raw = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(raw, list):
+            return
+        manager = self.checkpoint_managers.get(project_id)
+        for item in raw:
+            try:
+                meta = CheckpointMetadata.model_validate(item)
+            except ValueError:
+                continue
+            self.checkpoints[meta.checkpoint_id] = meta
+            if manager is not None:
+                manager.checkpoints[meta.checkpoint_id] = meta
+
+    def _restore_audit_events(self, project_root: Path) -> None:
+        path = project_root / AUDIT_FILENAME
+        if not path.exists():
+            return
+        try:
+            raw = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(raw, list):
+            return
+        known_ids = {event.get("event_id") for event in self.audit_events}
+        for item in raw:
+            if isinstance(item, dict) and item.get("event_id") not in known_ids:
+                self.audit_events.append(item)
+        self.audit_events.sort(key=lambda event: str(event.get("timestamp", "")))
+
+    def _persist_checkpoints(self, project_id: str) -> None:
+        project_root = self.project_roots.get(project_id)
+        if project_root is None:
+            return
+        metas = [
+            json.loads(meta.model_dump_json())
+            for meta in self.checkpoints.values()
+            if meta.project_id == project_id
+        ]
+        project_root.mkdir(parents=True, exist_ok=True)
+        (project_root / CHECKPOINTS_FILENAME).write_text(json.dumps(metas, indent=2))
+
+    def _persist_audit_events(self, project_id: str) -> None:
+        project_root = self.project_roots.get(project_id)
+        if project_root is None:
+            return
+        events = [
+            event
+            for event in self.audit_events
+            if event.get("details", {}).get("project_id") == project_id
+        ]
+        project_root.mkdir(parents=True, exist_ok=True)
+        (project_root / AUDIT_FILENAME).write_text(json.dumps(events, indent=2, default=str))
 
     # --- Project management ---
 
     def create_project(self, project_id: str, title: str = "", slug: str = "") -> dict[str, Any]:
         if project_id in self.projects:
             raise ValueError(f"Project '{project_id}' already exists.")
-        project_root = self.runtime_root / f"{project_id}-{uuid4().hex[:8]}"
-        git = GitBackend.init_temp(project_root)
+        assert self.runtime_root is not None
+        project_root = self.runtime_root / project_id
+        git = _project_git_backend(project_root)
         state: dict[str, Any] = {
             "project_id": project_id,
             "title": title,
@@ -109,6 +219,11 @@ class StudioRuntime:
         project_artifact_dir = artifact_root / project_id
         if project_artifact_dir.exists():
             shutil.rmtree(project_artifact_dir, ignore_errors=True)
+        self.checkpoints = {
+            checkpoint_id: meta
+            for checkpoint_id, meta in self.checkpoints.items()
+            if meta.project_id != project_id
+        }
         return True
 
     def set_active(self, project_id: str) -> None:
@@ -411,6 +526,7 @@ class StudioRuntime:
             graph_state_ref=graph_state_ref,
         )
         self.checkpoints[meta.checkpoint_id] = meta
+        self._persist_checkpoints(project_id)
         self._record_audit(
             "system",
             "create_checkpoint",
@@ -440,6 +556,9 @@ class StudioRuntime:
                 "details": details,
             }
         )
+        project_id = str(details.get("project_id", ""))
+        if project_id and project_id in self.project_roots:
+            self._persist_audit_events(project_id)
 
     def get_audit_log(
         self, project_id: str | None = None, limit: int = 100
@@ -549,13 +668,15 @@ class StudioRuntime:
         return dict(self.provider_health)
 
     def seed_default_provider_health(self) -> None:
-        """Seed provider health rows for the configured runtime mode.
+        """Seed provider health rows and adapters for the configured runtime mode.
 
         Mock mode advertises the zero-cost mock providers as healthy. Real mode
         advertises the live generation providers, marking each healthy only when
         its API credentials are configured so the operator can see at a glance
-        what is wired up. Existing health entries are never overwritten.
+        what is wired up. Existing health entries are never overwritten, but
+        missing adapters are always registered so generation can dispatch.
         """
+        self.seed_default_provider_adapters()
         if self.provider_health:
             return
         if self.server_mode == "real":
@@ -573,6 +694,47 @@ class StudioRuntime:
             return
         for provider_id in ("mock-image-provider", "mock-video-provider"):
             self.set_provider_health(provider_id, "healthy", "mock runtime")
+
+    def seed_default_provider_adapters(self) -> None:
+        """Register default provider adapters for the runtime mode.
+
+        Project profiles can replace these via ``register_provider``; seeding
+        only fills providers that are not registered yet.
+        """
+        from film_pipeline.providers.factory import build_provider_adapter
+
+        specs: tuple[tuple[str, str], ...]
+        if self.server_mode == "real":
+            specs = (
+                ("seedance-openrouter", "video"),
+                ("veo-fast", "video"),
+                ("gemini-imagen-4", "image"),
+            )
+        else:
+            specs = (
+                ("mock-video-provider", "video"),
+                ("mock-image-provider", "image"),
+            )
+        for provider_id, provider_type in specs:
+            if provider_id not in self.provider_adapters:
+                self.register_provider(
+                    provider_id,
+                    build_provider_adapter(provider_id, provider_type=provider_type),
+                )
+
+    def default_video_provider(self) -> tuple[str, str]:
+        """Return the (provider_id, model) pair generation should default to."""
+        if self.server_mode == "real":
+            from film_pipeline.providers import credentials
+
+            for provider_id, model in (
+                ("seedance-openrouter", "bytedance/seedance-2.0"),
+                ("veo-fast", "veo-3.1-fast"),
+            ):
+                if credentials.is_configured(provider_id):
+                    return provider_id, model
+            return "seedance-openrouter", "bytedance/seedance-2.0"
+        return "mock-video-provider", "mock-fast"
 
     def _persist_project_state(self, project_id: str) -> None:
         project = self.projects[project_id]
@@ -637,26 +799,47 @@ class StudioRuntime:
         state = dict(state)
         state[SERVICES_KEY] = self.services
         node_result = node(state)
-        # Merge node result back into state (graph would do this via reducers,
-        # but direct node calls bypass the graph's state accumulation)
+        # Merge node result back into state using the same reducer semantics
+        # the graph applies (direct node calls bypass channel accumulation).
+        from film_pipeline.graph.state_schema import (
+            merge_generation_requests,
+            merge_issues,
+            merge_unique,
+        )
+
         merged = dict(state)
         merged.update(node_result)
-        # Append-only channels: merge lists manually (graph uses Annotated[list, add])
-        for key in (
-            "artifact_refs",
-            "issues",
-            "validation_report_refs",
-            "generation_requests",
-            "_routing_decisions",
-            "_validation_reports",
-        ):
+        reducers: dict[str, Callable[[list[Any] | None, list[Any] | None], list[Any]]] = {
+            "artifact_refs": merge_unique,
+            "issues": merge_issues,
+            "validation_report_refs": merge_unique,
+            "generation_requests": merge_generation_requests,
+        }
+        for key, reducer in reducers.items():
+            new = node_result.get(key, [])
+            if new:
+                merged[key] = reducer(list(state.get(key, [])), list(new))
+        for key in ("_routing_decisions", "_validation_reports"):
             prev = state.get(key, [])
             new = node_result.get(key, [])
             if new:
-                merged[key] = list(prev) + list(new)
+                merged[key] = list(prev) + [item for item in new if item not in prev]
         # Strip runtime-only keys that must not leak into persisted state
         merged.pop(SERVICES_KEY, None)
         return merged
+
+
+def _project_git_backend(project_root: Path) -> GitBackend:
+    """Initialize (or reuse) the checkpoint git repo for a project root."""
+    already_initialized = (project_root / ".git").exists()
+    git = GitBackend.init_temp(project_root)
+    gitignore = project_root / ".gitignore"
+    if not gitignore.exists():
+        gitignore.write_text(_PROJECT_GITIGNORE)
+    if not already_initialized:
+        with contextlib.suppress(RuntimeError):
+            git.commit("checkpoint: initialize project repository")
+    return git
 
 
 def create_runtime(server_mode: str | None = None) -> StudioRuntime:
@@ -781,6 +964,13 @@ def _build_resume_payload(
     generation_requests = active.get("generation_requests")
     if generation_requests:
         external_state["generation_requests"] = generation_requests
+        # The requests exist now, so any "no requests" blockers recorded in
+        # the graph checkpoint are stale — instruct the issues reducer to
+        # drop them before the approval guard runs.
+        external_state["remove_issue_codes"] = [
+            "empty_generation_requests",
+            "no_generation_requests",
+        ]
     if external_state:
         payload["_external_state"] = external_state
     return payload

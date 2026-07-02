@@ -224,6 +224,9 @@ def _apply_external_state(
         ]
         if new_requests:
             updates["generation_requests"] = new_requests
+    remove_codes = external_state.get("remove_issue_codes")
+    if isinstance(remove_codes, list) and remove_codes:
+        updates["issues"] = [{"__remove_codes__": [str(code) for code in remove_codes]}]
     return updates
 
 
@@ -364,23 +367,35 @@ def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
     return ctx
 
 
-def _propagate_side_effects(source: dict[str, Any], dest: dict[str, Any]) -> None:
+def _propagate_side_effects(
+    source: dict[str, Any],
+    dest: dict[str, Any],
+    original: dict[str, Any] | None = None,
+) -> None:
     """Copy known side-effect keys from ``source`` to ``dest``.
 
     ``_run_agent`` mutates ``source`` (the node's ``new_state``) via
     ``_record_handoff``, but nodes return only an ``updates`` dict.
     This helper ensures routing decisions and other side effects
     survive the node boundary.
+
+    ``issues`` and ``validation_report_refs`` are append-only reducer
+    channels: when ``original`` (the node's input state) is provided, only
+    entries appended after the node's deep copy are propagated so the
+    reducer never re-appends pre-existing entries.
     """
-    for key in (
-        "_routing_decisions",
-        "_repair_feedback",
-        "issues",
-        "validation_report_refs",
-        "_validation_reports",
-    ):
+    for key in ("_routing_decisions", "_repair_feedback", "_validation_reports"):
         if key in source:
             dest[key] = source[key]
+    for key in ("issues", "validation_report_refs"):
+        if key not in source:
+            continue
+        entries = list(source.get(key, []) or [])
+        if original is not None:
+            prior = len(list(original.get(key, []) or []))
+            entries = entries[prior:]
+        if entries or original is None:
+            dest[key] = entries
 
 
 def _run_agent(
@@ -968,7 +983,7 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1044,7 +1059,7 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1102,7 +1117,7 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1165,7 +1180,7 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1248,7 +1263,7 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1447,7 +1462,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1576,7 +1591,7 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1916,8 +1931,10 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
         if val:
             updates[key] = val
     if "generation_requests" in new_state:
+        # The generation_requests reducer upserts by request id, so returning
+        # the enriched list updates entries in place without duplication.
         updates["generation_requests"] = new_state["generation_requests"]
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -1993,7 +2010,7 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
         val = new_state.get(key)
         if val:
             updates[key] = val
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -2099,6 +2116,23 @@ def _build_consensus_if_needed(state: dict[str, Any], phase: str) -> None:
         state.setdefault("artifact_refs", []).append(ref)
 
 
+def _pick_artifact(
+    artifact_data: dict[str, Any],
+    *artifact_ids: str,
+) -> dict[str, Any] | None:
+    """Return the first loaded artifact matching the given ids.
+
+    Validators are written against one specific artifact shape; feeding them
+    an arbitrary artifact produces false blocking findings (e.g. the script
+    validator reporting "no scenes" when handed a project profile).
+    """
+    for artifact_id in artifact_ids:
+        candidate = artifact_data.get(artifact_id)
+        if isinstance(candidate, dict):
+            return candidate
+    return None
+
+
 def _run_script_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
@@ -2109,8 +2143,9 @@ def _run_script_validators(
     from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
     from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "script", "scene_list")
+    if artifact is None:
+        return
     for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
         try:
             instance = vcls()
@@ -2134,8 +2169,9 @@ def _run_reference_validators(
     """Run reference usability validator against visual_dev artifacts."""
     from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "reference_index")
+    if artifact is None:
+        return
     try:
         instance = ReferenceUsabilityValidator()
         instance.set_services(
@@ -2157,8 +2193,9 @@ def _run_prompt_validators(
     """Run prompt readiness validator against gen_planning artifacts."""
     from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "prompt_registry", "execution_brief")
+    if artifact is None:
+        return
     try:
         instance = PromptReadinessValidator()
         instance.set_services(
@@ -2180,8 +2217,13 @@ def _run_continuity_validators(
     """Run scene continuity validator against shot_bible artifacts."""
     from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "shot_matrix", "shot_bible")
+    if artifact is None:
+        return
+    if "shots" not in artifact and isinstance(artifact.get("rows"), list):
+        # The shot matrix stores per-shot rows under "rows"; the continuity
+        # validator reads "shots".
+        artifact = {**artifact, "shots": artifact["rows"]}
     try:
         instance = SceneContinuityValidator()
         instance.set_services(
@@ -2203,8 +2245,9 @@ def _run_assembly_validators(
     """Run assembly validator against post/assembly artifacts."""
     from film_pipeline.validation.impl.assembly import AssemblyValidator
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "assembly_manifest", "review_cut", "final_cut")
+    if artifact is None:
+        return
     try:
         instance = AssemblyValidator()
         instance.set_services(
@@ -2228,8 +2271,9 @@ def _run_delivery_validators(
         DeliveryCompletenessValidator,
     )
 
-    raw: Any = next(iter(artifact_data.values()), {})
-    artifact: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    artifact = _pick_artifact(artifact_data, "delivery_manifest", "delivery_package")
+    if artifact is None:
+        return
     try:
         instance = DeliveryCompletenessValidator()
         instance.set_services(
@@ -2319,7 +2363,7 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates)
+    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -2395,7 +2439,7 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     ``after_approval`` routing will advance to the next phase.
     """
     if state.get("approved"):
-        return state
+        return {}
 
     from film_pipeline.graph.orchestrator_state import is_stalled
 
@@ -2425,10 +2469,7 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
         if blocking_count == 0:
             return approve_phase_node(state)
-        new_state = deepcopy(state)
-        new_state["approved"] = False
-        new_state["human_approval_required"] = False
-        return new_state
+        return {"approved": False, "human_approval_required": False}
 
     # ── Human gate (default) ───────────────────────────────────────────
     # The orchestrator may prepare a recommendation, but the human decides.
@@ -2483,6 +2524,19 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     else:
         action = "await"
 
+    if state_updates.get("issues"):
+        # Apply externally resolved issues before the approval guard runs so
+        # stale blockers (already fixed outside the graph) cannot wedge it.
+        from film_pipeline.graph.state_schema import merge_issues
+
+        state = {
+            **state,
+            "issues": merge_issues(
+                cast("list[dict[str, object]]", state.get("issues", [])),
+                cast("list[dict[str, object]]", state_updates["issues"]),
+            ),
+        }
+
     if action in ("approve", "approve_phase"):
         result = approve_phase_node(state)
         result.update(state_updates)
@@ -2493,22 +2547,21 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
         result = request_revision_node(state)
         result.update(state_updates)
         return result
-    return state
+    return state_updates
 
 
 def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
+    """Approve the current phase. Returns a partial state update.
 
+    Returning the full state would re-append every entry of the
+    append-only reducer channels (``issues``, ``artifact_refs``, ...), so
+    only the keys this node actually changes are returned.
+    """
     # ── Guard: reject approval when structural issues exist ──────────
-    issues: list[dict[str, Any]] = new_state.get("issues", [])
+    issues: list[dict[str, Any]] = state.get("issues", []) or []
     blocking = [i for i in issues if i.get("severity") == "blocking"]
     if blocking:
-        new_state["approved"] = False
-        new_state["_approval_blocked_by_issues"] = True
-        return new_state
-
-    new_state["approved"] = True
-    new_state["human_approval_required"] = False
+        return {"approved": False, "_approval_blocked_by_issues": True}
 
     # Promote all candidate refs to approved
     from film_pipeline.graph.orchestrator_state import (
@@ -2517,38 +2570,51 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
         set_approved_ref,
     )
 
-    ensure_orchestrator_state(new_state)
-    for family, ref in get_candidate_refs(new_state).items():
-        set_approved_ref(new_state, family, ref)
+    working = {
+        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
+    }
+    ensure_orchestrator_state(working)
+    for family, ref in get_candidate_refs(state).items():
+        set_approved_ref(working, family, ref)
 
-    return new_state
+    return {
+        "approved": True,
+        "human_approval_required": False,
+        "_approval_blocked_by_issues": False,
+        "_orchestrator__approved_refs": working.get("_orchestrator__approved_refs", {}),
+    }
 
 
 def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    new_state["approved"] = False
-    new_state["human_approval_required"] = False
-    revision_note = str(new_state.pop("_revision_note", ""))
-    issues = new_state.get("issues", [])
-    new_state["issues"] = [
-        *issues,
-        {
-            "issue_id": "rev",
-            "severity": "warning",
-            "code": "REVISION_REQUESTED",
-            "message": revision_note or "Human requested revision.",
-        },
-    ]
+    """Route the current phase to revision. Returns a partial state update."""
+    revision_note = str(state.get("_revision_note", ""))
     # Record durable revision request via orchestrator state helpers
     from film_pipeline.graph.orchestrator_state import (
         add_revision_request,
         ensure_orchestrator_state,
     )
 
-    ensure_orchestrator_state(new_state)
-    artifact_refs = new_state.get("artifact_refs", [])
-    add_revision_request(new_state, artifact_refs, note="Human requested revision.")
-    return new_state
+    working = {
+        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
+    }
+    ensure_orchestrator_state(working)
+    artifact_refs = list(state.get("artifact_refs", []) or [])
+    add_revision_request(working, artifact_refs, note="Human requested revision.")
+
+    return {
+        "approved": False,
+        "human_approval_required": False,
+        "_revision_note": "",
+        "issues": [
+            {
+                "issue_id": "rev",
+                "severity": "warning",
+                "code": "REVISION_REQUESTED",
+                "message": revision_note or "Human requested revision.",
+            }
+        ],
+        "_orchestrator__pending_revisions": working.get("_orchestrator__pending_revisions", []),
+    }
 
 
 def _is_new_ref(ref: str, original_state: dict[str, Any]) -> bool:
@@ -2631,22 +2697,27 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     phase = str(state.get("current_phase", ""))
     phase_fn = _PHASE_NODES.get(phase)
     if phase_fn is None:
-        new_state = deepcopy(state)
-        new_state.setdefault("issues", []).append(
-            {
-                "severity": "warning",
-                "code": "no_repair_handler",
-                "message": f"No repair handler for phase '{phase}'.",
-            }
-        )
-        return new_state
+        return {
+            "issues": [
+                {
+                    "severity": "warning",
+                    "code": "no_repair_handler",
+                    "message": f"No repair handler for phase '{phase}'.",
+                }
+            ]
+        }
 
-    # Track repair attempts
+    # Track repair attempts (on the shared state so phase_fn sees the round,
+    # and returned explicitly so the update survives the node boundary).
     round_num = increment_convergence_round(state, phase)
+    convergence_update = deepcopy(state.get("_orchestrator__convergence", {}))
 
     if is_stalled(state, phase, max_rounds=3):
         mark_stalled(state, phase, f"Repair failed after {round_num} rounds.")
-        return state
+        return {
+            "_orchestrator__convergence": deepcopy(state.get("_orchestrator__convergence", {})),
+            "_stalled_phase": phase,
+        }
 
     # ── Build structured repair feedback ──────────────────────────────
     issues: list[dict[str, Any]] = state.get("issues", [])
@@ -2719,5 +2790,8 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     # Also inject the rendered context for direct use (backward compat)
     state["_repair_feedback"] = feedback.to_agent_context()
 
-    # Re-run the phase node — gates will re-validate
-    return cast(dict[str, Any], phase_fn(state))
+    # Re-run the phase node — gates will re-validate. Carry the convergence
+    # counter into the returned update so repair rounds are durable.
+    result = cast(dict[str, Any], phase_fn(state))
+    result.setdefault("_orchestrator__convergence", convergence_update)
+    return result
