@@ -69,6 +69,9 @@ class StudioGateway(Protocol):
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Poll running generations once, delivering completed outputs."""
 
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        """Return per-shot resolved prompts for operator review before spend."""
+
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
         """Request a revision with notes."""
 

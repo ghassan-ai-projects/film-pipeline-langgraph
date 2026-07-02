@@ -215,9 +215,12 @@ class AppCommandsMixin(AppCockpitBase):
 
         def _done(result: object) -> None:
             self.active_project_id = getattr(result, "project_id", project_id)
+            self.action_refresh()
+            self.action_open_tab("review")
             self._update_context(
                 f"{getattr(result, 'message', '') or 'Project created.'}\n"
-                f"Current phase: {getattr(result, 'current_phase', '')}"
+                f"Current phase: {getattr(result, 'current_phase', '')}\n\n"
+                "Read the intake output in Review, then approve (a, y)."
             )
 
         self._run_in_background(

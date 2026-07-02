@@ -483,6 +483,61 @@ class TestOperatorService:
         with pytest.raises(BackendOperationError, match="Runtime mode is fixed"):
             service.set_runtime_mode("real")
 
+    def test_preview_generation_prompts_resolves_from_shot_matrix(self, tmp_path: Path) -> None:
+        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
+
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="prompts", title="Prompts"))
+        assert service.runtime.services is not None
+        matrix = MasterFilmMatrix(
+            project_id="prompts",
+            rows=[
+                MasterFilmMatrixRow(
+                    shot_id="shot_0001",
+                    act_id="act1",
+                    sequence_id="seq_001",
+                    scene_id="sc_001",
+                    scene_intent_ref="s_001",
+                    duration_seconds=8,
+                    story_function="inciting image",
+                    characters=["mara"],
+                    environment="field",
+                    camera_profile="wide_establishing",
+                )
+            ],
+        )
+        service.runtime.services.artifact_store.save(
+            matrix,
+            ArtifactMetadata(
+                artifact_id="shot_matrix",
+                artifact_type=ArtifactType.MASTER_FILM_MATRIX,
+                project_id="prompts",
+                phase=FilmPhase.SHOT_BIBLE,
+                version=1,
+                status=ArtifactStatus.CANDIDATE,
+                created_by="test",
+                created_at=datetime.now(UTC),
+            ),
+        )
+
+        previews = service.preview_generation_prompts("prompts")
+
+        assert len(previews) == 1
+        preview = previews[0]
+        assert preview["shot_id"] == "shot_0001"
+        assert preview["scene_id"] == "sc_001"
+        assert preview["provider"] == "mock-video-provider"
+        assert preview["duration_seconds"] == 8
+        assert "wide_establishing" in str(preview["prompt"]).lower()
+
+    def test_preview_generation_prompts_empty_without_matrix(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(ProjectCreateRequest(project_id="bare", title="Bare"))
+
+        assert service.preview_generation_prompts("bare") == []
+
 
 class TestProviderHealthSeeding:
     def test_seed_mock_runtime_advertises_mock_providers(self) -> None:

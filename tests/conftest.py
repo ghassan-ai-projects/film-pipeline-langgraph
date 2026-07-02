@@ -18,9 +18,13 @@ def _isolated_runtime_root(
 
     ``StudioRuntime`` restores persisted project state from its runtime root
     at construction; without per-test isolation, projects created by one
-    test would reappear in the next.
+    test would reappear in the next. The global runtime singleton is also
+    reset so tests that exercise MCP tools share no in-memory state.
     """
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(tmp_path / "runtime-root"))
+    from film_pipeline.app.runtime import reset_runtime
+
+    reset_runtime()
 
 
 @pytest.fixture(scope="session", autouse=True)
