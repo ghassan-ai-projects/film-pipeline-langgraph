@@ -54,8 +54,6 @@ def merge_generation_requests(
         if isinstance(request, dict) and _request_id(request)
     }
     for request in right or []:
-        if not isinstance(request, dict):
-            continue
         request_id = _request_id(request)
         if request_id and request_id in index_by_id:
             merged[index_by_id[request_id]] = request

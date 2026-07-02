@@ -17,7 +17,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, read_manifest, write_manifest
+from film_pipeline.artifacts.manifest import (
+    AssetEntry,
+    AssetManifest,
+    read_manifest,
+    write_manifest,
+)
 from film_pipeline.artifacts.paths import generated_asset_dir
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.ledger import GenerationLedgerManager
@@ -129,9 +134,7 @@ class GenerationExecutor:
         """Submit SUBMITTED rows to their provider adapters (-> RUNNING)."""
         rows = self._ledger.list_rows(project_id, status=GenerationStatus.SUBMITTED)
         result = GenerationStepResult()
-        shot_rows = {
-            str(row.get("shot_id", "")): row for row in self.load_shot_rows(project_id)
-        }
+        shot_rows = {str(row.get("shot_id", "")): row for row in self.load_shot_rows(project_id)}
         for row in rows:
             result.processed += 1
             if row.provider_job_id:
@@ -268,7 +271,10 @@ class GenerationExecutor:
         persists a new empty ledger artifact when none exists, which would
         turn every status refresh into an artifact write.
         """
-        return self._store.next_version(project_id, FilmPhase.GENERATION.value, "generation_ledger") > 1
+        return (
+            self._store.next_version(project_id, FilmPhase.GENERATION.value, "generation_ledger")
+            > 1
+        )
 
     def status_rows(self, project_id: str) -> list[dict[str, Any]]:
         """Summarize all ledger rows for operator display."""

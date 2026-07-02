@@ -10,6 +10,7 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from textual.widgets import TabbedContent
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.services.operator import OperatorService
@@ -35,9 +36,10 @@ def test_tui_full_mock_flow(tmp_path: Path) -> None:
             # Create project via command palette
             await pilot.press("slash")
             await pilot.pause()
-            await pilot.press(
-                *list("create tui-mock-flow | TUI Mock Flow | A one-minute demo about a lost message."),
+            create_cmd = (
+                "create tui-mock-flow | TUI Mock Flow | A one-minute demo about a lost message."
             )
+            await pilot.press(*list(create_cmd))
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
@@ -51,10 +53,12 @@ def test_tui_full_mock_flow(tmp_path: Path) -> None:
             # Drive pipeline to completion
             phase_history: list[str] = []
             for _ in range(80):
-                dashboard = app.snapshot.dashboard if app.snapshot else None
-                if dashboard is None:
+                snapshot = app.snapshot
+                if snapshot is None:
                     await pilot.pause()
                     continue
+                dashboard = snapshot.dashboard
+                assert dashboard is not None
                 if dashboard.current_phase == "complete":
                     break
                 if dashboard.current_phase not in phase_history:
@@ -77,12 +81,14 @@ def test_tui_full_mock_flow(tmp_path: Path) -> None:
                 else:
                     await pilot.pause()
 
+            assert app.snapshot is not None
             dashboard = app.snapshot.dashboard
             assert dashboard is not None
             assert dashboard.current_phase in {"delivery", "complete"}
             assert dashboard.status == "complete"
 
             # Visit every workspace tab
+            tabs = app.query_one("#tabs", TabbedContent)
             for tab_id in (
                 "review",
                 "generate",
@@ -95,7 +101,7 @@ def test_tui_full_mock_flow(tmp_path: Path) -> None:
             ):
                 app.action_open_tab(tab_id)
                 await pilot.pause()
-                assert app.query_one("#tabs", object).active == tab_id
+                assert tabs.active == tab_id
 
             # Assets were generated
             assert len(app.snapshot.assets) > 0

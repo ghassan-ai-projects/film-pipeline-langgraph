@@ -2571,9 +2571,7 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     working = {
-        key: deepcopy(value)
-        for key, value in state.items()
-        if key.startswith("_orchestrator__")
+        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
     }
     ensure_orchestrator_state(working)
     for family, ref in get_candidate_refs(state).items():
@@ -2597,9 +2595,7 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     working = {
-        key: deepcopy(value)
-        for key, value in state.items()
-        if key.startswith("_orchestrator__")
+        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
     }
     ensure_orchestrator_state(working)
     artifact_refs = list(state.get("artifact_refs", []) or [])
