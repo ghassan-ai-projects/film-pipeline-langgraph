@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import ClassVar
+import time
+from typing import Any, ClassVar
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -151,6 +152,7 @@ class StudioScreen(Screen[None]):
     BINDINGS: ClassVar = [
         Binding("a", "approve", "Approve"),
         Binding("v", "validate", "Validate"),
+        Binding("g", "generate", "Generate"),
         Binding("escape", "home", "Home"),
     ]
 
@@ -265,6 +267,10 @@ class StudioScreen(Screen[None]):
         """Keybinding action for running validation."""
         self._run_validation()
 
+    def action_generate(self) -> None:
+        """Keybinding action for running the generation batch."""
+        self._run_generation()
+
     async def action_home(self) -> None:
         """Keybinding action to return to the project gallery."""
         from film_pipeline.tui.app import FilmStudioApp
@@ -294,6 +300,8 @@ class StudioScreen(Screen[None]):
             self._request_revision()
         elif event.button.id == "action_validate":
             self._run_validation()
+        elif event.button.id == "action_generate":
+            self._run_generation()
         elif event.button.id == "action_next":
             self._do_next_action()
         elif event.button.id == "view_toggle":
@@ -373,7 +381,9 @@ class StudioScreen(Screen[None]):
         if dashboard is None:
             self.app.set_status("No active project.")
             return
-        if dashboard.next_action in {"present_review_package", "wait_for_human"}:
+        if dashboard.current_phase == "generation":
+            self._run_generation()
+        elif dashboard.next_action in {"present_review_package", "wait_for_human"}:
             if "request_revision" in dashboard.eligible_actions:
                 self._request_revision()
             elif "approve_phase" in dashboard.eligible_actions:
@@ -388,6 +398,74 @@ class StudioScreen(Screen[None]):
             self._approve_phase()
         else:
             self.app.set_status(f"Next action: {dashboard.next_action or 'none'}")
+
+    def _run_generation(self) -> None:
+        """Drive the generation batch plan → spend → start → poll in a worker."""
+        from film_pipeline.tui.app import AppState, FilmStudioApp
+
+        if not isinstance(self.app, FilmStudioApp) or not isinstance(self._app_state, AppState):
+            return
+        if self._app_state.dashboard is None:
+            self.app.set_status("No active project.")
+            return
+
+        project_id = self.app.active_project_id
+        gateway = self.app.gateway
+        app = self.app
+
+        def _generate() -> Any:
+            workspace = gateway.get_generation_workspace(project_id)
+            if not workspace.rows:
+                workspace = gateway.plan_generation(project_id)
+            if workspace.planned:
+                workspace = gateway.approve_generation_spend(project_id)
+            if workspace.submitted:
+                workspace = gateway.start_generation(project_id)
+            for _ in range(120):
+                if workspace.running == 0:
+                    break
+                time.sleep(1.0)
+                workspace = gateway.poll_generation(project_id)
+            return workspace
+
+        def _on_done(result: Any) -> None:
+            app.action_refresh()
+            failed = getattr(result, "failed", 0)
+            completed = getattr(result, "completed", 0)
+            planned = getattr(result, "planned", 0)
+            submitted = getattr(result, "submitted", 0)
+            running = getattr(result, "running", 0)
+            if failed:
+                app.set_status(
+                    f"Generation finished with failures: {completed} done, {failed} failed."
+                )
+            elif completed:
+                app.set_status(f"Generation complete: {completed} clips delivered.")
+            else:
+                app.set_status(
+                    f"Generation update: planned={planned} submitted={submitted} "
+                    f"running={running} completed={completed}."
+                )
+
+        def _task() -> None:
+            try:
+                result = _generate()
+            except Exception as exc:
+                app.call_from_thread(app.set_status, f"Generation failed: {exc}")
+                return
+            app.call_from_thread(_on_done, result)
+
+        for worker in self.workers:
+            if (
+                worker.name == "generation_batch"
+                and not worker.is_cancelled
+                and not worker.is_finished
+            ):
+                app.set_status("Generation is already running.")
+                return
+
+        app.set_status("Generation: planning batch...")
+        self.run_worker(_task, thread=True, exclusive=False, name="generation_batch")
 
 
 class RevisionForm(ModalScreen[str | None]):

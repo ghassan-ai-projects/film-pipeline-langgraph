@@ -96,32 +96,45 @@ pytest -m integration  # integration
 make build
 ```
 
-### Terminal Operator Console
+### Terminal Operator Console (Cockpit)
 
-The TUI is a redesigned, stage-first studio interface for creating a project,
-navigating the pipeline, reviewing artifacts and validation issues, approving
-phases, requesting revisions, and inspecting checkpoints, providers, audit
-events, and assets.
+The repository ships two TUI entry points while the redesigned interface is being
+proven side-by-side with the legacy cockpit:
 
-Start it from the repository root:
+- `film-pipeline-tui` — redesigned, stage-first studio interface (default).
+- `film-pipeline-tui-legacy` — legacy keyboard-first operator cockpit.
+
+Start either from the repository root:
 
 ```bash
-uv run film-pipeline-tui
+uv run film-pipeline-tui          # redesigned interface
+uv run film-pipeline-tui-legacy   # legacy cockpit
 ```
 
-Or start directly from the module:
+Equivalent module entry points:
 
 ```bash
-uv run python -m film_pipeline.tui.app
+uv run python -m film_pipeline.tui.app      # redesigned
+uv run python -m film_pipeline.tui.cockpit  # legacy
 ```
 
 To open directly into project creation:
 
 ```bash
 uv run film-pipeline-tui --create
+uv run film-pipeline-tui-legacy --create
 ```
 
-Basic create-from-idea flow:
+The default gateway is **in-process** (shared application service layer). It does
+not require network access or provider keys for mock-mode project creation. To
+use the MCP stdio gateway instead, set `FILM_PIPELINE_TUI_GATEWAY=mcp`.
+
+#### New redesigned TUI
+
+The redesigned interface starts at a **Project gallery**. Create or open a project
+to enter a three-pane studio workspace: pipeline stages on the left, contextual
+actions and artifact/issue tables in the center, and an inspector on the right.
+Common actions are always visible as buttons; press `/` for the command palette.
 
 1. From the **Project gallery**, choose **New Project** (or press `n`).
 2. Enter `project id`, `title`, optional `slug`, runtime mode, provider/quality
@@ -134,22 +147,38 @@ Basic create-from-idea flow:
    `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and `home`.
 
 Keyboard shortcuts: `n` new project, `r` refresh, `a` approve phase, `v` run
-validation, `escape` return home, `q` quit.
-
-The default TUI uses the MCP gateway so every action goes through the same
-`tools/call` surface as OpenClaw. Set `FILM_PIPELINE_TUI_GATEWAY=inprocess` to
-use the in-process service gateway instead.
-
-Real mode (live model generation):
-
-```bash
-export OPENROUTER_API_KEY="sk-or-v1-..."
-export GOOGLE_API_KEY="..."
-uv run film-pipeline-tui --real
-```
+validation, `g` run generation (when in the generation stage), `escape` return home,
+`q` quit.
 
 State is persisted to `~/.film-pipeline/` (runtime state and graph checkpoints)
-and `projects/` (artifacts), so existing projects are loaded when the TUI starts."} stood. After finalizing docs and committing, update the TODO list and provide a concise summary to the user. Also consider whether the active goal should be marked complete; since this is a follow-on to the original goal and the work is done with `make ci-check` passing, mark it complete if possible. But the user may want to keep it open? The original goal completion criterion included passing ci-check; now it still passes after real-mode fixes. We can mark complete. Use UpdateGoal if available; we know it exists now (used earlier? Actually earlier we attempted and it succeeded? Wait earlier we tried `functions.UpdateGoal` and it succeeded? The last tool call to UpdateGoal returned
+and `projects/` (artifacts), so existing projects are loaded when the TUI starts.
+
+#### Legacy cockpit
+
+The legacy cockpit uses numbered tabs (`1` Dashboard, `2` Review, `3` Generate,
+`4` Scenes, `5` Assets, `6` Matrix, `7` Guide, `8` Validation, `9` Ops) and a
+command palette (`/`). Approve phases with `a` then `a` (or `a` then `y`), run
+generation with `G`, and run validation with `V`.
+
+#### Real-provider mode
+
+Real mode uses Seedance via OpenRouter and Veo/Imagen via Google. Configure keys
+in a local `.env` file or environment:
+
+```bash
+OPENROUTER_API_KEY=...
+GOOGLE_API_KEY=...
+```
+
+Then launch in real mode:
+
+```bash
+FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui
+# or for the legacy cockpit
+FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui-legacy
+```
+
+Generation with real providers incurs cost and polling latency.
 
 ### Headless CLI
 

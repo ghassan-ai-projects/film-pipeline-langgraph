@@ -81,6 +81,15 @@ class Inspector(Vertical):
             subtitle.update(state.selected_target.phase or "")
             body.update(pretty(state.selected_target.detail))
             actions.update("")
+        elif state.snapshot is not None and (
+            state.snapshot.generation is not None or state.snapshot.prompts
+        ):
+            title.update("Generation")
+            subtitle.update(
+                state.dashboard.current_phase if state.dashboard is not None else "generation"
+            )
+            body.update(self._format_generation(state.snapshot))
+            actions.update("Actions: generate")
         else:
             self._show_empty()
 
@@ -120,4 +129,33 @@ class Inspector(Vertical):
             lines.append("Validation")
             for issue in reader.linked_validation[:8]:
                 lines.append(f"- {issue.get('severity', '')}: {issue.get('message', '')}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _format_generation(snapshot: object) -> str:
+        from film_pipeline.tui.view_models.models import CockpitSnapshot
+
+        if not isinstance(snapshot, CockpitSnapshot):
+            return ""
+        lines: list[str] = []
+        if snapshot.generation is not None:
+            gen = snapshot.generation
+            lines.append("Batch status")
+            lines.append(
+                f"  planned={gen.planned} submitted={gen.submitted} "
+                f"running={gen.running} completed={gen.completed} failed={gen.failed}"
+            )
+            if gen.estimated_cost_usd:
+                lines.append(f"  estimated cost: ${gen.estimated_cost_usd:.4f}")
+            if gen.next_step:
+                lines.append(f"  next step: {gen.next_step}")
+        if snapshot.prompts:
+            lines.append("")
+            lines.append("Prompts")
+            for prompt in snapshot.prompts[:10]:
+                shot_id = prompt.get("shot_id", "")
+                duration = prompt.get("duration_seconds", "")
+                text = prompt.get("prompt", "")
+                lines.append(f"  {shot_id} ({duration}s):")
+                lines.append(f"    {text[:200]}")
         return "\n".join(lines)

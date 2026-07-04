@@ -18,6 +18,7 @@ from film_pipeline.app.services.models import (
     ArtifactDetail,
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     OperatorComment,
     OperatorCommentRequest,
@@ -59,6 +60,7 @@ class OperatorService:
                     status=self._status_for_state(state),
                     has_blockers=has_blockers,
                     awaiting_review=bool(state.get("human_approval_required")),
+                    last_updated_at=self._last_updated_at(project_id),
                     project_kind=self._project_kind_for_state(state, project_id),
                     project_root=str(self.runtime.project_roots.get(project_id, "")),
                 )
@@ -66,6 +68,20 @@ class OperatorService:
         known_ids = {item.project_id for item in items}
         items.extend(self._discover_project_folders(known_ids))
         return items
+
+    def _last_updated_at(self, project_id: str) -> str:
+        """ISO timestamp of the project's last persisted state change."""
+        root = self.runtime.project_roots.get(project_id)
+        if root is None:
+            return ""
+        state_path = root / "project-state.json"
+        try:
+            mtime = state_path.stat().st_mtime
+        except OSError:
+            return ""
+        from datetime import UTC, datetime
+
+        return datetime.fromtimestamp(mtime, tz=UTC).isoformat()
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
         """Create a project, set it active, and optionally submit the idea."""
@@ -294,6 +310,150 @@ class OperatorService:
             current_phase=str(next_state.get("current_phase", "")),
             message="Revision requested.",
         )
+
+    # --- Generation batch operations ---
+
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Summarize the generation ledger for the operator."""
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        rows = executor.status_rows(project_id_value)
+        counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
+        for row in rows:
+            status = str(row.get("status", ""))
+            if status in counts:
+                counts[status] += 1
+        provider, model = self.runtime.default_video_provider()
+        return GenerationWorkspace(
+            project_id=project_id_value,
+            phase=str(state.get("current_phase", "")),
+            provider=provider,
+            model=model,
+            estimated_cost_usd=executor.estimated_cost(project_id_value),
+            rows=rows,
+            planned=counts["prepared"],
+            submitted=counts["submitted"],
+            running=counts["running"],
+            completed=counts["completed"],
+            failed=counts["failed"],
+            next_step=self._generation_next_step(rows, counts),
+        )
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Plan a generation batch for every shot in the approved shot matrix."""
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        provider, model = self.runtime.default_video_provider()
+        try:
+            executor.plan(project_id_value, provider=provider, model=model)
+        except ValueError as exc:
+            raise BackendOperationError(str(exc)) from exc
+        self._sync_generation_requests(state, project_id_value)
+        return self.get_generation_workspace(project_id_value)
+
+    def approve_generation_spend(
+        self,
+        project_id: str | None = None,
+        max_cost_usd: float = -1.0,
+    ) -> GenerationWorkspace:
+        """Approve spend for planned generation rows."""
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        try:
+            executor.approve_spend(project_id_value, max_cost_usd=max_cost_usd)
+        except ValueError as exc:
+            raise BackendOperationError(str(exc)) from exc
+        self._sync_generation_requests(state, project_id_value)
+        return self.get_generation_workspace(project_id_value)
+
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Submit approved generation rows to their providers."""
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        executor.start(project_id_value)
+        self._sync_generation_requests(state, project_id_value)
+        return self.get_generation_workspace(project_id_value)
+
+    def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Poll running generations once, delivering completed outputs."""
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        executor.poll_once(project_id_value)
+        self._sync_generation_requests(state, project_id_value)
+        return self.get_generation_workspace(project_id_value)
+
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, Any]]:
+        """Resolve the exact prompt each shot will send to its provider.
+
+        Available as soon as the shot matrix exists so the operator can read
+        and validate prompts during gen_planning review — before any spend.
+        """
+        state = self._state_for_project(project_id)
+        project_id_value = str(state["project_id"])
+        executor = self._generation_executor()
+        provider, model = self.runtime.default_video_provider()
+        previews: list[dict[str, Any]] = []
+        for row in executor.load_shot_rows(project_id_value):
+            shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+            if not shot_id:
+                continue
+            previews.append(
+                {
+                    "shot_id": shot_id,
+                    "scene_id": str(row.get("scene_id", "")),
+                    "provider": provider,
+                    "model": model,
+                    "duration_seconds": row.get("duration_seconds", 5),
+                    "prompt": executor.resolve_prompt(project_id_value, shot_id, row),
+                }
+            )
+        return previews
+
+    def _generation_executor(self) -> Any:
+        from film_pipeline.generation.executor import GenerationExecutor
+
+        if self.runtime.services is None:
+            raise BackendOperationError("artifact store is not configured.")
+        return GenerationExecutor(
+            self.runtime.services.artifact_store,
+            self.runtime.provider_adapters,
+        )
+
+    def _sync_generation_requests(self, state: dict[str, Any], project_id: str) -> None:
+        """Mirror ledger rows into graph state so approval gates can pass."""
+        executor = self._generation_executor()
+        requests = executor.dispatchable_requests(project_id)
+        if requests:
+            state["generation_requests"] = requests
+            stale_codes = {"empty_generation_requests", "no_generation_requests"}
+            issues = state.get("issues", [])
+            if isinstance(issues, list):
+                state["issues"] = [
+                    issue
+                    for issue in issues
+                    if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
+                ]
+        self.runtime.projects[project_id] = state
+        self.runtime._persist_project_state(project_id)
+
+    @staticmethod
+    def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) -> str:
+        if not rows:
+            return "plan"
+        if counts["prepared"]:
+            return "approve_spend"
+        if counts["submitted"]:
+            return "start"
+        if counts["running"]:
+            return "poll"
+        if counts["failed"] and not counts["completed"]:
+            return "review_failures"
+        return "approve_phase"
 
     def add_operator_comment(
         self,

@@ -52,14 +52,14 @@ def test_call_tool_unknown_tool() -> None:
         rt_mod._RUNTIME_MODE_OVERRIDE = previous_override
 
 
-def test_target_met_state_reports_target_phase_approved() -> None:
+def test_target_met_state_reports_target_phase_approved(tmp_path: Path) -> None:
     """When the graph has advanced past the target, report target as approved."""
     import film_pipeline.app.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
     previous_override = rt_mod._RUNTIME_MODE_OVERRIDE
     try:
-        rt = HeadlessDriver.setup_runtime("mock", Path("/tmp/film-cli-unit-test"))
+        rt = HeadlessDriver.setup_runtime("mock", tmp_path / "runtime")
         rt.create_project(project_id="p1", title="T", slug="p1")
         rt.set_active("p1")
         # Simulate the graph landing on gen_planning after shot_bible approval.

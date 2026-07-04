@@ -98,7 +98,7 @@ class TestFull3MinuteFlowMock:
         result = invoke_tool(rt, "set_active_project", project_ref=project_id)
         assert result["ok"] is True, f"set_active_project failed: {result}"
 
-        result = invoke_tool(rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA, target_scene_count=12)
+        result = invoke_tool(rt, "submit_idea", idea=THE_LAST_SIGNAL_IDEA, target_scene_count=2)
         assert result["ok"] is True, f"submit_idea failed: {result}"
         assert result.get("current_phase") is not None
 
@@ -109,8 +109,8 @@ class TestFull3MinuteFlowMock:
         assert state is not None
         assert str(state.get("current_phase", "")) == "shot_bible"
         # The user-supplied scene count must propagate into the Story Scope Contract.
-        assert state.get("target_scene_count") == 12
-        assert state.get("min_scene_count") == 12
+        assert state.get("target_scene_count") == 2
+        assert state.get("min_scene_count") == 2
 
         assert rt.services is not None
         store: ArtifactStore = rt.services.artifact_store

@@ -6,6 +6,7 @@ from film_pipeline.app.services.models import (
     ArtifactDetail,
     AuditEvent,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     OperatorComment,
     OperatorCommentRequest,
@@ -37,6 +38,26 @@ class InProcessStudioGateway:
 
     def submit_idea(self, project_id: str, idea: str) -> MutationResult:
         return self._service.submit_idea(project_id, idea)
+
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+        return self._service.get_generation_workspace(project_id)
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        return self._service.plan_generation(project_id)
+
+    def approve_generation_spend(
+        self, project_id: str | None = None, max_cost_usd: float = -1.0
+    ) -> GenerationWorkspace:
+        return self._service.approve_generation_spend(project_id, max_cost_usd)
+
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        return self._service.start_generation(project_id)
+
+    def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        return self._service.poll_generation(project_id)
+
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        return self._service.preview_generation_prompts(project_id)
 
     def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
         return self._service.get_dashboard(project_id)

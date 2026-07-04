@@ -179,6 +179,17 @@ class FilmStudioApp(App[None]):
         providers = self.gateway.list_provider_status()
         audit_events = self.gateway.get_audit_feed(project_id, limit=30) if project_id else []
         comments = self.gateway.list_operator_comments(project_id) if project_id else []
+        generation = (
+            self.gateway.get_generation_workspace(project_id)
+            if project_id and dashboard and dashboard.current_phase == "generation"
+            else None
+        )
+        prompt_phases = {"generation", "gen_planning"}
+        prompts = (
+            self.gateway.preview_generation_prompts(project_id)
+            if project_id and dashboard and dashboard.current_phase in prompt_phases
+            else []
+        )
         return CockpitSnapshot(
             projects=projects,
             dashboard=dashboard,
@@ -194,6 +205,8 @@ class FilmStudioApp(App[None]):
             graph_rows=[],
             command_suggestions=[],
             command_options=CommandOptions(),
+            generation=generation,
+            prompts=prompts,
         )
 
     def _resolve_active_project(self, projects: list[ProjectListItem]) -> ProjectListItem | None:
@@ -334,7 +347,7 @@ class FilmStudioApp(App[None]):
             return
         if normalized in {"help", "commands"}:
             self._set_status(
-                "Commands: next, approve, revise <note>, validate, "
+                "Commands: next, approve, revise <note>, validate, generate, "
                 "project <id>, create, home, assets"
             )
             return
@@ -357,6 +370,9 @@ class FilmStudioApp(App[None]):
             return
         if normalized == "validate":
             self._dispatch_to_studio("_run_validation")
+            return
+        if normalized == "generate":
+            self._dispatch_to_studio("_run_generation")
             return
         if normalized.startswith("revise "):
             note = command.removeprefix("revise ").strip()

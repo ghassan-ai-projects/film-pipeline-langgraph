@@ -167,7 +167,10 @@ def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Compile
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:
-    return state
+    # Routing-only node: returning the full state would re-append every
+    # reducer-channel entry, so return an empty update.
+    _ = state
+    return {}
 
 
 def _route_current_phase(state: dict[str, Any]) -> str:

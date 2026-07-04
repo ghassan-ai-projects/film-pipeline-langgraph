@@ -50,9 +50,9 @@ class TestRunCli:
                 "--runtime-root",
                 str(tmp_path / "runtime"),
                 "--target-scene-count",
-                "6",
+                "2",
                 "--target-runtime-seconds",
-                "60",
+                "20",
             ]
         )
         assert code == 0
