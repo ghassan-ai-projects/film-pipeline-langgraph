@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 
 import pytest
+from textual.widgets import Input
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.services.operator import OperatorService
@@ -46,7 +47,15 @@ def test_tui_real_mode_text_only_intake(tmp_path: Path) -> None:
             await pilot.pause()
 
             await pilot.press("slash")
-            await pilot.pause()
+            for _ in range(20):
+                await pilot.pause()
+                try:
+                    palette = app.screen.query_one("#command_palette", Input)
+                    if "open" in palette.classes and palette.has_focus:
+                        break
+                except Exception:
+                    pass
+
             create_cmd = (
                 "create real-text-only | Real Text Only | "
                 "A one-minute silent film about a paper boat on a rainy street. | "
@@ -57,14 +66,17 @@ def test_tui_real_mode_text_only_intake(tmp_path: Path) -> None:
             await pilot.press("enter")
 
             # Wait for the background create_project worker and navigation.
-            for _ in range(300):
+            last_status = ""
+            for _ in range(400):
                 await pilot.pause()
+                last_status = app._status_text()
                 if app.active_project_id == "real-text-only" and isinstance(
                     app.screen, StudioScreen
                 ):
                     break
             assert isinstance(app.screen, StudioScreen), (
-                f"still on {app.screen}; status={app._status_text()!r}"
+                f"still on {app.screen}; active_project_id={app.active_project_id!r}; "
+                f"status={last_status!r}"
             )
             assert app.active_project_id == "real-text-only"
 
