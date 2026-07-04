@@ -256,6 +256,10 @@ class MCPStudioGateway(StudioGateway):
         return str(r.get("generation_policy", "")).lower() == "text_only"
 
     def _text_only_workspace(self, project_id: str | None) -> GenerationWorkspace:
+        assets = self.list_assets(project_id)
+        completed = any(
+            str(asset.get("kind", "")).lower() == "text_only_delivery" for asset in assets
+        )
         return GenerationWorkspace(
             project_id=project_id or "",
             phase="generation",
@@ -266,9 +270,9 @@ class MCPStudioGateway(StudioGateway):
             planned=0,
             submitted=0,
             running=0,
-            completed=1,
+            completed=1 if completed else 0,
             failed=0,
-            next_step="approve_phase",
+            next_step="approve_phase" if completed else "plan",
         )
 
     def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:

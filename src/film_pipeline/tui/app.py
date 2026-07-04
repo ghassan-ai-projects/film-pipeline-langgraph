@@ -372,9 +372,10 @@ class FilmStudioApp(App[None]):
                     title=parts[1].strip(),
                     slug=parts[0].strip(),
                     idea=parts[2].strip(),
-                    runtime_mode="mock",
+                    runtime_mode=parts[3].strip() if len(parts) >= 4 else "mock",
                     workflow_mode="manual",
                     project_kind="production",
+                    generation_policy=parts[4].strip() if len(parts) >= 5 else "generate",
                 )
                 self.create_project(request)
                 return

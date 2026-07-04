@@ -2137,7 +2137,7 @@ def test_inspector_shows_full_artifact_body() -> None:
     _run(_body())
 
 
-def test_action_bar_hides_generate_for_text_only_policy() -> None:
+def test_action_bar_shows_complete_action_for_text_only_policy_before_completion() -> None:
     class TextOnlyDashboardGateway(RecordingGateway):
         def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
             dashboard = super().get_dashboard(project_id)
@@ -2162,6 +2162,57 @@ def test_action_bar_hides_generate_for_text_only_policy() -> None:
 
     async def _body() -> None:
         gateway = TextOnlyDashboardGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            generate_button = app.screen.query_one("#action_generate", Button)
+            assert generate_button.styles.display == "block"
+            assert str(generate_button.label) == "Complete Text-Only"
+            approve_button = app.screen.query_one("#action_approve", Button)
+            assert str(approve_button.label) == "Approve Phase"
+
+    _run(_body())
+
+
+def test_action_bar_hides_generate_for_completed_text_only_policy() -> None:
+    class CompletedTextOnlyGateway(RecordingGateway):
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="awaiting_review",
+                next_action="approve_phase",
+                route_reason="text only",
+                eligible_actions=["approve_phase"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+                generation_policy="text_only",
+            )
+
+        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+            return GenerationWorkspace(
+                project_id=project_id or self.active_project_id,
+                phase="generation",
+                provider="",
+                model="",
+                estimated_cost_usd=0.0,
+                rows=[],
+                completed=1,
+                next_step="approve_phase",
+            )
+
+    async def _body() -> None:
+        gateway = CompletedTextOnlyGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
             await pilot.pause()

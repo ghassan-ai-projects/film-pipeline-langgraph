@@ -215,6 +215,37 @@ def test_mcp_gateway_list_assets_with_manifest(
         gateway.close()
 
 
+def test_mcp_gateway_text_only_workspace_tracks_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Text-only generation is incomplete until the manifest asset is recorded."""
+    gateway = MCPStudioGateway()
+    assets: list[dict[str, object]] = []
+
+    def fake_tool(method: str, _args: dict[str, object]) -> dict[str, object]:
+        if method == "get_project_summary":
+            return {"ok": True, "generation_policy": "text_only"}
+        if method == "list_assets":
+            return {"ok": True, "assets": assets}
+        if method == "plan_generation_batch":
+            assets.append({"asset_id": "text-only-delivery", "kind": "text_only_delivery"})
+            return {"ok": True}
+        return {"ok": True}
+
+    try:
+        monkeypatch.setattr(gateway, "_tool", fake_tool)
+
+        before = gateway.get_generation_workspace("mcp-gw-text-only")
+        assert before.completed == 0
+        assert before.next_step == "plan"
+
+        after = gateway.plan_generation("mcp-gw-text-only")
+        assert after.completed == 1
+        assert after.next_step == "approve_phase"
+    finally:
+        gateway.close()
+
+
 def test_mcp_gateway_preview_generation_prompts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
