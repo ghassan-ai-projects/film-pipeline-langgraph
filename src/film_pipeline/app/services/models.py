@@ -18,6 +18,12 @@ class ProjectCreateRequest:
     workflow_mode: str = "manual"
     project_kind: str = "production"
     target_runtime_seconds: int = 0  # 0 = not specified; intake will estimate
+    film_type_profile: str = ""
+    quality_profile: str = ""
+    provider_profile: str = ""
+    review_profile: str = ""
+    auto_approve_profile: str = ""
+    generation_policy: str = "generate"
 
 
 @dataclass(frozen=True)
@@ -62,6 +68,8 @@ class DashboardSummary:
     checkpoint_count: int = 0
     has_blockers: bool = False
     stalled_phase: str = ""
+    profile_stack: dict[str, str] = field(default_factory=dict)
+    generation_policy: str = "generate"
 
 
 @dataclass(frozen=True)

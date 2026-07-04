@@ -9,15 +9,17 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.config.profile_resolver import (
+    load_profile_flex,
+    register_project_providers,
+    resolve_project_config,
+)
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 
 from .helpers import (
     _active_project_id,
     _error,
-    _load_profile_flex,
     _ok,
-    _register_project_providers,
-    _resolve_project_config,
     _services,
 )
 
@@ -68,9 +70,7 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
         return _error("profile_id is required.")
 
     try:
-        _loader, src = _load_profile_flex(
-            profile_id, ("provider", "quality", "film-type", "review")
-        )
+        _loader, src = load_profile_flex(profile_id, ("provider", "quality", "film-type", "review"))
         return _ok(
             profile_id=src.path.stem,
             file=str(src.path),
@@ -146,8 +146,8 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     new_stack = _merge_profile_changes(current_stack, changes)
 
     try:
-        resolved_current = _resolve_project_config(current_stack)
-        resolved_new = _resolve_project_config(new_stack)
+        resolved_current = resolve_project_config(current_stack)
+        resolved_new = resolve_project_config(new_stack)
     except FileNotFoundError as e:
         return _error(f"Profile not found: {e}")
     except Exception as e:
@@ -217,7 +217,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
 
     new_stack = dict(proposal.proposed_profile_stack)
     try:
-        resolved = _resolve_project_config(new_stack)
+        resolved = resolve_project_config(new_stack)
     except FileNotFoundError as e:
         return _error(f"Profile not found: {e}")
     except Exception as e:
@@ -230,7 +230,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     state["resolved_config_sources"] = resolved.get("sources", [])
     state["config_conflicts"] = list(cast(list[Any], resolved.get("conflicts", [])))
 
-    _register_project_providers(rt, new_stack, cast(dict[str, object], resolved.get("raw", {})))
+    register_project_providers(rt, new_stack, cast(dict[str, object], resolved.get("raw", {})))
 
     config_ref = _save_resolved_config_artifact(
         rt, project_id, new_version, cast(dict[str, object], resolved.get("raw", {})), new_stack

@@ -74,6 +74,7 @@ def test_reduce_qc_reports_normalizes_missing_lists() -> None:
     state: Any = {"_qc_raw_reports": "bad", "_qc_reports": None}
     reduced = qc.reduce_qc_reports(state)
 
+    assert reduced.get("_qc_reports") == []
     assert reduced["_validation_reports"] == []
     assert reduced["current_phase"] == "qc"
     assert reduced["human_approval_phase"] == "qc"
@@ -107,7 +108,10 @@ def test_reduce_qc_reports_translates_findings_into_issues() -> None:
 def test_run_validator_skips_without_services() -> None:
     result = qc._run_validator("script-structure", "ScriptStructureValidator", {})
 
-    assert result == {"_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}]}
+    assert result == {
+        "_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}],
+        "_qc_raw_reports": [{"validator_id": "script-structure", "status": "skipped"}],
+    }
 
 
 def test_run_validator_skips_when_validator_missing(monkeypatch: Any) -> None:
@@ -120,7 +124,10 @@ def test_run_validator_skips_when_validator_missing(monkeypatch: Any) -> None:
         state,
     )
 
-    assert result == {"_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}]}
+    assert result == {
+        "_qc_reports": [{"validator_id": "script-structure", "status": "skipped"}],
+        "_qc_raw_reports": [{"validator_id": "script-structure", "status": "skipped"}],
+    }
 
 
 def test_run_validator_skips_without_artifact(monkeypatch: Any) -> None:
@@ -143,7 +150,14 @@ def test_run_validator_skips_without_artifact(monkeypatch: Any) -> None:
                 "status": "skipped",
                 "reason": "no artifact",
             }
-        ]
+        ],
+        "_qc_raw_reports": [
+            {
+                "validator_id": "script-structure",
+                "status": "skipped",
+                "reason": "no artifact",
+            }
+        ],
     }
 
 
@@ -164,7 +178,10 @@ def test_run_validator_reports_failure(monkeypatch: Any) -> None:
         state,
     )
 
-    assert result == {"_qc_reports": [{"validator_id": "dialogue-voice", "status": "failed"}]}
+    assert result == {
+        "_qc_reports": [{"validator_id": "dialogue-voice", "status": "failed"}],
+        "_qc_raw_reports": [{"validator_id": "dialogue-voice", "status": "failed"}],
+    }
 
 
 def test_run_validator_returns_summary_and_raw_report(monkeypatch: Any) -> None:

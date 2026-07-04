@@ -14,7 +14,7 @@ from textual.widgets import TabbedContent
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.services.operator import OperatorService
-from film_pipeline.tui.app import FilmCockpitApp
+from film_pipeline.tui.cockpit import FilmCockpitApp
 from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 
 

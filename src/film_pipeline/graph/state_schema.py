@@ -124,6 +124,7 @@ class StudioGraphState(TypedDict, total=False):
     runtime_mode: str
     workflow_mode: str
     project_kind: str
+    generation_policy: str
 
     # ── Human gate control ────────────────────────────────────────────────
     human_approval_phase: str

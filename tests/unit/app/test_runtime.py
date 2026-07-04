@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.app.safety import ProductionDataError
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
 from film_pipeline.schemas._base import ArtifactType, FilmPhase
 
@@ -69,3 +72,80 @@ def test_delete_project_clears_active_project_only_when_matching(tmp_path: Path)
 
     assert rt.active_project_id == "p-active"
     assert rt.get_project("p-active") is not None
+
+
+def test_delete_project_archives_to_trash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    persist = tmp_path / "persist"
+    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(persist))
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert rt.services is not None
+    rt.services.artifact_store._root = tmp_path / "projects"
+    rt.create_project("p-trash", title="Trash Me")
+    rt.set_active("p-trash")
+    project_root = rt.project_roots["p-trash"]
+    artifact_dir = rt.services.artifact_store._root / "p-trash"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (project_root / "state.json").write_text("{}")
+    (artifact_dir / "idea.json").write_text("{}")
+
+    deleted = rt.delete_project("p-trash")
+
+    assert deleted is True
+    assert not project_root.exists()
+    assert not artifact_dir.exists()
+    trash_root = persist / "trash"
+    assert any(trash_root.glob("runtime-p-trash-*"))
+    assert any(trash_root.glob("artifacts-p-trash-*"))
+
+
+def test_delete_project_blocks_production_by_default(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt.create_project("p-prod", title="Prod")
+    rt.projects["p-prod"]["project_kind"] = "production"
+    rt.set_active("p-prod")
+
+    with pytest.raises(ProductionDataError):
+        rt.delete_project("p-prod")
+
+
+def test_delete_project_allows_production_with_force(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt.create_project("p-prod", title="Prod")
+    rt.projects["p-prod"]["project_kind"] = "production"
+    rt.set_active("p-prod")
+
+    assert rt.delete_project("p-prod", force=True) is True
+    assert rt.get_project("p-prod") is None
+
+
+def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
+    tmp_path: Path,
+) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert rt.services is not None
+    projects_root = tmp_path / "projects"
+    rt.services.artifact_store._root = projects_root
+
+    rt.create_project("persisted", title="Persisted Project")
+    rt._persist_project_state("persisted")
+
+    discovered_root = projects_root / "discovered"
+    (discovered_root / "intake").mkdir(parents=True)
+    (discovered_root / "intake" / "idea.v001.json").write_text("{}")
+
+    fresh = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    assert fresh.services is not None
+    fresh.services.artifact_store._root = projects_root
+    fresh.load_persistent_projects()
+
+    assert "persisted" in fresh.projects
+    assert fresh.projects["persisted"]["title"] == "Persisted Project"
+    assert "discovered" in fresh.projects
+    assert fresh.projects["discovered"]["current_phase"] == "intake"
+    assert fresh.project_roots["discovered"].exists()
+
+
+def test_load_persistent_projects_skips_empty_runtime_root(tmp_path: Path) -> None:
+    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt.load_persistent_projects()
+    assert rt.projects == {}

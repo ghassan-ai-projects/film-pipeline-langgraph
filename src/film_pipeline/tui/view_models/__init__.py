@@ -1,9 +1,10 @@
-"""View models for the Textual operator cockpit.
+"""View models shared by the redesigned TUI and the legacy cockpit.
 
-This package is split into focused modules (models, builders_*, helpers) but
-re-exports everything from the original ``view_models`` flat module so that
-existing imports such as ``from film_pipeline.tui.view_models import X``
-continue to work unchanged.
+This package keeps the shared dataclasses and artifact/scene rendering helpers
+used by both interfaces. All builder modules are re-exported from this
+namespace so that legacy ``from film_pipeline.tui.view_models import X``
+imports continue to work alongside direct imports from ``view_models.models``
+in the redesigned interface.
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ from film_pipeline.tui.view_models.builders_reading import (
     ReadingSection,
     build_phase_reading,
 )
+from film_pipeline.tui.view_models.helpers import (
+    _all_issues,
+    _issue_target,
+    _validation_for_target,
+)
 from film_pipeline.tui.view_models.models import (
     GRAPH_PHASES,
     CockpitSnapshot,
@@ -80,6 +86,9 @@ __all__ = [
     "TargetSelection",
     "ValidationFixSuggestion",
     "ValidationGroup",
+    "_all_issues",
+    "_issue_target",
+    "_validation_for_target",
     "build_artifact_reader",
     "build_asset_action_rows",
     "build_command_help_rows",

@@ -98,78 +98,67 @@ make build
 
 ### Terminal Operator Console (Cockpit)
 
-The TUI is a keyboard-first operator cockpit for creating a project from an idea,
-reviewing generated artifacts, approving phases, requesting revisions, running
-generation, and inspecting checkpoints, providers, audit events, and artifacts.
+The repository ships two TUI entry points while the redesigned interface is being
+proven side-by-side with the legacy cockpit:
 
-Start it from the repository root:
+- `film-pipeline-tui` — redesigned, stage-first studio interface (default).
+- `film-pipeline-tui-legacy` — legacy keyboard-first operator cockpit.
+
+Start either from the repository root:
 
 ```bash
-uv run film-pipeline-tui
+uv run film-pipeline-tui          # redesigned interface
+uv run film-pipeline-tui-legacy   # legacy cockpit
 ```
 
-Or start directly from the module:
+Equivalent module entry points:
 
 ```bash
-uv run python -m film_pipeline.tui.app
+uv run python -m film_pipeline.tui.app      # redesigned
+uv run python -m film_pipeline.tui.cockpit  # legacy
 ```
 
 To open directly into project creation:
 
 ```bash
 uv run film-pipeline-tui --create
+uv run film-pipeline-tui-legacy --create
 ```
 
 The default gateway is **in-process** (shared application service layer). It does
 not require network access or provider keys for mock-mode project creation. To
 use the MCP stdio gateway instead, set `FILM_PIPELINE_TUI_GATEWAY=mcp`.
 
-#### Tabs
+#### New redesigned TUI
 
-Press the number key to switch tabs:
+The redesigned interface starts at a **Project gallery**. Create or open a project
+to enter a three-pane studio workspace: pipeline stages on the left, contextual
+actions and artifact/issue tables in the center, and an inspector on the right.
+Common actions are always visible as buttons; press `/` for the command palette.
 
-| Key | Tab | Purpose |
-|-----|-----|---------|
-| `1` | **Dashboard** | Project rail, KPIs, pipeline table, and phase detail |
-| `2` | **Review** | Current-phase artifacts, approval/revision, comments |
-| `3` | **Generate** | Generation ledger: plan, approve spend, start, poll |
-| `4` | **Scenes** | Scene list and per-scene shots |
-| `5` | **Assets** | Generated clips, frames, reference images, manifest |
-| `6` | **Matrix** | Living master film matrix |
-| `7` | **Guide** | Command reference and shortcuts |
-| `8` | **Validation** | Validator reports and QC issues |
-| `9` | **Ops** | Checkpoints, provider health, audit log |
+1. From the **Project gallery**, choose **New Project** (or press `n`).
+2. Enter `project id`, `title`, optional `slug`, runtime mode, provider/quality
+   profiles, and the film idea.
+3. The studio creates the project, runs intake, and opens the **Studio workspace**.
+4. The workspace shows the current pipeline stage, artifacts, and validation
+   issues. Use the always-visible **Action bar** to validate, approve, or
+   request a revision.
+5. Press `/` to open the **Command palette** for power-user commands such as
+   `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and `home`.
 
-#### Action keys
+Keyboard shortcuts: `n` new project, `r` refresh, `a` approve phase, `v` run
+validation, `g` run generation (when in the generation stage), `escape` return home,
+`q` quit.
 
-| Key | Action |
-|-----|--------|
-| `n` | New project from idea |
-| `i` | Submit / revise idea |
-| `a` | Approve current phase (press once to prepare, twice to confirm) |
-| `y` | Confirm approval (alternative to second `a`) |
-| `r` | Request revision |
-| `G` | Run generation (plan → approve spend → start → poll loop) |
-| `V` | Run validation on demand |
-| `c` | Add operator comment on selected target |
-| `/` | Open command palette |
-| `f5` | Refresh snapshot |
-| `q` | Quit |
+State is persisted to `~/.film-pipeline/` (runtime state and graph checkpoints)
+and `projects/` (artifacts), so existing projects are loaded when the TUI starts.
 
-#### Basic create-from-idea flow
+#### Legacy cockpit
 
-1. Press `n` (or run with `--create`) and fill in `project id`, `title`, optional
-   `slug`, runtime mode `mock`/`real`, workflow mode `manual`, and the film idea.
-   You can also type `/` then `create id | title | idea`.
-2. The cockpit creates the project, submits the idea, runs intake, and opens the
-   Dashboard.
-3. Press `2` to open the Review tab and inspect the current phase artifacts.
-4. Press `a` then `a` (or `a` then `y`) to approve and advance.
-5. When you reach the **Generate** tab (`3`), press `G` to plan, approve spend,
-   start, and poll the batch.
-6. Visit **Assets** (`5`) to view delivered clips/frames and **Validation** (`8`)
-   for QC reports.
-7. Continue approving until the project reaches **delivery**.
+The legacy cockpit uses numbered tabs (`1` Dashboard, `2` Review, `3` Generate,
+`4` Scenes, `5` Assets, `6` Matrix, `7` Guide, `8` Validation, `9` Ops) and a
+command palette (`/`). Approve phases with `a` then `a` (or `a` then `y`), run
+generation with `G`, and run validation with `V`.
 
 #### Real-provider mode
 
@@ -181,14 +170,15 @@ OPENROUTER_API_KEY=...
 GOOGLE_API_KEY=...
 ```
 
-Then launch in real mode with the `local-real-provider` profile:
+Then launch in real mode:
 
 ```bash
 FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui
+# or for the legacy cockpit
+FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui-legacy
 ```
 
-Generation with real providers incurs cost and polling latency. The cockpit shows
-provider health and budget state in the Ops tab (`9`).
+Generation with real providers incurs cost and polling latency.
 
 ### Headless CLI
 

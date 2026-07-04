@@ -28,6 +28,7 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.artifacts.manifest import read_manifest
+from film_pipeline.config import profile_resolver as _profiles
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.router import compute_actions
 from film_pipeline.schemas._base import FilmPhase
@@ -97,6 +98,26 @@ class OperatorService:
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
         state["project_kind"] = self._normalize_project_kind(request.project_kind)
+        state["generation_policy"] = request.generation_policy
+
+        profile_stack = _profiles.canonicalize_profile_stack(
+            {
+                "film_type_profile": request.film_type_profile,
+                "quality_profile": request.quality_profile,
+                "provider_profile": request.provider_profile,
+                "review_profile": request.review_profile,
+                "auto_approve_profile": request.auto_approve_profile,
+            }
+        )
+        resolved_config = _profiles.resolve_project_config(profile_stack)
+        state["profile_stack"] = profile_stack
+        state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
+        state["resolved_config_sources"] = resolved_config["sources"]
+        state["config_conflicts"] = list(cast(list[Any], resolved_config.get("conflicts", [])))
+        _profiles.register_project_providers(
+            self.runtime, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        )
+
         self.runtime.set_active(request.project_id.strip())
 
         if request.target_runtime_seconds > 0:
@@ -104,15 +125,22 @@ class OperatorService:
             # so the classifier adopts it instead of guessing.
             state["target_runtime_seconds"] = request.target_runtime_seconds
 
-        if request.idea.strip():
+        # When the caller already supplied an idea (e.g. the TUI new-project
+        # form), run intake immediately so the project opens with data. When no
+        # idea is supplied we stay aligned with MCP create_film_project and only
+        # set up state; submit_idea is then responsible for advancing.
+        current_phase = ""
+        if request.idea and request.idea.strip():
             state["idea"] = request.idea.strip()
-            state = self.runtime.run_graph(state)
-            self.runtime.projects[request.project_id.strip()] = state
+            next_state = self.runtime.run_graph(state)
+            next_state["generation_policy"] = request.generation_policy
+            self.runtime.projects[request.project_id.strip()] = next_state
+            current_phase = str(next_state.get("current_phase", ""))
 
         return MutationResult(
             ok=True,
             project_id=str(state["project_id"]),
-            current_phase=str(state.get("current_phase", "")),
+            current_phase=current_phase,
             message="Project created.",
         )
 
@@ -198,6 +226,8 @@ class OperatorService:
             checkpoint_count=checkpoint_count,
             has_blockers=self._has_blockers(state),
             stalled_phase=str(state.get("_stalled_phase", "")),
+            profile_stack=dict(cast(Mapping[str, str], state.get("profile_stack", {}))),
+            generation_policy=str(state.get("generation_policy", "generate")),
         )
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
@@ -290,6 +320,11 @@ class OperatorService:
         """Summarize the generation ledger for the operator."""
         state = self._state_for_project(project_id)
         project_id_value = str(state["project_id"])
+        provider, model = self.runtime.default_video_provider()
+
+        if self._is_text_only_policy(state):
+            return self._text_only_workspace(state, project_id_value, provider, model)
+
         executor = self._generation_executor()
         rows = executor.status_rows(project_id_value)
         counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
@@ -297,7 +332,6 @@ class OperatorService:
             status = str(row.get("status", ""))
             if status in counts:
                 counts[status] += 1
-        provider, model = self.runtime.default_video_provider()
         return GenerationWorkspace(
             project_id=project_id_value,
             phase=str(state.get("current_phase", "")),
@@ -317,6 +351,9 @@ class OperatorService:
         """Plan a generation batch for every shot in the approved shot matrix."""
         state = self._state_for_project(project_id)
         project_id_value = str(state["project_id"])
+        if self._is_text_only_policy(state):
+            self._complete_text_only_generation(state, project_id_value)
+            return self.get_generation_workspace(project_id_value)
         executor = self._generation_executor()
         provider, model = self.runtime.default_video_provider()
         try:
@@ -334,6 +371,8 @@ class OperatorService:
         """Approve spend for planned generation rows."""
         state = self._state_for_project(project_id)
         project_id_value = str(state["project_id"])
+        if self._is_text_only_policy(state):
+            return self.get_generation_workspace(project_id_value)
         executor = self._generation_executor()
         try:
             executor.approve_spend(project_id_value, max_cost_usd=max_cost_usd)
@@ -346,6 +385,8 @@ class OperatorService:
         """Submit approved generation rows to their providers."""
         state = self._state_for_project(project_id)
         project_id_value = str(state["project_id"])
+        if self._is_text_only_policy(state):
+            return self.get_generation_workspace(project_id_value)
         executor = self._generation_executor()
         executor.start(project_id_value)
         self._sync_generation_requests(state, project_id_value)
@@ -355,6 +396,8 @@ class OperatorService:
         """Poll running generations once, delivering completed outputs."""
         state = self._state_for_project(project_id)
         project_id_value = str(state["project_id"])
+        if self._is_text_only_policy(state):
+            return self.get_generation_workspace(project_id_value)
         executor = self._generation_executor()
         executor.poll_once(project_id_value)
         self._sync_generation_requests(state, project_id_value)
@@ -427,6 +470,119 @@ class OperatorService:
         if counts["failed"] and not counts["completed"]:
             return "review_failures"
         return "approve_phase"
+
+    @staticmethod
+    def _is_text_only_policy(state: dict[str, Any]) -> bool:
+        return str(state.get("generation_policy", "")).lower() == "text_only"
+
+    def _complete_text_only_generation(self, state: dict[str, Any], project_id: str) -> None:
+        """Satisfy generation gates without producing clips or frames.
+
+        Creates completed generation_requests from the shot matrix and records
+        a text-only manifest entry so the project can advance to QC/delivery.
+        """
+        if state.get("_text_only_generation_completed"):
+            return
+        executor = self._generation_executor()
+        shot_rows = executor.load_shot_rows(project_id)
+        provider, model = self.runtime.default_video_provider()
+        requests: list[dict[str, Any]] = []
+        for row in shot_rows:
+            shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+            if not shot_id:
+                continue
+            requests.append(
+                {
+                    "generation_request_id": f"text-only-{project_id}-{shot_id}",
+                    "generation_id": f"text-only-{project_id}-{shot_id}",
+                    "project_id": project_id,
+                    "shot_id": shot_id,
+                    "mode": "text_only",
+                    "provider": provider,
+                    "model": model,
+                    "prompt_ref": "",
+                    "prompt_payload": {"text_only": True, "shot_id": shot_id},
+                    "reference_refs": [],
+                    "status": "completed",
+                }
+            )
+        if not requests:
+            requests.append(
+                {
+                    "generation_request_id": f"text-only-{project_id}-all",
+                    "generation_id": f"text-only-{project_id}-all",
+                    "project_id": project_id,
+                    "shot_id": "all",
+                    "mode": "text_only",
+                    "provider": provider,
+                    "model": model,
+                    "prompt_ref": "",
+                    "prompt_payload": {"text_only": True},
+                    "reference_refs": [],
+                    "status": "completed",
+                }
+            )
+        state["generation_requests"] = requests
+        state["_text_only_generation_completed"] = True
+        stale_codes = {"empty_generation_requests", "no_generation_requests"}
+        issues = state.get("issues", [])
+        if isinstance(issues, list):
+            state["issues"] = [
+                issue
+                for issue in issues
+                if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
+            ]
+        self._record_text_only_manifest(project_id)
+        self.runtime.projects[project_id] = state
+        self.runtime._persist_project_state(project_id)
+
+    def _text_only_workspace(
+        self,
+        state: dict[str, Any],
+        project_id: str,
+        provider: str,
+        model: str,
+    ) -> GenerationWorkspace:
+        requests = state.get("generation_requests", []) or []
+        completed = sum(
+            1
+            for req in requests
+            if isinstance(req, dict) and str(req.get("status", "")).lower() == "completed"
+        )
+        return GenerationWorkspace(
+            project_id=project_id,
+            phase=str(state.get("current_phase", "")),
+            provider=provider,
+            model=model,
+            estimated_cost_usd=0.0,
+            rows=[],
+            planned=0,
+            submitted=0,
+            running=0,
+            completed=completed,
+            failed=0,
+            next_step="approve_phase" if completed > 0 else "plan",
+        )
+
+    def _record_text_only_manifest(self, project_id: str) -> None:
+        from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
+
+        if self.runtime.services is None:
+            return
+        root = self.runtime.services.artifact_store._root
+        manifest = read_manifest(project_id, root=root)
+        entries = list(manifest.entries) if manifest else []
+        if not any(entry.asset_id == "text-only-delivery" for entry in entries):
+            entries.append(
+                AssetEntry(
+                    asset_id="text-only-delivery",
+                    kind="text_only_delivery",
+                    shot_id="",
+                    scene_id="",
+                    path="",
+                )
+            )
+            write_manifest(AssetManifest(project_id=project_id, entries=entries), root=root)
 
     def add_operator_comment(
         self,

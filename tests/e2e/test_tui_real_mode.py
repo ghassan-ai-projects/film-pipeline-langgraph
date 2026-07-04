@@ -28,7 +28,7 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
-from film_pipeline.tui.app import FilmCockpitApp
+from film_pipeline.tui.cockpit import FilmCockpitApp
 from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 
 

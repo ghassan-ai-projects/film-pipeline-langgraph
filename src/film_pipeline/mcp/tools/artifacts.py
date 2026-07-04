@@ -1,10 +1,12 @@
-"""List/inspect artifacts, shots, scenes, and references."""
+"""List/inspect artifacts, shots, scenes, references, and assets."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.artifacts.manifest import read_manifest
 
 from .helpers import _active_project_id, _error, _load_latest_reference_index, _ok, _services
 
@@ -156,3 +158,32 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     if match is None:
         return _error(f"Reference '{reference_id}' not found.")
     return _ok(reference=match)
+
+
+async def list_assets(args: dict[str, object]) -> dict[str, object]:
+    """List generated/reference assets from the project asset manifest."""
+    rt = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    store = _services(rt).artifact_store
+    root = getattr(store, "_root", None)
+    if not isinstance(root, Path):
+        root = Path("projects")
+    manifest = read_manifest(project_id, root=root)
+    if manifest is None:
+        return _ok(assets=[])
+    return _ok(
+        assets=[
+            {
+                "asset_id": entry.asset_id,
+                "kind": entry.kind,
+                "scene_id": entry.scene_id,
+                "shot_id": entry.shot_id,
+                "take": entry.take,
+                "active": entry.active,
+                "path": entry.path,
+            }
+            for entry in manifest.entries
+        ]
+    )

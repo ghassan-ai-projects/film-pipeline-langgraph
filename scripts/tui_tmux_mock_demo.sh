@@ -10,9 +10,9 @@ SESSION="filmtui"
 # Clean up any leftover session.
 tmux kill-session -t "$SESSION" 2>/dev/null || true
 
-# Start the TUI detached. Use a screen-compatible TERM so Textual renders.
+# Start the legacy TUI detached. Use a screen-compatible TERM so Textual renders.
 tmux new-session -d -s "$SESSION" \
-  "export TERM=screen-256color; cd '$(pwd)' && .venv/bin/python -m film_pipeline.tui.app"
+  "export TERM=screen-256color; cd '$(pwd)' && uv run python -m film_pipeline.tui.cockpit"
 
 cleanup() {
   tmux kill-session -t "$SESSION" 2>/dev/null || true

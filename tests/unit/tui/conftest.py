@@ -32,6 +32,10 @@ class RecordingGateway:
     validation_runs: int = 0
     runtime_mode: str = "mock"
     submitted_ideas: list[str] = field(default_factory=list)
+    plan_calls: int = 0
+    spend_calls: int = 0
+    start_calls: int = 0
+    poll_calls: int = 0
 
     def __post_init__(self) -> None:
         if self.revision_notes is None:
@@ -159,6 +163,7 @@ class RecordingGateway:
         )
 
     def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self.plan_calls += 1
         workspace = self.get_generation_workspace(project_id)
         return GenerationWorkspace(
             project_id=workspace.project_id,
@@ -174,6 +179,7 @@ class RecordingGateway:
     def approve_generation_spend(
         self, project_id: str | None = None, max_cost_usd: float = -1.0
     ) -> GenerationWorkspace:
+        self.spend_calls += 1
         workspace = self.get_generation_workspace(project_id)
         return GenerationWorkspace(
             project_id=workspace.project_id,
@@ -183,10 +189,12 @@ class RecordingGateway:
             estimated_cost_usd=workspace.estimated_cost_usd,
             rows=[{**row, "status": "approved"} for row in workspace.rows],
             planned=1,
+            submitted=1,
             next_step="start",
         )
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self.start_calls += 1
         workspace = self.get_generation_workspace(project_id)
         return GenerationWorkspace(
             project_id=workspace.project_id,
@@ -201,6 +209,7 @@ class RecordingGateway:
         )
 
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self.poll_calls += 1
         workspace = self.get_generation_workspace(project_id)
         return GenerationWorkspace(
             project_id=workspace.project_id,
@@ -210,6 +219,7 @@ class RecordingGateway:
             estimated_cost_usd=workspace.estimated_cost_usd,
             rows=[{**row, "status": "delivered"} for row in workspace.rows],
             planned=1,
+            submitted=1,
             completed=1,
             next_step="approve_phase",
         )

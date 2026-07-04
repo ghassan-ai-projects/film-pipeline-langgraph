@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import json
+import os
 import sys
 from dataclasses import dataclass, field
 from typing import Any
@@ -249,6 +250,9 @@ def main() -> int:
     errors if their required resources are missing.
     """
     from film_pipeline.app.bootstrap import validate_environment
+
+    if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
+        os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
 
     issues = validate_environment()
     if issues:

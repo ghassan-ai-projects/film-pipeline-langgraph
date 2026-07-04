@@ -55,31 +55,35 @@ _VALIDATOR_MAP: dict[str, str] = {
 def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
-    """Run a single validator in parallel and return its report."""
+    """Run a single validator in parallel and append its report to the raw channel."""
     from film_pipeline.graph.nodes import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
+        report = {"validator_id": validator_id, "status": "skipped"}
         return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "skipped"}],
+            "_qc_reports": [report],
+            "_qc_raw_reports": [report],
         }
 
     validator = _resolve_validator_instance(srv, validator_id)
     if validator is None:
+        report = {"validator_id": validator_id, "status": "skipped"}
         return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "skipped"}],
+            "_qc_reports": [report],
+            "_qc_raw_reports": [report],
         }
 
     artifact = _load_artifact_for_validator(state, validator_id)
     if not artifact:
+        report = {
+            "validator_id": validator_id,
+            "status": "skipped",
+            "reason": "no artifact",
+        }
         return {
-            "_qc_reports": [
-                {
-                    "validator_id": validator_id,
-                    "status": "skipped",
-                    "reason": "no artifact",
-                }
-            ],
+            "_qc_reports": [report],
+            "_qc_raw_reports": [report],
         }
 
     try:
@@ -87,6 +91,7 @@ def _run_validator(
     except Exception:
         return {
             "_qc_reports": [{"validator_id": validator_id, "status": "failed"}],
+            "_qc_raw_reports": [{"validator_id": validator_id, "status": "failed"}],
         }
 
     return {
@@ -220,9 +225,7 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     from film_pipeline.graph.nodes import _require_human_approval
 
     raw_raw = state.get("_qc_raw_reports", [])
-    reports_raw = state.get("_qc_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
-    reports: list[dict[str, Any]] = list(reports_raw) if isinstance(reports_raw, list) else []
 
     issues: list[dict[str, object]] = []
     for report in raw:
@@ -251,7 +254,8 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
         "human_approval_required": not auto,
         "human_approval_phase": "qc",
     }
-    _ = reports
+    if not raw:
+        update["_qc_reports"] = []
     if issues:
         update["issues"] = issues
     return update
