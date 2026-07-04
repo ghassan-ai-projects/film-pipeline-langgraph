@@ -89,6 +89,7 @@ markers = [
   "integration: marks tests as integration (slow)",
   "e2e: marks tests as end-to-end (require mock provider harness)",
   "smoke: marks tests as smoke (validate documented operator workflow)",
+  "real_provider: marks tests that call live paid providers",
 ]
 
 [tool.coverage.run]

@@ -80,7 +80,8 @@ class ActionBar(Horizontal):
                     and state.snapshot.generation.completed > 0
                 )
                 if dashboard.generation_policy == "text_only":
-                    pass  # no generate/regenerate action for text-only workflow
+                    if not generation_complete:
+                        actions.append(("action_generate", "Complete Text-Only", True))
                 elif generation_complete and "approve_phase" in dashboard.eligible_actions:
                     actions.append(("action_generate", "Regenerate", False))
                 else:
