@@ -362,6 +362,22 @@ class FilmStudioApp(App[None]):
         if normalized == "create":
             self.action_new_project()
             return
+        if normalized.startswith("create "):
+            parts = command.removeprefix("create ").split(" | ")
+            if len(parts) >= 3:
+                from film_pipeline.app.services.models import ProjectCreateRequest
+
+                request = ProjectCreateRequest(
+                    project_id=parts[0].strip(),
+                    title=parts[1].strip(),
+                    slug=parts[0].strip(),
+                    idea=parts[2].strip(),
+                    runtime_mode="mock",
+                    workflow_mode="manual",
+                    project_kind="production",
+                )
+                self.create_project(request)
+                return
         if normalized == "next":
             self._dispatch_to_studio("_do_next_action")
             return

@@ -392,7 +392,9 @@ class MCPStudioGateway(StudioGateway):
 
     def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
         self._set_active(project_id)
-        return []
+        r = self._tool("list_assets", {})
+        assets = r.get("assets", [])
+        return list(assets) if isinstance(assets, list) else []
 
     def inspect_artifact(
         self,
@@ -473,7 +475,7 @@ def default_gateway() -> StudioGateway:
     surface over the shared application service layer (routing, assets,
     generation, provider health). Set ``FILM_PIPELINE_TUI_GATEWAY=mcp`` to
     drive the cockpit through the MCP stdio tool surface instead (parity
-    testing with OpenClaw; reduced feature set).
+    testing with OpenClaw).
     """
     from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 

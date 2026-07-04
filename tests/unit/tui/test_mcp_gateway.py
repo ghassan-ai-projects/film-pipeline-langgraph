@@ -185,6 +185,36 @@ def test_mcp_gateway_set_runtime_mode() -> None:
         gateway.close()
 
 
+def test_mcp_gateway_list_assets_with_manifest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gateway delegates asset listing to the list_assets MCP tool."""
+    gateway = MCPStudioGateway()
+    try:
+        monkeypatch.setattr(
+            gateway,
+            "_tool",
+            lambda _method, _args: {
+                "ok": True,
+                "assets": [
+                    {
+                        "asset_id": "clip-001",
+                        "kind": "generated_clip",
+                        "shot_id": "shot_0001",
+                        "scene_id": "scene_01",
+                        "path": "projects/mcp-gw-assets/07-generated-assets/clip-001.mp4",
+                    }
+                ],
+            },
+        )
+        assets = gateway.list_assets("mcp-gw-assets")
+        assert len(assets) == 1
+        assert assets[0]["asset_id"] == "clip-001"
+        assert assets[0]["kind"] == "generated_clip"
+    finally:
+        gateway.close()
+
+
 def test_mcp_gateway_preview_generation_prompts(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
