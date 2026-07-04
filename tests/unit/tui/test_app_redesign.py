@@ -13,6 +13,7 @@ from textual.widgets import Button, Collapsible, DataTable, Input, Select, Stati
 from film_pipeline.app.services.errors import ProjectNotFoundError, ServiceError
 from film_pipeline.app.services.models import (
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     ProjectCreateRequest,
     ProjectListItem,
@@ -1835,5 +1836,216 @@ def test_simplified_view_toggles_and_populates() -> None:
 
             scene_browser = screen.query_one("#scene_browser", SceneBrowser)
             assert scene_browser.row_count >= 1
+
+    _run(_body())
+
+
+def test_generate_button_shows_in_generation_phase() -> None:
+    class GenerationPhaseGateway(RecordingGateway):
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="run_generation",
+                route_reason="ready to generate",
+                eligible_actions=["run_generation"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+            )
+
+    async def _body() -> None:
+        gateway = GenerationPhaseGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, StudioScreen)
+            generate_button = app.screen.query_one("#action_generate", Button)
+            assert generate_button.styles.display != "none"
+            assert "Generate" in str(generate_button.label)
+
+    _run(_body())
+
+
+def test_generate_button_runs_generation_batch() -> None:
+    class GenerationPhaseGateway(RecordingGateway):
+        _planned: bool = False
+
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="run_generation",
+                route_reason="ready to generate",
+                eligible_actions=["run_generation"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+            )
+
+        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+            if not self._planned:
+                return GenerationWorkspace(
+                    project_id=project_id or self.active_project_id,
+                    phase="generation",
+                    provider="mock-video-provider",
+                    model="mock-fast",
+                    estimated_cost_usd=0.0,
+                    rows=[],
+                    next_step="plan",
+                )
+            return super().get_generation_workspace(project_id)
+
+        def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+            self._planned = True
+            return super().plan_generation(project_id)
+
+        def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+            self.start_calls += 1
+            workspace = self.get_generation_workspace(project_id)
+            return GenerationWorkspace(
+                project_id=workspace.project_id,
+                phase=workspace.phase,
+                provider=workspace.provider,
+                model=workspace.model,
+                estimated_cost_usd=workspace.estimated_cost_usd,
+                rows=[{**row, "status": "running"} for row in workspace.rows],
+                planned=1,
+                submitted=1,
+                running=1,
+                next_step="poll",
+            )
+
+    async def _body() -> None:
+        gateway = GenerationPhaseGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            app.screen.query_one("#action_generate", Button).focus()
+            await pilot.press("enter")
+            for _ in range(4):
+                await pilot.pause(delay=0.3)
+            assert gateway.plan_calls == 1
+            assert gateway.spend_calls == 1
+            assert gateway.start_calls == 1
+            assert gateway.poll_calls >= 1
+            status = app.screen.query_one("#status_footer", Static)
+            assert "complete" in str(status.renderable).lower()
+
+    _run(_body())
+
+
+def test_command_palette_generate_runs_batch() -> None:
+    class GenerationPhaseGateway(RecordingGateway):
+        _planned: bool = False
+
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="run_generation",
+                route_reason="ready to generate",
+                eligible_actions=["run_generation"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+            )
+
+        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+            if not self._planned:
+                return GenerationWorkspace(
+                    project_id=project_id or self.active_project_id,
+                    phase="generation",
+                    provider="mock-video-provider",
+                    model="mock-fast",
+                    estimated_cost_usd=0.0,
+                    rows=[],
+                    next_step="plan",
+                )
+            return super().get_generation_workspace(project_id)
+
+        def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+            self._planned = True
+            return super().plan_generation(project_id)
+
+    async def _body() -> None:
+        gateway = GenerationPhaseGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            app._run_command("generate")
+            for _ in range(4):
+                await pilot.pause(delay=0.3)
+            assert gateway.plan_calls == 1
+            assert gateway.start_calls == 1
+
+    _run(_body())
+
+
+def test_inspector_shows_generation_prompts() -> None:
+    class GenerationPhaseGateway(RecordingGateway):
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="run_generation",
+                route_reason="ready to generate",
+                eligible_actions=["run_generation"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+            )
+
+    async def _body() -> None:
+        gateway = GenerationPhaseGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            inspector = app.screen.query_one("#inspector", Inspector)
+            body = inspector.query_one("#inspector_body", Static)
+            assert "Batch status" in str(body.renderable)
+            assert "Prompts" in str(body.renderable)
+            assert "Wide establishing shot" in str(body.renderable)
 
     _run(_body())

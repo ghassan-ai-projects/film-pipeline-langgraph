@@ -137,7 +137,7 @@ def test_mcp_gateway_default_gateway_selection() -> None:
         os.environ["FILM_PIPELINE_TUI_GATEWAY"] = "inprocess"
         assert isinstance(default_gateway(), InProcessStudioGateway)
         del os.environ["FILM_PIPELINE_TUI_GATEWAY"]
-        assert isinstance(default_gateway(), MCPStudioGateway)
+        assert isinstance(default_gateway(), InProcessStudioGateway)
     finally:
         if prev is None:
             os.environ.pop("FILM_PIPELINE_TUI_GATEWAY", None)
@@ -181,6 +181,54 @@ def test_mcp_gateway_set_runtime_mode() -> None:
     gateway = MCPStudioGateway()
     try:
         assert gateway.set_runtime_mode("mock") == "mock"
+    finally:
+        gateway.close()
+
+
+def test_mcp_gateway_preview_generation_prompts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gateway delegates prompt previews to the MCP tool surface."""
+    gateway = MCPStudioGateway()
+    try:
+        monkeypatch.setattr(
+            gateway,
+            "_tool",
+            lambda _method, _args: {
+                "ok": True,
+                "previews": [
+                    {
+                        "shot_id": "shot_0001",
+                        "scene_id": "sc_001",
+                        "provider": "mock-video-provider",
+                        "model": "mock-fast",
+                        "duration_seconds": 8,
+                        "prompt": "Wide establishing shot of the field at dawn.",
+                    }
+                ],
+            },
+        )
+        previews = gateway.preview_generation_prompts("any-project")
+        assert len(previews) == 1
+        assert previews[0]["shot_id"] == "shot_0001"
+        assert "prompt" in previews[0]
+    finally:
+        gateway.close()
+
+
+def test_mcp_gateway_preview_generation_prompts_returns_empty_on_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The gateway surfaces a failed tool call as an empty list."""
+    gateway = MCPStudioGateway()
+    try:
+        monkeypatch.setattr(
+            gateway,
+            "_tool",
+            lambda _method, _args: {"ok": False, "error": "No shot matrix"},
+        )
+        previews = gateway.preview_generation_prompts("any-project")
+        assert previews == []
     finally:
         gateway.close()
 

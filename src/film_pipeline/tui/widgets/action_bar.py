@@ -42,6 +42,7 @@ class ActionBar(Horizontal):
         yield Button("Validate", id="action_validate", classes="action-button")
         yield Button("Approve Phase", id="action_approve", classes="action-button")
         yield Button("Request Revision", id="action_revise", classes="action-button")
+        yield Button("Generate", id="action_generate", classes="action-button")
         yield Button("Next", id="action_next", classes="action-button")
         yield Button("Inspect", id="action_inspect", classes="action-button")
 
@@ -72,6 +73,8 @@ class ActionBar(Horizontal):
                 and state.snapshot.validation.blocking_issues
             ):
                 actions.append(("action_validate", "Validate", True))
+            if current_phase == "generation":
+                actions.append(("action_generate", "Generate", True))
             if "approve_phase" in dashboard.eligible_actions:
                 actions.append(("action_approve", "Approve Phase", True))
             if "request_revision" in dashboard.eligible_actions:

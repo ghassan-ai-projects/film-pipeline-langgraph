@@ -264,7 +264,7 @@ class TestAutoApprove:
         assert _require_human_approval(state) is True
 
     def test_await_approval_passes_through_when_approved(self) -> None:
-        """await_approval_node returns state unchanged when already approved."""
+        """await_approval_node returns no updates when already approved."""
         from film_pipeline.graph.nodes import await_approval_node
 
         state: dict[str, Any] = {
@@ -276,8 +276,8 @@ class TestAutoApprove:
             "issues": [],
         }
         result = await_approval_node(state)
-        assert result is state
-        assert result.get("approved") is True
+        assert result == {}
+        assert state.get("approved") is True
 
     def test_phase_node_auto_approves_when_config_false(self) -> None:
         """Phase node sets approved=True when require_human_approval is off."""
