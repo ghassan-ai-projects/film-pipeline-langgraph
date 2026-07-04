@@ -74,7 +74,15 @@ class ActionBar(Horizontal):
             ):
                 actions.append(("action_validate", "Validate", True))
             if current_phase == "generation":
-                actions.append(("action_generate", "Generate", True))
+                generation_complete = (
+                    state.snapshot
+                    and state.snapshot.generation is not None
+                    and state.snapshot.generation.completed > 0
+                )
+                if generation_complete and "approve_phase" in dashboard.eligible_actions:
+                    actions.append(("action_generate", "Regenerate", False))
+                else:
+                    actions.append(("action_generate", "Generate", True))
             if "approve_phase" in dashboard.eligible_actions:
                 actions.append(("action_approve", "Approve Phase", True))
             if "request_revision" in dashboard.eligible_actions:
