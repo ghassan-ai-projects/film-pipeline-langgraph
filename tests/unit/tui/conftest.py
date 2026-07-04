@@ -214,6 +214,19 @@ class RecordingGateway:
             next_step="approve_phase",
         )
 
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        _ = project_id
+        return [
+            {
+                "shot_id": "shot_0001",
+                "scene_id": "sc_001",
+                "provider": "mock-video-provider",
+                "model": "mock-fast",
+                "duration_seconds": 8,
+                "prompt": "Wide establishing shot of the field at dawn.",
+            }
+        ]
+
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self.approved_count += 1
         return MutationResult(

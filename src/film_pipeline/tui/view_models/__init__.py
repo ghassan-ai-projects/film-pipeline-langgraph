@@ -47,6 +47,11 @@ from film_pipeline.tui.view_models.builders_reader import (
     selection_from_row,
     validation_issue_rows,
 )
+from film_pipeline.tui.view_models.builders_reading import (
+    PhaseReading,
+    ReadingSection,
+    build_phase_reading,
+)
 from film_pipeline.tui.view_models.models import (
     GRAPH_PHASES,
     CockpitSnapshot,
@@ -68,7 +73,9 @@ __all__ = [
     "CommandValidation",
     "MatrixImpact",
     "PhaseDetail",
+    "PhaseReading",
     "ReaderView",
+    "ReadingSection",
     "ReviewIssueTarget",
     "TargetSelection",
     "ValidationFixSuggestion",
@@ -87,6 +94,7 @@ __all__ = [
     "build_matrix_pivot_rows",
     "build_matrix_rows",
     "build_phase_detail",
+    "build_phase_reading",
     "build_reader_index_rows",
     "build_reader_link_rows",
     "build_review_checklist_rows",

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from textual.widgets import Button, DataTable, Input, TabbedContent
 
@@ -104,9 +105,27 @@ class AppActionsMixin(AppCockpitBase):
         except (ServiceError, ValueError, FileNotFoundError) as exc:
             self._update_context(f"Error\n\n{exc}")
 
+    # The table that receives focus when a tab opens, so arrow keys and
+    # Enter (row selection) work immediately without reaching for the mouse.
+    _TAB_PRIMARY_TABLE: ClassVar[dict[str, str]] = {
+        "dashboard": "#dashboard_action_table",
+        "review": "#review_issue_table",
+        "generate": "#generation_table",
+        "scenes": "#scene_table",
+        "assets": "#asset_table",
+        "matrix": "#matrix_table",
+        "guide": "#guide_table",
+        "validation": "#validation_table",
+        "ops": "#provider_table",
+    }
+
     def action_open_tab(self, tab_id: str) -> None:
-        """Open a workspace tab by ID."""
+        """Open a workspace tab by ID and focus its primary table."""
         self.query_one("#tabs", TabbedContent).active = tab_id
+        selector = self._TAB_PRIMARY_TABLE.get(tab_id)
+        if selector:
+            with contextlib.suppress(Exception):
+                self.query_one(selector, DataTable).focus()
         self._context_for_tab(tab_id)
 
     def action_toggle_command_palette(self) -> None:
@@ -451,6 +470,8 @@ class AppActionsMixin(AppCockpitBase):
             self._run_command(str(row.get("command", "")))
         if table_id == "asset_action_table":
             self._fill_command(str(row.get("command", "")))
+        if table_id == "generation_table":
+            self._show_generation_prompt(str(row.get("shot_id", "")))
         if table_id == "project_table":
             self._switch_project(str(row.get("project", "")))
         if table_id == "guide_table":
