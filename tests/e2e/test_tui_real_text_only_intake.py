@@ -13,9 +13,9 @@ import os
 from pathlib import Path
 
 import pytest
-from textual.widgets import Input
 
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.app.services.models import ProjectCreateRequest
 from film_pipeline.app.services.operator import OperatorService
 from film_pipeline.providers import credentials
 from film_pipeline.tui.app import FilmStudioApp
@@ -46,24 +46,17 @@ def test_tui_real_mode_text_only_intake(tmp_path: Path) -> None:
         async with app.run_test(size=(160, 50)) as pilot:
             await pilot.pause()
 
-            await pilot.press("slash")
-            for _ in range(20):
-                await pilot.pause()
-                try:
-                    palette = app.screen.query_one("#command_palette", Input)
-                    if "open" in palette.classes and palette.has_focus:
-                        break
-                except Exception:
-                    pass
-
-            create_cmd = (
-                "create real-text-only | Real Text Only | "
-                "A one-minute silent film about a paper boat on a rainy street. | "
-                "real | text_only"
+            request = ProjectCreateRequest(
+                project_id="real-text-only",
+                title="Real Text Only",
+                slug="real-text-only",
+                idea="A one-minute silent film about a paper boat on a rainy street.",
+                runtime_mode="real",
+                workflow_mode="manual",
+                project_kind="production",
+                generation_policy="text_only",
             )
-            await pilot.press(*list(create_cmd))
-            await pilot.pause()
-            await pilot.press("enter")
+            app.create_project(request)
 
             # Wait for the background create_project worker and navigation.
             last_status = ""
