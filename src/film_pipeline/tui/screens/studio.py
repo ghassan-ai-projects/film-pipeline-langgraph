@@ -399,7 +399,7 @@ class StudioScreen(Screen[None]):
         else:
             self.app.set_status(f"Next action: {dashboard.next_action or 'none'}")
 
-    def _run_generation(self) -> None:
+    def _run_generation(self, *, confirmed: bool = False) -> None:
         """Drive the generation batch plan → spend → start → poll in a worker."""
         from film_pipeline.tui.app import AppState, FilmStudioApp
 
@@ -412,6 +412,24 @@ class StudioScreen(Screen[None]):
         project_id = self.app.active_project_id
         gateway = self.app.gateway
         app = self.app
+        snapshot = self._app_state.snapshot
+
+        generation_complete = (
+            snapshot is not None
+            and snapshot.generation is not None
+            and snapshot.generation.completed > 0
+        )
+        has_assets = snapshot is not None and len(snapshot.assets) > 0
+
+        if generation_complete and has_assets and not confirmed:
+            app.push_screen(
+                ConfirmScreen(
+                    "Regenerate clips?",
+                    "This will overwrite existing generated clips and may incur cost.",
+                ),
+                lambda ok: self._run_generation(confirmed=bool(ok)) if ok else None,
+            )
+            return
 
         def _generate() -> Any:
             workspace = gateway.get_generation_workspace(project_id)
@@ -466,6 +484,76 @@ class StudioScreen(Screen[None]):
 
         app.set_status("Generation: planning batch...")
         self.run_worker(_task, thread=True, exclusive=False, name="generation_batch")
+
+
+class ConfirmScreen(ModalScreen[bool]):
+    """Simple yes/no confirmation modal."""
+
+    CSS = """
+    ConfirmScreen {
+        align: center middle;
+    }
+
+    #confirm_dialog {
+        width: 60;
+        height: auto;
+        padding: 1 2;
+        border: thick #bf616a;
+        background: #11151a;
+    }
+
+    .dialog-title {
+        color: #bf616a;
+        text-style: bold;
+        margin: 0 0 1 0;
+    }
+
+    .dialog-hint {
+        color: #d8dee9;
+        margin: 0 0 1 0;
+    }
+
+    #dialog_buttons {
+        height: auto;
+        margin: 1 0 0 0;
+    }
+
+    #dialog_buttons Button {
+        margin: 0 1 0 0;
+    }
+    """
+
+    BINDINGS: ClassVar = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(
+        self,
+        title: str,
+        message: str,
+        *,
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ) -> None:
+        super().__init__(name=name, id=id, classes=classes)
+        self._title = title
+        self._message = message
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="confirm_dialog"):
+            yield ModalStatic(self._title, classes="dialog-title")
+            yield ModalStatic(self._message, classes="dialog-hint")
+            with ModalHorizontal(id="dialog_buttons"):
+                yield ModalButton("Yes", id="cf_yes", variant="error")
+                yield ModalButton("No", id="cf_no")
+
+    def on_button_pressed(self, event: ModalButton.Pressed) -> None:
+        if event.button.id == "cf_yes":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 class RevisionForm(ModalScreen[str | None]):

@@ -2049,3 +2049,88 @@ def test_inspector_shows_generation_prompts() -> None:
             assert "Wide establishing shot" in str(body.renderable)
 
     _run(_body())
+
+
+def test_action_bar_generation_button_relabels_after_completion() -> None:
+    class GenerationDoneGateway(RecordingGateway):
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="approve_phase",
+                route_reason="generation complete",
+                eligible_actions=["approve_phase", "request_revision"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+            )
+
+        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+            workspace = super().get_generation_workspace(project_id)
+            return GenerationWorkspace(
+                project_id=workspace.project_id,
+                phase="generation",
+                provider="mock-video-provider",
+                model="mock-fast",
+                estimated_cost_usd=0.0,
+                rows=workspace.rows,
+                planned=1,
+                submitted=1,
+                completed=2,
+                next_step="approve_phase",
+            )
+
+    async def _body() -> None:
+        gateway = GenerationDoneGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            generate_button = app.screen.query_one("#action_generate", Button)
+            assert str(generate_button.label) == "Regenerate"
+            assert generate_button.variant == "default"
+            approve_button = app.screen.query_one("#action_approve", Button)
+            assert str(approve_button.label) == "Approve Phase"
+            assert approve_button.variant == "primary"
+
+    _run(_body())
+
+
+def test_inspector_shows_full_artifact_body() -> None:
+    async def _body() -> None:
+        from film_pipeline.tui.view_models.models import ReaderView
+
+        long_body = "Line.\n" * 2000
+        gateway = RecordingGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            app.state.reader = ReaderView(
+                title="Script",
+                subtitle="v1",
+                outline=[],
+                body=long_body,
+                metadata={},
+                linked_comments=[],
+                linked_validation=[],
+            )
+            app._propagate_state()
+            await pilot.pause()
+            inspector = app.screen.query_one("#inspector", Inspector)
+            body = inspector.query_one("#inspector_body", Static)
+            rendered = str(body.renderable)
+            assert len(rendered) > 10000
+            assert rendered.count("Line.") == 2000
+
+    _run(_body())

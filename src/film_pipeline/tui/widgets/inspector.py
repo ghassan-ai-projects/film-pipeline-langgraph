@@ -34,6 +34,9 @@ class Inspector(Vertical):
         border: solid #3b4252;
         padding: 0 1;
         margin: 0 0 1 0;
+        overflow-y: auto;
+        scrollbar-background: #1e2229;
+        scrollbar-color: #4c566a;
     }
 
     #inspector_actions {
@@ -110,11 +113,11 @@ class Inspector(Vertical):
         lines: list[str] = []
         if reader.outline:
             lines.append("Outline")
-            lines.extend(f"  {line}" for line in reader.outline[:20])
+            lines.extend(f"  {line}" for line in reader.outline)
         if reader.body:
             lines.append("")
             lines.append("Body")
-            lines.append(reader.body[:2000])
+            lines.append(reader.body)
         if reader.metadata:
             lines.append("")
             lines.append("Metadata")

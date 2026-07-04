@@ -61,7 +61,9 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
                     continue
 
                 dashboard = snapshot.dashboard
-                if dashboard.current_phase in {"delivery", "complete"}:
+                if dashboard.current_phase in {"delivery", "complete"} and (
+                    dashboard.status == "complete"
+                ):
                     break
                 if dashboard.current_phase != last_phase:
                     phase_history.append(dashboard.current_phase)
@@ -117,6 +119,7 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
             assert final_snapshot.dashboard is not None
             dashboard = final_snapshot.dashboard
             assert dashboard.current_phase in {"delivery", "complete"}
+            assert dashboard.status == "complete"
             assert "generation" in phase_history
 
             # Open asset viewer via the command palette.
@@ -131,6 +134,7 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
 
             # Final state assertions.
             assert len(final_snapshot.assets) > 0
+            assert any(asset.get("kind") == "generated_clip" for asset in final_snapshot.assets)
             assert len(final_snapshot.checkpoints) >= 2
             assert len(final_snapshot.audit_events) >= 2
 
