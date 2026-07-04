@@ -23,6 +23,7 @@ class ProjectCreateRequest:
     provider_profile: str = ""
     review_profile: str = ""
     auto_approve_profile: str = ""
+    generation_policy: str = "generate"
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,7 @@ class DashboardSummary:
     has_blockers: bool = False
     stalled_phase: str = ""
     profile_stack: dict[str, str] = field(default_factory=dict)
+    generation_policy: str = "generate"
 
 
 @dataclass(frozen=True)

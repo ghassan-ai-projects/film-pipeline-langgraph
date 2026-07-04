@@ -56,6 +56,8 @@ class FilmMeta(Vertical):
                 idea = idea[:77] + "..."
             lines.append(f"Idea:   {idea}")
         lines.append(f"Mode:   {dashboard.workflow_mode} / {dashboard.runtime_mode}")
+        if dashboard.generation_policy == "text_only":
+            lines.append("Policy: text only (no generated media)")
         if dashboard.profile_stack:
             lines.append("Profiles:")
             label_map = {

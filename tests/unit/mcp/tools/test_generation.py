@@ -8,6 +8,7 @@ previously untested in isolation.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any, cast
@@ -657,3 +658,34 @@ def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime)
     assert previews[0]["shot_id"] == "shot_0001"
     assert previews[0]["provider"] == "mock-video-provider"
     assert "wide_establishing" in str(previews[0]["prompt"]).lower()
+
+
+class TestTextOnlyGenerationPolicy:
+    def test_plan_generation_batch_text_only(self, rt: StudioRuntime) -> None:
+        active = rt.get_active()
+        assert active is not None
+        active["generation_policy"] = "text_only"
+        active["current_phase"] = "generation"
+        result = asyncio.run(plan_generation_batch({}))
+        assert result["ok"] is True
+        assert result.get("text_only") is True
+        assert result.get("completed") == 1
+        assert active.get("_text_only_generation_completed") is True
+        requests = active.get("generation_requests", [])
+        assert len(requests) >= 1
+        assert all(str(r.get("status", "")).lower() == "completed" for r in requests)
+
+    def test_approve_and_start_text_only_are_no_ops(self, rt: StudioRuntime) -> None:
+        active = rt.get_active()
+        assert active is not None
+        active["generation_policy"] = "text_only"
+        active["current_phase"] = "generation"
+        asyncio.run(plan_generation_batch({}))
+
+        result = asyncio.run(approve_generation_spend({}))
+        assert result["ok"] is True
+        assert result.get("text_only") is True
+
+        result = asyncio.run(start_generation_batch({}))
+        assert result["ok"] is True
+        assert result.get("text_only") is True

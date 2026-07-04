@@ -602,3 +602,52 @@ class TestProviderHealthSeeding:
         health = runtime.get_all_health()
         assert set(health) == {"seedance-openrouter", "veo-fast", "gemini-imagen-4"}
         assert all(entry["status"] in {"healthy", "unconfigured"} for entry in health.values())
+
+
+class TestTextOnlyGeneration:
+    def test_plan_generation_text_only_creates_completed_requests(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="text-only",
+                title="Text Only Film",
+                idea="A film delivered as text only.",
+                generation_policy="text_only",
+            )
+        )
+        state = service.runtime.projects["text-only"]
+        state["current_phase"] = "generation"
+        service.runtime.projects["text-only"] = state
+
+        workspace = service.plan_generation("text-only")
+        assert workspace.completed == 1
+        assert workspace.next_step == "approve_phase"
+        assert workspace.estimated_cost_usd == 0.0
+
+        state = service.runtime.projects["text-only"]
+        assert state.get("_text_only_generation_completed") is True
+        requests = state.get("generation_requests", [])
+        assert len(requests) >= 1
+        assert all(str(r.get("status", "")).lower() == "completed" for r in requests)
+
+    def test_approve_and_start_text_only_are_no_ops(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="text-only-noop",
+                title="Text Only Noop",
+                idea="A text-only film.",
+                generation_policy="text_only",
+            )
+        )
+        state = service.runtime.projects["text-only-noop"]
+        state["current_phase"] = "generation"
+        service.runtime.projects["text-only-noop"] = state
+        service.plan_generation("text-only-noop")
+
+        workspace = service.approve_generation_spend("text-only-noop")
+        assert workspace.completed == 1
+        workspace = service.start_generation("text-only-noop")
+        assert workspace.completed == 1
+        workspace = service.poll_generation("text-only-noop")
+        assert workspace.completed == 1
