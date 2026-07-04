@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
+from textual.binding import Binding
 from textual.widgets import DataTable
 
 from film_pipeline.app.services.errors import ServiceError
 from film_pipeline.app.services.models import ArtifactDetail
+from film_pipeline.tui.system_open import open_path
 from film_pipeline.tui.view_models.builders_reader import build_artifact_reader
 
 _CATEGORIES: tuple[str, ...] = (
@@ -18,6 +20,7 @@ _CATEGORIES: tuple[str, ...] = (
     "Scene",
     "Camera",
     "Generated Asset",
+    "Text-Only Delivery",
     "Other",
 )
 
@@ -42,6 +45,8 @@ def _category_for_artifact(artifact: dict[str, object]) -> str:
 
 def _category_for_asset(asset: dict[str, object]) -> str:
     kind = str(asset.get("kind", "")).lower()
+    if kind == "text_only_delivery":
+        return "Text-Only Delivery"
     if kind in {"generated_clip", "video", "render"}:
         return "Generated Asset"
     if kind in {"reference_sheet", "image", "reference"}:
@@ -58,6 +63,10 @@ class AssetBrowser(DataTable[str]):
         border: solid #3b4252;
     }
     """
+
+    BINDINGS: ClassVar[list[Binding | tuple[str, str] | tuple[str, str, str]]] = [
+        Binding("o", "open_asset", "Open selected"),
+    ]
 
     def __init__(self, *, id: str | None = None, classes: str | None = None) -> None:
         super().__init__(id=id, classes=classes)
@@ -85,18 +94,52 @@ class AssetBrowser(DataTable[str]):
 
     def _refresh_view(self) -> None:
         self.clear(columns=True)
-        self.add_columns("Asset", "Category", "Phase", "Status")
+        self.add_columns("Name", "Type", "Category", "Phase", "Status")
         if not self._rows:
-            self.add_row("—", "—", "—", "No assets yet.")
+            self.add_row("—", "—", "—", "—", "No assets yet.")
             return
         for row in self._rows:
             asset_id = str(row.get("asset_id", ""))
             artifact_id = str(row.get("artifact_id", ""))
             name = asset_id or artifact_id or "unknown"
+            source = row.get("_source", "")
+            item_type = "Artifact" if source == "artifact" else "Generated Media"
             category = str(row.get("_category", _category_for_asset(row)))
             phase = str(row.get("phase", row.get("scene_id", "")))
             status = str(row.get("status", row.get("active", "")))
-            self.add_row(name, category, phase, status)
+            self.add_row(name, item_type, category, phase, status)
+
+    def _selected_row(self) -> dict[str, object] | None:
+        cursor = self.cursor_coordinate
+        row_index = cursor.row
+        if row_index < 0 or row_index >= len(self._rows):
+            return None
+        return self._rows[row_index]
+
+    def action_open_asset(self) -> None:
+        """Open the selected generated asset with the system default application."""
+        from film_pipeline.tui.app import FilmStudioApp
+
+        if not isinstance(self.app, FilmStudioApp):
+            return
+        app = self.app
+        row = self._selected_row()
+        if row is None:
+            return
+        source = row.get("_source", "")
+        if source == "artifact":
+            app.set_status("Open is only available for generated media assets.")
+            return
+        path = str(row.get("path", ""))
+        if not path:
+            app.set_status("Selected asset has no file path.")
+            return
+        try:
+            open_path(path)
+        except Exception as exc:
+            app.set_status(f"Could not open asset: {exc}")
+            return
+        app.set_status(f"Opened {path}")
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table is not self:

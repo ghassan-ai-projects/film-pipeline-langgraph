@@ -184,6 +184,16 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                         allow_blank=False,
                         id="pf_provider",
                     )
+                    yield Label("Generation", classes="field-label")
+                    yield Select(
+                        [
+                            ("generate media", "generate"),
+                            ("text only", "text_only"),
+                        ],
+                        value="generate",
+                        allow_blank=False,
+                        id="pf_generation_policy",
+                    )
                 with (
                     Collapsible(title="Advanced profiles", collapsed=True),
                     Grid(id="advanced_grid"),
@@ -258,6 +268,7 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
         provider_profile = str(self.query_one("#pf_provider", Select).value)
         review_profile = str(self.query_one("#pf_review", Select).value)
         auto_approve_profile = str(self.query_one("#pf_auto_approve", Select).value)
+        generation_policy = str(self.query_one("#pf_generation_policy", Select).value)
         error = self.query_one("#pf_error", Static)
         if not project_id:
             self._show_error("Project ID is required.", "#pf_id")
@@ -298,6 +309,7 @@ class ProjectForm(ModalScreen[ProjectCreateRequest | None]):
                 provider_profile=provider_profile,
                 review_profile=review_profile,
                 auto_approve_profile=auto_approve_profile,
+                generation_policy=generation_policy,
             )
         )
 

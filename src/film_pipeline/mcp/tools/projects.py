@@ -91,6 +91,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
         state["resolved_config_sources"] = resolved_config["sources"]
         state["config_conflicts"] = conflicts
+        state["generation_policy"] = str(args.get("generation_policy", "generate"))
         user_runtime = _coerce_runtime_arg(args)
         if user_runtime > 0:
             # User-supplied expected length is authoritative for the whole pipeline.
@@ -110,6 +111,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
             rt.set_active(project_id)
             state["idea"] = idea
             state = rt.run_graph(state)
+            state["generation_policy"] = str(args.get("generation_policy", "generate"))
             rt.projects[project_id] = state
         return _ok(
             project_id=project_id,
@@ -210,4 +212,5 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
         issue_count=len(state.get("issues", [])),
         routing_decisions_count=len(routing),
         has_blockers=any(i.get("severity") == "blocking" for i in state.get("issues", [])),
+        generation_policy=str(state.get("generation_policy", "generate")),
     )

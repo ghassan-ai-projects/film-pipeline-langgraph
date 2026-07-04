@@ -7,6 +7,7 @@ from dataclasses import replace
 from typing import Any
 from unittest.mock import patch
 
+from textual.binding import Binding
 from textual.coordinate import Coordinate
 from textual.widgets import Button, Collapsible, DataTable, Input, Select, Static, TextArea
 
@@ -2132,5 +2133,74 @@ def test_inspector_shows_full_artifact_body() -> None:
             rendered = str(body.renderable)
             assert len(rendered) > 10000
             assert rendered.count("Line.") == 2000
+
+    _run(_body())
+
+
+def test_action_bar_hides_generate_for_text_only_policy() -> None:
+    class TextOnlyDashboardGateway(RecordingGateway):
+        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+            dashboard = super().get_dashboard(project_id)
+            return DashboardSummary(
+                project_id=dashboard.project_id,
+                title=dashboard.title,
+                slug=dashboard.slug,
+                current_phase="generation",
+                runtime_mode=dashboard.runtime_mode,
+                workflow_mode=dashboard.workflow_mode,
+                status="in_progress",
+                next_action="approve_phase",
+                route_reason="text only",
+                eligible_actions=["approve_phase"],
+                blocked_actions=dashboard.blocked_actions,
+                issue_count=dashboard.issue_count,
+                artifact_count=dashboard.artifact_count,
+                checkpoint_count=dashboard.checkpoint_count,
+                has_blockers=False,
+                generation_policy="text_only",
+            )
+
+    async def _body() -> None:
+        gateway = TextOnlyDashboardGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            generate_button = app.screen.query_one("#action_generate", Button)
+            assert generate_button.styles.display == "none"
+            approve_button = app.screen.query_one("#action_approve", Button)
+            assert str(approve_button.label) == "Approve Phase"
+
+    _run(_body())
+
+
+def test_asset_browser_shows_type_column() -> None:
+    async def _body() -> None:
+        gateway = RecordingGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            browser = app.screen.query_one("#asset_browser", AssetBrowser)
+            headers = [str(column.label) for column in browser.columns.values()]
+            assert "Type" in headers
+
+    _run(_body())
+
+
+def test_asset_browser_open_action_exists() -> None:
+    async def _body() -> None:
+        gateway = RecordingGateway()
+        app = FilmStudioApp(gateway=gateway)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.open_project("field-message")
+            await pilot.pause()
+            browser = app.screen.query_one("#asset_browser", AssetBrowser)
+            assert any(
+                isinstance(binding, Binding) and binding.key == "o" for binding in browser.BINDINGS
+            )
 
     _run(_body())
