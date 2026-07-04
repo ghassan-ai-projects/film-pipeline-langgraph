@@ -16,17 +16,54 @@ uv run --python 3.12 --group dev pytest tests/smoke/test_manual_4min_mock_short.
 make demo-project
 ```
 
-## TUI cockpit demo (mock mode)
+The manual 4-minute mock short is now the best single demo because it is both
+human-readable and executable.
 
-Launch the terminal cockpit:
+## Interactive TUI
+
+The redesigned studio interface and the legacy cockpit are both available while
+the redesign is being proven:
 
 ```bash
-uv run film-pipeline-tui
+# Redesigned interface
+uv run --python 3.12 --group dev python -m film_pipeline.tui.app
+
+# Legacy cockpit
+uv run --python 3.12 --group dev python -m film_pipeline.tui.cockpit
+```
+
+### New redesigned TUI
+
+The new interface starts at a project gallery. Create or open a project to enter
+a three-pane studio workspace: pipeline stages on the left, contextual actions
+and artifact/issue tables in the center, and an inspector on the right. Common
+actions are always visible as buttons; press `/` for the command palette.
+
+For real model generation, launch with `--real` after setting your API keys:
+
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export GOOGLE_API_KEY="..."
+uv run --python 3.12 --group dev python -m film_pipeline.tui.app --real
+```
+
+The TUI persists runtime state and LangGraph checkpoints under `~/.film-pipeline/`
+and project artifacts under `projects/`, so existing projects are loaded
+automatically on startup.
+
+See the operator guide for the full TUI walkthrough:
+[openclaw-mcp-operator-guide.md](./openclaw-mcp-operator-guide.md).
+
+### Legacy cockpit
+
+The legacy cockpit is a keyboard-first operator console with numbered tabs and a
+command palette. Launch it with:
+
+```bash
+uv run film-pipeline-tui-legacy
 ```
 
 The default gateway is in-process and mock-mode requires no API keys.
-
-### Keyboard walkthrough
 
 | Step | Keys | What happens |
 |------|------|--------------|
@@ -39,58 +76,30 @@ The default gateway is in-process and mock-mode requires no API keys.
 | Ops | `9` | Checkpoints, provider health, audit |
 | Finish | `a` `a` through delivery | Project reaches `delivery` |
 
-### Scripted tmux mock session
-
-A ready-to-run script is included:
+A ready-to-run tmux mock session is included for the legacy cockpit:
 
 ```bash
 ./scripts/tui_tmux_mock_demo.sh
 ```
 
-It launches the TUI in a detached tmux session, creates `tmux-demo`, approves
-through the pipeline, runs generation with `G`, visits Assets/Scenes/Validation/Ops,
-and captures rows 4-22 of the pane. The final capture shows:
+It launches the legacy TUI in a detached tmux session, creates `tmux-demo`,
+approves through the pipeline, runs generation with `G`, visits
+Assets/Scenes/Validation/Ops, and captures rows 4-22 of the pane. The final
+capture shows:
 
 ```
 phase 11/11: delivery (complete) | mock mode | providers 2/2 | next: film complete 🎬
 ```
 
-To drive it manually with `tmux send-keys`:
+A tmux demo for the redesigned studio is also available:
 
 ```bash
-SESSION=filmtui
-tmux new-session -d -s $SESSION "cd $(pwd) && .venv/bin/python -m film_pipeline.tui.app"
-sleep 2
-
-# Create project via command palette
-tmux send-keys -t $SESSION '/'
-tmux send-keys -t $SESSION 'create demo-mock | Demo Mock | A 20-second demo about a lost key.'
-tmux send-keys -t $SESSION Enter
-sleep 6
-
-# Approve phases until generation
-for _ in {1..7}; do
-  tmux send-keys -t $SESSION 'a' 'a'
-  sleep 4
-done
-
-# Run generation batch
-tmux send-keys -t $SESSION '3'  # Generate tab
-sleep 1
-tmux send-keys -t $SESSION 'G'  # plan → spend → start → poll
-sleep 12
-
-# Approve remaining phases
-for _ in {1..5}; do
-  tmux send-keys -t $SESSION 'a' 'a'
-  sleep 4
-done
-
-# Inspect views
-tmux send-keys -t $SESSION '5' '4' '8' '9'
-sleep 2
-tmux capture-pane -t $SESSION -p | sed -n '4,22p'
+./scripts/tui_new_tmux_mock_demo.sh
 ```
+
+It launches the redesigned TUI, creates a new project through the modal form,
+approves phases with `a`, runs generation with `g`, opens the asset viewer via
+the command palette, and captures the final pane.
 
 ## TUI cockpit demo (real mode)
 
@@ -100,6 +109,8 @@ Real mode exercises the live LLM agents and provider registry. Set keys first:
 export OPENROUTER_API_KEY=...
 export GOOGLE_API_KEY=...
 FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui
+# or for the legacy cockpit
+FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui-legacy
 ```
 
 The included real-mode E2E test uses live agents for scripts and prompts but

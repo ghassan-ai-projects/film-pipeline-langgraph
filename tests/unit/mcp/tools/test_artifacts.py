@@ -17,6 +17,7 @@ from film_pipeline.mcp.tools import (
     inspect_scene,
     inspect_shot,
     list_artifacts,
+    list_assets,
     list_shots,
     set_active_project,
 )
@@ -262,3 +263,58 @@ def test_inspect_reference_not_found_with_index(
 
     result = asyncio.run(inspect_reference({"reference_id": "totally-bogus-ref-id"}))
     assert result["ok"] is False
+
+
+def test_list_assets_requires_active_project() -> None:
+    rt = gr()
+    rt.active_project_id = ""
+    result = asyncio.run(list_assets({}))
+    assert result["ok"] is False
+
+
+def test_list_assets_empty_when_no_manifest() -> None:
+    _make_active_project("proj-assets-1")
+    result = asyncio.run(list_assets({}))
+    assert result["ok"] is True
+    assert result["assets"] == []
+
+
+def test_list_assets_returns_entries(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    rt = StudioRuntime(runtime_root=tmp_path / "runtime")
+    rt.create_project("proj-assets-2", "Assets Test")
+    rt.set_active("proj-assets-2")
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
+
+    assert rt.services is not None
+    write_manifest(
+        AssetManifest(
+            project_id="proj-assets-2",
+            entries=[
+                AssetEntry(
+                    asset_id="clip-001",
+                    kind="generated_clip",
+                    shot_id="shot_0001",
+                    scene_id="scene_01",
+                    path="projects/proj-assets-2/07-generated-assets/clip-001.mp4",
+                ),
+                AssetEntry(
+                    asset_id="frame-001",
+                    kind="last_frame",
+                    shot_id="shot_0001",
+                    scene_id="scene_01",
+                    path="projects/proj-assets-2/07-generated-assets/frame-001.png",
+                ),
+            ],
+        ),
+        root=rt.services.artifact_store._root,
+    )
+
+    result = asyncio.run(list_assets({}))
+    assert result["ok"] is True
+    assets = cast(list[dict[str, object]], result["assets"])
+    assert len(assets) == 2
+    assert assets[0]["asset_id"] == "clip-001"
+    assert assets[0]["kind"] == "generated_clip"
+    assert assets[1]["asset_id"] == "frame-001"

@@ -1,5 +1,9 @@
 """Terminal operator console for the film pipeline."""
 
-__all__ = ["__version__"]
+from __future__ import annotations
 
-__version__ = "0.1.0"
+from film_pipeline.tui.app import FilmStudioApp, main
+
+__all__ = ["FilmStudioApp", "__version__", "main"]
+
+__version__ = "0.2.0"

@@ -30,6 +30,7 @@ from film_pipeline.mcp.tools.artifacts import (
     inspect_scene,
     inspect_shot,
     list_artifacts,
+    list_assets,
     list_shots,
 )
 from film_pipeline.mcp.tools.assembly import (
@@ -175,6 +176,7 @@ __all__ = [
     "list_active_generations",
     "list_artifact_versions",
     "list_artifacts",
+    "list_assets",
     "list_checkpoints",
     "list_coverage_groups",
     "list_operator_comments",

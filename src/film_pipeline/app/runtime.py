@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
+from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.router import PHASE_ORDER
@@ -31,6 +32,47 @@ AUDIT_FILENAME = "audit-log.json"
 # Keep per-project git checkpoint repos small: media lives in the artifact
 # tree and is tracked by the asset manifest, not by checkpoint commits.
 _PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
+
+_PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
+_RUNTIME_ROOT = _PERSIST_ROOT / "runtime"
+
+
+def _use_persistent_runtime() -> bool:
+    return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE"))
+
+
+def _is_same_or_child(child: Path, parent: Path) -> bool:
+    try:
+        resolved_child = child.resolve()
+        resolved_parent = parent.resolve()
+    except OSError:
+        return False
+    return resolved_child == resolved_parent or resolved_parent in resolved_child.parents
+
+
+def _looks_like_project_dir(project_dir: Path) -> bool:
+    return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
+
+
+def _latest_discovered_phase(project_dir: Path) -> str:
+    phase_order = (
+        ("10-delivery", "delivery"),
+        ("09-post", "post"),
+        ("08-validation", "qc"),
+        ("07-generated-assets", "generation"),
+        ("06-generation-plan", "gen_planning"),
+        ("05-shot-bible", "shot_bible"),
+        ("04-visual-dev", "visual_dev"),
+        ("03-script", "script"),
+        ("02-development", "development"),
+        ("01-vision", "constitution"),
+        ("intake", "intake"),
+    )
+    for dirname, phase in phase_order:
+        candidate = project_dir / dirname
+        if candidate.exists() and any(candidate.rglob("*.json")):
+            return phase
+    return ""
 
 
 @dataclass
@@ -60,30 +102,32 @@ class StudioRuntime:
         if self.services is None:
             self.services = _build_services_for_mode(self.server_mode)
         if self.runtime_root is None:
-            self.runtime_root = self._default_runtime_root()
+            env_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
+            if env_root:
+                self.runtime_root = Path(env_root)
+            elif _use_persistent_runtime():
+                self.runtime_root = _RUNTIME_ROOT
+                self.runtime_root.mkdir(parents=True, exist_ok=True)
+            else:
+                store = self.services.artifact_store if self.services else None
+                root = getattr(store, "_root", None)
+                self.runtime_root = root if isinstance(root, Path) else Path("projects")
         self.load_persisted_projects()
-
-    def _default_runtime_root(self) -> Path:
-        """Durable home for project state: env override, else the artifact root."""
-        env_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-        if env_root:
-            return Path(env_root)
-        store = self.services.artifact_store if self.services else None
-        root = getattr(store, "_root", None)
-        return root if isinstance(root, Path) else Path("projects")
 
     # --- Persistence across restarts ---
 
     def load_persisted_projects(self) -> int:
-        """Restore projects persisted by earlier sessions from the runtime root.
+        """Restore projects from runtime state files and discover artifact-only projects.
 
-        Returns the number of projects restored. Projects already loaded in
-        memory are never overwritten.
+        Returns the number of projects restored or discovered. Projects already
+        loaded in memory are never overwritten.
         """
         root = self.runtime_root
         if root is None or not root.is_dir():
             return 0
         restored = 0
+
+        # 1. Load projects that have a persisted runtime state file.
         for state_path in sorted(root.glob(f"*/{STATE_FILENAME}")):
             project_root = state_path.parent
             project_id = project_root.name
@@ -93,7 +137,11 @@ class StudioRuntime:
                 state = json.loads(state_path.read_text())
             except (OSError, json.JSONDecodeError):
                 continue
-            if not isinstance(state, dict) or str(state.get("project_id", "")) != project_id:
+            if not isinstance(state, dict):
+                continue
+            # Discovered projects may carry a project_id that differs from the
+            # directory name; regular persisted projects must match.
+            if not state.get("discovered") and str(state.get("project_id", "")) != project_id:
                 continue
             self.projects[project_id] = state
             self.project_roots[project_id] = project_root
@@ -103,7 +151,43 @@ class StudioRuntime:
             self._restore_checkpoints(project_id, project_root)
             self._restore_audit_events(project_root)
             restored += 1
+
+        # 2. Discover projects that only exist in artifact storage.
+        known_ids = set(self.projects.keys())
+        for store_root in self._artifact_discovery_roots():
+            if store_root is None or not store_root.exists():
+                continue
+            for project_dir in sorted(p for p in store_root.iterdir() if p.is_dir()):
+                project_id = project_dir.name
+                if project_id in known_ids or not _looks_like_project_dir(project_dir):
+                    continue
+                project_root = root / project_id
+                discovered_state: dict[str, Any] = {
+                    "project_id": project_id,
+                    "title": project_id.replace("-", " ").replace("_", " ").title(),
+                    "slug": project_id,
+                    "server_mode": self.server_mode,
+                    "current_phase": _latest_discovered_phase(project_dir),
+                    "approved": False,
+                    "human_approval_required": False,
+                    "human_approval_phase": "",
+                    "constraints_hints": {},
+                    "issues": [],
+                    "discovered": True,
+                }
+                self.projects[project_id] = discovered_state
+                self.project_roots[project_id] = project_root
+                known_ids.add(project_id)
+                project_root.mkdir(parents=True, exist_ok=True)
+                self.checkpoint_managers[project_id] = CheckpointManager(
+                    _project_git_backend(project_root)
+                )
+                self._persist_project_state(project_id)
+                restored += 1
         return restored
+
+    # Backward-compatible alias used by tests and external callers.
+    load_persistent_projects = load_persisted_projects
 
     def _restore_checkpoints(self, project_id: str, project_root: Path) -> None:
         path = project_root / CHECKPOINTS_FILENAME
@@ -196,29 +280,53 @@ class StudioRuntime:
     def get_project(self, project_id: str) -> dict[str, Any] | None:
         return self.projects.get(project_id)
 
-    def delete_project(self, project_id: str) -> bool:
-        """Remove a project from runtime state and delete its on-disk data.
+    def delete_project(self, project_id: str, *, force: bool = False) -> bool:
+        """Remove a project from runtime state and archive its on-disk data.
 
         Returns ``True`` when the project existed and was removed, ``False``
-        otherwise. Used by tests and CLI cleanup to keep the projects folder
-        clear.
+        otherwise. Runtime state is moved to ``~/.film-pipeline/trash`` instead
+        of being deleted; artifacts are also archived when the path is safe.
+
+        Production projects require ``force=True`` or
+        ``FILM_PIPELINE_ALLOW_DELETE=1``.
         """
         if project_id not in self.projects:
             return False
+        state = self.projects[project_id]
+        if not can_delete_project(state, force=force):
+            raise ProductionDataError(
+                f"Refusing to delete production project '{project_id}'. "
+                "Set force=True or FILM_PIPELINE_ALLOW_DELETE=1 to override."
+            )
+
         project_root = self.project_roots.pop(project_id, None)
         self.checkpoint_managers.pop(project_id, None)
         self.projects.pop(project_id, None)
         if self.active_project_id == project_id:
             self.active_project_id = ""
         self._record_audit("system", "delete_project", project_id=project_id)
+
         if project_root is not None and project_root.exists():
-            shutil.rmtree(project_root, ignore_errors=True)
+            try:
+                move_to_trash(project_root, prefix=f"runtime-{project_id}-")
+            except ProductionDataError:
+                if force:
+                    shutil.rmtree(project_root, ignore_errors=True)
+                else:
+                    raise
+
         artifact_root = Path("projects")
         if self.services is not None and hasattr(self.services.artifact_store, "_root"):
             artifact_root = self.services.artifact_store._root
         project_artifact_dir = artifact_root / project_id
         if project_artifact_dir.exists():
-            shutil.rmtree(project_artifact_dir, ignore_errors=True)
+            try:
+                move_to_trash(project_artifact_dir, prefix=f"artifacts-{project_id}-")
+            except ProductionDataError:
+                if force:
+                    shutil.rmtree(project_artifact_dir, ignore_errors=True)
+                else:
+                    raise
         self.checkpoints = {
             checkpoint_id: meta
             for checkpoint_id, meta in self.checkpoints.items()
@@ -694,6 +802,35 @@ class StudioRuntime:
             return
         for provider_id in ("mock-image-provider", "mock-video-provider"):
             self.set_provider_health(provider_id, "healthy", "mock runtime")
+
+    def _artifact_root(self) -> Path | None:
+        store = self.services.artifact_store if self.services is not None else None
+        root = getattr(store, "_root", None)
+        return root if isinstance(root, Path) else None
+
+    def _artifact_discovery_roots(self) -> list[Path]:
+        """Return artifact roots to scan for existing projects.
+
+        The current configured root is checked first.  Legacy CWD-relative
+        ``projects/`` and ``.film-pipeline-run/artifacts`` are scanned
+        read-only so older projects remain loadable after the migration to
+        ``~/.film-pipeline/artifacts``.
+        """
+        roots: list[Path] = []
+        current = self._artifact_root()
+        if current is not None:
+            roots.append(current)
+        legacy = [Path("projects"), Path(".film-pipeline-run") / "artifacts"]
+        for candidate in legacy:
+            try:
+                resolved = candidate.resolve()
+            except OSError:
+                continue
+            if resolved not in roots and all(
+                not _is_same_or_child(resolved, existing) for existing in roots
+            ):
+                roots.append(resolved)
+        return roots
 
     def seed_default_provider_adapters(self) -> None:
         """Register default provider adapters for the runtime mode.

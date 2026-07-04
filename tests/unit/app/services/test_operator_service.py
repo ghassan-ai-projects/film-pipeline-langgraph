@@ -183,6 +183,24 @@ class TestOperatorService:
         assert len(checkpoints) >= 1
         assert checkpoints[-1]["phase"] == "constitution"
 
+    def test_approve_phase_advances_through_pre_generation_phases(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="multi-phase",
+                title="Multi Phase",
+            )
+        )
+        service.submit_idea(
+            "multi-phase",
+            "A projectionist restores a lost frame and discovers it predicts the future.",
+        )
+
+        for expected in ("constitution", "development", "script", "visual_dev", "shot_bible"):
+            result = service.approve_phase("multi-phase")
+            assert result.ok is True
+            assert result.current_phase == expected
+
     def test_validation_workspace_splits_blocking_and_non_blocking_issues(
         self, tmp_path: Path
     ) -> None:
@@ -276,6 +294,28 @@ class TestOperatorService:
 
         with pytest.raises(ProjectNotFoundError, match="No active project"):
             service.get_dashboard()
+
+    def test_create_project_resolves_and_stores_profile_stack(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="profiled",
+                title="Profiled",
+                film_type_profile="narrative",
+                quality_profile="draft",
+                provider_profile="mock-demo",
+            )
+        )
+
+        state = service.runtime.projects["profiled"]
+        assert state["profile_stack"]["film_type_profile"] == "film-type.narrative"
+        assert state["profile_stack"]["quality_profile"] == "quality.draft"
+        assert state["profile_stack"]["provider_profile"] == "mock-demo"
+        assert "resolved_config" in state
+
+        dashboard = service.get_dashboard("profiled")
+        assert dashboard.profile_stack["film_type_profile"] == "film-type.narrative"
+        assert dashboard.profile_stack["quality_profile"] == "quality.draft"
 
     def test_review_workspace_before_phase_recommends_starting_intake(self, tmp_path: Path) -> None:
         service = _service(tmp_path)
@@ -562,3 +602,52 @@ class TestProviderHealthSeeding:
         health = runtime.get_all_health()
         assert set(health) == {"seedance-openrouter", "veo-fast", "gemini-imagen-4"}
         assert all(entry["status"] in {"healthy", "unconfigured"} for entry in health.values())
+
+
+class TestTextOnlyGeneration:
+    def test_plan_generation_text_only_creates_completed_requests(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="text-only",
+                title="Text Only Film",
+                idea="A film delivered as text only.",
+                generation_policy="text_only",
+            )
+        )
+        state = service.runtime.projects["text-only"]
+        state["current_phase"] = "generation"
+        service.runtime.projects["text-only"] = state
+
+        workspace = service.plan_generation("text-only")
+        assert workspace.completed == 1
+        assert workspace.next_step == "approve_phase"
+        assert workspace.estimated_cost_usd == 0.0
+
+        state = service.runtime.projects["text-only"]
+        assert state.get("_text_only_generation_completed") is True
+        requests = state.get("generation_requests", [])
+        assert len(requests) >= 1
+        assert all(str(r.get("status", "")).lower() == "completed" for r in requests)
+
+    def test_approve_and_start_text_only_are_no_ops(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        service.create_project(
+            ProjectCreateRequest(
+                project_id="text-only-noop",
+                title="Text Only Noop",
+                idea="A text-only film.",
+                generation_policy="text_only",
+            )
+        )
+        state = service.runtime.projects["text-only-noop"]
+        state["current_phase"] = "generation"
+        service.runtime.projects["text-only-noop"] = state
+        service.plan_generation("text-only-noop")
+
+        workspace = service.approve_generation_spend("text-only-noop")
+        assert workspace.completed == 1
+        workspace = service.start_generation("text-only-noop")
+        assert workspace.completed == 1
+        workspace = service.poll_generation("text-only-noop")
+        assert workspace.completed == 1

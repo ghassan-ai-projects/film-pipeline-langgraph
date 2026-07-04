@@ -10,6 +10,7 @@ from .artifacts import (
     inspect_scene,
     inspect_shot,
     list_artifacts,
+    list_assets,
     list_shots,
 )
 from .assembly import (
@@ -182,6 +183,7 @@ def register_all_tools(registry: ToolRegistry) -> None:
     registry.register(
         _make("inspect_artifact", ToolGroup.ARTIFACT, inspect_artifact), inspect_artifact
     )
+    registry.register(_make("list_assets", ToolGroup.ARTIFACT, list_assets), list_assets)
     registry.register(_make("list_shots", ToolGroup.ARTIFACT, list_shots), list_shots)
     registry.register(_make("inspect_shot", ToolGroup.ARTIFACT, inspect_shot), inspect_shot)
     registry.register(_make("inspect_scene", ToolGroup.ARTIFACT, inspect_scene), inspect_scene)

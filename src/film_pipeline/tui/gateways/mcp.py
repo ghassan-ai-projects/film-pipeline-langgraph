@@ -131,16 +131,22 @@ class MCPStudioGateway(StudioGateway):
             return []
         items: list[ProjectListItem] = []
         for pid in projects:
-            summary = self._tool("get_project_summary", {})
+            if not isinstance(pid, str):
+                continue
+            summary = self._tool("get_project_summary", {"project_ref": pid})
+            current_phase = str(summary.get("current_phase", ""))
+            status = str(summary.get("status", ""))
+            if not status:
+                status = "in_progress" if current_phase else "created"
             items.append(
                 ProjectListItem(
-                    project_id=str(pid),
+                    project_id=pid,
                     title=str(summary.get("title", pid)),
                     slug=str(summary.get("slug", pid)),
-                    current_phase=str(summary.get("current_phase", "")),
-                    status="in_progress" if summary.get("current_phase") else "created",
+                    current_phase=current_phase,
+                    status=status,
                     has_blockers=bool(summary.get("has_blockers")),
-                    awaiting_review=False,
+                    awaiting_review=status == "awaiting_review",
                 )
             )
         return items
@@ -158,6 +164,18 @@ class MCPStudioGateway(StudioGateway):
             args["runtime_mode"] = request.runtime_mode
         if request.target_runtime_seconds:
             args["target_runtime_seconds"] = request.target_runtime_seconds
+        if request.film_type_profile:
+            args["film_type_profile"] = request.film_type_profile
+        if request.quality_profile:
+            args["quality_profile"] = request.quality_profile
+        if request.provider_profile:
+            args["provider_profile"] = request.provider_profile
+        if request.review_profile:
+            args["review_profile"] = request.review_profile
+        if request.auto_approve_profile:
+            args["auto_approve_profile"] = request.auto_approve_profile
+        if request.generation_policy:
+            args["generation_policy"] = request.generation_policy
         r = self._tool("create_film_project", args)
         return MutationResult(
             ok=bool(r.get("ok")),
@@ -202,6 +220,7 @@ class MCPStudioGateway(StudioGateway):
             artifact_count=int(r.get("artifact_count", 0)),
             checkpoint_count=int(r.get("checkpoint_count", 0)),
             has_blockers=bool(r.get("has_blockers")),
+            generation_policy=str(r.get("generation_policy", "generate")),
         )
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
@@ -231,8 +250,35 @@ class MCPStudioGateway(StudioGateway):
         self._tool("run_validation", {})
         return self.get_validation_workspace(project_id)
 
+    def _is_text_only(self, project_id: str | None) -> bool:
+        self._set_active(project_id)
+        r = self._tool("get_project_summary", {})
+        return str(r.get("generation_policy", "")).lower() == "text_only"
+
+    def _text_only_workspace(self, project_id: str | None) -> GenerationWorkspace:
+        assets = self.list_assets(project_id)
+        completed = any(
+            str(asset.get("kind", "")).lower() == "text_only_delivery" for asset in assets
+        )
+        return GenerationWorkspace(
+            project_id=project_id or "",
+            phase="generation",
+            provider="",
+            model="",
+            estimated_cost_usd=0.0,
+            rows=[],
+            planned=0,
+            submitted=0,
+            running=0,
+            completed=1 if completed else 0,
+            failed=0,
+            next_step="approve_phase" if completed else "plan",
+        )
+
     def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
+        if self._is_text_only(project_id):
+            return self._text_only_workspace(project_id)
         r = self._tool("list_active_generations", {})
         rows_raw = r.get("rows", [])
         rows = [dict(row) for row in rows_raw] if isinstance(rows_raw, list) else []
@@ -250,6 +296,11 @@ class MCPStudioGateway(StudioGateway):
 
     def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
+        if self._is_text_only(project_id):
+            result = self._tool("plan_generation_batch", {})
+            if not result.get("ok"):
+                raise RuntimeError(str(result.get("error", "plan_generation_batch failed")))
+            return self._text_only_workspace(project_id)
         result = self._tool("plan_generation_batch", {})
         if not result.get("ok"):
             raise RuntimeError(str(result.get("error", "plan_generation_batch failed")))
@@ -259,6 +310,11 @@ class MCPStudioGateway(StudioGateway):
         self, project_id: str | None = None, max_cost_usd: float = -1.0
     ) -> GenerationWorkspace:
         self._set_active(project_id)
+        if self._is_text_only(project_id):
+            result = self._tool("approve_generation_spend", {"max_cost_usd": max_cost_usd})
+            if not result.get("ok"):
+                raise RuntimeError(str(result.get("error", "approve_generation_spend failed")))
+            return self._text_only_workspace(project_id)
         result = self._tool("approve_generation_spend", {"max_cost_usd": max_cost_usd})
         if not result.get("ok"):
             raise RuntimeError(str(result.get("error", "approve_generation_spend failed")))
@@ -266,6 +322,11 @@ class MCPStudioGateway(StudioGateway):
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
+        if self._is_text_only(project_id):
+            result = self._tool("start_generation_batch", {})
+            if not result.get("ok"):
+                raise RuntimeError(str(result.get("error", "start_generation_batch failed")))
+            return self._text_only_workspace(project_id)
         result = self._tool("start_generation_batch", {})
         if not result.get("ok"):
             raise RuntimeError(str(result.get("error", "start_generation_batch failed")))
@@ -273,6 +334,8 @@ class MCPStudioGateway(StudioGateway):
 
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
+        if self._is_text_only(project_id):
+            return self._text_only_workspace(project_id)
         active = self._tool("list_active_generations", {})
         rows = active.get("rows", [])
         if isinstance(rows, list):
@@ -376,7 +439,9 @@ class MCPStudioGateway(StudioGateway):
 
     def list_assets(self, project_id: str | None = None) -> list[dict[str, object]]:
         self._set_active(project_id)
-        return []
+        r = self._tool("list_assets", {})
+        assets = r.get("assets", [])
+        return list(assets) if isinstance(assets, list) else []
 
     def inspect_artifact(
         self,
@@ -457,7 +522,7 @@ def default_gateway() -> StudioGateway:
     surface over the shared application service layer (routing, assets,
     generation, provider health). Set ``FILM_PIPELINE_TUI_GATEWAY=mcp`` to
     drive the cockpit through the MCP stdio tool surface instead (parity
-    testing with OpenClaw; reduced feature set).
+    testing with OpenClaw).
     """
     from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 

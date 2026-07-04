@@ -8,7 +8,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Static
 
 from film_pipeline.app.services.models import DashboardSummary
-from film_pipeline.tui.app import FilmCockpitApp
+from film_pipeline.tui.cockpit import FilmCockpitApp
 from tests.unit.tui.conftest import BrokenArtifactGateway, RecordingGateway
 
 

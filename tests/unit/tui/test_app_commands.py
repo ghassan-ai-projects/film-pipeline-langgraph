@@ -7,7 +7,7 @@ import asyncio
 from textual.widgets import DataTable, Input, Static, TabbedContent
 
 from film_pipeline.app.services.models import OperatorCommentRequest, ProjectListItem
-from film_pipeline.tui.app import FilmCockpitApp
+from film_pipeline.tui.cockpit import FilmCockpitApp
 from film_pipeline.tui.screens import NewProjectScreen, ReviseIdeaScreen
 from tests.unit.tui.conftest import NoApprovalGateway, RecordingGateway
 

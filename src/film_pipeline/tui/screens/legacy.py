@@ -1,4 +1,4 @@
-"""Modal screens for the film pipeline cockpit.
+"""Legacy modal screens used by the operator cockpit.
 
 These keep multi-field operator input (creating a project, revising an idea)
 out of the single-line command palette so the most common production actions
