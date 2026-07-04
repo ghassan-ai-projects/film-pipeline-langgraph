@@ -57,6 +57,7 @@ from .generation import (
     get_generation_status,
     list_active_generations,
     plan_generation_batch,
+    preview_generation_prompts,
     promote_test_to_production,
     resume_generation_polling,
     start_generation_batch,
@@ -202,6 +203,14 @@ def register_all_tools(registry: ToolRegistry) -> None:
     registry.register(
         _make("plan_generation_batch", ToolGroup.GENERATION, plan_generation_batch),
         plan_generation_batch,
+    )
+    registry.register(
+        _make(
+            "preview_generation_prompts",
+            ToolGroup.GENERATION,
+            preview_generation_prompts,
+        ),
+        preview_generation_prompts,
     )
     registry.register(
         _make(

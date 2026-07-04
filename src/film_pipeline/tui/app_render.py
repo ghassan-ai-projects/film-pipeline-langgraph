@@ -13,6 +13,7 @@ from film_pipeline.tui.view_models import (
     CockpitSnapshot,
     MatrixImpact,
     PhaseDetail,
+    PhaseReading,
     ReaderView,
     build_asset_action_rows,
     build_command_help_rows,
@@ -25,6 +26,7 @@ from film_pipeline.tui.view_models import (
     build_graph_rows,
     build_matrix_pivot_rows,
     build_matrix_rows,
+    build_phase_reading,
     build_reader_index_rows,
     build_reader_link_rows,
     build_review_checklist_rows,
@@ -58,6 +60,8 @@ class AppRenderMixin(AppCockpitBase):
                 generation = self.gateway.get_generation_workspace(project_id)
             except (ServiceError, ValueError, FileNotFoundError, NotImplementedError):
                 generation = None
+        prompts = self._load_prompt_previews(dashboard, project_id)
+        reading = self._load_phase_reading(dashboard, artifacts, prompts, project_id)
         checkpoints = self.gateway.list_checkpoints(project_id) if project_id else []
         providers = self.gateway.list_provider_status()
         audit_events = self.gateway.get_audit_feed(project_id, limit=30) if project_id else []
@@ -72,6 +76,8 @@ class AppRenderMixin(AppCockpitBase):
             artifacts=artifacts,
             assets=assets,
             generation=generation,
+            reading=reading,
+            prompts=prompts,
             checkpoints=checkpoints,
             providers=providers,
             audit_events=audit_events,
@@ -91,6 +97,56 @@ class AppRenderMixin(AppCockpitBase):
                 artifacts=artifacts,
                 providers=providers,
             ),
+        )
+
+    def _load_prompt_previews(
+        self,
+        dashboard: DashboardSummary | None,
+        project_id: str | None,
+    ) -> list[dict[str, object]]:
+        """Load per-shot prompt previews once the shot matrix exists."""
+        if dashboard is None or not project_id:
+            return []
+        phases_with_prompts = {"shot_bible", "gen_planning", "generation", "qc"}
+        if dashboard.current_phase not in phases_with_prompts:
+            return []
+        try:
+            return self.gateway.preview_generation_prompts(project_id)
+        except (ServiceError, ValueError, FileNotFoundError, NotImplementedError):
+            return []
+
+    def _load_phase_reading(
+        self,
+        dashboard: DashboardSummary | None,
+        artifacts: list[dict[str, object]],
+        prompts: list[dict[str, object]],
+        project_id: str | None,
+    ) -> PhaseReading | None:
+        """Load the current phase's artifact bodies and build the reading."""
+        if dashboard is None or not project_id or not dashboard.current_phase:
+            return None
+        phase = dashboard.current_phase
+        bodies: dict[str, dict[str, object]] = {}
+        for row in artifacts:
+            if str(row.get("phase", "")) != phase:
+                continue
+            artifact_id = str(row.get("artifact_id", ""))
+            if not artifact_id or artifact_id == "graph_state":
+                continue
+            version_value = row.get("version", 1)
+            try:
+                version = (
+                    version_value if isinstance(version_value, int) else int(str(version_value))
+                )
+                detail = self.gateway.inspect_artifact(artifact_id, phase, version, project_id)
+            except (ServiceError, ValueError, FileNotFoundError):
+                continue
+            bodies[artifact_id] = detail.body
+        include_prompts = phase in {"gen_planning", "generation"}
+        return build_phase_reading(
+            phase,
+            bodies,
+            prompts=[dict(prompt) for prompt in prompts] if include_prompts else None,
         )
 
     def _enrich_artifact_rows(
@@ -134,11 +190,13 @@ class AppRenderMixin(AppCockpitBase):
         except ServiceError:
             # Only auto-activate live, runtime-loaded projects. Folders merely
             # discovered on disk (status "discovered") require explicit opening
-            # so the cockpit never boots into stale leftover state.
+            # so the cockpit never boots into stale leftover state. Prefer the
+            # project the operator touched most recently.
             live = [project for project in projects if project.status != "discovered"]
             if not live:
                 return None
-            dashboard = self.gateway.set_active_project(live[0].project_id)
+            most_recent = max(live, key=lambda project: project.last_updated_at)
+            dashboard = self.gateway.set_active_project(most_recent.project_id)
             self.active_project_id = dashboard.project_id
             return dashboard
 
@@ -323,7 +381,30 @@ class AppRenderMixin(AppCockpitBase):
                 f"{generation.completed} clip(s) delivered to the project asset tree.\n"
                 "Open Assets (5) to inspect them."
             )
+        elif snapshot.prompts:
+            detail = "Select a shot row to read the exact prompt it will send."
         self.query_one("#generation_detail", Static).update(detail)
+
+    def _show_generation_prompt(self, shot_id: str) -> None:
+        """Show the full resolved prompt for a selected generation row."""
+        snapshot = self.snapshot
+        if snapshot is None or not shot_id:
+            return
+        match = next(
+            (prompt for prompt in snapshot.prompts if str(prompt.get("shot_id", "")) == shot_id),
+            None,
+        )
+        if match is None:
+            self.query_one("#generation_detail", Static).update(
+                f"No prompt preview available for {shot_id}."
+            )
+            return
+        text = (
+            f"[{shot_id}] {match.get('provider', '')} / {match.get('model', '')} · "
+            f"{match.get('duration_seconds', '?')}s\n\n{match.get('prompt', '')}"
+        )
+        self.query_one("#generation_detail", Static).update(text)
+        self._update_context(f"Generation Prompt\n\n{text}")
 
     def _render_matrix(self, snapshot: CockpitSnapshot) -> None:
         matrix_rows = filter_matrix_rows(snapshot.matrix_rows, self.matrix_filter)
@@ -347,7 +428,10 @@ class AppRenderMixin(AppCockpitBase):
         review = snapshot.review
         if review is None:
             self.query_one("#review_summary", Static).update("No review workspace.")
-            self.query_one("#review_intelligence", Static).update("")
+            self.query_one("#review_reading_body", Static).update(
+                "Create a project and submit an idea; the phase output will be "
+                "readable here before you approve it."
+            )
             self._set_table(
                 "#review_checklist_table",
                 ["check", "status", "detail", "action"],
@@ -358,7 +442,6 @@ class AppRenderMixin(AppCockpitBase):
                 ["issue_id", "severity", "target_id", "target_type", "message", "command"],
                 [],
             )
-            self._set_table("#review_artifacts", ["artifact", "type", "phase", "status"], [])
             self._set_table(
                 "#comment_thread_table",
                 ["target_id", "target_type", "open", "latest", "updated", "command"],
@@ -374,20 +457,14 @@ class AppRenderMixin(AppCockpitBase):
         thread_rows = build_comment_thread_rows(snapshot.comments)
         summary = "\n".join(
             [
-                f"Review package: {review.phase or 'none'}",
-                f"Recommendation: {review.recommendation}",
-                f"Actions: {', '.join(review.available_actions) or 'none'}",
-                f"Blocked actions: {len(review.blocked_actions)}",
+                f"Review package: {review.phase or 'none'} | "
+                f"Actions: {', '.join(review.available_actions) or 'none'} | "
                 f"Open issues: {len(review.open_issues)}",
+                f"Recommendation: {review.recommendation}",
             ]
         )
         self.query_one("#review_summary", Static).update(summary)
-        self.query_one("#review_intelligence", Static).update(
-            "Review Intelligence\n"
-            f"Checklist: {len(checklist_rows)} | Issues: {len(issue_rows)} | "
-            f"Threads: {len(thread_rows)}\n"
-            "Commands: review issue <id>, thread <target>, draft <target> | <note>"
-        )
+        self._render_reading_pane(snapshot.reading)
         self._set_table(
             "#review_checklist_table",
             ["check", "status", "detail", "action"],
@@ -399,38 +476,20 @@ class AppRenderMixin(AppCockpitBase):
             issue_rows,
         )
         self._set_table(
-            "#review_artifacts",
-            ["artifact", "type", "phase", "version", "status"],
-            [
-                {
-                    "artifact": row.get("artifact_id", ""),
-                    "type": row.get("artifact_type", ""),
-                    "phase": row.get("phase", ""),
-                    "version": row.get("version", ""),
-                    "status": row.get("status", ""),
-                }
-                for row in review.candidate_artifacts
-            ],
-        )
-        self._set_table(
             "#comment_thread_table",
             ["target_id", "target_type", "open", "latest", "updated", "command"],
             thread_rows,
         )
-        self._set_table(
-            "#comment_table",
-            ["target", "type", "phase", "body", "created"],
-            [
-                {
-                    "target": comment.target_id,
-                    "type": comment.target_type,
-                    "phase": comment.phase,
-                    "body": comment.body,
-                    "created": comment.created_at,
-                }
-                for comment in snapshot.comments
-            ],
-        )
+
+    def _render_reading_pane(self, reading: PhaseReading | None) -> None:
+        body = self.query_one("#review_reading_body", Static)
+        if reading is None or not reading.sections:
+            body.update(
+                "Nothing to read yet for this phase.\n\n"
+                "Artifacts appear here as soon as the phase produces them."
+            )
+            return
+        body.update(reading.as_text())
 
     def _render_scenes(self, snapshot: CockpitSnapshot) -> None:
         self.query_one("#scene_summary", Static).update(
@@ -661,8 +720,10 @@ class AppRenderMixin(AppCockpitBase):
             self._update_context(
                 "Review Context\n\n"
                 f"{snapshot.review.recommendation}\n\n"
-                "Use review issue <id> to jump to issue context, thread <target> "
-                "to inspect notes, or draft <target> | <note> to prefill revision."
+                "Read the phase output in the left pane, then approve (a, y) "
+                "or write a note and revise (r).\n\n"
+                "Deep links: scene <id>, artifact <id>, review issue <id>, "
+                "thread <target>, draft <target> | <note>."
             )
         elif tab_id == "matrix":
             self._update_context(

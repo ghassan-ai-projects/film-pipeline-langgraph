@@ -12,7 +12,7 @@ import os
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from film_pipeline.app.services.models import (
     ArtifactDetail,
@@ -283,6 +283,14 @@ class MCPStudioGateway(StudioGateway):
                         {"generation_id": str(row.get("generation_id", ""))},
                     )
         return self.get_generation_workspace(project_id)
+
+    def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
+        """Resolve the exact prompt each shot will send to its provider."""
+        self._set_active(project_id)
+        r = self._tool("preview_generation_prompts", {})
+        if not r.get("ok"):
+            return []
+        return cast(list[dict[str, object]], r.get("previews", []))
 
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self._set_active(project_id)
