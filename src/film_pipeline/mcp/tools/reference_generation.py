@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -16,6 +17,8 @@ from .helpers import (
     _ok,
     _services,
 )
+
+_logger = logging.getLogger(__name__)
 
 
 async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
@@ -550,8 +553,8 @@ def _build_composites(
             build_character_identity_sheet(subject_id, subject_id, frames, sheet_path)
             # Phase 8 — Composite validation
             _validate_composite(sheet_path, "character_identity_sheet", subject_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning("Identity sheet build failed for %s: %s", subject_id, exc)
 
     # Group entries by environment subject
     env_frames: dict[str, dict[str, Path]] = {}
@@ -585,8 +588,8 @@ def _build_composites(
             )
             # Phase 8 — Composite validation
             _validate_composite(sheet_path, "environment_board", subject_id)
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning("Environment board build failed for %s: %s", subject_id, exc)
 
     # Phase 05 — Additional composite templates
     _build_optional_sheets(project_root, project_id, char_frames, env_palettes)
@@ -612,8 +615,8 @@ def _build_optional_sheets(
                 project_root / "references" / "characters" / subject_id / "expression-sheet.png"
             )
             build_expression_sheet(subject_id, subject_id, frames, sheet_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning("Expression sheet build failed for %s: %s", subject_id, exc)
 
     # Scale sheet — all characters' full-body frames
     full_body_frames: dict[str, Path] = {}
@@ -625,8 +628,8 @@ def _build_optional_sheets(
         try:
             sheet_path = project_root / "references" / "scale" / "scale-sheet.png"
             build_scale_sheet(project_id, full_body_frames, sheet_path)
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning("Scale sheet build failed for %s: %s", project_id, exc)
 
     # Style board — use first environment's palette or defaults
     palette: list[str] = []
@@ -636,8 +639,8 @@ def _build_optional_sheets(
     try:
         sheet_path = project_root / "references" / "style" / "style-board.png"
         build_style_board(project_id, palette, "", "", "", sheet_path)
-    except Exception:
-        pass
+    except Exception as exc:
+        _logger.warning("Style board build failed for %s: %s", project_id, exc)
 
 
 def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
