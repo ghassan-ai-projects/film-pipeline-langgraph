@@ -18,8 +18,21 @@ from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
+from film_pipeline.app import _persistence, _provider_seeds
+from film_pipeline.app._persistence import (
+    RUNTIME_ROOT,
+    STATE_FILENAME,
+    project_git_backend,
+    use_persistent_runtime,
+)
+from film_pipeline.app._resume import (
+    _approval_made_progress,
+    _build_resume_payload,
+    _has_stale_generation_request_blocker,
+    _preserve_external_generation_requests,
+    _strip_stale_generation_request_blockers,
+)
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
-from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.services import GraphServices
@@ -27,55 +40,6 @@ from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 _logger = logging.getLogger(__name__)
-
-STATE_FILENAME = "project-state.json"
-CHECKPOINTS_FILENAME = "checkpoints.json"
-AUDIT_FILENAME = "audit-log.json"
-
-# Keep per-project git checkpoint repos small: media lives in the artifact
-# tree and is tracked by the asset manifest, not by checkpoint commits.
-_PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
-
-_PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
-_RUNTIME_ROOT = _PERSIST_ROOT / "runtime"
-
-
-def _use_persistent_runtime() -> bool:
-    return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE"))
-
-
-def _is_same_or_child(child: Path, parent: Path) -> bool:
-    try:
-        resolved_child = child.resolve()
-        resolved_parent = parent.resolve()
-    except OSError:
-        return False
-    return resolved_child == resolved_parent or resolved_parent in resolved_child.parents
-
-
-def _looks_like_project_dir(project_dir: Path) -> bool:
-    return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
-
-
-def _latest_discovered_phase(project_dir: Path) -> str:
-    phase_order = (
-        ("10-delivery", "delivery"),
-        ("09-post", "post"),
-        ("08-validation", "qc"),
-        ("07-generated-assets", "generation"),
-        ("06-generation-plan", "gen_planning"),
-        ("05-shot-bible", "shot_bible"),
-        ("04-visual-dev", "visual_dev"),
-        ("03-script", "script"),
-        ("02-development", "development"),
-        ("01-vision", "constitution"),
-        ("intake", "intake"),
-    )
-    for dirname, phase in phase_order:
-        candidate = project_dir / dirname
-        if candidate.exists() and any(candidate.rglob("*.json")):
-            return phase
-    return ""
 
 
 @dataclass
@@ -108,8 +72,8 @@ class StudioRuntime:
             env_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
             if env_root:
                 self.runtime_root = Path(env_root)
-            elif _use_persistent_runtime():
-                self.runtime_root = _RUNTIME_ROOT
+            elif use_persistent_runtime():
+                self.runtime_root = RUNTIME_ROOT
                 self.runtime_root.mkdir(parents=True, exist_ok=True)
             else:
                 store = self.services.artifact_store if self.services else None
@@ -125,132 +89,16 @@ class StudioRuntime:
         Returns the number of projects restored or discovered. Projects already
         loaded in memory are never overwritten.
         """
-        root = self.runtime_root
-        if root is None or not root.is_dir():
-            return 0
-        restored = 0
-
-        # 1. Load projects that have a persisted runtime state file.
-        for state_path in sorted(root.glob(f"*/{STATE_FILENAME}")):
-            project_root = state_path.parent
-            project_id = project_root.name
-            if project_id in self.projects or project_id.startswith("."):
-                continue
-            try:
-                state = json.loads(state_path.read_text())
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(state, dict):
-                continue
-            # Discovered projects may carry a project_id that differs from the
-            # directory name; regular persisted projects must match.
-            if not state.get("discovered") and str(state.get("project_id", "")) != project_id:
-                continue
-            self.projects[project_id] = state
-            self.project_roots[project_id] = project_root
-            self.checkpoint_managers[project_id] = CheckpointManager(
-                _project_git_backend(project_root)
-            )
-            self._restore_checkpoints(project_id, project_root)
-            self._restore_audit_events(project_root)
-            restored += 1
-
-        # 2. Discover projects that only exist in artifact storage.
-        known_ids = set(self.projects.keys())
-        for store_root in self._artifact_discovery_roots():
-            if store_root is None or not store_root.exists():
-                continue
-            for project_dir in sorted(p for p in store_root.iterdir() if p.is_dir()):
-                project_id = project_dir.name
-                if project_id in known_ids or not _looks_like_project_dir(project_dir):
-                    continue
-                project_root = root / project_id
-                discovered_state: dict[str, Any] = {
-                    "project_id": project_id,
-                    "title": project_id.replace("-", " ").replace("_", " ").title(),
-                    "slug": project_id,
-                    "server_mode": self.server_mode,
-                    "current_phase": _latest_discovered_phase(project_dir),
-                    "approved": False,
-                    "human_approval_required": False,
-                    "human_approval_phase": "",
-                    "constraints_hints": {},
-                    "issues": [],
-                    "discovered": True,
-                }
-                self.projects[project_id] = discovered_state
-                self.project_roots[project_id] = project_root
-                known_ids.add(project_id)
-                project_root.mkdir(parents=True, exist_ok=True)
-                self.checkpoint_managers[project_id] = CheckpointManager(
-                    _project_git_backend(project_root)
-                )
-                self._persist_project_state(project_id)
-                restored += 1
-        return restored
-
-    # Backward-compatible alias used by tests and external callers.
-    load_persistent_projects = load_persisted_projects
-
-    def _restore_checkpoints(self, project_id: str, project_root: Path) -> None:
-        path = project_root / CHECKPOINTS_FILENAME
-        if not path.exists():
-            return
-        try:
-            raw = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
-            return
-        if not isinstance(raw, list):
-            return
-        manager = self.checkpoint_managers.get(project_id)
-        for item in raw:
-            try:
-                meta = CheckpointMetadata.model_validate(item)
-            except ValueError:
-                continue
-            self.checkpoints[meta.checkpoint_id] = meta
-            if manager is not None:
-                manager.checkpoints[meta.checkpoint_id] = meta
-
-    def _restore_audit_events(self, project_root: Path) -> None:
-        path = project_root / AUDIT_FILENAME
-        if not path.exists():
-            return
-        try:
-            raw = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
-            return
-        if not isinstance(raw, list):
-            return
-        known_ids = {event.get("event_id") for event in self.audit_events}
-        for item in raw:
-            if isinstance(item, dict) and item.get("event_id") not in known_ids:
-                self.audit_events.append(item)
-        self.audit_events.sort(key=lambda event: str(event.get("timestamp", "")))
+        return _persistence.load_persisted_projects(self)
 
     def _persist_checkpoints(self, project_id: str) -> None:
-        project_root = self.project_roots.get(project_id)
-        if project_root is None:
-            return
-        metas = [
-            json.loads(meta.model_dump_json())
-            for meta in self.checkpoints.values()
-            if meta.project_id == project_id
-        ]
-        project_root.mkdir(parents=True, exist_ok=True)
-        (project_root / CHECKPOINTS_FILENAME).write_text(json.dumps(metas, indent=2))
+        _persistence.persist_checkpoints(self, project_id)
 
     def _persist_audit_events(self, project_id: str) -> None:
-        project_root = self.project_roots.get(project_id)
-        if project_root is None:
-            return
-        events = [
-            event
-            for event in self.audit_events
-            if event.get("details", {}).get("project_id") == project_id
-        ]
-        project_root.mkdir(parents=True, exist_ok=True)
-        (project_root / AUDIT_FILENAME).write_text(json.dumps(events, indent=2, default=str))
+        _persistence.persist_audit_events(self, project_id)
+
+    def _persist_project_state(self, project_id: str) -> None:
+        _persistence.persist_project_state(self, project_id)
 
     # --- Project management ---
 
@@ -259,7 +107,7 @@ class StudioRuntime:
             raise ValueError(f"Project '{project_id}' already exists.")
         assert self.runtime_root is not None
         project_root = self.runtime_root / project_id
-        git = _project_git_backend(project_root)
+        git = project_git_backend(project_root)
         state: dict[str, Any] = {
             "project_id": project_id,
             "title": title,
@@ -781,109 +629,16 @@ class StudioRuntime:
         return dict(self.provider_health)
 
     def seed_default_provider_health(self) -> None:
-        """Seed provider health rows and adapters for the configured runtime mode.
-
-        Mock mode advertises the zero-cost mock providers as healthy. Real mode
-        advertises the live generation providers, marking each healthy only when
-        its API credentials are configured so the operator can see at a glance
-        what is wired up. Existing health entries are never overwritten, but
-        missing adapters are always registered so generation can dispatch.
-        """
-        self.seed_default_provider_adapters()
-        if self.provider_health:
-            return
-        if self.server_mode == "real":
-            from film_pipeline.providers import credentials
-
-            for provider_id in ("seedance-openrouter", "veo-fast", "gemini-imagen-4"):
-                if credentials.is_configured(provider_id):
-                    self.set_provider_health(provider_id, "healthy")
-                else:
-                    self.set_provider_health(
-                        provider_id,
-                        "unconfigured",
-                        "API credentials not set",
-                    )
-            return
-        for provider_id in ("mock-image-provider", "mock-video-provider"):
-            self.set_provider_health(provider_id, "healthy", "mock runtime")
-
-    def _artifact_root(self) -> Path | None:
-        store = self.services.artifact_store if self.services is not None else None
-        root = getattr(store, "_root", None)
-        return root if isinstance(root, Path) else None
-
-    def _artifact_discovery_roots(self) -> list[Path]:
-        """Return artifact roots to scan for existing projects.
-
-        The current configured root is checked first.  Legacy CWD-relative
-        ``projects/`` and ``.film-pipeline-run/artifacts`` are scanned
-        read-only so older projects remain loadable after the migration to
-        ``~/.film-pipeline/artifacts``.
-        """
-        roots: list[Path] = []
-        current = self._artifact_root()
-        if current is not None:
-            roots.append(current)
-        legacy = [Path("projects"), Path(".film-pipeline-run") / "artifacts"]
-        for candidate in legacy:
-            try:
-                resolved = candidate.resolve()
-            except OSError:
-                continue
-            if resolved not in roots and all(
-                not _is_same_or_child(resolved, existing) for existing in roots
-            ):
-                roots.append(resolved)
-        return roots
+        """Seed provider health rows and adapters for the configured runtime mode."""
+        _provider_seeds.seed_default_provider_health(self)
 
     def seed_default_provider_adapters(self) -> None:
-        """Register default provider adapters for the runtime mode.
-
-        Project profiles can replace these via ``register_provider``; seeding
-        only fills providers that are not registered yet.
-        """
-        from film_pipeline.providers.factory import build_provider_adapter
-
-        specs: tuple[tuple[str, str], ...]
-        if self.server_mode == "real":
-            specs = (
-                ("seedance-openrouter", "video"),
-                ("veo-fast", "video"),
-                ("gemini-imagen-4", "image"),
-            )
-        else:
-            specs = (
-                ("mock-video-provider", "video"),
-                ("mock-image-provider", "image"),
-            )
-        for provider_id, provider_type in specs:
-            if provider_id not in self.provider_adapters:
-                self.register_provider(
-                    provider_id,
-                    build_provider_adapter(provider_id, provider_type=provider_type),
-                )
+        """Register default provider adapters for the runtime mode."""
+        _provider_seeds.seed_default_provider_adapters(self)
 
     def default_video_provider(self) -> tuple[str, str]:
         """Return the (provider_id, model) pair generation should default to."""
-        if self.server_mode == "real":
-            from film_pipeline.providers import credentials
-
-            for provider_id, model in (
-                ("seedance-openrouter", "bytedance/seedance-2.0"),
-                ("veo-fast", "veo-3.1-fast"),
-            ):
-                if credentials.is_configured(provider_id):
-                    return provider_id, model
-            return "seedance-openrouter", "bytedance/seedance-2.0"
-        return "mock-video-provider", "mock-fast"
-
-    def _persist_project_state(self, project_id: str) -> None:
-        project = self.projects[project_id]
-        project_root = self.project_roots[project_id]
-        project_root.mkdir(parents=True, exist_ok=True)
-        state_path = project_root / STATE_FILENAME
-        state_path.write_text(json.dumps(project, indent=2, sort_keys=True, default=str))
+        return _provider_seeds.default_video_provider(self)
 
     def _advance_to_next_phase(self, state: dict[str, Any]) -> dict[str, Any]:
         current_phase = str(state.get("current_phase", ""))
@@ -971,19 +726,6 @@ class StudioRuntime:
         return merged
 
 
-def _project_git_backend(project_root: Path) -> GitBackend:
-    """Initialize (or reuse) the checkpoint git repo for a project root."""
-    already_initialized = (project_root / ".git").exists()
-    git = GitBackend.init_temp(project_root)
-    gitignore = project_root / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text(_PROJECT_GITIGNORE)
-    if not already_initialized:
-        with contextlib.suppress(RuntimeError):
-            git.commit("checkpoint: initialize project repository")
-    return git
-
-
 def create_runtime(server_mode: str | None = None) -> StudioRuntime:
     """Create a runtime aligned to the requested or configured server mode."""
     mode = _normalize_server_mode(server_mode or _configured_server_mode())
@@ -1020,102 +762,6 @@ def _normalize_server_mode(server_mode: str) -> str:
     if mode not in {"mock", "real"}:
         raise ValueError(f"server_mode must be 'mock' or 'real', got '{server_mode}'")
     return mode
-
-
-def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
-    """Return whether a graph approval resume changed phase or intentionally blocked."""
-    if state.get("completed"):
-        return True
-    if state.get("_approval_blocked_by_issues"):
-        return True
-    issues = state.get("issues", [])
-    if isinstance(issues, list) and any(
-        isinstance(issue, dict) and issue.get("severity") == "blocking" for issue in issues
-    ):
-        return True
-    current_phase = str(state.get("current_phase", ""))
-    if current_phase == previous_phase:
-        return False
-    if current_phase in PHASE_ORDER and previous_phase in PHASE_ORDER:
-        return PHASE_ORDER.index(current_phase) > PHASE_ORDER.index(previous_phase)
-    return bool(current_phase)
-
-
-def _has_stale_generation_request_blocker(
-    resumed_state: dict[str, Any],
-    active_state: dict[str, Any],
-) -> bool:
-    """Detect graph checkpoints that predate externally planned generation requests."""
-    if str(active_state.get("current_phase", "")) != "generation":
-        return False
-    if not active_state.get("generation_requests"):
-        return False
-    if resumed_state.get("generation_requests"):
-        return False
-    issues = resumed_state.get("issues", [])
-    if not isinstance(issues, list):
-        return False
-    stale_codes = {"empty_generation_requests", "no_generation_requests"}
-    return any(isinstance(issue, dict) and issue.get("code") in stale_codes for issue in issues)
-
-
-def _preserve_external_generation_requests(
-    resumed_state: dict[str, Any],
-    active_state: dict[str, Any],
-) -> None:
-    """Carry generation requests created by MCP tools across graph checkpoint resumes."""
-    if resumed_state.get("generation_requests"):
-        return
-    generation_requests = active_state.get("generation_requests")
-    if generation_requests:
-        resumed_state["generation_requests"] = generation_requests
-
-
-def _strip_stale_generation_request_blockers(state: dict[str, Any]) -> None:
-    """Remove generated request-missing blockers after requests are restored."""
-    if not state.get("generation_requests"):
-        return
-    issues = state.get("issues", [])
-    if not isinstance(issues, list):
-        return
-    stale_codes = {"empty_generation_requests", "no_generation_requests"}
-    state["issues"] = [
-        issue
-        for issue in issues
-        if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
-    ]
-
-
-def _build_resume_payload(
-    action: str,
-    active: dict[str, Any],
-    note: str = "",
-) -> dict[str, Any]:
-    """Build a Command resume payload, carrying external MCP state into the graph.
-
-    MCP tools such as ``plan_generation_batch`` update the active project state
-    after the graph checkpoint was created. Without replaying those mutations,
-    a resumed checkpoint sees stale state (e.g. empty generation requests) and
-    loops on repair. The ``_external_state`` key is applied by ``await_approval_node``
-    before the approval/revision action is processed.
-    """
-    payload: dict[str, Any] = {"action": action}
-    if note:
-        payload["note"] = note
-    external_state: dict[str, Any] = {}
-    generation_requests = active.get("generation_requests")
-    if generation_requests:
-        external_state["generation_requests"] = generation_requests
-        # The requests exist now, so any "no requests" blockers recorded in
-        # the graph checkpoint are stale — instruct the issues reducer to
-        # drop them before the approval guard runs.
-        external_state["remove_issue_codes"] = [
-            "empty_generation_requests",
-            "no_generation_requests",
-        ]
-    if external_state:
-        payload["_external_state"] = external_state
-    return payload
 
 
 def _configured_server_mode() -> str:
