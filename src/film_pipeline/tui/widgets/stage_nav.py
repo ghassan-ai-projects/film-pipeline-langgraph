@@ -1,4 +1,4 @@
-"""Pipeline stage navigator sidebar widget."""
+"""Compact pipeline stage navigator sidebar."""
 
 from __future__ import annotations
 
@@ -9,24 +9,27 @@ from textual.widgets import Button, Static
 from film_pipeline.tui.view_models.models import GRAPH_PHASES
 
 _STAGE_LABELS: dict[str, str] = {
-    "intake": "1. Intake",
-    "constitution": "2. Vision",
-    "development": "3. Development",
-    "script": "4. Script",
-    "visual_dev": "5. Visual Dev",
-    "shot_bible": "6. Shot Bible",
-    "gen_planning": "7. Gen Plan",
-    "generation": "8. Generation",
-    "qc": "9. QC",
-    "post": "10. Post",
-    "delivery": "11. Delivery",
+    "intake": "Intake",
+    "constitution": "Vision",
+    "development": "Development",
+    "script": "Script",
+    "visual_dev": "Visual Dev",
+    "shot_bible": "Shot Bible",
+    "gen_planning": "Gen Plan",
+    "generation": "Generation",
+    "qc": "QC",
+    "post": "Post",
+    "delivery": "Delivery",
 }
 
 
 class StageNav(Vertical):
-    """Left-rail stage navigator with status badges."""
+    """Left-rail stage navigator: one line per stage with a status glyph.
 
-    CSS = """
+    Glyphs: ``✔`` done, ``▸`` current, ``·`` upcoming, ``!`` blocking issues.
+    """
+
+    DEFAULT_CSS = """
     StageNav {
         height: 1fr;
         padding: 1 0;
@@ -40,21 +43,32 @@ class StageNav(Vertical):
 
     .stage-button {
         width: 100%;
-        height: auto;
+        height: 1;
+        min-width: 0;
         content-align: left middle;
         text-align: left;
         padding: 0 1;
-        margin: 0 0 1 0;
+        margin: 0;
         border: none;
         background: transparent;
+        color: #6b7480;
     }
 
     .stage-button:hover {
         background: #1e2229;
     }
 
-    .stage-current {
+    .stage-button:focus {
+        text-style: none;
+        background: #1e2229;
+    }
+
+    .stage-selected {
         background: #2e3440;
+        color: #d8dee9;
+    }
+
+    .stage-current {
         color: #88c0d0;
         text-style: bold;
     }
@@ -65,10 +79,6 @@ class StageNav(Vertical):
 
     .stage-blocked {
         color: #bf616a;
-    }
-
-    .stage-review {
-        color: #ebcb8b;
     }
 
     #project_hint {
@@ -132,47 +142,43 @@ class StageNav(Vertical):
         return counts
 
     def _refresh_view(self) -> None:
-        title = self.query_one("#stage_nav_title", Static)
         hint = self.query_one("#project_hint", Static)
-        if not self._current_phase:
-            title.update("Pipeline")
-            hint.update("Open a project to see the pipeline.")
-            hint.styles.display = "block"
-        else:
-            hint.styles.display = "none"
-            counts = self._issue_counts.get(self._current_phase, {})
-            total = counts.get("blocking", 0) + counts.get("warning", 0)
-            suffix = f" ({total} issues)" if total else ""
-            title.update(f"Pipeline{suffix}")
+        hint.styles.display = "none" if self._current_phase else "block"
 
         current_index = (
             self._phase_order.index(self._current_phase)
             if self._current_phase in self._phase_order
             else -1
         )
-        for stage in self._phase_order:
+        for index, stage in enumerate(self._phase_order):
             button = self.query_one(f"#stage_{stage}", Button)
             classes = set(button.classes)
+            classes.discard("stage-selected")
             classes.discard("stage-current")
             classes.discard("stage-done")
             classes.discard("stage-blocked")
-            classes.discard("stage-review")
+
+            done = 0 <= index < current_index
+            blocked = bool(self._issue_counts.get(stage, {}).get("blocking", 0))
             if stage == self._selected_stage:
-                classes.add("stage-current")
-            if current_index >= 0 and self._phase_order.index(stage) < current_index:
-                classes.add("stage-done")
-            issues = self._issue_counts.get(stage, {})
-            if issues.get("blocking", 0):
-                classes.add("stage-blocked")
-            elif issues.get("warning", 0):
-                classes.add("stage-review")
-            button.classes = classes
-            label = _STAGE_LABELS.get(stage, stage)
+                classes.add("stage-selected")
             if stage == self._current_phase:
-                label = f"▸ {label}"
-            if issues.get("blocking", 0):
-                label = f"{label} ●"
-            button.label = label
+                classes.add("stage-current")
+            elif done:
+                classes.add("stage-done")
+            if blocked:
+                classes.add("stage-blocked")
+            button.classes = classes
+
+            if blocked:
+                glyph = "!"
+            elif stage == self._current_phase:
+                glyph = "▸"
+            elif done:
+                glyph = "✔"
+            else:
+                glyph = "·"
+            button.label = f"{glyph} {_STAGE_LABELS.get(stage, stage)}"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id or ""

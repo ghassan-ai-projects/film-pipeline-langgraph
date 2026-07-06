@@ -96,69 +96,55 @@ pytest -m integration  # integration
 make build
 ```
 
-### Terminal Operator Console (Cockpit)
+### Film Studio TUI
 
-The repository ships two TUI entry points while the redesigned interface is being
-proven side-by-side with the legacy cockpit:
-
-- `film-pipeline-tui` — redesigned, stage-first studio interface (default).
-- `film-pipeline-tui-legacy` — legacy keyboard-first operator cockpit.
-
-Start either from the repository root:
+`film-pipeline-tui` is the terminal interface for making a film end to end —
+create a project, review every scene, run generation, and reach delivery
+without leaving the terminal.
 
 ```bash
-uv run film-pipeline-tui          # redesigned interface
-uv run film-pipeline-tui-legacy   # legacy cockpit
-```
-
-Equivalent module entry points:
-
-```bash
-uv run python -m film_pipeline.tui.app      # redesigned
-uv run python -m film_pipeline.tui.cockpit  # legacy
-```
-
-To open directly into project creation:
-
-```bash
-uv run film-pipeline-tui --create
-uv run film-pipeline-tui-legacy --create
+uv run film-pipeline-tui             # start the studio
+uv run film-pipeline-tui --create    # jump straight into project creation
+uv run python -m film_pipeline.tui.app   # equivalent module entry point
 ```
 
 The default gateway is **in-process** (shared application service layer). It does
 not require network access or provider keys for mock-mode project creation. To
 use the MCP stdio gateway instead, set `FILM_PIPELINE_TUI_GATEWAY=mcp`.
 
-#### New redesigned TUI
+#### How it works
 
-The redesigned interface starts at a **Project gallery**. Create or open a project
-to enter a three-pane studio workspace: pipeline stages on the left, contextual
-actions and artifact/issue tables in the center, and an inspector on the right.
-Common actions are always visible as buttons; press `/` for the command palette.
+The studio has two screens:
 
-1. From the **Project gallery**, choose **New Project** (or press `n`).
-2. Enter `project id`, `title`, optional `slug`, runtime mode, provider/quality
-   profiles, and the film idea.
-3. The studio creates the project, runs intake, and opens the **Studio workspace**.
-4. The workspace shows the current pipeline stage, artifacts, and validation
-   issues. Use the always-visible **Action bar** to validate, approve, or
-   request a revision.
-5. Press `/` to open the **Command palette** for power-user commands such as
-   `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and `home`.
+- **Project gallery** — pick a project or create a new one (`n`).
+- **Studio workspace** — one screen with three panes:
+  - **Pipeline rail** (left): all eleven stages with status glyphs
+    (`✔` done, `▸` current, `·` upcoming, `!` blocking issues). Click a stage
+    to browse its artifacts.
+  - **Content tabs** (center): `Scenes`, `Artifacts`, `Assets`, `Issues`
+    (keys `1`–`4`). The most useful tab is selected automatically for the
+    current stage — scenes during scripting, assets during generation.
+  - **Reader** (right): whatever you select — a scene, an artifact, an asset —
+    renders here as readable, screenplay-style text. Review the whole script
+    scene by scene without an external editor.
 
-Keyboard shortcuts: `n` new project, `r` refresh, `a` approve phase, `v` run
-validation, `g` run generation (when in the generation stage), `escape` return home,
-`q` quit.
+An action bar under the workspace shows only the actions that are eligible
+right now (approve, request revision, validate, generate), and a one-line
+status bar reports what happened last.
+
+Typical flow: `n` → fill in id/title/idea → `Create` (or `F2`) → review each
+stage's output in the reader → `a` to approve (or `r` to request a revision
+with a note) → `g` when you reach generation → `o` on an asset to open the
+rendered clip → approve through QC/post/delivery. Done.
+
+Keyboard shortcuts: `n` new project, `a` approve, `r` request revision,
+`v` validate, `g` generate, `1`–`4` switch content tabs, `o` open selected
+asset, `f5` refresh, `escape` home, `q` quit. Press `/` for the command
+palette (`project <id>`, `stage <name>`, `revise <note>`, `assets`, `home`,
+`help`).
 
 State is persisted to `~/.film-pipeline/` (runtime state and graph checkpoints)
 and `projects/` (artifacts), so existing projects are loaded when the TUI starts.
-
-#### Legacy cockpit
-
-The legacy cockpit uses numbered tabs (`1` Dashboard, `2` Review, `3` Generate,
-`4` Scenes, `5` Assets, `6` Matrix, `7` Guide, `8` Validation, `9` Ops) and a
-command palette (`/`). Approve phases with `a` then `a` (or `a` then `y`), run
-generation with `G`, and run validation with `V`.
 
 #### Real-provider mode
 
@@ -173,9 +159,7 @@ GOOGLE_API_KEY=...
 Then launch in real mode:
 
 ```bash
-FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui
-# or for the legacy cockpit
-FILM_PIPELINE_MCP_MODE=real uv run film-pipeline-tui-legacy
+uv run film-pipeline-tui --real
 ```
 
 Generation with real providers incurs cost and polling latency.

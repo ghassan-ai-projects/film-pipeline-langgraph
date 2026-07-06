@@ -1,45 +1,18 @@
-"""Tests for artifact reader, selection, and review/validation view model builders."""
+"""Tests for the reader view builders."""
 
 from __future__ import annotations
 
-from film_pipeline.app.services.models import ArtifactDetail, OperatorCommentRequest
+from film_pipeline.app.services.models import (
+    ArtifactDetail,
+    DashboardSummary,
+    OperatorCommentRequest,
+)
 from film_pipeline.tui.view_models import (
     build_artifact_reader,
-    build_asset_action_rows,
-    build_comment_thread_rows,
-    build_reader_index_rows,
-    build_reader_link_rows,
-    build_review_checklist_rows,
-    build_review_issue_rows,
-    build_validation_fix_suggestions,
-    build_validation_groups,
-    format_fix_draft,
-    format_selection_detail,
-    format_targeted_revision_note,
-    selection_from_row,
+    build_overview_reader,
     validation_issue_rows,
 )
 from tests.unit.tui.conftest import RecordingGateway
-
-
-def test_selection_and_targeted_revision_note_preserve_context() -> None:
-    selection = selection_from_row(
-        "scene_table",
-        {
-            "scene": "SC_007",
-            "phase": "script",
-            "status": "warning",
-            "validation": "Payoff is unclear.",
-        },
-    )
-
-    note = format_targeted_revision_note(selection, "Make the payoff emotionally clearer.")
-
-    assert selection.target_type == "scene"
-    assert selection.target_id == "SC_007"
-    assert note == (
-        "[target_type=scene target_id=SC_007 phase=script] Make the payoff emotionally clearer."
-    )
 
 
 def test_artifact_reader_builds_outline_body_and_links() -> None:
@@ -80,53 +53,6 @@ def test_artifact_reader_renders_matrix_scene_camera_and_assets() -> None:
     assert "camera_movement: dolly forward from wide to close" in reader.body
     assert "assets: ref_station_platform, prop_warning_note" in reader.body
     assert "references: style_noir_dawn" in reader.body
-
-
-def test_reader_index_and_link_rows_make_artifact_navigable() -> None:
-    gateway = RecordingGateway()
-    comment = gateway.add_operator_comment(
-        OperatorCommentRequest(
-            target_type="scene",
-            target_id="SC_004",
-            phase="script",
-            body="Make the station feel colder.",
-        ),
-        "field-message",
-    )
-    artifact = gateway.inspect_artifact("script", "script", 4, "field-message")
-    reader = build_artifact_reader(
-        artifact,
-        comments=[comment],
-        validation=gateway.get_validation_workspace("field-message"),
-        scene_id="SC_004",
-    )
-
-    index_rows = build_reader_index_rows(artifact)
-    link_rows = build_reader_link_rows(reader)
-
-    assert index_rows == [
-        {
-            "order": 1,
-            "target_id": "SC_004",
-            "target_type": "scene",
-            "heading": "INT. STATION - DAWN",
-            "command": "scene SC_004",
-        }
-    ]
-    assert link_rows[0]["kind"] == "validation"
-    assert link_rows[0]["command"] == "fix SC_004"
-    assert link_rows[1]["kind"] == "comment"
-    assert link_rows[1]["command"] == "thread SC_004"
-
-
-def test_asset_action_rows_make_artifacts_actionable() -> None:
-    rows = build_asset_action_rows(RecordingGateway().list_artifacts("field-message"))
-
-    script_actions = [row for row in rows if row["artifact_id"] == "script"]
-    assert [row["action"] for row in script_actions] == ["review", "change", "extend"]
-    assert script_actions[0]["command"] == "asset review script"
-    assert script_actions[1]["command"] == "asset change script | <note>"
-    assert script_actions[2]["command"] == "asset extend script | <note>"
 
 
 def test_artifact_reader_renders_text_treatment_scene_list_and_compact_bodies() -> None:
@@ -189,7 +115,6 @@ def test_artifact_reader_renders_text_treatment_scene_list_and_compact_bodies() 
     assert treatment_reader.body == "Act one opens at the abandoned platform."
     assert treatment_reader.metadata["validation_refs"] == ["validation:1"]
     assert scene_reader.outline == ["SC_001: Arrival", "?: Missing id fallback"]
-    assert build_reader_index_rows(scene_list_artifact)[0]["command"] == "scene SC_001"
     assert compact_reader.body.splitlines() == [
         "title: Field Message",
         "shots: 2 item(s)",
@@ -198,115 +123,56 @@ def test_artifact_reader_renders_text_treatment_scene_list_and_compact_bodies() 
     ]
 
 
-def test_selection_from_row_covers_tui_table_sources() -> None:
-    rows: dict[str, dict[str, object]] = {
-        "asset_table": {"artifact_id": "script", "phase": "script"},
-        "asset_table_manifest": {"asset_id": "clip_1", "scene_id": "SC_004", "shot_id": "shot_1"},
-        "asset_action_table": {"artifact_id": "script", "action": "review", "phase": "script"},
-        "dashboard_kpi_table": {"metric": "blockers"},
-        "dashboard_action_table": {"action": "approve"},
-        "project_table": {"project": "field-message", "kind": "production"},
-        "guide_table": {"step": 3, "goal": "Inspect assets"},
-        "review_checklist_table": {"check": "read script"},
-        "review_issue_table": {"target_type": "scene", "target_id": "SC_004"},
-        "comment_thread_table": {"target_type": "scene", "target_id": "SC_004"},
-        "validation_table": {"target": "SC_004", "phase": "script"},
-        "validation_group_table": {"validator_id": "dialogue-voice"},
-        "validation_fix_table": {"target_type": "scene", "target_id": "SC_004"},
-        "matrix_table": {"kind": "artifact", "target": "script", "phase": "script"},
-        "matrix_pivot_table": {"value": "blocking"},
-        "graph_table": {"phase": "script"},
-        "graph_artifact_table": {"artifact_id": "script", "phase": "script"},
-        "command_suggestion_table": {"command": "fix SC_004"},
-        "reader_index_table": {"target_type": "scene", "target_id": "SC_004"},
-        "reader_link_table": {"kind": "validation", "target_id": "SC_004"},
-        "provider_table": {"provider_id": "imagen"},
-        "checkpoint_table": {"checkpoint_id": "checkpoint:1", "phase": "script"},
-        "unknown_table": {"first": "fallback"},
-    }
-
-    selections = {source: selection_from_row(source, row) for source, row in rows.items()}
-
-    assert selections["asset_table"].target_type == "artifact"
-    assert selection_from_row("asset_table", rows["asset_table_manifest"]).target_type == "asset"
-    assert selection_from_row("asset_table", rows["asset_table_manifest"]).target_id == "clip_1"
-    assert selections["asset_action_table"].target_type == "asset_action"
-    assert selections["dashboard_kpi_table"].target_id == "blockers"
-    assert selections["dashboard_action_table"].target_type == "dashboard_action"
-    assert selections["project_table"].target_type == "project"
-    assert selections["guide_table"].target_type == "guide_step"
-    assert selections["review_checklist_table"].target_id == "read script"
-    assert selections["review_issue_table"].target_type == "scene"
-    assert selections["comment_thread_table"].target_id == "SC_004"
-    assert selections["validation_table"].target_type == "validation_issue"
-    assert selections["validation_group_table"].target_type == "validator"
-    assert selections["validation_fix_table"].target_type == "scene"
-    assert selections["matrix_table"].target_type == "artifact"
-    assert selections["matrix_pivot_table"].target_type == "matrix_pivot"
-    assert selections["graph_table"].target_type == "graph_phase"
-    assert selections["graph_artifact_table"].target_id == "script"
-    assert selections["command_suggestion_table"].target_type == "command"
-    assert selections["reader_index_table"].target_type == "scene"
-    assert selections["reader_link_table"].target_type == "validation"
-    assert selections["provider_table"].target_id == "imagen"
-    assert selections["checkpoint_table"].phase == "script"
-    assert selections["unknown_table"].target_id == "fallback"
-    assert "comment script | <what you want changed>" in format_selection_detail(
-        selections["asset_table"]
-    )
-    assert format_targeted_revision_note(None, "  no selection  ") == "no selection"
-
-
-def test_validation_groups_and_fixes_turn_issues_into_actions() -> None:
+def test_validation_issue_rows_with_filters() -> None:
     validation = RecordingGateway().get_validation_workspace("field-message")
 
-    groups = build_validation_groups(validation)
-    suggestions = build_validation_fix_suggestions(validation)
+    all_rows = validation_issue_rows(validation)
     blocking_rows = validation_issue_rows(validation, severity="blocking")
     dialogue_rows = validation_issue_rows(validation, validator_id="dialogue-voice")
 
-    assert groups[0].validator_id == "dialogue-voice"
-    assert groups[0].severity == "blocking"
-    assert groups[0].count == 1
-    assert groups[0].suggested_action == "fix SC_004"
-    assert suggestions[0].target_id == "SC_004"
-    assert suggestions[0].target_type == "scene"
-    assert suggestions[0].command == "fix SC_004"
-    assert format_fix_draft(suggestions[0]) == ("dialogue-voice: Dialogue voice drift in scene 4.")
+    assert len(all_rows) >= 2
     assert blocking_rows == dialogue_rows
     assert blocking_rows[0]["scene"] == "SC_004"
+    assert validation_issue_rows(None) == []
 
 
-def test_review_models_build_checklist_issues_and_threads() -> None:
-    gateway = RecordingGateway()
-    validation = gateway.get_validation_workspace("field-message")
-    review = gateway.get_review_workspace("field-message")
-    comment = gateway.add_operator_comment(
-        OperatorCommentRequest(
-            target_type="scene",
-            target_id="SC_004",
-            phase="script",
-            body="Make the voice more consistent.",
-        ),
-        "field-message",
+def _dashboard(**overrides: object) -> DashboardSummary:
+    values: dict[str, object] = {
+        "project_id": "field-message",
+        "title": "Field Message",
+        "slug": "field-message",
+        "current_phase": "script",
+        "runtime_mode": "mock",
+        "workflow_mode": "manual",
+        "status": "awaiting_review",
+        "next_action": "present_review_package",
+        "route_reason": "script complete",
+        "idea": "A courier hears tomorrow's warning today.",
+    }
+    values.update(overrides)
+    return DashboardSummary(**values)  # type: ignore[arg-type]
+
+
+def test_overview_reader_shows_idea_phase_and_next_action() -> None:
+    overview = build_overview_reader(
+        _dashboard(), stage_explanation="Write and review the screenplay."
     )
 
-    checklist = build_review_checklist_rows(review, validation, [comment])
-    issues = build_review_issue_rows(review, validation)
-    threads = build_comment_thread_rows([comment])
+    assert overview.title == "Field Message"
+    assert overview.subtitle == "project field-message"
+    assert "A courier hears tomorrow's warning today." in overview.body
+    assert "Now:  script — awaiting_review" in overview.body
+    assert "Write and review the screenplay." in overview.body
+    assert "Next: present_review_package" in overview.body
+    assert "Why:  script complete" in overview.body
+    assert overview.metadata["mode"] == "manual/mock"
 
-    assert checklist[0]["check"] == "candidate_artifacts"
-    assert checklist[1]["status"] == "blocked"
-    assert issues[0]["target_id"] == "SC_004"
-    assert issues[0]["command"] == "scene SC_004"
-    assert any(row["severity"] == "warning" and row["target_id"] == "SC_007" for row in issues)
-    assert threads == [
-        {
-            "target_id": "SC_004",
-            "target_type": "scene",
-            "open": 1,
-            "latest": "Make the voice more consistent.",
-            "updated": "2026-06-24T10:02:00",
-            "command": "thread SC_004",
-        }
-    ]
+
+def test_overview_reader_flags_blockers_and_text_only_policy() -> None:
+    overview = build_overview_reader(
+        _dashboard(generation_policy="text_only"),
+        blocking_issues=2,
+    )
+
+    assert "Blocked by 2 validation issue(s)" in overview.body
+    assert overview.metadata["policy"] == "text only (no generated media)"

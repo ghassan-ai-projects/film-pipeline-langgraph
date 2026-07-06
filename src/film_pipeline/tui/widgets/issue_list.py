@@ -10,10 +10,9 @@ from film_pipeline.tui.view_models.builders_reader import validation_issue_rows
 class IssueList(DataTable[str]):
     """Lists validation issues for the selected stage."""
 
-    CSS = """
+    DEFAULT_CSS = """
     IssueList {
         height: 1fr;
-        border: solid #3b4252;
     }
     """
 
@@ -45,11 +44,10 @@ class IssueList(DataTable[str]):
 
     def _refresh_view(self) -> None:
         self.clear(columns=True)
-        if not self._rows:
-            self.add_columns("Severity", "Validator", "Target", "Message")
-            self.add_row("—", "—", "—", "No issues for this stage.")
-            return
         self.add_columns("Severity", "Validator", "Target", "Message")
+        if not self._rows:
+            self.add_row("—", "", "", "No issues for this stage.")
+            return
         for row in self._rows:
             self.add_row(
                 str(row.get("severity", "")),
