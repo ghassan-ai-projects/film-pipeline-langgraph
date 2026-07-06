@@ -209,7 +209,7 @@ class TestHumanGateMandatory:
 
         monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
         monkeypatch.setattr(
-            "film_pipeline.graph.nodes._run_orchestrator_agent",
+            "film_pipeline.graph.nodes.approval._run_orchestrator_agent",
             lambda _state: {"action": "approve", "feedback": "looks good", "preserve": []},
         )
 
@@ -383,7 +383,7 @@ class TestExternalStateReplay:
 
         monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
         monkeypatch.setattr(
-            "film_pipeline.graph.nodes._run_orchestrator_agent", lambda _state: None
+            "film_pipeline.graph.nodes.approval._run_orchestrator_agent", lambda _state: None
         )
 
         state: dict[str, Any] = {

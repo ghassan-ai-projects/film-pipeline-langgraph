@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import shutil
 from collections.abc import Callable
@@ -24,6 +25,8 @@ from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
+
+_logger = logging.getLogger(__name__)
 
 STATE_FILENAME = "project-state.json"
 CHECKPOINTS_FILENAME = "checkpoints.json"
@@ -429,8 +432,10 @@ class StudioRuntime:
                 safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
                 store.save(CheckpointState(state=safe_state), meta)
                 graph_state_ref = f"artifact:graph_state:v{version}"
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.warning(
+                    "Auto-checkpoint could not persist graph state for %s: %s", project_id, exc
+                )
 
         from film_pipeline.graph.orchestrator_state import get_candidate_refs
 
