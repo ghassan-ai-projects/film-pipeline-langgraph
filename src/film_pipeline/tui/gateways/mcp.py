@@ -521,7 +521,7 @@ def default_gateway() -> StudioGateway:
     Defaults to the in-process gateway: it is the complete, low-latency
     surface over the shared application service layer (routing, assets,
     generation, provider health). Set ``FILM_PIPELINE_TUI_GATEWAY=mcp`` to
-    drive the cockpit through the MCP stdio tool surface instead (parity
+    drive the studio through the MCP stdio tool surface instead (parity
     testing with OpenClaw).
     """
     from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway

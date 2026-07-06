@@ -21,7 +21,7 @@ from film_pipeline.app.services.models import (
 
 @dataclass
 class RecordingGateway:
-    """Gateway fake with enough state to exercise the cockpit."""
+    """Gateway fake with enough state to exercise the studio TUI."""
 
     created_request: ProjectCreateRequest | None = None
     approved_count: int = 0

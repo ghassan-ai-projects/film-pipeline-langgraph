@@ -1,4 +1,4 @@
-"""Future-forward Textual interface for the LangGraph Film Studio.
+"""Textual interface for the LangGraph Film Studio.
 
 Run with:
 
@@ -6,10 +6,11 @@ Run with:
 python -m film_pipeline.tui.app
 ```
 
-The new studio is organized around the film pipeline itself: a stage navigator
-on the left, a contextual workspace in the center, and an inspector on the
-right. Common actions are always visible as buttons; the command palette
-remains available for power users.
+The studio is organized around the film pipeline itself: a compact stage rail
+on the left, content tabs (scenes, artifacts, assets, issues) in the center,
+and a wide reader pane on the right so scripts and scenes can be reviewed
+without leaving the terminal. Common actions are always visible as buttons;
+the command palette remains available for power users.
 """
 
 from __future__ import annotations
@@ -39,9 +40,8 @@ from film_pipeline.tui.screens.home import ProjectGalleryScreen
 from film_pipeline.tui.screens.studio import StudioScreen
 from film_pipeline.tui.view_models.models import (
     GRAPH_PHASES,
-    CockpitSnapshot,
-    CommandOptions,
     ReaderView,
+    StudioSnapshot,
     TargetSelection,
 )
 
@@ -55,7 +55,7 @@ class AppState:
     exposing every field as a reactive attribute.
     """
 
-    snapshot: CockpitSnapshot | None = None
+    snapshot: StudioSnapshot | None = None
     active_project: ProjectListItem | None = None
     dashboard: DashboardSummary | None = None
     selected_stage: str = ""
@@ -73,7 +73,7 @@ class AppState:
 
 
 class FilmStudioApp(App[None]):
-    """The redesigned film studio TUI."""
+    """The film studio TUI."""
 
     CSS = """
     Screen {
@@ -115,7 +115,6 @@ class FilmStudioApp(App[None]):
         Binding("escape", "back", "Back"),
         Binding("slash", "command_palette", "Command"),
         Binding("n", "new_project", "New Project"),
-        Binding("r", "refresh", "Refresh"),
     ]
 
     def __init__(self, gateway: StudioGateway | None = None, *, start_create: bool = False) -> None:
@@ -125,6 +124,7 @@ class FilmStudioApp(App[None]):
         self.state = AppState()
         self.active_project_id = ""
         self.selected_stage = ""
+        self._last_seen_phase: tuple[str, str] = ("", "")
 
     def on_mount(self) -> None:
         self.title = "LangGraph Film Studio"
@@ -150,13 +150,14 @@ class FilmStudioApp(App[None]):
                 current_phase and self.selected_stage not in GRAPH_PHASES
             ):
                 self.selected_stage = current_phase
+            self._follow_phase(dashboard.project_id, current_phase)
             self.state.providers_healthy = sum(
                 1 for p in self.state.snapshot.providers if str(p.get("status", "")) == "healthy"
             )
             self.state.providers_total = len(self.state.snapshot.providers)
             status = (
                 f"{dashboard.title}  •  {dashboard.current_phase or 'no phase'}  •  "
-                f"{dashboard.status}  •  {dashboard.workflow_mode}/{dashboard.runtime_mode}  •  "
+                f"{dashboard.status}  •  "
                 f"providers {self.state.providers_healthy}/{self.state.providers_total}"
             )
         else:
@@ -164,7 +165,27 @@ class FilmStudioApp(App[None]):
         self._set_status(status)
         self._propagate_state()
 
-    def _load_snapshot(self) -> CockpitSnapshot:
+    def _follow_phase(self, project_id: str, current_phase: str) -> None:
+        """Snap the selected stage forward when the pipeline advances.
+
+        Keeps the workspace on the stage the film is actually at after an
+        approval, instead of staying on the stage that was just approved.
+        """
+        last_project, last_phase = self._last_seen_phase
+        if (
+            current_phase
+            and last_project == project_id
+            and last_phase
+            and last_phase != current_phase
+            and self.selected_stage == last_phase
+        ):
+            self.selected_stage = current_phase
+            self.state.reader = None
+            self.state.selected_target = None
+            self.state.selected_artifact = None
+        self._last_seen_phase = (project_id, current_phase)
+
+    def _load_snapshot(self) -> StudioSnapshot:
         projects = self.gateway.list_projects()
         active = self._resolve_active_project(projects)
         self.state.active_project = active
@@ -175,9 +196,7 @@ class FilmStudioApp(App[None]):
         assets = self.gateway.list_assets(project_id) if project_id else []
         review = self.gateway.get_review_workspace(project_id) if project_id else None
         validation = self.gateway.get_validation_workspace(project_id) if project_id else None
-        checkpoints = self.gateway.list_checkpoints(project_id) if project_id else []
         providers = self.gateway.list_provider_status()
-        audit_events = self.gateway.get_audit_feed(project_id, limit=30) if project_id else []
         comments = self.gateway.list_operator_comments(project_id) if project_id else []
         generation = (
             self.gateway.get_generation_workspace(project_id)
@@ -190,21 +209,15 @@ class FilmStudioApp(App[None]):
             if project_id and dashboard and dashboard.current_phase in prompt_phases
             else []
         )
-        return CockpitSnapshot(
+        return StudioSnapshot(
             projects=projects,
             dashboard=dashboard,
             review=review,
             validation=validation,
             artifacts=artifacts,
             assets=assets,
-            checkpoints=checkpoints,
             providers=providers,
-            audit_events=audit_events,
             comments=comments,
-            matrix_rows=[],
-            graph_rows=[],
-            command_suggestions=[],
-            command_options=CommandOptions(),
             generation=generation,
             prompts=prompts,
         )
@@ -223,16 +236,12 @@ class FilmStudioApp(App[None]):
         return None
 
     def _propagate_state(self) -> None:
-        """Push the updated app state down to whichever screen is active."""
-        from film_pipeline.tui.screens.home import ProjectGalleryScreen
-        from film_pipeline.tui.screens.studio import StudioScreen
-
+        """Push the updated app state down to every screen that renders it."""
         self.state.selected_stage = self.selected_stage
-        current = self.screen
-        if isinstance(current, (ProjectGalleryScreen, StudioScreen)) and hasattr(
-            current, "update_state"
-        ):
-            current.update_state(self.state)
+        for screen in self.screen_stack:
+            update = getattr(screen, "update_state", None)
+            if callable(update):
+                update(self.state)
         with contextlib.suppress(Exception):
             self.screen.query_one("#status_footer", Static).update(self._status_text())
 
@@ -307,7 +316,13 @@ class FilmStudioApp(App[None]):
         dashboard = self.gateway.set_active_project(project_id)
         self.active_project_id = dashboard.project_id
         self.selected_stage = dashboard.current_phase or ""
-        self.switch_screen(StudioScreen(id="studio_screen"))
+        self.state.reader = None
+        self.state.selected_target = None
+        self.state.selected_artifact = None
+        if isinstance(self.screen, StudioScreen):
+            self.action_refresh()
+        else:
+            self.switch_screen(StudioScreen(id="studio_screen"))
 
     def set_selected_stage(self, stage: str) -> None:
         """Public API for child widgets to change the active stage."""
@@ -315,7 +330,7 @@ class FilmStudioApp(App[None]):
         self._propagate_state()
 
     def set_selected_target(self, target: TargetSelection | None) -> None:
-        """Public API for child widgets to change the inspector target."""
+        """Public API for child widgets to change the reader target."""
         self.state.selected_target = target
         self._propagate_state()
 
@@ -348,16 +363,14 @@ class FilmStudioApp(App[None]):
         if normalized in {"help", "commands"}:
             self._set_status(
                 "Commands: next, approve, revise <note>, validate, generate, "
-                "project <id>, create, home, assets"
+                "project <id>, stage <name>, create, home, assets"
             )
             return
         if normalized == "home":
             self.switch_screen(ProjectGalleryScreen(id="home_screen"))
             return
         if normalized == "assets":
-            from film_pipeline.tui.screens.asset_viewer import AssetViewerScreen
-
-            self.push_screen(AssetViewerScreen(id="asset_viewer"))
+            self._show_studio_tab("tab_assets")
             return
         if normalized == "create":
             self.action_new_project()
@@ -365,8 +378,6 @@ class FilmStudioApp(App[None]):
         if normalized.startswith("create "):
             parts = command.removeprefix("create ").split(" | ")
             if len(parts) >= 3:
-                from film_pipeline.app.services.models import ProjectCreateRequest
-
                 request = ProjectCreateRequest(
                     project_id=parts[0].strip(),
                     title=parts[1].strip(),
@@ -411,10 +422,16 @@ class FilmStudioApp(App[None]):
             return
         self._set_status(f"Unknown command: {command}. Try 'help'.")
 
+    def _show_studio_tab(self, tab_id: str) -> None:
+        """Switch the studio content tabs, if the studio is active."""
+        screen = self.screen
+        if isinstance(screen, StudioScreen):
+            screen.action_show_tab(tab_id)
+        else:
+            self._set_status("Open a project to browse its assets.")
+
     def _dispatch_to_studio(self, method_name: str) -> None:
         """Invoke a method on the current studio screen if it is active."""
-        from film_pipeline.tui.screens.studio import StudioScreen
-
         screen = self.screen
         if isinstance(screen, StudioScreen) and hasattr(screen, method_name):
             getattr(screen, method_name)()
@@ -438,7 +455,7 @@ class FilmStudioApp(App[None]):
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point for the redesigned Textual TUI."""
+    """Entry point for the Textual TUI."""
     parser = argparse.ArgumentParser(description="Run the LangGraph Film Studio TUI.")
     parser.add_argument("--create", action="store_true", help="Open the create-project form.")
     parser.add_argument(

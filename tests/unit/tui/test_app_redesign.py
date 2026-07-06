@@ -21,19 +21,13 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.tui.app import AppState, FilmStudioApp
-from film_pipeline.tui.screens.asset_viewer import AssetViewerScreen
 from film_pipeline.tui.screens.home import ProjectGalleryScreen
-from film_pipeline.tui.screens.review import ReviewGateScreen
 from film_pipeline.tui.screens.studio import RevisionForm, StudioScreen
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
-from film_pipeline.tui.widgets.asset_browser import AssetBrowser
-from film_pipeline.tui.widgets.current_node import CurrentNode
-from film_pipeline.tui.widgets.film_meta import FilmMeta
-from film_pipeline.tui.widgets.inspector import Inspector
 from film_pipeline.tui.widgets.issue_list import IssueList
 from film_pipeline.tui.widgets.project_form import ProjectForm
-from film_pipeline.tui.widgets.scene_browser import SceneBrowser
+from film_pipeline.tui.widgets.reader import Reader
 from film_pipeline.tui.widgets.stage_nav import StageNav
 from tests.unit.tui.conftest import (
     BrokenArtifactGateway,
@@ -321,8 +315,10 @@ def test_command_palette_project_opens_studio() -> None:
     _run(_body())
 
 
-def test_command_palette_assets_pushes_viewer() -> None:
+def test_command_palette_assets_switches_tab() -> None:
     async def _body() -> None:
+        from textual.widgets import TabbedContent
+
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
@@ -335,7 +331,9 @@ def test_command_palette_assets_pushes_viewer() -> None:
             palette.value = "assets"
             await pilot.press("enter")
             await pilot.pause()
-            assert isinstance(app.screen, AssetViewerScreen)
+            assert isinstance(app.screen, StudioScreen)
+            tabs = app.screen.query_one("#content_tabs", TabbedContent)
+            assert tabs.active == "tab_assets"
 
     _run(_body())
 
@@ -377,23 +375,6 @@ def test_create_failure_surfaces_status() -> None:
             result = app.create_project(request)
             assert result.ok is False
             assert "failed to create project" in app._status_text().lower()
-
-    _run(_body())
-
-
-def test_review_gate_displays_package() -> None:
-    async def _body() -> None:
-        gateway = RecordingGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.open_project("field-message")
-            await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            assert isinstance(app.screen, ReviewGateScreen)
-            summary = app.screen.query_one("#review_summary", Static)
-            assert "script" in str(summary.renderable).lower()
 
     _run(_body())
 
@@ -499,7 +480,7 @@ def test_home_filter_input_event() -> None:
     _run(_body())
 
 
-def test_inspector_shows_reader() -> None:
+def test_reader_shows_reader_view() -> None:
     async def _body() -> None:
         from film_pipeline.tui.view_models.models import ReaderView
 
@@ -520,14 +501,14 @@ def test_inspector_shows_reader() -> None:
             )
             app._propagate_state()
             await pilot.pause()
-            inspector = app.screen.query_one("#inspector", Inspector)
-            body = inspector.query_one("#inspector_body", Static)
+            reader = app.screen.query_one("#reader", Reader)
+            body = reader.query_one("#reader_body", Static)
             assert "Mara waits" in str(body.renderable)
 
     _run(_body())
 
 
-def test_inspector_shows_selected_target() -> None:
+def test_reader_shows_selected_target() -> None:
     async def _body() -> None:
         from film_pipeline.tui.view_models.models import TargetSelection
 
@@ -546,8 +527,8 @@ def test_inspector_shows_selected_target() -> None:
             )
             app._propagate_state()
             await pilot.pause()
-            inspector = app.screen.query_one("#inspector", Inspector)
-            body = inspector.query_one("#inspector_body", Static)
+            reader = app.screen.query_one("#reader", Reader)
+            body = reader.query_one("#reader_body", Static)
             assert "Drift in scene 4" in str(body.renderable)
 
     _run(_body())
@@ -590,55 +571,19 @@ def test_artifact_list_selection_loads_reader() -> None:
     _run(_body())
 
 
-def test_asset_viewer_loads_assets() -> None:
+def test_asset_browser_lists_media_assets() -> None:
     async def _body() -> None:
+        from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
             await pilot.pause()
             app.open_project("field-message")
             await pilot.pause()
-            app.push_screen(AssetViewerScreen(id="asset_viewer"))
-            await pilot.pause()
-            assert isinstance(app.screen, AssetViewerScreen)
-            table = app.screen.query_one("#asset_table", DataTable)
-            assert table.row_count == 2
-
-    _run(_body())
-
-
-def test_review_gate_approve_calls_gateway() -> None:
-    async def _body() -> None:
-        gateway = RecordingGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.open_project("field-message")
-            await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            app.screen.query_one("#review_approve", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-            assert gateway.approved_count == 1
-
-    _run(_body())
-
-
-def test_review_gate_back_returns_to_studio() -> None:
-    async def _body() -> None:
-        gateway = RecordingGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.open_project("field-message")
-            await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            app.screen.query_one("#review_back", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-            assert isinstance(app.screen, StudioScreen)
+            browser = app.screen.query_one("#asset_browser", AssetBrowser)
+            assert app.state.snapshot is not None
+            assert browser.row_count == len(app.state.snapshot.assets)
 
     _run(_body())
 
@@ -715,28 +660,25 @@ def test_command_palette_unknown() -> None:
     _run(_body())
 
 
-def test_asset_viewer_row_select_and_back() -> None:
+def test_asset_browser_row_select_shows_details_in_reader() -> None:
     async def _body() -> None:
+        from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
             await pilot.pause()
             app.open_project("field-message")
             await pilot.pause()
-            app.push_screen(AssetViewerScreen(id="asset_viewer"))
+            browser = app.screen.query_one("#asset_browser", AssetBrowser)
+            browser.cursor_coordinate = Coordinate(0, 0)
+            browser.action_select_cursor()
             await pilot.pause()
-            screen = app.screen
-            assert isinstance(screen, AssetViewerScreen)
-            table = screen.query_one("#asset_table", DataTable)
-            table.cursor_coordinate = Coordinate(0, 0)
-            table.action_select_cursor()
-            await pilot.pause()
-            detail = screen.query_one("#asset_detail", Static)
-            assert "clip_SC_004" in str(detail.renderable)
-            screen.query_one("#asset_back", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-            assert isinstance(app.screen, StudioScreen)
+            assert app.state.selected_target is not None
+            assert app.state.selected_target.target_type == "asset"
+            reader = app.screen.query_one("#reader", Reader)
+            body = str(reader.query_one("#reader_body", Static).renderable)
+            assert "clip_SC_004" in body
 
     _run(_body())
 
@@ -794,7 +736,7 @@ def test_action_bar_no_dashboard() -> None:
     _run(_body())
 
 
-def test_inspector_with_comments_and_validation() -> None:
+def test_reader_with_comments_and_validation() -> None:
     async def _body() -> None:
         from film_pipeline.app.services.models import OperatorComment
         from film_pipeline.tui.view_models.models import ReaderView
@@ -827,11 +769,10 @@ def test_inspector_with_comments_and_validation() -> None:
             )
             app._propagate_state()
             await pilot.pause()
-            inspector = app.screen.query_one("#inspector", Inspector)
-            body = inspector.query_one("#inspector_body", Static)
-            rendered = str(body.renderable)
-            assert "Tighten Mara" in rendered
-            assert "Voice drift" in rendered
+            reader = app.screen.query_one("#reader", Reader)
+            extras = str(reader.query_one("#reader_extras", Static).renderable)
+            assert "Tighten Mara" in extras
+            assert "Voice drift" in extras
 
     _run(_body())
 
@@ -1081,7 +1022,7 @@ def test_new_project_action_from_studio() -> None:
     _run(_body())
 
 
-def test_review_gate_revise_opens_revision_form() -> None:
+def test_studio_revise_keybinding_opens_revision_form() -> None:
     async def _body() -> None:
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
@@ -1089,10 +1030,9 @@ def test_review_gate_revise_opens_revision_form() -> None:
             await pilot.pause()
             app.open_project("field-message")
             await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            app.screen.query_one("#review_revise", Button).focus()
-            await pilot.press("enter")
+            screen = app.screen
+            assert isinstance(screen, StudioScreen)
+            screen.action_revise()
             await pilot.pause()
             assert isinstance(app.screen, RevisionForm)
 
@@ -1226,8 +1166,6 @@ def test_action_back_pops_screen_and_returns_home() -> None:
         async with app.run_test() as pilot:
             await pilot.pause()
             app.open_project("field-message")
-            await pilot.pause()
-            app.push_screen(AssetViewerScreen(id="asset_viewer"))
             await pilot.pause()
             await app.action_back()
             await pilot.pause()
@@ -1715,63 +1653,7 @@ def test_studio_action_home_returns_to_gallery() -> None:
     _run(_body())
 
 
-def test_review_gate_no_review_workspace() -> None:
-    async def _body() -> None:
-        gateway = RecordingGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.open_project("field-message")
-            await pilot.pause()
-            assert app.state.snapshot is not None
-            app.state.snapshot = replace(app.state.snapshot, review=None)
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            summary = app.screen.query_one("#review_summary", Static)
-            assert "no review" in str(summary.renderable).lower()
-
-    _run(_body())
-
-
-def test_review_gate_approve_failure_sets_status() -> None:
-    async def _body() -> None:
-        class BoomApproveGateway(RecordingGateway):
-            def approve_phase(self, project_id: str | None = None) -> MutationResult:
-                raise ProjectNotFoundError("approve boom")
-
-        gateway = BoomApproveGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.open_project("field-message")
-            await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            app.screen.query_one("#review_approve", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-            assert any("approve boom" in str(m).lower() for m in app.state.messages)
-
-    _run(_body())
-
-
-def test_review_gate_revise_from_home_does_not_crash() -> None:
-    async def _body() -> None:
-        gateway = RecordingGateway()
-        app = FilmStudioApp(gateway=gateway)
-        async with app.run_test() as pilot:
-            await pilot.pause()
-            app.push_screen(ReviewGateScreen(id="review_screen"))
-            await pilot.pause()
-            app.screen.query_one("#review_revise", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-            assert isinstance(app.screen, ProjectGalleryScreen)
-
-    _run(_body())
-
-
-def test_simplified_view_toggles_and_populates() -> None:
+def test_studio_tabs_and_default_selection() -> None:
     class SceneBodyGateway(RecordingGateway):
         def list_artifacts(
             self, project_id: str | None = None, phase: str | None = None
@@ -1803,6 +1685,11 @@ def test_simplified_view_toggles_and_populates() -> None:
             return rows
 
     async def _body() -> None:
+        from textual.widgets import TabbedContent
+
+        from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+        from film_pipeline.tui.widgets.scene_browser import SceneBrowser
+
         gateway = SceneBodyGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
@@ -1812,31 +1699,20 @@ def test_simplified_view_toggles_and_populates() -> None:
             screen = app.screen
             assert isinstance(screen, StudioScreen)
 
-            advanced = screen.query_one("#advanced_workspace")
-            simplified = screen.query_one("#simplified_workspace")
-            assert advanced.styles.display != "none"
-            assert simplified.styles.display == "none"
+            # The current phase is script, so the Scenes tab is selected.
+            tabs = screen.query_one("#content_tabs", TabbedContent)
+            assert tabs.active == "tab_scenes"
 
-            screen.query_one("#view_toggle", Button).focus()
-            await pilot.press("enter")
-            await pilot.pause()
-
-            assert advanced.styles.display == "none"
-            assert simplified.styles.display != "none"
-
-            current_node = screen.query_one("#current_node", CurrentNode)
-            current_body = current_node.query_one("#current_node_body", Static)
-            assert "script" in str(current_body.renderable).lower()
-
-            film_meta = screen.query_one("#film_meta", FilmMeta)
-            film_body = film_meta.query_one("#film_meta_body", Static)
-            assert "The Field Message" in str(film_body.renderable)
+            scene_browser = screen.query_one("#scene_browser", SceneBrowser)
+            assert scene_browser.row_count >= 1
 
             asset_browser = screen.query_one("#asset_browser", AssetBrowser)
             assert asset_browser.row_count >= 2
 
-            scene_browser = screen.query_one("#scene_browser", SceneBrowser)
-            assert scene_browser.row_count >= 1
+            # Keybinding actions switch tabs.
+            screen.action_show_tab("tab_issues")
+            await pilot.pause()
+            assert tabs.active == "tab_issues"
 
     _run(_body())
 
@@ -2014,7 +1890,7 @@ def test_command_palette_generate_runs_batch() -> None:
     _run(_body())
 
 
-def test_inspector_shows_generation_prompts() -> None:
+def test_reader_shows_generation_prompts() -> None:
     class GenerationPhaseGateway(RecordingGateway):
         def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
             dashboard = super().get_dashboard(project_id)
@@ -2043,8 +1919,8 @@ def test_inspector_shows_generation_prompts() -> None:
             await pilot.pause()
             app.open_project("field-message")
             await pilot.pause()
-            inspector = app.screen.query_one("#inspector", Inspector)
-            body = inspector.query_one("#inspector_body", Static)
+            reader = app.screen.query_one("#reader", Reader)
+            body = reader.query_one("#reader_body", Static)
             assert "Batch status" in str(body.renderable)
             assert "Prompts" in str(body.renderable)
             assert "Wide establishing shot" in str(body.renderable)
@@ -2106,7 +1982,7 @@ def test_action_bar_generation_button_relabels_after_completion() -> None:
     _run(_body())
 
 
-def test_inspector_shows_full_artifact_body() -> None:
+def test_reader_shows_full_artifact_body() -> None:
     async def _body() -> None:
         from film_pipeline.tui.view_models.models import ReaderView
 
@@ -2128,8 +2004,8 @@ def test_inspector_shows_full_artifact_body() -> None:
             )
             app._propagate_state()
             await pilot.pause()
-            inspector = app.screen.query_one("#inspector", Inspector)
-            body = inspector.query_one("#inspector_body", Static)
+            reader = app.screen.query_one("#reader", Reader)
+            body = reader.query_one("#reader_body", Static)
             rendered = str(body.renderable)
             assert len(rendered) > 10000
             assert rendered.count("Line.") == 2000
@@ -2226,8 +2102,10 @@ def test_action_bar_hides_generate_for_completed_text_only_policy() -> None:
     _run(_body())
 
 
-def test_asset_browser_shows_type_column() -> None:
+def test_asset_browser_shows_kind_column() -> None:
     async def _body() -> None:
+        from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
@@ -2236,13 +2114,15 @@ def test_asset_browser_shows_type_column() -> None:
             await pilot.pause()
             browser = app.screen.query_one("#asset_browser", AssetBrowser)
             headers = [str(column.label) for column in browser.columns.values()]
-            assert "Type" in headers
+            assert "Kind" in headers
 
     _run(_body())
 
 
 def test_asset_browser_open_action_exists() -> None:
     async def _body() -> None:
+        from film_pipeline.tui.widgets.asset_browser import AssetBrowser
+
         gateway = RecordingGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
