@@ -55,7 +55,7 @@ async def generate_reference_images(args: dict[str, object]) -> dict[str, object
 
     # Phase 4 — Identity/geometry consistency: group entries by subject,
     # generate anchor frame first, propagate seed + identity state.
-    grouped_entries = _group_and_sort_entries(entries, requested_ids, force, project_root, results)
+    grouped_entries = _group_and_sort_entries(entries, requested_ids, force, project_root)
     identity_states: dict[str, dict[str, object]] = {}  # keyed by group_key
 
     # Pre-load CharacterBibles from artifact store for structured prompts
@@ -405,7 +405,6 @@ def _group_and_sort_entries(
     requested_ids: set[str],
     force: bool,
     project_root: Path,
-    skip_results: list[dict[str, object]],
 ) -> list[dict[str, object]]:
     """Filter, group, and sort entries — anchor frame first per group.
 

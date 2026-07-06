@@ -71,8 +71,7 @@ def test_group_and_sort_entries_filters_non_dict_and_blank_ids() -> None:
         "not-a-dict",
         {"reference_id": "", "subject_type": "character", "subject_id": "leo"},
     ]
-    results: list[dict[str, object]] = []
-    out = _group_and_sort_entries(entries, set(), False, Path("/tmp/proj"), results)
+    out = _group_and_sort_entries(entries, set(), False, Path("/tmp/proj"))
     assert len(out) == 1
     assert out[0]["reference_id"] == "ref1"
 
@@ -82,8 +81,7 @@ def test_group_and_sort_entries_respects_requested_ids_filter() -> None:
         {"reference_id": "ref1", "subject_type": "character", "subject_id": "leo"},
         {"reference_id": "ref2", "subject_type": "character", "subject_id": "mia"},
     ]
-    results: list[dict[str, object]] = []
-    out = _group_and_sort_entries(entries, {"ref2"}, False, Path("/tmp/proj"), results)
+    out = _group_and_sort_entries(entries, {"ref2"}, False, Path("/tmp/proj"))
     assert len(out) == 1
     assert out[0]["reference_id"] == "ref2"
 
@@ -99,8 +97,7 @@ def test_group_and_sort_entries_marks_skip_when_asset_exists(tmp_path: Path) -> 
             "asset_path": "frame.png",
         }
     ]
-    results: list[dict[str, object]] = []
-    out = _group_and_sort_entries(entries, set(), False, tmp_path, results)
+    out = _group_and_sort_entries(entries, set(), False, tmp_path)
     assert out[0].get("_skip") is True
 
 
@@ -115,8 +112,7 @@ def test_group_and_sort_entries_force_overrides_skip(tmp_path: Path) -> None:
             "asset_path": "frame.png",
         }
     ]
-    results: list[dict[str, object]] = []
-    out = _group_and_sort_entries(entries, set(), True, tmp_path, results)
+    out = _group_and_sort_entries(entries, set(), True, tmp_path)
     assert out[0].get("_skip") is None
 
 
@@ -135,8 +131,7 @@ def test_group_and_sort_entries_sorts_anchor_first() -> None:
             "frame_role": "front-face",
         },
     ]
-    results: list[dict[str, object]] = []
-    out = _group_and_sort_entries(entries, set(), False, Path("/tmp/proj"), results)
+    out = _group_and_sort_entries(entries, set(), False, Path("/tmp/proj"))
     assert out[0]["reference_id"] == "ref_a"
     assert out[1]["reference_id"] == "ref_b"
 

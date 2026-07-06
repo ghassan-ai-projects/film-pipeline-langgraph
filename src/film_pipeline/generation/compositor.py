@@ -124,7 +124,6 @@ def build_character_identity_sheet(
         _SHEET_SIZE,
         frames,
         _CHAR_TILES,
-        _CHAR_LABELS,
     )
     return output_path
 
@@ -316,7 +315,6 @@ def build_environment_board(
         _ENV_SHEET_SIZE,
         frames,
         _ENV_TILES,
-        _ENV_LABELS,
     )
     return output_path
 
@@ -383,7 +381,6 @@ def _write_sheet_manifest(
     dimensions: tuple[int, int],
     frames: dict[str, Path],
     tiles: dict[str, tuple[int, int, int, int]],
-    labels: dict[str, str],  # noqa: ARG001
 ) -> None:
     """Write a .sheet.json manifest alongside the composite PNG."""
 

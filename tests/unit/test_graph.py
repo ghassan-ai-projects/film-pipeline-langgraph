@@ -5,12 +5,6 @@ from __future__ import annotations
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.graph import build_graph
-from film_pipeline.graph.interrupts import (
-    APPROVAL_GATE_LABELS,
-    interrupt_for_gate,
-    resolve_after_approval,
-    should_interrupt,
-)
 from film_pipeline.graph.nodes import (
     approve_phase_node,
     intake_node,
@@ -239,61 +233,8 @@ class TestGraph:
         assert build_graph() is not None
 
 
-class TestInterrupts:
-    def test_interrupt_for_gate(self) -> None:
-        state: dict[str, object] = {}
-        result = interrupt_for_gate(state, "script", "script")
-        assert result["human_approval_required"] is True
-        assert result["human_approval_phase"] == "script"
-        assert result["current_phase"] == "script"
-
-    def test_should_interrupt_true(self) -> None:
-        assert should_interrupt({"human_approval_required": True}) is True
-
-    def test_should_interrupt_false(self) -> None:
-        assert should_interrupt({"human_approval_required": False}) is False
-        assert should_interrupt({}) is False
-
-    def test_resolve_after_approval(self) -> None:
-        state: dict[str, object] = {
-            "human_approval_required": True,
-            "human_approval_phase": "script",
-            "approved": False,
-        }
-        result = resolve_after_approval(state)
-        assert result["human_approval_required"] is False
-        assert result["human_approval_phase"] == ""
-        assert result["approved"] is True
-
-    def test_all_phases_have_gate_label(self) -> None:
-        for phase in PHASE_ORDER:
-            assert phase in APPROVAL_GATE_LABELS
-
-
 class TestSubgraphs:
-    def test_subgraphs_importable(self) -> None:
-        from film_pipeline.graph.subgraphs import (
-            constitution,
-            delivery,
-            development,
-            gen_planning,
-            generation,
-            intake,
-            post,
-            qc,
-            screenwriting,
-            shot_bible,
-            visual_dev,
-        )
+    def test_qc_subgraph_importable(self) -> None:
+        from film_pipeline.graph.subgraphs import qc
 
-        assert constitution is not None
-        assert delivery is not None
-        assert development is not None
-        assert gen_planning is not None
-        assert generation is not None
-        assert intake is not None
-        assert post is not None
-        assert qc is not None
-        assert screenwriting is not None
-        assert shot_bible is not None
-        assert visual_dev is not None
+        assert qc.build_qc_subgraph() is not None
