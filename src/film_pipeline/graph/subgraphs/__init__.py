@@ -1,9 +1,7 @@
-"""Phase subgraphs — one per film production phase.
+"""Phase subgraphs — internal graphs wired into the supervisor graph.
 
-Each subgraph wraps a phase node and will eventually contain internal
-router → creator agent → reviewer → validator → orchestrator synthesis flow.
-
-Currently stubs: they delegate to the corresponding node in film_pipeline.graph.nodes.
+Currently only QC has a real subgraph (parallel validator fan-out); the
+other phases run as plain nodes in film_pipeline.graph.nodes.
 """
 
 from __future__ import annotations

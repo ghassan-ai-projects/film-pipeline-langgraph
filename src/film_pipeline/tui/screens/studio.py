@@ -54,6 +54,10 @@ _STAGE_DEFAULT_TAB: dict[str, str] = {
     "delivery": "tab_assets",
 }
 
+# Generation polling: check job status once per second, give up after 2 minutes.
+_GENERATION_POLL_SECONDS = 1.0
+_GENERATION_POLL_ATTEMPTS = 120
+
 
 class StudioScreen(Screen[None]):
     """Single workspace: pipeline rail, content tabs, and a wide reader."""
@@ -384,10 +388,10 @@ class StudioScreen(Screen[None]):
                 workspace = gateway.approve_generation_spend(project_id)
             if workspace.submitted:
                 workspace = gateway.start_generation(project_id)
-            for _ in range(120):
+            for _ in range(_GENERATION_POLL_ATTEMPTS):
                 if workspace.running == 0:
                     break
-                time.sleep(1.0)
+                time.sleep(_GENERATION_POLL_SECONDS)
                 workspace = gateway.poll_generation(project_id)
             return workspace
 

@@ -17,7 +17,6 @@ def regenerate_failing_tiles(
     sheet_review: SheetReviewResult,
     entries: list[dict[str, Any]],
     sheet_path: Path,
-    project_root: Path,  # noqa: ARG001
     *,
     regenerate_fn: Any,
     max_iterations: int = 3,
@@ -29,7 +28,6 @@ def regenerate_failing_tiles(
         sheet_review: Composite validation result with failing_tiles.
         entries: Reference index entries (to find source frames by role).
         sheet_path: Path to the composite sheet to fix.
-        project_root: Project root for resolving asset paths.
         regenerate_fn: Callable(entry, prompt_feedback) -> Path that regenerates
                        a single frame and returns the new file path.
         max_iterations: Max delta iterations (default 3).
