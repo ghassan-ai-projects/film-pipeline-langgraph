@@ -774,27 +774,30 @@ When using the MCP gateway, every TUI action (create project, submit idea,
 approve phase, add comment, list checkpoints, etc.) is dispatched through the
 same `tools/call` JSON-RPC endpoint that OpenClaw uses.
 
-### Redesigned Studio Interface
+### Studio Interface
 
-The TUI is organized around the film pipeline itself instead of a dense cockpit:
+The TUI is organized around the film pipeline itself:
 
 - **Project gallery** — the home screen lists projects; create a new film or open
   an existing one.
 - **Studio workspace** — three-pane layout for the active project:
-  - **Left rail**: pipeline stages from intake through delivery; the current
-    stage is highlighted, done stages are marked, and stages with blocking
-    issues show a warning badge.
-  - **Center workspace**: contextual header, action bar, and tables for the
-    selected stage's artifacts and validation issues.
-  - **Right drawer**: inspector for the selected artifact or issue.
-- **Action bar**: always shows the most relevant actions for the current stage
-  (validate, approve phase, request revision, next, inspect) as clickable
-  buttons; no commands need to be memorized.
+  - **Pipeline rail**: stages from intake through delivery with status glyphs;
+    the current stage is highlighted and stages with blocking issues show `!`.
+  - **Content tabs**: `Scenes`, `Artifacts`, `Assets`, `Issues` (keys `1`–`4`);
+    the most useful tab is selected automatically for the current stage.
+  - **Reader pane**: the selected scene, artifact, or asset rendered as
+    readable, screenplay-style text — review the film without an external
+    editor.
+- **Action bar**: shows only the actions that are eligible right now (validate,
+  approve phase, request revision, generate) as clickable buttons; no commands
+  need to be memorized.
 - **Command palette** — press `/` to toggle a power-user palette for commands
   such as `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and
   `home`.
-- **Keyboard shortcuts** — `n` creates a project, `r` refreshes, `a` approves the
-  current phase, `v` runs validation, `escape` returns home, and `q` quits.
+- **Keyboard shortcuts** — `n` creates a project, `a` approves the current
+  phase, `r` requests a revision, `v` runs validation, `g` runs generation,
+  `o` opens the selected asset, `f5` refreshes, `escape` returns home, and `q`
+  quits.
 
 ## What Is Resolved (as of 2026-06-29)
 

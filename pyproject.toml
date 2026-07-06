@@ -39,7 +39,6 @@ mcp = [
 [project.scripts]
 film-pipeline-run = "film_pipeline.cli.run:main"
 film-pipeline-tui = "film_pipeline.tui.app:main"
-film-pipeline-tui-legacy = "film_pipeline.tui.cockpit:main"
 
 [project.urls]
 Homepage = "https://github.com/ghassan-ai-projects/film-pipeline-langgraph"
@@ -98,20 +97,6 @@ source = ["film_pipeline"]
 omit = [
   "*/testing/*",
   "src/film_pipeline/mcp/tools/__init__.py",
-  # Legacy cockpit TUI kept alongside the redesigned studio during the transition.
-  # Coverage is enforced on the new TUI; the legacy surface will be removed once
-  # the redesigned interface is fully validated.
-  "src/film_pipeline/tui/app_actions.py",
-  "src/film_pipeline/tui/app_base.py",
-  "src/film_pipeline/tui/app_commands.py",
-  "src/film_pipeline/tui/app_render.py",
-  "src/film_pipeline/tui/app_shell.py",
-  "src/film_pipeline/tui/cockpit.py",
-  "src/film_pipeline/tui/screens/legacy.py",
-  "src/film_pipeline/tui/view_models/builders_command.py",
-  "src/film_pipeline/tui/view_models/builders_dashboard.py",
-  "src/film_pipeline/tui/view_models/builders_matrix.py",
-  "src/film_pipeline/tui/view_models/builders_reading.py",
 ]
 
 [tool.coverage.report]
@@ -119,18 +104,6 @@ show_missing = true
 skip_covered = false
 omit = [
   "*/testing/*",
-  # Legacy cockpit TUI files (see run omit above).
-  "src/film_pipeline/tui/app_actions.py",
-  "src/film_pipeline/tui/app_base.py",
-  "src/film_pipeline/tui/app_commands.py",
-  "src/film_pipeline/tui/app_render.py",
-  "src/film_pipeline/tui/app_shell.py",
-  "src/film_pipeline/tui/cockpit.py",
-  "src/film_pipeline/tui/screens/legacy.py",
-  "src/film_pipeline/tui/view_models/builders_command.py",
-  "src/film_pipeline/tui/view_models/builders_dashboard.py",
-  "src/film_pipeline/tui/view_models/builders_matrix.py",
-  "src/film_pipeline/tui/view_models/builders_reading.py",
 ]
 
 [tool.mypy]
