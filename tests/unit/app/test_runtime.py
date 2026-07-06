@@ -136,7 +136,7 @@ def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     fresh = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
     assert fresh.services is not None
     fresh.services.artifact_store._root = projects_root
-    fresh.load_persistent_projects()
+    fresh.load_persisted_projects()
 
     assert "persisted" in fresh.projects
     assert fresh.projects["persisted"]["title"] == "Persisted Project"
@@ -147,5 +147,5 @@ def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
 
 def test_load_persistent_projects_skips_empty_runtime_root(tmp_path: Path) -> None:
     rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
-    rt.load_persistent_projects()
+    rt.load_persisted_projects()
     assert rt.projects == {}
