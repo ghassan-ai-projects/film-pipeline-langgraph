@@ -123,7 +123,7 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
             assert dashboard.status == "complete"
             assert "generation" in phase_history
 
-            # Open asset viewer via the command palette.
+            # Switch to the Assets tab via the command palette.
             app._run_command("assets")
             for _ in range(20):
                 await pilot.pause()
@@ -136,8 +136,8 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
             # Final state assertions.
             assert len(final_snapshot.assets) > 0
             assert any(asset.get("kind") == "generated_clip" for asset in final_snapshot.assets)
-            assert len(final_snapshot.checkpoints) >= 2
-            assert len(final_snapshot.audit_events) >= 2
+            assert len(service.list_checkpoints("tui-new-flow")) >= 2
+            assert len(service.get_audit_feed("tui-new-flow")) >= 2
 
     asyncio.run(run())
 

@@ -8,22 +8,25 @@ from typing import Any, ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.containers import Horizontal as ModalHorizontal
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Footer, Header, Input, Static
-from textual.widgets import Button as ModalButton
-from textual.widgets import Label as ModalLabel
-from textual.widgets import Static as ModalStatic
-from textual.widgets import TextArea as ModalTextArea
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    Static,
+    TabbedContent,
+    TabPane,
+    TextArea,
+)
 
-from film_pipeline.tui.view_models.models import GRAPH_PHASES, ReaderView
+from film_pipeline.tui.view_models.models import GRAPH_PHASES
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
 from film_pipeline.tui.widgets.asset_browser import AssetBrowser
-from film_pipeline.tui.widgets.current_node import CurrentNode
-from film_pipeline.tui.widgets.film_meta import FilmMeta
-from film_pipeline.tui.widgets.inspector import Inspector
 from film_pipeline.tui.widgets.issue_list import IssueList
+from film_pipeline.tui.widgets.reader import Reader
 from film_pipeline.tui.widgets.scene_browser import SceneBrowser
 from film_pipeline.tui.widgets.stage_nav import StageNav
 
@@ -41,30 +44,33 @@ _STAGE_EXPLANATIONS: dict[str, str] = {
     "delivery": "Package the finished film and assets for export.",
 }
 
+# Which content tab is most useful when a stage is selected.
+_STAGE_DEFAULT_TAB: dict[str, str] = {
+    "script": "tab_scenes",
+    "shot_bible": "tab_scenes",
+    "generation": "tab_assets",
+    "qc": "tab_issues",
+    "post": "tab_assets",
+    "delivery": "tab_assets",
+}
+
 
 class StudioScreen(Screen[None]):
-    """The main single-screen workspace for the active project."""
+    """Single workspace: pipeline rail, content tabs, and a wide reader."""
 
     CSS = """
     #studio_layout {
         height: 1fr;
     }
 
-    #left_rail {
-        width: 26;
-        border: solid #2e3440;
+    #stage_rail {
+        width: 20;
         padding: 0 1;
+        border-right: solid #2e3440;
     }
 
-    #center_workspace {
+    #content_col {
         width: 1fr;
-        border: solid #3b4252;
-        padding: 1 2;
-    }
-
-    #right_drawer {
-        width: 38;
-        border: solid #2e3440;
         padding: 0 1;
     }
 
@@ -84,79 +90,36 @@ class StudioScreen(Screen[None]):
         height: auto;
     }
 
-    #stage_body {
+    #content_tabs {
         height: 1fr;
     }
 
-    #workspace_left {
-        width: 1fr;
-        height: 1fr;
+    #reader {
+        width: 42%;
+        border-left: solid #2e3440;
     }
 
-    #workspace_right {
-        width: 1fr;
-        height: 1fr;
-    }
-
-    .panel {
-        border: solid #3b4252;
+    #action_row {
+        height: auto;
         padding: 0 1;
-        margin: 0 0 1 0;
-        height: 1fr;
-    }
-
-    #top_bar {
-        height: auto;
-        margin: 0 0 1 0;
-    }
-
-    #view_toggle {
-        width: auto;
-        margin: 0 0 0 1;
-    }
-
-    #advanced_workspace {
-        height: 1fr;
-    }
-
-    #simplified_workspace {
-        height: 1fr;
-        display: none;
-    }
-
-    #simplified_top {
-        height: auto;
-    }
-
-    #simplified_top CurrentNode {
-        width: 1fr;
-    }
-
-    #simplified_top FilmMeta {
-        width: 1fr;
-    }
-
-    #simplified_bottom {
-        height: 1fr;
-    }
-
-    #simplified_bottom AssetBrowser {
-        width: 1fr;
-    }
-
-    #simplified_bottom SceneBrowser {
-        width: 1fr;
+        border-top: solid #2e3440;
     }
     """
 
     BINDINGS: ClassVar = [
         Binding("a", "approve", "Approve"),
+        Binding("r", "revise", "Revise"),
         Binding("v", "validate", "Validate"),
         Binding("g", "generate", "Generate"),
+        Binding("1", "show_tab('tab_scenes')", "Scenes", show=False),
+        Binding("2", "show_tab('tab_artifacts')", "Artifacts", show=False),
+        Binding("3", "show_tab('tab_assets')", "Assets", show=False),
+        Binding("4", "show_tab('tab_issues')", "Issues", show=False),
         Binding("escape", "home", "Home"),
     ]
 
     _app_state: object | None = None
+    _auto_tab_stage: str = ""
 
     def on_mount(self) -> None:
         from film_pipeline.tui.app import FilmStudioApp
@@ -167,34 +130,27 @@ class StudioScreen(Screen[None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="studio_layout"):
-            with Vertical(id="left_rail"):
+            with Vertical(id="stage_rail"):
                 yield StageNav(id="stage_nav")
-            with Vertical(id="center_workspace"):
+            with Vertical(id="content_col"):
                 with Vertical(id="stage_header"):
                     yield Static("No project loaded", id="stage_name")
                     yield Static("Open or create a project to begin.", id="stage_explanation")
-                with Horizontal(id="top_bar"):
-                    yield ActionBar(id="action_bar")
-                    yield Button("Simplified view", id="view_toggle")
-                with Horizontal(id="advanced_workspace"):
-                    with Vertical(id="workspace_left"):
-                        yield Static("Artifacts", id="artifact_header", classes="headline")
-                        yield ArtifactList(id="artifact_list")
-                    with Vertical(id="workspace_right"):
-                        yield Static("Issues", id="issue_header", classes="headline")
-                        yield IssueList(id="issue_list")
-                with Vertical(id="simplified_workspace"):
-                    with Horizontal(id="simplified_top"):
-                        yield CurrentNode(id="current_node")
-                        yield FilmMeta(id="film_meta")
-                    with Horizontal(id="simplified_bottom"):
-                        yield AssetBrowser(id="asset_browser")
+                with TabbedContent(id="content_tabs"):
+                    with TabPane("Scenes", id="tab_scenes"):
                         yield SceneBrowser(id="scene_browser")
-            with Vertical(id="right_drawer"):
-                yield Inspector(id="inspector")
+                    with TabPane("Artifacts", id="tab_artifacts"):
+                        yield ArtifactList(id="artifact_list")
+                    with TabPane("Assets", id="tab_assets"):
+                        yield AssetBrowser(id="asset_browser")
+                    with TabPane("Issues", id="tab_issues"):
+                        yield IssueList(id="issue_list")
+            yield Reader(id="reader")
+        with Horizontal(id="action_row"):
+            yield ActionBar(id="action_bar")
         yield Static("", id="status_footer")
         yield Input(
-            placeholder="Command palette: try 'next', 'approve', 'validate', 'project <id>'",
+            placeholder="Command: next · approve · revise <note> · validate · project <id> · help",
             id="command_palette",
         )
         yield Footer()
@@ -215,53 +171,59 @@ class StudioScreen(Screen[None]):
         stage = state.selected_stage or state.dashboard.current_phase or ""
         if stage not in GRAPH_PHASES:
             stage = state.dashboard.current_phase or ""
-        label = stage.replace("_", " ").title()
         current = state.dashboard.current_phase or ""
-        label = f"▸ {label} (current)" if stage == current else f"{label} (past)"
+        label = stage.replace("_", " ").title()
+        if stage and stage != current:
+            label = f"{label} — viewing past stage"
         name.update(label)
-        explanation.update(_STAGE_EXPLANATIONS.get(stage, "Inspect artifacts and issues."))
+        explanation.update(_STAGE_EXPLANATIONS.get(stage, ""))
 
-        action_bar = self.query_one("#action_bar", ActionBar)
-        action_bar.update_state(state)
-        artifact_list = self.query_one("#artifact_list", ArtifactList)
-        artifact_list.update_state(state)
-        issue_list = self.query_one("#issue_list", IssueList)
-        issue_list.update_state(state)
-        inspector = self.query_one("#inspector", Inspector)
-        inspector.update_state(state)
-        nav = self.query_one("#stage_nav", StageNav)
-        nav.update_state(state)
-        current_node = self.query_one("#current_node", CurrentNode)
-        current_node.update_state(state)
-        film_meta = self.query_one("#film_meta", FilmMeta)
-        film_meta.update_state(state)
-        asset_browser = self.query_one("#asset_browser", AssetBrowser)
-        asset_browser.update_state(state)
-        scene_browser = self.query_one("#scene_browser", SceneBrowser)
-        scene_browser.update_state(state)
-
-        # If the project has just been created and there are no artifacts yet,
-        # surface the idea in the inspector so the intake screen is not blank.
-        if (
-            state.dashboard is not None
-            and state.dashboard.idea
-            and state.reader is None
-            and (not state.snapshot or not state.snapshot.artifacts)
+        self._auto_select_tab(stage)
+        for widget in (
+            self.query_one("#stage_nav", StageNav),
+            self.query_one("#action_bar", ActionBar),
+            self.query_one("#scene_browser", SceneBrowser),
+            self.query_one("#artifact_list", ArtifactList),
+            self.query_one("#asset_browser", AssetBrowser),
+            self.query_one("#issue_list", IssueList),
+            self.query_one("#reader", Reader),
         ):
-            state.reader = ReaderView(
-                title="Idea",
-                subtitle=state.dashboard.title,
-                body=state.dashboard.idea,
-                outline=[],
-                metadata={},
-                linked_comments=[],
-                linked_validation=[],
-            )
-            inspector.update_state(state)
+            widget.update_state(state)
+
+    def _auto_select_tab(self, stage: str) -> None:
+        """Pick the most useful tab when the selected stage changes."""
+        if not stage or stage == self._auto_tab_stage:
+            return
+        first_selection = not self._auto_tab_stage
+        self._auto_tab_stage = stage
+        tabs = self.query_one("#content_tabs", TabbedContent)
+        tabs.active = _STAGE_DEFAULT_TAB.get(stage, "tab_artifacts")
+        if first_selection:
+            self._focus_active_table()
+
+    def action_show_tab(self, tab_id: str) -> None:
+        """Keybinding action to switch content tabs."""
+        self.query_one("#content_tabs", TabbedContent).active = tab_id
+        self._focus_active_table()
+
+    def _focus_active_table(self) -> None:
+        """Move focus into the active tab so arrow keys browse its rows."""
+        tabs = self.query_one("#content_tabs", TabbedContent)
+        pane = tabs.get_pane(tabs.active) if tabs.active else None
+        if pane is None:
+            return
+        for child in pane.children:
+            if child.can_focus:
+                child.focus()
+                return
 
     def action_approve(self) -> None:
         """Keybinding action for approving the current phase."""
         self._approve_phase()
+
+    def action_revise(self) -> None:
+        """Keybinding action for requesting a revision."""
+        self._request_revision()
 
     def action_validate(self) -> None:
         """Keybinding action for running validation."""
@@ -278,21 +240,6 @@ class StudioScreen(Screen[None]):
         if isinstance(self.app, FilmStudioApp):
             await self.app.action_back()
 
-    def action_toggle_view(self) -> None:
-        """Switch between advanced (stage-centric) and simplified (asset/scene) views."""
-        advanced = self.query_one("#advanced_workspace", Horizontal)
-        simplified = self.query_one("#simplified_workspace", Vertical)
-        toggle = self.query_one("#view_toggle", Button)
-        if advanced.styles.display == "none":
-            advanced.styles.display = "block"
-            simplified.styles.display = "none"
-            toggle.label = "Simplified view"
-        else:
-            advanced.styles.display = "none"
-            simplified.styles.display = "block"
-            toggle.label = "Advanced view"
-        self.update_state(self._app_state)
-
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "action_approve":
             self._approve_phase()
@@ -304,8 +251,6 @@ class StudioScreen(Screen[None]):
             self._run_generation()
         elif event.button.id == "action_next":
             self._do_next_action()
-        elif event.button.id == "view_toggle":
-            self.action_toggle_view()
 
     def _approve_phase(self) -> None:
         from film_pipeline.tui.app import AppState, FilmStudioApp
@@ -540,13 +485,13 @@ class ConfirmScreen(ModalScreen[bool]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm_dialog"):
-            yield ModalStatic(self._title, classes="dialog-title")
-            yield ModalStatic(self._message, classes="dialog-hint")
-            with ModalHorizontal(id="dialog_buttons"):
-                yield ModalButton("Yes", id="cf_yes", variant="error")
-                yield ModalButton("No", id="cf_no")
+            yield Static(self._title, classes="dialog-title")
+            yield Static(self._message, classes="dialog-hint")
+            with Horizontal(id="dialog_buttons"):
+                yield Button("Yes", id="cf_yes", variant="error")
+                yield Button("No", id="cf_no")
 
-    def on_button_pressed(self, event: ModalButton.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "cf_yes":
             self.dismiss(True)
         else:
@@ -626,34 +571,34 @@ class RevisionForm(ModalScreen[str | None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="revision_dialog"):
-            yield ModalStatic(
+            yield Static(
                 f"Request Revision — {self._project_id}",
                 classes="dialog-title",
             )
-            yield ModalStatic(
+            yield Static(
                 f"Phase: {self._phase or 'current'}. Describe what should change.",
                 classes="dialog-hint",
             )
-            yield ModalLabel("Revision note", classes="field-label")
-            yield ModalTextArea("", id="revision_note")
-            yield ModalStatic("", id="revision_error", classes="dialog-error")
-            with ModalHorizontal(id="dialog_buttons"):
-                yield ModalButton("Submit", id="rf_submit", variant="primary")
-                yield ModalButton("Cancel", id="rf_cancel")
+            yield Label("Revision note", classes="field-label")
+            yield TextArea("", id="revision_note")
+            yield Static("", id="revision_error", classes="dialog-error")
+            with Horizontal(id="dialog_buttons"):
+                yield Button("Submit", id="rf_submit", variant="primary")
+                yield Button("Cancel", id="rf_cancel")
 
     def on_mount(self) -> None:
-        self.query_one("#revision_note", ModalTextArea).focus()
+        self.query_one("#revision_note", TextArea).focus()
 
-    def on_button_pressed(self, event: ModalButton.Pressed) -> None:
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "rf_cancel":
             self.dismiss(None)
         elif event.button.id == "rf_submit":
             self._submit()
 
     def _submit(self) -> None:
-        note = self.query_one("#revision_note", ModalTextArea).text.strip()
+        note = self.query_one("#revision_note", TextArea).text.strip()
         if not note:
-            self.query_one("#revision_error", ModalStatic).update("Revision note is required.")
+            self.query_one("#revision_error", Static).update("Revision note is required.")
             return
         self.dismiss(note)
 

@@ -8,12 +8,11 @@ from textual.widgets import Button, Static
 
 
 class ActionBar(Horizontal):
-    """Shows the most relevant actions for the current stage."""
+    """Shows only the actions that are eligible right now."""
 
-    CSS = """
+    DEFAULT_CSS = """
     ActionBar {
         height: auto;
-        margin: 0 0 1 0;
         align: left middle;
     }
 
@@ -23,19 +22,13 @@ class ActionBar(Horizontal):
 
     #action_hint {
         color: #6b7480;
-        content-align: center middle;
         height: auto;
-        display: block;
     }
 
     .action-button {
         display: none;
     }
     """
-
-    def __init__(self, *, id: str | None = None, classes: str | None = None) -> None:
-        super().__init__(id=id, classes=classes)
-        self._actions: list[tuple[str, str, bool]] = []
 
     def compose(self) -> ComposeResult:
         yield Static("Open a project to see available actions.", id="action_hint")
@@ -44,7 +37,6 @@ class ActionBar(Horizontal):
         yield Button("Request Revision", id="action_revise", classes="action-button")
         yield Button("Generate", id="action_generate", classes="action-button")
         yield Button("Next", id="action_next", classes="action-button")
-        yield Button("Inspect", id="action_inspect", classes="action-button")
 
     def update_state(self, app_state: object) -> None:
         """Refresh actions from parent app state."""
@@ -55,6 +47,7 @@ class ActionBar(Horizontal):
         buttons = {str(button.id): button for button in self.query(Button) if button.id is not None}
 
         if state is None or state.dashboard is None:
+            hint.update("Open a project to see available actions.")
             hint.styles.display = "block"
             for button in buttons.values():
                 button.styles.display = "none"
@@ -92,10 +85,11 @@ class ActionBar(Horizontal):
                 actions.append(("action_revise", "Request Revision", False))
             if not actions:
                 actions.append(("action_next", "Next", True))
+            hint.styles.display = "none"
         else:
-            actions.append(("action_inspect", "Inspect", True))
+            hint.update("Viewing a past stage — actions apply to the current stage.")
+            hint.styles.display = "block"
 
-        hint.styles.display = "none"
         active_ids = {button_id for button_id, _, _ in actions}
         for button_id, button in buttons.items():
             if button_id in active_ids:
@@ -109,10 +103,3 @@ class ActionBar(Horizontal):
             button = buttons[button_id]
             button.label = label
             button.variant = "primary" if primary else "default"
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "action_inspect":
-            from film_pipeline.tui.app import FilmStudioApp
-
-            if isinstance(self.app, FilmStudioApp):
-                self.app.set_selected_stage(self.app.state.selected_stage or "")

@@ -14,10 +14,9 @@ from film_pipeline.tui.view_models.builders_reader import build_artifact_reader
 class ArtifactList(DataTable[str]):
     """Lists artifacts for the selected stage with one-click inspection."""
 
-    CSS = """
+    DEFAULT_CSS = """
     ArtifactList {
         height: 1fr;
-        border: solid #3b4252;
     }
     """
 
@@ -45,11 +44,10 @@ class ArtifactList(DataTable[str]):
 
     def _refresh_view(self) -> None:
         self.clear(columns=True)
-        if not self._rows:
-            self.add_columns("Artifact", "Type", "Version", "Status")
-            self.add_row("—", "—", "—", "No artifacts for this stage.")
-            return
         self.add_columns("Artifact", "Type", "Version", "Status")
+        if not self._rows:
+            self.add_row("No artifacts for this stage yet.", "", "", "")
+            return
         for row in self._rows:
             self.add_row(
                 str(row.get("artifact_id", "")),
