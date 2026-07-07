@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import base64
 import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
+
+from film_pipeline.generation.gemini_client import call_gemini
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -122,7 +122,7 @@ def review_composite_sheet(
     prompt = _build_sheet_review_prompt(sheet_type, subject_id, prompt_text, domains, max_score)
 
     try:
-        response = _call_gemini(prompt, image_b64, model, http_opener, api_key)
+        response = call_gemini(prompt, image_b64, model, http_opener, api_key)
     except Exception as exc:
         return SheetReviewResult(
             sheet_id=subject_id,
@@ -165,43 +165,6 @@ def _build_sheet_review_prompt(
         + '},"total":0,"passed":false,"actionable_feedback":"",'
         + '"failing_tiles":[],"bad_reference_tags":[]}'
     )
-
-
-def _call_gemini(
-    prompt: str,
-    image_b64: str,
-    model: str,
-    http_opener: Any = None,
-    api_key: str | None = None,
-) -> dict[str, Any]:
-
-    from film_pipeline.providers.credentials import lookup
-
-    key = api_key or lookup("gemini-imagen-4")
-    if not key:
-        raise RuntimeError("GOOGLE_API_KEY is not set.")
-
-    url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
-    )
-    body = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": prompt},
-                    {"inline_data": {"mime_type": "image/png", "data": image_b64}},
-                ]
-            }
-        ],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1024},
-    }
-    data = json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        url, data=data, headers={"Content-Type": "application/json"}, method="POST"
-    )
-    opener = http_opener if http_opener is not None else urllib.request.build_opener()
-    with opener.open(req) as resp:
-        return cast(dict[str, Any], json.loads(resp.read().decode("utf-8")))
 
 
 def _parse_sheet_response(

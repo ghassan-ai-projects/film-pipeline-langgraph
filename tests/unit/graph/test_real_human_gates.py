@@ -209,7 +209,7 @@ class TestHumanGateMandatory:
 
         monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
         monkeypatch.setattr(
-            "film_pipeline.graph.nodes._run_orchestrator_agent",
+            "film_pipeline.graph.nodes.approval._run_orchestrator_agent",
             lambda _state: {"action": "approve", "feedback": "looks good", "preserve": []},
         )
 
@@ -354,7 +354,7 @@ class TestExternalStateReplay:
         assert updates == {}
 
     def test_build_resume_payload_carries_generation_requests(self) -> None:
-        from film_pipeline.app.runtime import _build_resume_payload
+        from film_pipeline.app._resume import _build_resume_payload
 
         active: dict[str, Any] = {"generation_requests": [{"generation_request_id": "r1"}]}
         payload = _build_resume_payload("approve", active)
@@ -362,7 +362,7 @@ class TestExternalStateReplay:
         assert payload["_external_state"]["generation_requests"] == active["generation_requests"]
 
     def test_build_resume_payload_omits_external_state_when_empty(self) -> None:
-        from film_pipeline.app.runtime import _build_resume_payload
+        from film_pipeline.app._resume import _build_resume_payload
 
         active: dict[str, Any] = {}
         payload = _build_resume_payload("approve", active)
@@ -383,7 +383,7 @@ class TestExternalStateReplay:
 
         monkeypatch.setattr("langgraph.types.interrupt", fake_interrupt)
         monkeypatch.setattr(
-            "film_pipeline.graph.nodes._run_orchestrator_agent", lambda _state: None
+            "film_pipeline.graph.nodes.approval._run_orchestrator_agent", lambda _state: None
         )
 
         state: dict[str, Any] = {

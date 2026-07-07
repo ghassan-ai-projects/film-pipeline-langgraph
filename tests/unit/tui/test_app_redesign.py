@@ -22,7 +22,8 @@ from film_pipeline.app.services.models import (
 )
 from film_pipeline.tui.app import AppState, FilmStudioApp
 from film_pipeline.tui.screens.home import ProjectGalleryScreen
-from film_pipeline.tui.screens.studio import RevisionForm, StudioScreen
+from film_pipeline.tui.screens.modals import RevisionForm
+from film_pipeline.tui.screens.studio import StudioScreen
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
 from film_pipeline.tui.widgets.issue_list import IssueList

@@ -1,0 +1,289 @@
+"""Generation batch operations for the operator service.
+
+Owns the plan → approve spend → start → poll sequencing plus the text-only
+policy path. ``OperatorService`` exposes these as thin delegate methods.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from film_pipeline.app.services.errors import BackendOperationError
+from film_pipeline.app.services.models import GenerationWorkspace
+from film_pipeline.artifacts.manifest import read_manifest
+
+if TYPE_CHECKING:
+    from film_pipeline.app.services.operator import OperatorService
+
+_STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
+
+
+def get_generation_workspace(
+    svc: OperatorService, project_id: str | None = None
+) -> GenerationWorkspace:
+    """Summarize the generation ledger for the operator."""
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    provider, model = svc.runtime.default_video_provider()
+
+    if _is_text_only_policy(state):
+        return _text_only_workspace(state, project_id_value, provider, model)
+
+    executor = _generation_executor(svc)
+    rows = executor.status_rows(project_id_value)
+    counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
+    for row in rows:
+        status = str(row.get("status", ""))
+        if status in counts:
+            counts[status] += 1
+    return GenerationWorkspace(
+        project_id=project_id_value,
+        phase=str(state.get("current_phase", "")),
+        provider=provider,
+        model=model,
+        estimated_cost_usd=executor.estimated_cost(project_id_value),
+        rows=rows,
+        planned=counts["prepared"],
+        submitted=counts["submitted"],
+        running=counts["running"],
+        completed=counts["completed"],
+        failed=counts["failed"],
+        next_step=_generation_next_step(rows, counts),
+    )
+
+
+def plan_generation(svc: OperatorService, project_id: str | None = None) -> GenerationWorkspace:
+    """Plan a generation batch for every shot in the approved shot matrix."""
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    if _is_text_only_policy(state):
+        _complete_text_only_generation(svc, state, project_id_value)
+        return get_generation_workspace(svc, project_id_value)
+    executor = _generation_executor(svc)
+    provider, model = svc.runtime.default_video_provider()
+    try:
+        executor.plan(project_id_value, provider=provider, model=model)
+    except ValueError as exc:
+        raise BackendOperationError(str(exc)) from exc
+    _sync_generation_requests(svc, state, project_id_value)
+    return get_generation_workspace(svc, project_id_value)
+
+
+def approve_generation_spend(
+    svc: OperatorService,
+    project_id: str | None = None,
+    max_cost_usd: float = -1.0,
+) -> GenerationWorkspace:
+    """Approve spend for planned generation rows."""
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    if _is_text_only_policy(state):
+        return get_generation_workspace(svc, project_id_value)
+    executor = _generation_executor(svc)
+    try:
+        executor.approve_spend(project_id_value, max_cost_usd=max_cost_usd)
+    except ValueError as exc:
+        raise BackendOperationError(str(exc)) from exc
+    _sync_generation_requests(svc, state, project_id_value)
+    return get_generation_workspace(svc, project_id_value)
+
+
+def start_generation(svc: OperatorService, project_id: str | None = None) -> GenerationWorkspace:
+    """Submit approved generation rows to their providers."""
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    if _is_text_only_policy(state):
+        return get_generation_workspace(svc, project_id_value)
+    executor = _generation_executor(svc)
+    executor.start(project_id_value)
+    _sync_generation_requests(svc, state, project_id_value)
+    return get_generation_workspace(svc, project_id_value)
+
+
+def poll_generation(svc: OperatorService, project_id: str | None = None) -> GenerationWorkspace:
+    """Poll running generations once, delivering completed outputs."""
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    if _is_text_only_policy(state):
+        return get_generation_workspace(svc, project_id_value)
+    executor = _generation_executor(svc)
+    executor.poll_once(project_id_value)
+    _sync_generation_requests(svc, state, project_id_value)
+    return get_generation_workspace(svc, project_id_value)
+
+
+def preview_generation_prompts(
+    svc: OperatorService, project_id: str | None = None
+) -> list[dict[str, Any]]:
+    """Resolve the exact prompt each shot will send to its provider.
+
+    Available as soon as the shot matrix exists so the operator can read
+    and validate prompts during gen_planning review — before any spend.
+    """
+    state = svc._state_for_project(project_id)
+    project_id_value = str(state["project_id"])
+    executor = _generation_executor(svc)
+    provider, model = svc.runtime.default_video_provider()
+    previews: list[dict[str, Any]] = []
+    for row in executor.load_shot_rows(project_id_value):
+        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+        if not shot_id:
+            continue
+        previews.append(
+            {
+                "shot_id": shot_id,
+                "scene_id": str(row.get("scene_id", "")),
+                "provider": provider,
+                "model": model,
+                "duration_seconds": row.get("duration_seconds", 5),
+                "prompt": executor.resolve_prompt(project_id_value, shot_id, row),
+            }
+        )
+    return previews
+
+
+def _generation_executor(svc: OperatorService) -> Any:
+    from film_pipeline.generation.executor import GenerationExecutor
+
+    if svc.runtime.services is None:
+        raise BackendOperationError("artifact store is not configured.")
+    return GenerationExecutor(
+        svc.runtime.services.artifact_store,
+        svc.runtime.provider_adapters,
+    )
+
+
+def _sync_generation_requests(svc: OperatorService, state: dict[str, Any], project_id: str) -> None:
+    """Mirror ledger rows into graph state so approval gates can pass."""
+    executor = _generation_executor(svc)
+    requests = executor.dispatchable_requests(project_id)
+    if requests:
+        state["generation_requests"] = requests
+        _strip_stale_request_issues(state)
+    svc.runtime.projects[project_id] = state
+    svc.runtime._persist_project_state(project_id)
+
+
+def _strip_stale_request_issues(state: dict[str, Any]) -> None:
+    issues = state.get("issues", [])
+    if isinstance(issues, list):
+        state["issues"] = [
+            issue
+            for issue in issues
+            if not (isinstance(issue, dict) and issue.get("code") in _STALE_REQUEST_CODES)
+        ]
+
+
+def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) -> str:
+    if not rows:
+        return "plan"
+    if counts["prepared"]:
+        return "approve_spend"
+    if counts["submitted"]:
+        return "start"
+    if counts["running"]:
+        return "poll"
+    if counts["failed"] and not counts["completed"]:
+        return "review_failures"
+    return "approve_phase"
+
+
+def _is_text_only_policy(state: dict[str, Any]) -> bool:
+    return str(state.get("generation_policy", "")).lower() == "text_only"
+
+
+def _complete_text_only_generation(
+    svc: OperatorService, state: dict[str, Any], project_id: str
+) -> None:
+    """Satisfy generation gates without producing clips or frames.
+
+    Creates completed generation_requests from the shot matrix and records
+    a text-only manifest entry so the project can advance to QC/delivery.
+    """
+    if state.get("_text_only_generation_completed"):
+        return
+    executor = _generation_executor(svc)
+    shot_rows = executor.load_shot_rows(project_id)
+    provider, model = svc.runtime.default_video_provider()
+    requests: list[dict[str, Any]] = []
+    for row in shot_rows:
+        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+        if not shot_id:
+            continue
+        requests.append(_text_only_request(project_id, shot_id, provider, model))
+    if not requests:
+        requests.append(_text_only_request(project_id, "all", provider, model))
+    state["generation_requests"] = requests
+    state["_text_only_generation_completed"] = True
+    _strip_stale_request_issues(state)
+    _record_text_only_manifest(svc, project_id)
+    svc.runtime.projects[project_id] = state
+    svc.runtime._persist_project_state(project_id)
+
+
+def _text_only_request(project_id: str, shot_id: str, provider: str, model: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {"text_only": True}
+    if shot_id != "all":
+        payload["shot_id"] = shot_id
+    return {
+        "generation_request_id": f"text-only-{project_id}-{shot_id}",
+        "generation_id": f"text-only-{project_id}-{shot_id}",
+        "project_id": project_id,
+        "shot_id": shot_id,
+        "mode": "text_only",
+        "provider": provider,
+        "model": model,
+        "prompt_ref": "",
+        "prompt_payload": payload,
+        "reference_refs": [],
+        "status": "completed",
+    }
+
+
+def _text_only_workspace(
+    state: dict[str, Any],
+    project_id: str,
+    provider: str,
+    model: str,
+) -> GenerationWorkspace:
+    requests = state.get("generation_requests", []) or []
+    completed = sum(
+        1
+        for req in requests
+        if isinstance(req, dict) and str(req.get("status", "")).lower() == "completed"
+    )
+    return GenerationWorkspace(
+        project_id=project_id,
+        phase=str(state.get("current_phase", "")),
+        provider=provider,
+        model=model,
+        estimated_cost_usd=0.0,
+        rows=[],
+        planned=0,
+        submitted=0,
+        running=0,
+        completed=completed,
+        failed=0,
+        next_step="approve_phase" if completed > 0 else "plan",
+    )
+
+
+def _record_text_only_manifest(svc: OperatorService, project_id: str) -> None:
+    from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
+
+    if svc.runtime.services is None:
+        return
+    root = svc.runtime.services.artifact_store._root
+    manifest = read_manifest(project_id, root=root)
+    entries = list(manifest.entries) if manifest else []
+    if not any(entry.asset_id == "text-only-delivery" for entry in entries):
+        entries.append(
+            AssetEntry(
+                asset_id="text-only-delivery",
+                kind="text_only_delivery",
+                shot_id="",
+                scene_id="",
+                path="",
+            )
+        )
+        write_manifest(AssetManifest(project_id=project_id, entries=entries), root=root)

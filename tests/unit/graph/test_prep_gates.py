@@ -87,24 +87,19 @@ class TestCriticalContextGate:
 class TestAutoApprovalWithholding:
     def test_withholds_on_blocking_in_auto_mode(self) -> None:
         updates: dict[str, Any] = {"approved": True, "human_approval_required": False}
-        nodes._withhold_auto_approval_on_blockers(
-            updates, auto=True, issues=[{"severity": "blocking"}]
-        )
+        nodes._withhold_auto_approval_on_blockers(updates, issues=[{"severity": "blocking"}])
         assert updates["approved"] is False
 
     def test_keeps_approval_when_only_warnings(self) -> None:
         updates: dict[str, Any] = {"approved": True}
-        nodes._withhold_auto_approval_on_blockers(
-            updates, auto=True, issues=[{"severity": "warning"}]
-        )
+        nodes._withhold_auto_approval_on_blockers(updates, issues=[{"severity": "warning"}])
         assert updates["approved"] is True
 
     def test_noop_in_human_mode(self) -> None:
-        updates: dict[str, Any] = {"approved": True}
-        nodes._withhold_auto_approval_on_blockers(
-            updates, auto=False, issues=[{"severity": "blocking"}]
-        )
-        assert updates["approved"] is True
+        updates: dict[str, Any] = {"approved": False}
+        nodes._withhold_auto_approval_on_blockers(updates, issues=[{"severity": "blocking"}])
+        assert updates["approved"] is False
+        assert "human_approval_required" not in updates
 
 
 class TestEdgesAutoMode:
