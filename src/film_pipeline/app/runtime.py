@@ -6,35 +6,24 @@ In production, this would be a proper session/process manager.
 
 from __future__ import annotations
 
-import contextlib
-import json
 import logging
 import os
 import shutil
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
-from film_pipeline.app import _persistence, _provider_seeds
+from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
     RUNTIME_ROOT,
     STATE_FILENAME,
     project_git_backend,
     use_persistent_runtime,
 )
-from film_pipeline.app._resume import (
-    _approval_made_progress,
-    _build_resume_payload,
-    _has_stale_generation_request_blocker,
-    _preserve_external_generation_requests,
-    _strip_stale_generation_request_blockers,
-)
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
 from film_pipeline.checkpoints.manager import CheckpointManager
-from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
@@ -198,268 +187,33 @@ class StudioRuntime:
 
     # --- Graph ---
 
+    # --- Graph execution (see _graph_exec) ---
+
     def ensure_graph(self) -> Any:
         """Lazy-load and cache the graph instance."""
-        if self.graph is None:
-            from film_pipeline.graph.graph import build_graph
-
-            self.graph = build_graph()
-        return self.graph
+        return _graph_exec.ensure_graph(self)
 
     def run_graph(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Run the graph with the given state.
-
-        Supplies ``GraphServices`` through runtime context before invocation
-        so checkpoints never need to serialize service objects.
-
-        With LangGraph ``interrupt()`` + checkpointer, the graph pauses at
-        human gates and resumes via ``graph.invoke(Command(...), config)``.
-        No recursion-limit workaround needed.
-
-        Persists graph state to disk for crash recovery (Phase 7+ P0).
-        """
-        graph = self.ensure_graph()
-
-        state = dict(state)
-
-        # Set context-var fallback so nodes can find services without storing
-        # runtime dependencies in checkpointed graph state.
-        import film_pipeline.graph.nodes as _gn
-
-        token = _gn._SERVICES_CTX.set(self.services)
-        try:
-            config: dict[str, Any] = {
-                "configurable": {
-                    "thread_id": state.get("project_id", "default"),
-                    "services": self.services,
-                },
-                "recursion_limit": 50,  # 10 phases x ~3 steps each + repair headroom
-            }
-            result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
-        finally:
-            _gn._SERVICES_CTX.reset(token)
-        pid = str(result.get("project_id", ""))
-        if pid:
-            self._save_graph_state(dict(result), pid)
-            self._auto_checkpoint(result)
-        return result
+        """Run the graph with the given state, persisting results for recovery."""
+        return _graph_exec.run_graph(self, state)
 
     def _auto_checkpoint(self, state: dict[str, Any]) -> None:
-        """Create a checkpoint after a graph step completes."""
-        project_id = str(state.get("project_id", ""))
-        if not project_id or project_id not in self.projects:
-            return
-        manager = self.checkpoint_managers.get(project_id)
-        if manager is None:
-            return
-        phase = str(state.get("current_phase", "") or "intake")
-        if not phase:
-            return
-
-        graph_state_ref = ""
-        if self.services is not None:
-            store = self.services.artifact_store
-            try:
-                from datetime import UTC, datetime
-
-                from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-                from film_pipeline.schemas.artifact import ArtifactMetadata
-                from film_pipeline.schemas.checkpoint import CheckpointState
-
-                version = store.next_version(project_id, "intake", "graph_state")
-                meta = ArtifactMetadata(
-                    artifact_id="graph_state",
-                    artifact_type=ArtifactType.CHECKPOINT,
-                    project_id=project_id,
-                    phase=FilmPhase("intake"),
-                    version=version,
-                    status=ArtifactStatus.CANDIDATE,
-                    created_by="runtime_auto_checkpoint",
-                    created_at=datetime.now(UTC),
-                )
-                safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
-                store.save(CheckpointState(state=safe_state), meta)
-                graph_state_ref = f"artifact:graph_state:v{version}"
-            except Exception as exc:
-                _logger.warning(
-                    "Auto-checkpoint could not persist graph state for %s: %s", project_id, exc
-                )
-
-        from film_pipeline.graph.orchestrator_state import get_candidate_refs
-
-        candidate_refs = get_candidate_refs(state)
-        artifact_versions = dict(candidate_refs)
-
-        with contextlib.suppress(Exception):
-            self.create_checkpoint(
-                project_id=project_id,
-                phase=phase,
-                reason="auto: graph step completed",
-                artifact_versions=artifact_versions,
-                graph_state_ref=graph_state_ref,
-            )
-
-    def _save_graph_state(self, state: dict[str, Any], project_id: str) -> None:
-        """Persist graph state to disk for crash recovery."""
-        root = self.project_roots.get(project_id)
-        if root is None:
-            return
-        root.mkdir(parents=True, exist_ok=True)
-        state_path = root / ".graph_state.json"
-        safe = {k: v for k, v in state.items() if not k.startswith("_services")}
-        state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
+        _graph_exec.auto_checkpoint(self, state)
 
     def approve_phase(self) -> dict[str, Any]:
-        """Approve the current phase and advance.
-
-        Resumes the graph via ``Command(resume={"action": "approve"})``
-        when a checkpoint exists. Falls back to manual phase advance
-        when no graph checkpoint has been created (e.g. after direct
-        ``_run_phase_node`` calls).
-        """
-        from langgraph.types import Command
-
-        active = self.get_active()
-        if not active:
-            raise ValueError("No active project.")
-
-        current_phase = str(active.get("current_phase", ""))
-        if not current_phase:
-            raise ValueError("No active phase to approve.")
-
-        graph = self.ensure_graph()
-        config: dict[str, Any] = {
-            "configurable": {"thread_id": active["project_id"], "services": self.services},
-        }
-
-        # Set the services context variable so graph nodes can find
-        # GraphServices without checkpointing runtime objects.
-        import film_pipeline.graph.nodes as _gn
-
-        token = _gn._SERVICES_CTX.set(self.services)
-        try:
-            state = graph.invoke(
-                Command(resume=_build_resume_payload("approve", active)),
-                config,
-            )
-            _preserve_external_generation_requests(state, active)
-            _strip_stale_generation_request_blockers(state)
-            if not _approval_made_progress(
-                state, current_phase
-            ) or _has_stale_generation_request_blocker(state, active):
-                state = self._advance_to_next_phase(dict(active))
-        except Exception:
-            # No checkpoint exists — advance manually via phase nodes
-            state = self._advance_to_next_phase(dict(active))
-        finally:
-            _gn._SERVICES_CTX.reset(token)
-        state = cast(dict[str, Any], state)
-
-        self.projects[active["project_id"]] = state
-        self._persist_project_state(active["project_id"])
-        self._save_graph_state(dict(state), active["project_id"])
-
-        checkpoint = self.create_checkpoint(
-            project_id=active["project_id"],
-            phase=str(state.get("current_phase", "")),
-            reason=f"Approved at {current_phase}",
-        )
-
-        self._record_audit(
-            "human",
-            "approve_phase",
-            project_id=active["project_id"],
-            phase=current_phase,
-            next_phase=str(state.get("current_phase", "")),
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-        return state
+        """Approve the current phase and advance (graph resume with manual fallback)."""
+        return _graph_exec.approve_phase(self)
 
     def run_validation(self, project_id: str | None = None) -> dict[str, Any]:
-        """Run validators against the active project's current-phase artifacts.
-
-        Executes the same validator dispatch the QC node uses, but against the
-        live project state and *without* advancing the phase. Validator-produced
-        findings replace any prior validator findings (issues tagged with a
-        ``validator_id``) while non-validator blockers are preserved, then the
-        refreshed issues and validation reports are merged back and persisted.
-        """
-        from film_pipeline.graph.nodes import _run_validators
-        from film_pipeline.graph.services import SERVICES_KEY
-
-        active = self.get_project(project_id) if project_id else self.get_active()
-        if active is None:
-            raise ValueError("No active project.")
-        project_id_value = str(active["project_id"])
-
-        preserved_issues = [
-            issue
-            for issue in cast(list[dict[str, Any]], active.get("issues", []))
-            if not (isinstance(issue, dict) and issue.get("validator_id"))
-        ]
-        working = dict(active)
-        working[SERVICES_KEY] = self.services
-        working["issues"] = list(preserved_issues)
-        working["_validation_reports"] = []
-        working.pop("_pending_row_updates", None)
-        _run_validators(working)
-        working.pop(SERVICES_KEY, None)
-
-        active["issues"] = list(working.get("issues", []))
-        active["_validation_reports"] = list(working.get("_validation_reports", []))
-        consensus_ref = working.get("consensus_report_ref")
-        if consensus_ref:
-            active["consensus_report_ref"] = consensus_ref
-        self.projects[project_id_value] = active
-        self._persist_project_state(project_id_value)
-        self._record_audit(
-            "human",
-            "run_validation",
-            project_id=project_id_value,
-            phase=str(active.get("current_phase", "")),
-        )
-        return active
+        """Run validators against current-phase artifacts without advancing."""
+        return _graph_exec.run_validation(self, project_id)
 
     def request_revision(self, note: str = "") -> dict[str, Any]:
-        """Request revision of the current phase.
+        """Request revision of the current phase via graph resume."""
+        return _graph_exec.request_revision(self, note)
 
-        Resumes the graph via ``Command(resume={"action": "revise"})``.
-        The graph routes to repair automatically.
-        """
-        from langgraph.types import Command
-
-        active = self.get_active()
-        if not active:
-            raise ValueError("No active project.")
-
-        graph = self.ensure_graph()
-        config: dict[str, Any] = {
-            "configurable": {"thread_id": active["project_id"], "services": self.services},
-        }
-
-        import film_pipeline.graph.nodes as _gn
-
-        token = _gn._SERVICES_CTX.set(self.services)
-        try:
-            state = graph.invoke(
-                Command(resume=_build_resume_payload("revise", active, note=note)),
-                config,
-            )
-        finally:
-            _gn._SERVICES_CTX.reset(token)
-        state = cast(dict[str, Any], state)
-
-        self.projects[active["project_id"]] = state
-        self._persist_project_state(active["project_id"])
-        self._save_graph_state(dict(state), active["project_id"])
-
-        self._record_audit(
-            "human",
-            "request_revision",
-            project_id=active["project_id"],
-            note=note,
-        )
-        return state
+    def _run_phase_node(self, state: dict[str, Any], phase: str) -> dict[str, Any]:
+        return _graph_exec.run_phase_node(self, state, phase)
 
     # --- Checkpoints ---
 
@@ -639,91 +393,6 @@ class StudioRuntime:
     def default_video_provider(self) -> tuple[str, str]:
         """Return the (provider_id, model) pair generation should default to."""
         return _provider_seeds.default_video_provider(self)
-
-    def _advance_to_next_phase(self, state: dict[str, Any]) -> dict[str, Any]:
-        current_phase = str(state.get("current_phase", ""))
-        if current_phase not in PHASE_ORDER:
-            self.projects[state["project_id"]] = state
-            self._persist_project_state(state["project_id"])
-            return state
-
-        current_index = PHASE_ORDER.index(current_phase)
-        if current_index == len(PHASE_ORDER) - 1:
-            final_state = dict(state)
-            final_state["completed"] = True
-            final_state["human_approval_phase"] = ""
-            self.projects[state["project_id"]] = final_state
-            self._persist_project_state(state["project_id"])
-            return final_state
-
-        next_phase = PHASE_ORDER[current_index + 1]
-        advanced_state = self._run_phase_node(state, next_phase)
-        self.projects[state["project_id"]] = advanced_state
-        self._persist_project_state(state["project_id"])
-        return advanced_state
-
-    def _run_phase_node(self, state: dict[str, Any], phase: str) -> dict[str, Any]:
-        from film_pipeline.graph.nodes import (
-            constitution_node,
-            delivery_node,
-            development_node,
-            gen_planning_node,
-            generation_node,
-            intake_node,
-            post_node,
-            qc_node,
-            script_node,
-            shot_bible_node,
-            visual_dev_node,
-        )
-        from film_pipeline.graph.services import SERVICES_KEY
-
-        phase_nodes = {
-            "intake": intake_node,
-            "constitution": constitution_node,
-            "development": development_node,
-            "script": script_node,
-            "visual_dev": visual_dev_node,
-            "shot_bible": shot_bible_node,
-            "gen_planning": gen_planning_node,
-            "generation": generation_node,
-            "qc": qc_node,
-            "post": post_node,
-            "delivery": delivery_node,
-        }
-        node = phase_nodes[phase]
-        # Inject graph services so nodes can invoke agents and persist artifacts
-        state = dict(state)
-        state[SERVICES_KEY] = self.services
-        node_result = node(state)
-        # Merge node result back into state using the same reducer semantics
-        # the graph applies (direct node calls bypass channel accumulation).
-        from film_pipeline.graph.state_schema import (
-            merge_generation_requests,
-            merge_issues,
-            merge_unique,
-        )
-
-        merged = dict(state)
-        merged.update(node_result)
-        reducers: dict[str, Callable[[list[Any] | None, list[Any] | None], list[Any]]] = {
-            "artifact_refs": merge_unique,
-            "issues": merge_issues,
-            "validation_report_refs": merge_unique,
-            "generation_requests": merge_generation_requests,
-        }
-        for key, reducer in reducers.items():
-            new = node_result.get(key, [])
-            if new:
-                merged[key] = reducer(list(state.get(key, [])), list(new))
-        for key in ("_routing_decisions", "_validation_reports"):
-            prev = state.get(key, [])
-            new = node_result.get(key, [])
-            if new:
-                merged[key] = list(prev) + [item for item in new if item not in prev]
-        # Strip runtime-only keys that must not leak into persisted state
-        merged.pop(SERVICES_KEY, None)
-        return merged
 
 
 def create_runtime(server_mode: str | None = None) -> StudioRuntime:
