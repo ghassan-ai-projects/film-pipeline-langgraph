@@ -8,19 +8,18 @@ from typing import Any, ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.screen import ModalScreen, Screen
+from textual.screen import Screen
 from textual.widgets import (
     Button,
     Footer,
     Header,
     Input,
-    Label,
     Static,
     TabbedContent,
     TabPane,
-    TextArea,
 )
 
+from film_pipeline.tui.screens.modals import ConfirmScreen, RevisionForm
 from film_pipeline.tui.view_models.models import GRAPH_PHASES
 from film_pipeline.tui.widgets.action_bar import ActionBar
 from film_pipeline.tui.widgets.artifact_list import ArtifactList
@@ -53,6 +52,10 @@ _STAGE_DEFAULT_TAB: dict[str, str] = {
     "post": "tab_assets",
     "delivery": "tab_assets",
 }
+
+# Generation polling: check job status once per second, give up after 2 minutes.
+_GENERATION_POLL_SECONDS = 1.0
+_GENERATION_POLL_ATTEMPTS = 120
 
 
 class StudioScreen(Screen[None]):
@@ -384,10 +387,10 @@ class StudioScreen(Screen[None]):
                 workspace = gateway.approve_generation_spend(project_id)
             if workspace.submitted:
                 workspace = gateway.start_generation(project_id)
-            for _ in range(120):
+            for _ in range(_GENERATION_POLL_ATTEMPTS):
                 if workspace.running == 0:
                     break
-                time.sleep(1.0)
+                time.sleep(_GENERATION_POLL_SECONDS)
                 workspace = gateway.poll_generation(project_id)
             return workspace
 
@@ -429,178 +432,3 @@ class StudioScreen(Screen[None]):
 
         app.set_status("Generation: planning batch...")
         self.run_worker(_task, thread=True, exclusive=False, name="generation_batch")
-
-
-class ConfirmScreen(ModalScreen[bool]):
-    """Simple yes/no confirmation modal."""
-
-    CSS = """
-    ConfirmScreen {
-        align: center middle;
-    }
-
-    #confirm_dialog {
-        width: 60;
-        height: auto;
-        padding: 1 2;
-        border: thick #bf616a;
-        background: #11151a;
-    }
-
-    .dialog-title {
-        color: #bf616a;
-        text-style: bold;
-        margin: 0 0 1 0;
-    }
-
-    .dialog-hint {
-        color: #d8dee9;
-        margin: 0 0 1 0;
-    }
-
-    #dialog_buttons {
-        height: auto;
-        margin: 1 0 0 0;
-    }
-
-    #dialog_buttons Button {
-        margin: 0 1 0 0;
-    }
-    """
-
-    BINDINGS: ClassVar = [Binding("escape", "cancel", "Cancel")]
-
-    def __init__(
-        self,
-        title: str,
-        message: str,
-        *,
-        name: str | None = None,
-        id: str | None = None,
-        classes: str | None = None,
-    ) -> None:
-        super().__init__(name=name, id=id, classes=classes)
-        self._title = title
-        self._message = message
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="confirm_dialog"):
-            yield Static(self._title, classes="dialog-title")
-            yield Static(self._message, classes="dialog-hint")
-            with Horizontal(id="dialog_buttons"):
-                yield Button("Yes", id="cf_yes", variant="error")
-                yield Button("No", id="cf_no")
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "cf_yes":
-            self.dismiss(True)
-        else:
-            self.dismiss(False)
-
-    def action_cancel(self) -> None:
-        self.dismiss(False)
-
-
-class RevisionForm(ModalScreen[str | None]):
-    """Collect a revision note for the active phase."""
-
-    CSS = """
-    RevisionForm {
-        align: center middle;
-    }
-
-    #revision_dialog {
-        width: 72;
-        height: auto;
-        max-height: 90%;
-        padding: 1 2;
-        border: thick #ebcb8b;
-        background: #11151a;
-    }
-
-    .dialog-title {
-        color: #ebcb8b;
-        text-style: bold;
-        margin: 0 0 1 0;
-    }
-
-    .dialog-hint {
-        color: #6b7480;
-        margin: 0 0 1 0;
-    }
-
-    .field-label {
-        color: #d8dee9;
-        margin: 1 0 0 0;
-    }
-
-    #revision_note {
-        width: 100%;
-        height: 8;
-    }
-
-    .dialog-error {
-        color: #bf616a;
-        margin: 1 0 0 0;
-    }
-
-    #dialog_buttons {
-        height: auto;
-        margin: 1 0 0 0;
-    }
-
-    #dialog_buttons Button {
-        margin: 0 1 0 0;
-    }
-    """
-
-    BINDINGS: ClassVar = [Binding("escape", "cancel", "Cancel")]
-
-    def __init__(
-        self,
-        *,
-        project_id: str,
-        phase: str,
-        name: str | None = None,
-        id: str | None = None,
-        classes: str | None = None,
-    ) -> None:
-        super().__init__(name=name, id=id, classes=classes)
-        self._project_id = project_id
-        self._phase = phase
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="revision_dialog"):
-            yield Static(
-                f"Request Revision — {self._project_id}",
-                classes="dialog-title",
-            )
-            yield Static(
-                f"Phase: {self._phase or 'current'}. Describe what should change.",
-                classes="dialog-hint",
-            )
-            yield Label("Revision note", classes="field-label")
-            yield TextArea("", id="revision_note")
-            yield Static("", id="revision_error", classes="dialog-error")
-            with Horizontal(id="dialog_buttons"):
-                yield Button("Submit", id="rf_submit", variant="primary")
-                yield Button("Cancel", id="rf_cancel")
-
-    def on_mount(self) -> None:
-        self.query_one("#revision_note", TextArea).focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "rf_cancel":
-            self.dismiss(None)
-        elif event.button.id == "rf_submit":
-            self._submit()
-
-    def _submit(self) -> None:
-        note = self.query_one("#revision_note", TextArea).text.strip()
-        if not note:
-            self.query_one("#revision_error", Static).update("Revision note is required.")
-            return
-        self.dismiss(note)
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)

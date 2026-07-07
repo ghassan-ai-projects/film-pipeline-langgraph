@@ -9,10 +9,16 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any, cast
 
 from film_pipeline.app.runtime import StudioRuntime, get_runtime
+from film_pipeline.app.services import _browse_ops, _generation_ops
+from film_pipeline.app.services._project_discovery import (
+    discover_project_folders,
+    load_discovered_project,
+    normalize_project_kind,
+    project_kind_for_state,
+)
 from film_pipeline.app.services.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.app.services.models import (
     ArtifactDetail,
@@ -27,11 +33,9 @@ from film_pipeline.app.services.models import (
     ReviewWorkspace,
     ValidationWorkspace,
 )
-from film_pipeline.artifacts.manifest import read_manifest
 from film_pipeline.config import profile_resolver as _profiles
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.router import compute_actions
-from film_pipeline.schemas._base import FilmPhase
 
 
 class OperatorService:
@@ -61,12 +65,12 @@ class OperatorService:
                     has_blockers=has_blockers,
                     awaiting_review=bool(state.get("human_approval_required")),
                     last_updated_at=self._last_updated_at(project_id),
-                    project_kind=self._project_kind_for_state(state, project_id),
+                    project_kind=project_kind_for_state(state, project_id),
                     project_root=str(self.runtime.project_roots.get(project_id, "")),
                 )
             )
         known_ids = {item.project_id for item in items}
-        items.extend(self._discover_project_folders(known_ids))
+        items.extend(discover_project_folders(self, known_ids))
         return items
 
     def _last_updated_at(self, project_id: str) -> str:
@@ -97,7 +101,7 @@ class OperatorService:
         )
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
-        state["project_kind"] = self._normalize_project_kind(request.project_kind)
+        state["project_kind"] = normalize_project_kind(request.project_kind)
         state["generation_policy"] = request.generation_policy
 
         profile_stack = _profiles.canonicalize_profile_stack(
@@ -314,54 +318,15 @@ class OperatorService:
             message="Revision requested.",
         )
 
-    # --- Generation batch operations ---
+    # --- Generation batch operations (see _generation_ops) ---
 
     def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
         """Summarize the generation ledger for the operator."""
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        provider, model = self.runtime.default_video_provider()
-
-        if self._is_text_only_policy(state):
-            return self._text_only_workspace(state, project_id_value, provider, model)
-
-        executor = self._generation_executor()
-        rows = executor.status_rows(project_id_value)
-        counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
-        for row in rows:
-            status = str(row.get("status", ""))
-            if status in counts:
-                counts[status] += 1
-        return GenerationWorkspace(
-            project_id=project_id_value,
-            phase=str(state.get("current_phase", "")),
-            provider=provider,
-            model=model,
-            estimated_cost_usd=executor.estimated_cost(project_id_value),
-            rows=rows,
-            planned=counts["prepared"],
-            submitted=counts["submitted"],
-            running=counts["running"],
-            completed=counts["completed"],
-            failed=counts["failed"],
-            next_step=self._generation_next_step(rows, counts),
-        )
+        return _generation_ops.get_generation_workspace(self, project_id)
 
     def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Plan a generation batch for every shot in the approved shot matrix."""
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        if self._is_text_only_policy(state):
-            self._complete_text_only_generation(state, project_id_value)
-            return self.get_generation_workspace(project_id_value)
-        executor = self._generation_executor()
-        provider, model = self.runtime.default_video_provider()
-        try:
-            executor.plan(project_id_value, provider=provider, model=model)
-        except ValueError as exc:
-            raise BackendOperationError(str(exc)) from exc
-        self._sync_generation_requests(state, project_id_value)
-        return self.get_generation_workspace(project_id_value)
+        return _generation_ops.plan_generation(self, project_id)
 
     def approve_generation_spend(
         self,
@@ -369,220 +334,21 @@ class OperatorService:
         max_cost_usd: float = -1.0,
     ) -> GenerationWorkspace:
         """Approve spend for planned generation rows."""
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        if self._is_text_only_policy(state):
-            return self.get_generation_workspace(project_id_value)
-        executor = self._generation_executor()
-        try:
-            executor.approve_spend(project_id_value, max_cost_usd=max_cost_usd)
-        except ValueError as exc:
-            raise BackendOperationError(str(exc)) from exc
-        self._sync_generation_requests(state, project_id_value)
-        return self.get_generation_workspace(project_id_value)
+        return _generation_ops.approve_generation_spend(self, project_id, max_cost_usd)
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Submit approved generation rows to their providers."""
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        if self._is_text_only_policy(state):
-            return self.get_generation_workspace(project_id_value)
-        executor = self._generation_executor()
-        executor.start(project_id_value)
-        self._sync_generation_requests(state, project_id_value)
-        return self.get_generation_workspace(project_id_value)
+        return _generation_ops.start_generation(self, project_id)
 
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Poll running generations once, delivering completed outputs."""
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        if self._is_text_only_policy(state):
-            return self.get_generation_workspace(project_id_value)
-        executor = self._generation_executor()
-        executor.poll_once(project_id_value)
-        self._sync_generation_requests(state, project_id_value)
-        return self.get_generation_workspace(project_id_value)
+        return _generation_ops.poll_generation(self, project_id)
 
     def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, Any]]:
-        """Resolve the exact prompt each shot will send to its provider.
+        """Resolve the exact prompt each shot will send to its provider."""
+        return _generation_ops.preview_generation_prompts(self, project_id)
 
-        Available as soon as the shot matrix exists so the operator can read
-        and validate prompts during gen_planning review — before any spend.
-        """
-        state = self._state_for_project(project_id)
-        project_id_value = str(state["project_id"])
-        executor = self._generation_executor()
-        provider, model = self.runtime.default_video_provider()
-        previews: list[dict[str, Any]] = []
-        for row in executor.load_shot_rows(project_id_value):
-            shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
-            if not shot_id:
-                continue
-            previews.append(
-                {
-                    "shot_id": shot_id,
-                    "scene_id": str(row.get("scene_id", "")),
-                    "provider": provider,
-                    "model": model,
-                    "duration_seconds": row.get("duration_seconds", 5),
-                    "prompt": executor.resolve_prompt(project_id_value, shot_id, row),
-                }
-            )
-        return previews
-
-    def _generation_executor(self) -> Any:
-        from film_pipeline.generation.executor import GenerationExecutor
-
-        if self.runtime.services is None:
-            raise BackendOperationError("artifact store is not configured.")
-        return GenerationExecutor(
-            self.runtime.services.artifact_store,
-            self.runtime.provider_adapters,
-        )
-
-    def _sync_generation_requests(self, state: dict[str, Any], project_id: str) -> None:
-        """Mirror ledger rows into graph state so approval gates can pass."""
-        executor = self._generation_executor()
-        requests = executor.dispatchable_requests(project_id)
-        if requests:
-            state["generation_requests"] = requests
-            stale_codes = {"empty_generation_requests", "no_generation_requests"}
-            issues = state.get("issues", [])
-            if isinstance(issues, list):
-                state["issues"] = [
-                    issue
-                    for issue in issues
-                    if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
-                ]
-        self.runtime.projects[project_id] = state
-        self.runtime._persist_project_state(project_id)
-
-    @staticmethod
-    def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) -> str:
-        if not rows:
-            return "plan"
-        if counts["prepared"]:
-            return "approve_spend"
-        if counts["submitted"]:
-            return "start"
-        if counts["running"]:
-            return "poll"
-        if counts["failed"] and not counts["completed"]:
-            return "review_failures"
-        return "approve_phase"
-
-    @staticmethod
-    def _is_text_only_policy(state: dict[str, Any]) -> bool:
-        return str(state.get("generation_policy", "")).lower() == "text_only"
-
-    def _complete_text_only_generation(self, state: dict[str, Any], project_id: str) -> None:
-        """Satisfy generation gates without producing clips or frames.
-
-        Creates completed generation_requests from the shot matrix and records
-        a text-only manifest entry so the project can advance to QC/delivery.
-        """
-        if state.get("_text_only_generation_completed"):
-            return
-        executor = self._generation_executor()
-        shot_rows = executor.load_shot_rows(project_id)
-        provider, model = self.runtime.default_video_provider()
-        requests: list[dict[str, Any]] = []
-        for row in shot_rows:
-            shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
-            if not shot_id:
-                continue
-            requests.append(
-                {
-                    "generation_request_id": f"text-only-{project_id}-{shot_id}",
-                    "generation_id": f"text-only-{project_id}-{shot_id}",
-                    "project_id": project_id,
-                    "shot_id": shot_id,
-                    "mode": "text_only",
-                    "provider": provider,
-                    "model": model,
-                    "prompt_ref": "",
-                    "prompt_payload": {"text_only": True, "shot_id": shot_id},
-                    "reference_refs": [],
-                    "status": "completed",
-                }
-            )
-        if not requests:
-            requests.append(
-                {
-                    "generation_request_id": f"text-only-{project_id}-all",
-                    "generation_id": f"text-only-{project_id}-all",
-                    "project_id": project_id,
-                    "shot_id": "all",
-                    "mode": "text_only",
-                    "provider": provider,
-                    "model": model,
-                    "prompt_ref": "",
-                    "prompt_payload": {"text_only": True},
-                    "reference_refs": [],
-                    "status": "completed",
-                }
-            )
-        state["generation_requests"] = requests
-        state["_text_only_generation_completed"] = True
-        stale_codes = {"empty_generation_requests", "no_generation_requests"}
-        issues = state.get("issues", [])
-        if isinstance(issues, list):
-            state["issues"] = [
-                issue
-                for issue in issues
-                if not (isinstance(issue, dict) and issue.get("code") in stale_codes)
-            ]
-        self._record_text_only_manifest(project_id)
-        self.runtime.projects[project_id] = state
-        self.runtime._persist_project_state(project_id)
-
-    def _text_only_workspace(
-        self,
-        state: dict[str, Any],
-        project_id: str,
-        provider: str,
-        model: str,
-    ) -> GenerationWorkspace:
-        requests = state.get("generation_requests", []) or []
-        completed = sum(
-            1
-            for req in requests
-            if isinstance(req, dict) and str(req.get("status", "")).lower() == "completed"
-        )
-        return GenerationWorkspace(
-            project_id=project_id,
-            phase=str(state.get("current_phase", "")),
-            provider=provider,
-            model=model,
-            estimated_cost_usd=0.0,
-            rows=[],
-            planned=0,
-            submitted=0,
-            running=0,
-            completed=completed,
-            failed=0,
-            next_step="approve_phase" if completed > 0 else "plan",
-        )
-
-    def _record_text_only_manifest(self, project_id: str) -> None:
-        from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
-
-        if self.runtime.services is None:
-            return
-        root = self.runtime.services.artifact_store._root
-        manifest = read_manifest(project_id, root=root)
-        entries = list(manifest.entries) if manifest else []
-        if not any(entry.asset_id == "text-only-delivery" for entry in entries):
-            entries.append(
-                AssetEntry(
-                    asset_id="text-only-delivery",
-                    kind="text_only_delivery",
-                    shot_id="",
-                    scene_id="",
-                    path="",
-                )
-            )
-            write_manifest(AssetManifest(project_id=project_id, entries=entries), root=root)
+    # --- Comments, artifacts, and audit views (see _browse_ops) ---
 
     def add_operator_comment(
         self,
@@ -590,22 +356,7 @@ class OperatorService:
         project_id: str | None = None,
     ) -> OperatorComment:
         """Persist a target-scoped operator comment."""
-        if not request.body.strip():
-            raise BackendOperationError("comment body is required.")
-        if not request.target_type.strip():
-            raise BackendOperationError("comment target_type is required.")
-        if not request.target_id.strip():
-            raise BackendOperationError("comment target_id is required.")
-        state = self._state_for_project(project_id)
-        raw = self.runtime.add_operator_comment(
-            str(state["project_id"]),
-            target_type=request.target_type.strip(),
-            target_id=request.target_id.strip(),
-            body=request.body.strip(),
-            phase=request.phase.strip(),
-            source=request.source.strip() or "tui",
-        )
-        return self._comment_from_raw(raw)
+        return _browse_ops.add_operator_comment(self, request, project_id)
 
     def list_operator_comments(
         self,
@@ -614,57 +365,19 @@ class OperatorService:
         include_resolved: bool = False,
     ) -> list[OperatorComment]:
         """List target-scoped operator comments."""
-        state = self._state_for_project(project_id)
-        comments = self.runtime.list_operator_comments(
-            str(state["project_id"]),
-            include_resolved=include_resolved,
+        return _browse_ops.list_operator_comments(
+            self, project_id, include_resolved=include_resolved
         )
-        return [self._comment_from_raw(comment) for comment in comments]
 
     def list_artifacts(
         self, project_id: str | None = None, phase: str | None = None
     ) -> list[dict[str, Any]]:
         """List artifacts for a project, optionally filtered to one phase."""
-        state = self._state_for_project(project_id)
-        store = self.runtime.services.artifact_store if self.runtime.services else None
-        if store is None:
-            return []
-        phase_filter: FilmPhase | None = FilmPhase(phase) if phase else None
-        artifacts = store.list_artifacts(str(state["project_id"]), phase_filter)
-        rows: list[dict[str, Any]] = []
-        for artifact in artifacts:
-            rows.append(
-                {
-                    "artifact_id": artifact.artifact_id,
-                    "artifact_type": str(artifact.artifact_type.value),
-                    "phase": str(artifact.phase.value),
-                    "version": artifact.version,
-                    "status": str(artifact.status.value),
-                }
-            )
-        return rows
+        return _browse_ops.list_artifacts(self, project_id, phase)
 
     def list_assets(self, project_id: str | None = None) -> list[dict[str, Any]]:
         """List generated/reference assets from the project asset manifest."""
-        state = self._state_for_project(project_id)
-        root = self._artifact_root()
-        if root is None:
-            return []
-        manifest = read_manifest(str(state["project_id"]), root=root)
-        if manifest is None:
-            return []
-        return [
-            {
-                "asset_id": entry.asset_id,
-                "kind": entry.kind,
-                "scene_id": entry.scene_id,
-                "shot_id": entry.shot_id,
-                "take": entry.take,
-                "active": entry.active,
-                "path": entry.path,
-            }
-            for entry in manifest.entries
-        ]
+        return _browse_ops.list_assets(self, project_id)
 
     def inspect_artifact(
         self,
@@ -674,80 +387,19 @@ class OperatorService:
         project_id: str | None = None,
     ) -> ArtifactDetail:
         """Load one artifact body."""
-        if not artifact_id:
-            raise BackendOperationError("artifact_id is required.")
-        state = self._state_for_project(project_id)
-        if self.runtime.services is None:
-            raise BackendOperationError("artifact store is not configured.")
-        body = self.runtime.services.artifact_store.load(
-            str(state["project_id"]), FilmPhase(phase), artifact_id, version
-        )
-        return ArtifactDetail(
-            artifact_id=artifact_id,
-            artifact_type=str(body.get("artifact_type", artifact_id)),
-            phase=phase,
-            version=version,
-            status=str(body.get("status", "candidate")),
-            body=body,
-        )
+        return _browse_ops.inspect_artifact(self, artifact_id, phase, version, project_id)
 
     def list_checkpoints(self, project_id: str | None = None) -> list[dict[str, str]]:
         """List checkpoints for a project."""
-        state = self._state_for_project(project_id)
-        checkpoints = self.runtime.list_checkpoints(str(state["project_id"]))
-        return [
-            {
-                "checkpoint_id": checkpoint.checkpoint_id,
-                "project_id": checkpoint.project_id,
-                "phase": str(checkpoint.phase.value),
-                "reason": checkpoint.reason,
-                "created_at": checkpoint.created_at.isoformat(),
-            }
-            for checkpoint in checkpoints
-        ]
+        return _browse_ops.list_checkpoints(self, project_id)
 
     def list_provider_status(self) -> list[dict[str, Any]]:
         """Return provider health rows."""
-        return [
-            {"provider_id": provider_id, **health}
-            for provider_id, health in sorted(self.runtime.get_all_health().items())
-        ]
+        return _browse_ops.list_provider_status(self)
 
     def get_audit_feed(self, project_id: str | None = None, limit: int = 20) -> list[AuditEvent]:
         """Return recent audit events."""
-        state = self._state_for_project(project_id) if project_id else None
-        events = self.runtime.get_audit_log(
-            str(state["project_id"]) if state is not None else None,
-            limit=limit,
-        )
-        feed: list[AuditEvent] = []
-        for event in events:
-            details = cast(dict[str, Any], event.get("details", {}))
-            target = str(details.get("project_id", details.get("phase", "")))
-            feed.append(
-                AuditEvent(
-                    timestamp=str(event.get("timestamp", "")),
-                    actor=str(event.get("actor", "")),
-                    action=str(event.get("action", "")),
-                    target=target,
-                    summary=f"{event.get('action', '')} {target}".strip(),
-                )
-            )
-        return feed
-
-    @staticmethod
-    def _comment_from_raw(raw: Mapping[str, Any]) -> OperatorComment:
-        return OperatorComment(
-            comment_id=str(raw.get("comment_id", "")),
-            project_id=str(raw.get("project_id", "")),
-            target_type=str(raw.get("target_type", "")),
-            target_id=str(raw.get("target_id", "")),
-            body=str(raw.get("body", "")),
-            phase=str(raw.get("phase", "")),
-            source=str(raw.get("source", "")),
-            created_at=str(raw.get("created_at", "")),
-            resolved=bool(raw.get("resolved", False)),
-        )
+        return _browse_ops.get_audit_feed(self, project_id, limit)
 
     def _state_for_project(self, project_id: str | None) -> dict[str, Any]:
         if project_id:
@@ -760,7 +412,7 @@ class OperatorService:
     def _require_project(self, project_id: str) -> dict[str, Any]:
         project = self.runtime.get_project(project_id)
         if project is None:
-            project = self._load_discovered_project(project_id)
+            project = load_discovered_project(self, project_id)
         if project is None:
             raise ProjectNotFoundError(f"Project '{project_id}' not found.")
         return project
@@ -798,102 +450,3 @@ class OperatorService:
         if not next_action:
             return "No next action is currently available."
         return f"Current action: {next_action}."
-
-    def _discover_project_folders(self, known_ids: set[str]) -> list[ProjectListItem]:
-        """Return project folders present in artifact storage but absent from runtime memory."""
-        root = self._artifact_root()
-        if root is None or not root.exists() or not root.is_dir():
-            return []
-        discovered: list[ProjectListItem] = []
-        for project_dir in sorted(path for path in root.iterdir() if path.is_dir()):
-            project_id = project_dir.name
-            if project_id in known_ids or not self._looks_like_project_dir(project_dir):
-                continue
-            discovered.append(
-                ProjectListItem(
-                    project_id=project_id,
-                    title=project_id.replace("-", " ").replace("_", " ").title(),
-                    slug=project_id,
-                    current_phase=self._latest_discovered_phase(project_dir),
-                    status="discovered",
-                    has_blockers=False,
-                    awaiting_review=False,
-                    project_kind=self._project_kind_for_path(project_dir),
-                    project_root=str(project_dir),
-                )
-            )
-        return discovered
-
-    def _artifact_root(self) -> Path | None:
-        store = self.runtime.services.artifact_store if self.runtime.services else None
-        root = getattr(store, "_root", None)
-        return root if isinstance(root, Path) else None
-
-    def _load_discovered_project(self, project_id: str) -> dict[str, Any] | None:
-        root = self._artifact_root()
-        if root is None:
-            return None
-        project_dir = root / project_id
-        if not project_dir.exists() or not self._looks_like_project_dir(project_dir):
-            return None
-        state = self.runtime.create_project(
-            project_id=project_id,
-            title=project_id.replace("-", " ").replace("_", " ").title(),
-            slug=project_id,
-        )
-        state["current_phase"] = self._latest_discovered_phase(project_dir)
-        state["project_kind"] = self._project_kind_for_path(project_dir)
-        state["human_approval_required"] = False
-        self.runtime.projects[project_id] = state
-        return state
-
-    @staticmethod
-    def _looks_like_project_dir(project_dir: Path) -> bool:
-        return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
-
-    @staticmethod
-    def _latest_discovered_phase(project_dir: Path) -> str:
-        phase_order = (
-            ("10-delivery", "delivery"),
-            ("09-post", "post"),
-            ("08-validation", "qc"),
-            ("07-generated-assets", "generation"),
-            ("06-generation-plan", "gen_planning"),
-            ("05-shot-bible", "shot_bible"),
-            ("04-visual-dev", "visual_dev"),
-            ("03-script", "script"),
-            ("02-development", "development"),
-            ("01-vision", "constitution"),
-            ("intake", "intake"),
-        )
-        for dirname, phase in phase_order:
-            candidate = project_dir / dirname
-            if candidate.exists() and any(candidate.rglob("*.json")):
-                return phase
-        return ""
-
-    @classmethod
-    def _project_kind_for_state(cls, state: Mapping[str, Any], project_id: str) -> str:
-        explicit = str(state.get("project_kind", "")).strip().lower()
-        if explicit:
-            return cls._normalize_project_kind(explicit)
-        return cls._project_kind_for_name(project_id)
-
-    @classmethod
-    def _project_kind_for_path(cls, project_dir: Path) -> str:
-        return cls._project_kind_for_name(project_dir.name)
-
-    @staticmethod
-    def _project_kind_for_name(name: str) -> str:
-        lowered = name.lower()
-        test_markers = ("test", "fixture", "sample", "tmp", "demo")
-        return "test" if any(marker in lowered for marker in test_markers) else "production"
-
-    @staticmethod
-    def _normalize_project_kind(project_kind: str) -> str:
-        kind = project_kind.strip().lower()
-        if kind not in {"production", "test"}:
-            raise BackendOperationError(
-                f"project_kind must be 'production' or 'test', got '{project_kind}'."
-            )
-        return kind

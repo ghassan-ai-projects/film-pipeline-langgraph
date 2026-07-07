@@ -58,12 +58,6 @@ class ProjectRegistry:
     def all(self) -> list[ProjectRecord]:
         return list(self._projects)
 
-    def get_by_id(self, project_id: str) -> ProjectRecord | None:
-        for p in self._projects:
-            if p.project_id == project_id:
-                return p
-        return None
-
     def resolve(self, ref: str) -> ResolutionResult:
         """Resolve a reference, returning all candidates (best match first)."""
         if not ref:

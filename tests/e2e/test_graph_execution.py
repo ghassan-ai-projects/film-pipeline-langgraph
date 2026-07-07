@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.graph.edges import after_approval, after_phase, after_repair
+from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.graph import build_graph
 from film_pipeline.graph.nodes import (
     approve_phase_node,
@@ -130,7 +130,6 @@ class TestGraphExecution:
 
         assert after_approval({"current_phase": "intake", "approved": True}) == "constitution"
         assert after_approval({"current_phase": "delivery", "approved": True}) == "end"
-        assert after_repair({}) == "await_approval"
 
     def test_edge_routing_with_blocking_issues(self) -> None:
         """Blocking issues route to the repair node for automatic retry."""

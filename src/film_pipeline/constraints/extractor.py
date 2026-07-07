@@ -229,15 +229,6 @@ class ConstraintExtractor:
     def _normalize(text: str) -> str:
         return re.sub(r"\s+", " ", text).strip()
 
-    @staticmethod
-    def _to_int(value: Any) -> int | None:
-        if isinstance(value, bool):
-            return None
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            return None
-
     def _extract_number(self, text: str, unit_words: tuple[str, ...]) -> int | None:
         """Extract a number preceding one of ``unit_words`` (digits or words)."""
         unit_pattern = "|".join(re.escape(w) for w in unit_words)

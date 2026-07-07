@@ -1,0 +1,170 @@
+"""Composite sheet building and Gemini validation (non-blocking)."""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+_logger = logging.getLogger(__name__)
+
+
+def _build_composites(
+    project_root: Path,
+    project_id: str,
+    entries: list[dict[str, object]],
+    artifact_store: Any,
+) -> None:
+    """Build composite sheets from generated frames (Phase 7)."""
+    from film_pipeline.generation.compositor import (
+        build_character_identity_sheet,
+        build_environment_board,
+    )
+    from film_pipeline.schemas._base import FilmPhase
+
+    # Resolve color palettes from EnvironmentBible artifacts
+    env_palettes: dict[str, list[str]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "environment":
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id or subject_id in env_palettes:
+            continue
+        try:
+            bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
+            if isinstance(bible, dict):
+                palette = bible.get("color_palette", [])
+                if isinstance(palette, list) and palette:
+                    env_palettes[subject_id] = [str(c) for c in palette]
+        except (FileNotFoundError, ValueError):
+            pass
+
+    # Group entries by character subject
+    char_frames: dict[str, dict[str, Path]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "character":
+            continue
+        if entry.get("generation_status") not in ("validated", "generated"):
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id:
+            continue
+        role = str(entry.get("frame_role", "")).strip()
+        asset = str(entry.get("asset_path", "")).strip()
+        if not role or not asset:
+            continue
+        frame_path = project_root / asset
+        if frame_path.exists():
+            char_frames.setdefault(subject_id, {})[role] = frame_path
+
+    for subject_id, frames in char_frames.items():
+        sheet_path = project_root / "references" / "characters" / subject_id / "identity-sheet.png"
+        try:
+            build_character_identity_sheet(subject_id, subject_id, frames, sheet_path)
+            # Phase 8 — Composite validation
+            _validate_composite(sheet_path, "character_identity_sheet", subject_id)
+        except Exception as exc:
+            _logger.warning("Identity sheet build failed for %s: %s", subject_id, exc)
+
+    # Group entries by environment subject
+    env_frames: dict[str, dict[str, Path]] = {}
+    for entry in entries:
+        if str(entry.get("subject_type", "")) != "environment":
+            continue
+        if entry.get("generation_status") not in ("validated", "generated"):
+            continue
+        subject_id = str(entry.get("subject_id", "")).strip()
+        if not subject_id:
+            continue
+        role = str(entry.get("frame_role", "")).strip()
+        asset = str(entry.get("asset_path", "")).strip()
+        if not role or not asset:
+            continue
+        frame_path = project_root / asset
+        if frame_path.exists():
+            env_frames.setdefault(subject_id, {})[role] = frame_path
+
+    for subject_id, frames in env_frames.items():
+        sheet_path = (
+            project_root / "references" / "environments" / subject_id / "environment-board.png"
+        )
+        try:
+            build_environment_board(
+                subject_id,
+                subject_id,
+                frames,
+                sheet_path,
+                palette_colors=env_palettes.get(subject_id),
+            )
+            # Phase 8 — Composite validation
+            _validate_composite(sheet_path, "environment_board", subject_id)
+        except Exception as exc:
+            _logger.warning("Environment board build failed for %s: %s", subject_id, exc)
+
+    # Phase 05 — Additional composite templates
+    _build_optional_sheets(project_root, project_id, char_frames, env_palettes)
+
+
+def _build_optional_sheets(
+    project_root: Path,
+    project_id: str,
+    char_frames: dict[str, dict[str, Path]],
+    env_palettes: dict[str, list[str]],
+) -> None:
+    """Build expression sheets, scale sheet, and style board (non-blocking)."""
+    from film_pipeline.generation.compositor import (
+        build_expression_sheet,
+        build_scale_sheet,
+        build_style_board,
+    )
+
+    # Expression sheet per character
+    for subject_id, frames in char_frames.items():
+        try:
+            sheet_path = (
+                project_root / "references" / "characters" / subject_id / "expression-sheet.png"
+            )
+            build_expression_sheet(subject_id, subject_id, frames, sheet_path)
+        except Exception as exc:
+            _logger.warning("Expression sheet build failed for %s: %s", subject_id, exc)
+
+    # Scale sheet — all characters' full-body frames
+    full_body_frames: dict[str, Path] = {}
+    for subject_id, frames in char_frames.items():
+        fb = frames.get("full-body")
+        if fb and fb.exists():
+            full_body_frames[subject_id] = fb
+    if full_body_frames:
+        try:
+            sheet_path = project_root / "references" / "scale" / "scale-sheet.png"
+            build_scale_sheet(project_id, full_body_frames, sheet_path)
+        except Exception as exc:
+            _logger.warning("Scale sheet build failed for %s: %s", project_id, exc)
+
+    # Style board — use first environment's palette or defaults
+    palette: list[str] = []
+    for p in env_palettes.values():
+        palette = p
+        break
+    try:
+        sheet_path = project_root / "references" / "style" / "style-board.png"
+        build_style_board(project_id, palette, "", "", "", sheet_path)
+    except Exception as exc:
+        _logger.warning("Style board build failed for %s: %s", project_id, exc)
+
+
+def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
+    """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""
+    try:
+        from film_pipeline.agents.model_routing import ModelRouter
+        from film_pipeline.generation.sheet_reviewer import review_composite_sheet
+
+        router = ModelRouter()
+        review_composite_sheet(
+            sheet_path,
+            sheet_type,
+            subject_id,
+            model=router.resolve_or_raise("visual_reasoner"),
+        )
+    except Exception:
+        pass  # validation failure doesn't block

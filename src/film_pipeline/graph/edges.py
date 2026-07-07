@@ -122,7 +122,3 @@ def after_approval(state: dict[str, Any]) -> str:
     if state.get("issues"):
         return "repair"
     return "await_approval"
-
-
-def after_repair(_state: dict[str, Any]) -> str:
-    return "await_approval"
