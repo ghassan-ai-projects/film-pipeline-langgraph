@@ -1,5 +1,7 @@
 # film-pipeline-langgraph
 
+> **Author:** [Ghassan Alhamoud](https://ghassan-alhamoud.com)
+
 LangGraph-based film creation pipeline for taking a film idea through structured pre-production, generation planning, QC evidence, and validated handoff state.
 
 The supported product target is:
