@@ -106,7 +106,10 @@ class ModelRouter:
         return str(profile["primary"])
 
     def fallback(self, profile_name: str) -> str:
-        """Return the fallback model for a profile."""
+        """Return the fallback model for a profile.
+
+        Pure lookup — callers may invoke it eagerly before any attempt fails.
+        """
         profile = self.profiles.get(profile_name)
         if profile is None:
             raise ModelResolutionError(f"Model profile '{profile_name}' is not defined.")
