@@ -139,31 +139,21 @@ class HeadlessDriver:
         except ValueError as exc:
             raise HeadlessDriverError(f"Unknown target phase: {self.target_phase}") from exc
 
-        def _phase_index(phase: str) -> int:
-            try:
-                return PHASE_ORDER.index(phase)
-            except ValueError:
-                return -1
-
         state = self._active_state()
         for _ in range(self.max_phase_iterations):
             current_phase = str(state.get("current_phase", ""))
-            current_index = _phase_index(current_phase)
+            current_index = _phase_order_index(current_phase)
 
             if current_phase == self.target_phase or current_index > target_index:
                 # Approve the target gate (if still waiting) and finish.
                 if current_phase == self.target_phase and state.get("human_approval_required"):
-                    result = await self._call_tool("approve_phase", confirmed=True)
-                    if not result.get("ok"):
-                        raise HeadlessDriverError(f"approve_phase failed: {result}")
+                    await self._approve_gate()
                 # The graph advances to the next phase on approval. For the
                 # headless target contract, report the target phase as approved
                 # rather than the unapproved next phase the graph landed on.
                 return self._target_met_state(target_index)
 
-            result = await self._call_tool("approve_phase", confirmed=True)
-            if not result.get("ok"):
-                raise HeadlessDriverError(f"approve_phase failed: {result}")
+            await self._approve_gate()
             state = self._active_state()
 
         state = self._active_state()
@@ -184,12 +174,7 @@ class HeadlessDriver:
         current_phase = str(state.get("current_phase", ""))
         from film_pipeline.graph.router import PHASE_ORDER
 
-        try:
-            current_index = PHASE_ORDER.index(current_phase)
-        except ValueError:
-            current_index = -1
-
-        if current_index > target_index:
+        if _phase_order_index(current_phase) > target_index:
             state["current_phase"] = PHASE_ORDER[target_index]
             state["approved"] = True
             state["human_approval_required"] = False
@@ -201,6 +186,12 @@ class HeadlessDriver:
             raise HeadlessDriverError(f"Project '{self.project_id}' disappeared from runtime.")
         return state
 
+    async def _approve_gate(self) -> None:
+        """Auto-approve the current human gate, raising on tool failure."""
+        result = await self._call_tool("approve_phase", confirmed=True)
+        if not result.get("ok"):
+            raise HeadlessDriverError(f"approve_phase failed: {result}")
+
     async def _call_tool(self, tool_name: str, **args: Any) -> dict[str, Any]:
         """Invoke an async MCP tool by name against the bound runtime."""
         mod = importlib.import_module("film_pipeline.mcp.tools")
@@ -209,6 +200,16 @@ class HeadlessDriver:
             raise HeadlessDriverError(f"Unknown MCP tool: {tool_name}")
         result: dict[str, Any] = await handler(dict(args))
         return result
+
+
+def _phase_order_index(phase: str) -> int:
+    """Return the position of ``phase`` in ``PHASE_ORDER``, or -1 when unknown."""
+    from film_pipeline.graph.router import PHASE_ORDER
+
+    try:
+        return PHASE_ORDER.index(phase)
+    except ValueError:
+        return -1
 
 
 def _blocker_summary(state: dict[str, Any]) -> str:
