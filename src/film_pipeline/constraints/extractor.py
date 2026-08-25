@@ -3,170 +3,85 @@
 The extractor is intentionally regex/heuristic-based so it is fast,
 predictable, and unit-testable without live LLM calls. Explicit hints
 (from a CLI constraints file or MCP argument) always override extracted
-values.
+values. The trigger-word tables it scans live in ``_keywords``.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import Any
 
+from film_pipeline.constraints._keywords import (
+    _AUDIENCE_KEYWORDS,
+    _CHARACTER_CONSTRAINT_PATTERNS,
+    _DELIVERY_MODE_KEYWORDS,
+    _FILM_TYPE_KEYWORDS,
+    _FORBIDDEN_TOPIC_PATTERNS,
+    _GENRE_KEYWORDS,
+    _LOCATION_PATTERNS,
+    _NUMBER_WORDS,
+    _PACING_KEYWORDS,
+    _PACING_PREFERENCE,
+    _PHASE_KEYWORDS,
+    _RATING_KEYWORDS,
+    _REQUIRED_ELEMENT_PATTERNS,
+    _TONE_KEYWORDS,
+    _VISUAL_STYLE_KEYWORDS,
+)
 from film_pipeline.schemas._base import FilmType
 from film_pipeline.schemas.constraints import ProjectConstraints
 from film_pipeline.schemas.project import DeliveryMode
 
-# Number words up to twenty, plus some common larger ones.
-_NUMBER_WORDS: dict[str, int] = {
-    "one": 1,
-    "two": 2,
-    "three": 3,
-    "four": 4,
-    "five": 5,
-    "six": 6,
-    "seven": 7,
-    "eight": 8,
-    "nine": 9,
-    "ten": 10,
-    "eleven": 11,
-    "twelve": 12,
-    "thirteen": 13,
-    "fourteen": 14,
-    "fifteen": 15,
-    "sixteen": 16,
-    "seventeen": 17,
-    "eighteen": 18,
-    "nineteen": 19,
-    "twenty": 20,
-}
 
-_FILM_TYPE_KEYWORDS: dict[str, FilmType] = {
-    "narrative": FilmType.NARRATIVE,
-    "visual poetry": FilmType.VISUAL_POETRY,
-    "visual_poetry": FilmType.VISUAL_POETRY,
-    "experimental": FilmType.EXPERIMENTAL,
-    "short drama": FilmType.SHORT_DRAMA,
-    "short_drama": FilmType.SHORT_DRAMA,
-    "commercial": FilmType.COMMERCIAL,
-}
+def _first_matching_keyword(text: str, keywords: Iterable[str]) -> str | None:
+    """Return the first keyword that appears anywhere in ``text``."""
+    lowered = text.lower()
+    for keyword in keywords:
+        if keyword in lowered:
+            return keyword
+    return None
 
-_PACING_KEYWORDS: dict[str, str] = {
-    "slow": "slow_cinema",
-    "slow cinema": "slow_cinema",
-    "slow_cinema": "slow_cinema",
-    "meditative": "slow_cinema",
-    "contemplative": "slow_cinema",
-    "standard": "standard",
-    "moderate": "standard",
-    "dynamic": "dynamic",
-    "fast": "dynamic",
-    "action": "dynamic",
-}
 
-_GENRE_KEYWORDS: tuple[str, ...] = (
-    "sci-fi",
-    "science fiction",
-    "fantasy",
-    "horror",
-    "thriller",
-    "comedy",
-    "drama",
-    "romance",
-    "action",
-    "adventure",
-    "mystery",
-    "documentary",
-    "noir",
-    "western",
-    "musical",
-)
+def _captured_groups(patterns: Sequence[str], text: str) -> Iterator[str]:
+    """Yield capture group 1 of every match, patterns in scan order."""
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            yield match.group(1)
 
-_TONE_KEYWORDS: tuple[str, ...] = (
-    "dark",
-    "light",
-    "hopeful",
-    "melancholic",
-    "comedic",
-    "serious",
-    "somber",
-    "whimsical",
-    "tense",
-    "eerie",
-    "intimate",
-    "epic",
-    "nostalgic",
-    "uplifting",
-    "bleak",
-)
 
-_VISUAL_STYLE_KEYWORDS: tuple[str, ...] = (
-    "noir",
-    "vibrant",
-    "minimalist",
-    "saturated",
-    "desaturated",
-    "grainy",
-    "polished",
-    "handheld",
-    "static",
-    "surreal",
-    "realistic",
-    "abstract",
-    "cinematic",
-)
+def _whole_phrase(raw: str) -> list[str]:
+    """Treat an entire capture as a single phrase."""
+    return [raw.strip()]
 
-_RATING_KEYWORDS: dict[str, str] = {
-    "g rating": "G",
-    "rated g": "G",
-    "pg rating": "PG",
-    "rated pg": "PG",
-    "pg-13": "PG-13",
-    "pg13": "PG-13",
-    "r rating": "R",
-    "rated r": "R",
-    "nc-17": "NC-17",
-    "nc17": "NC-17",
-}
 
-_AUDIENCE_KEYWORDS: dict[str, str] = {
-    "children": "children",
-    "kids": "children",
-    "family": "family",
-    "adults": "adults",
-    "mature audience": "adults",
-    "general audience": "general",
-}
+def _distinct_in_order(items: Iterable[Any]) -> list[Any]:
+    """Keep the first occurrence of each item, preserving order."""
+    seen: set[Any] = set()
+    unique: list[Any] = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            unique.append(item)
+    return unique
 
-_DELIVERY_MODE_KEYWORDS: dict[str, DeliveryMode] = {
-    "mp4": "mp4",
-    "webm": "webm",
-    "mov": "mov",
-    "gif": "gif",
-}
 
-_PHASE_KEYWORDS: tuple[str, ...] = (
-    "intake",
-    "constitution",
-    "development",
-    "script",
-    "visual_dev",
-    "shot_bible",
-    "gen_planning",
-    "generation",
-    "qc",
-    "post",
-    "delivery",
-)
+def _distinct_captures(
+    patterns: Sequence[str],
+    text: str,
+    split: Callable[[str], list[str]],
+    min_length: int,
+) -> list[str]:
+    """Distinct captured items long enough to be meaningful, in scan order."""
+    candidates: list[str] = []
+    for raw in _captured_groups(patterns, text):
+        candidates.extend(split(raw))
+    return [item for item in _distinct_in_order(candidates) if len(item) > min_length]
 
 
 def _merged_unique(existing: list[Any], extra: list[Any]) -> list[Any]:
     """Concatenate two lists, deduplicating while preserving order."""
-    combined: list[Any] = []
-    seen: set[Any] = set()
-    for item in existing + extra:
-        if item not in seen:
-            seen.add(item)
-            combined.append(item)
-    return combined
+    return _distinct_in_order([*existing, *extra])
 
 
 def _merge_hints(extracted: dict[str, Any], hints: dict[str, Any]) -> dict[str, Any]:
@@ -309,75 +224,41 @@ class ConstraintExtractor:
         return self._extract_number(text, ("character", "characters"))
 
     def _extract_film_type(self, text: str) -> FilmType | None:
-        lowered = text.lower()
-        for keyword, film_type in _FILM_TYPE_KEYWORDS.items():
-            if keyword in lowered:
-                return film_type
-        return None
+        keyword = _first_matching_keyword(text, _FILM_TYPE_KEYWORDS)
+        if keyword is None:
+            return None
+        return _FILM_TYPE_KEYWORDS[keyword]
 
     def _extract_pacing(self, text: str) -> str | None:
-        lowered = text.lower()
-        # Prefer multi-word matches first.
-        for keyword in (
-            "slow cinema",
-            "meditative",
-            "contemplative",
-            "standard",
-            "moderate",
-            "dynamic",
-            "slow",
-            "fast",
-            "action",
-        ):
-            if keyword in lowered:
-                return _PACING_KEYWORDS[keyword]
-        return None
+        keyword = _first_matching_keyword(text, _PACING_PREFERENCE)
+        if keyword is None:
+            return None
+        return _PACING_KEYWORDS[keyword]
 
     def _extract_tone(self, text: str) -> str | None:
-        lowered = text.lower()
-        for tone in _TONE_KEYWORDS:
-            if tone in lowered:
-                return tone
-        return None
+        return _first_matching_keyword(text, _TONE_KEYWORDS)
 
     def _extract_genre(self, text: str) -> str | None:
-        lowered = text.lower()
-        for genre in _GENRE_KEYWORDS:
-            if genre in lowered:
-                return genre
-        return None
+        return _first_matching_keyword(text, _GENRE_KEYWORDS)
 
     def _extract_visual_style(self, text: str) -> str | None:
-        lowered = text.lower()
-        for style in _VISUAL_STYLE_KEYWORDS:
-            if style in lowered:
-                return style
-        return None
+        return _first_matching_keyword(text, _VISUAL_STYLE_KEYWORDS)
 
     def _extract_rating(self, text: str) -> str | None:
-        lowered = text.lower()
-        for keyword, rating in _RATING_KEYWORDS.items():
-            if keyword in lowered:
-                return rating
+        keyword = _first_matching_keyword(text, _RATING_KEYWORDS)
+        if keyword is not None:
+            return _RATING_KEYWORDS[keyword]
         # Standalone rating near word boundaries, e.g. "PG animated short".
-        standalone = re.search(r"\b(g|pg|pg-13|r|nc-17)\b", lowered)
+        standalone = re.search(r"\b(g|pg|pg-13|r|nc-17)\b", text.lower())
         if standalone:
-            raw = standalone.group(1)
-            return {
-                "g": "G",
-                "pg": "PG",
-                "pg-13": "PG-13",
-                "r": "R",
-                "nc-17": "NC-17",
-            }.get(raw)
+            return standalone.group(1).upper()
         return None
 
     def _extract_audience(self, text: str) -> str | None:
-        lowered = text.lower()
-        for keyword, audience in _AUDIENCE_KEYWORDS.items():
-            if keyword in lowered:
-                return audience
-        return None
+        keyword = _first_matching_keyword(text, _AUDIENCE_KEYWORDS)
+        if keyword is None:
+            return None
+        return _AUDIENCE_KEYWORDS[keyword]
 
     def _extract_themes(self, text: str) -> list[str]:
         """Look for explicit 'themes: ...' or 'theme: ...' lists."""
@@ -428,64 +309,19 @@ class ConstraintExtractor:
 
     def _extract_forbidden_topics(self, text: str) -> list[str]:
         """Extract topics after 'no ...', 'avoid ...', 'do not include ...'."""
-        patterns = [
-            r"\bno\s+([^\.\n,]+)",
-            r"\bavoid\s+([^\.\n,]+)",
-            r"\bdo\s+not\s+include\s+([^\.\n,]+)",
-        ]
-        found: list[str] = []
-        for pattern in patterns:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                for item in self._split_items(match.group(1)):
-                    if item and item not in found:
-                        found.append(item)
-        return found
+        return _distinct_captures(_FORBIDDEN_TOPIC_PATTERNS, text, self._split_items, min_length=1)
 
     def _extract_required_elements(self, text: str) -> list[str]:
         """Extract elements after 'must include ...', 'must have ...', 'needs ...'."""
-        patterns = [
-            r"\bmust\s+include\s+([^\.\n,]+)",
-            r"\bmust\s+have\s+([^\.\n,]+)",
-            r"\bneeds?\s+to\s+include\s+([^\.\n,]+)",
-            r"\brequired[:\-]?\s*([^\.\n]+)",
-        ]
-        found: list[str] = []
-        for pattern in patterns:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                for item in self._split_items(match.group(1)):
-                    if item and item not in found:
-                        found.append(item)
-        return found
+        return _distinct_captures(_REQUIRED_ELEMENT_PATTERNS, text, self._split_items, min_length=1)
 
     def _extract_locations(self, text: str) -> list[str]:
         """Extract locations after 'set in ...', 'takes place in ...'."""
-        patterns = [
-            r"\bset\s+in\s+([^\.\n,]+)",
-            r"\btakes?\s+place\s+in\s+([^\.\n,]+)",
-            r"\blocation[:\-]?\s*([^\.\n,]+)",
-        ]
-        found: list[str] = []
-        for pattern in patterns:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                item = match.group(1).strip()
-                if item and len(item) > 2 and item not in found:
-                    found.append(item)
-        return found
+        return _distinct_captures(_LOCATION_PATTERNS, text, _whole_phrase, min_length=2)
 
     def _extract_character_constraints(self, text: str) -> list[str]:
         """Extract constraints after 'protagonist must ...', 'character must ...'."""
-        patterns = [
-            r"\bprotagonist\s+must\s+([^\.\n]+)",
-            r"\bmain\s+character\s+must\s+([^\.\n]+)",
-            r"\bcharacter\s+must\s+([^\.\n]+)",
-        ]
-        found: list[str] = []
-        for pattern in patterns:
-            for match in re.finditer(pattern, text, re.IGNORECASE):
-                item = match.group(1).strip()
-                if item and len(item) > 2 and item not in found:
-                    found.append(item)
-        return found
+        return _distinct_captures(_CHARACTER_CONSTRAINT_PATTERNS, text, _whole_phrase, min_length=2)
 
     def _extract_target_phase(self, text: str) -> str | None:
         lowered = text.lower()
