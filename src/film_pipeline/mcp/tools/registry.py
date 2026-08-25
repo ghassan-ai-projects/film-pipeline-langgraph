@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
+from film_pipeline.mcp.contract import (
+    ToolContract,
+    ToolGroup,
+    ToolHandler,
+    ToolRegistry,
+)
 
 from .artifacts import (
     inspect_artifact,
@@ -93,15 +98,15 @@ from .state import (
 from .validation import get_validation_report, list_validation_issues, run_validation
 
 
-def _make(
+def _tool_contract(
     name: str,
     group: ToolGroup,
-    handler: object,
     *,
     mutates: bool = False,
     confirm: bool = False,
     checkpoint: bool = False,
 ) -> ToolContract:
+    """Return the standard contract declared for every tool."""
     return ToolContract(
         name=name,
         description=f"MCP tool: {name}",
@@ -112,386 +117,270 @@ def _make(
     )
 
 
-def register_all_tools(registry: ToolRegistry) -> None:
-    # project
+def _register(
+    registry: ToolRegistry,
+    name: str,
+    group: ToolGroup,
+    handler: ToolHandler,
+    *,
+    mutates: bool = False,
+    confirm: bool = False,
+    checkpoint: bool = False,
+) -> None:
+    """Register ``handler`` under the standard contract for ``name``."""
     registry.register(
-        _make("create_film_project", ToolGroup.PROJECT, create_film_project, mutates=True),
-        create_film_project,
-    )
-    registry.register(_make("list_projects", ToolGroup.PROJECT, list_projects), list_projects)
-    registry.register(_make("find_project", ToolGroup.PROJECT, find_project), find_project)
-    registry.register(
-        _make("set_active_project", ToolGroup.PROJECT, set_active_project, mutates=True),
-        set_active_project,
-    )
-    registry.register(
-        _make("get_active_project", ToolGroup.PROJECT, get_active_project), get_active_project
-    )
-    registry.register(
-        _make("get_project_summary", ToolGroup.PROJECT, get_project_summary), get_project_summary
+        _tool_contract(name, group, mutates=mutates, confirm=confirm, checkpoint=checkpoint),
+        handler,
     )
 
+
+def register_all_tools(registry: ToolRegistry) -> None:
+    """Register every MCP tool contract with its handler on ``registry``."""
+    # project
+    _register(registry, "create_film_project", ToolGroup.PROJECT, create_film_project, mutates=True)
+    _register(registry, "list_projects", ToolGroup.PROJECT, list_projects)
+    _register(registry, "find_project", ToolGroup.PROJECT, find_project)
+    _register(registry, "set_active_project", ToolGroup.PROJECT, set_active_project, mutates=True)
+    _register(registry, "get_active_project", ToolGroup.PROJECT, get_active_project)
+    _register(registry, "get_project_summary", ToolGroup.PROJECT, get_project_summary)
+
     # intake
-    registry.register(
-        _make("submit_idea", ToolGroup.INTAKE, submit_idea, mutates=True), submit_idea
-    )
-    registry.register(
-        _make("get_intake_analysis", ToolGroup.INTAKE, get_intake_analysis), get_intake_analysis
-    )
-    registry.register(
-        _make("approve_intake", ToolGroup.INTAKE, approve_intake, mutates=True, confirm=True),
-        approve_intake,
+    _register(registry, "submit_idea", ToolGroup.INTAKE, submit_idea, mutates=True)
+    _register(registry, "get_intake_analysis", ToolGroup.INTAKE, get_intake_analysis)
+    _register(
+        registry, "approve_intake", ToolGroup.INTAKE, approve_intake, mutates=True, confirm=True
     )
 
     # state
-    registry.register(
-        _make("get_current_phase", ToolGroup.STATE, get_current_phase), get_current_phase
-    )
-    registry.register(_make("get_film_state", ToolGroup.STATE, get_film_state), get_film_state)
-    registry.register(
-        _make("get_orchestrator_summary", ToolGroup.STATE, get_orchestrator_summary),
-        get_orchestrator_summary,
-    )
-    registry.register(
-        _make("get_next_actions", ToolGroup.STATE, get_next_actions), get_next_actions
-    )
-    registry.register(_make("get_blockers", ToolGroup.STATE, get_blockers), get_blockers)
+    _register(registry, "get_current_phase", ToolGroup.STATE, get_current_phase)
+    _register(registry, "get_film_state", ToolGroup.STATE, get_film_state)
+    _register(registry, "get_orchestrator_summary", ToolGroup.STATE, get_orchestrator_summary)
+    _register(registry, "get_next_actions", ToolGroup.STATE, get_next_actions)
+    _register(registry, "get_blockers", ToolGroup.STATE, get_blockers)
 
     # review
-    registry.register(
-        _make("review_phase_artifacts", ToolGroup.REVIEW, review_phase_artifacts),
-        review_phase_artifacts,
-    )
-    registry.register(
-        _make(
-            "approve_phase",
-            ToolGroup.REVIEW,
-            approve_phase,
-            mutates=True,
-            confirm=True,
-            checkpoint=True,
-        ),
+    _register(registry, "review_phase_artifacts", ToolGroup.REVIEW, review_phase_artifacts)
+    _register(
+        registry,
+        "approve_phase",
+        ToolGroup.REVIEW,
         approve_phase,
+        mutates=True,
+        confirm=True,
+        checkpoint=True,
     )
-    registry.register(
-        _make("request_revision", ToolGroup.REVIEW, request_revision, mutates=True, confirm=True),
+    _register(
+        registry,
+        "request_revision",
+        ToolGroup.REVIEW,
         request_revision,
+        mutates=True,
+        confirm=True,
     )
 
     # artifact
-    registry.register(_make("list_artifacts", ToolGroup.ARTIFACT, list_artifacts), list_artifacts)
-    registry.register(
-        _make("inspect_artifact", ToolGroup.ARTIFACT, inspect_artifact), inspect_artifact
-    )
-    registry.register(_make("list_assets", ToolGroup.ARTIFACT, list_assets), list_assets)
-    registry.register(_make("list_shots", ToolGroup.ARTIFACT, list_shots), list_shots)
-    registry.register(_make("inspect_shot", ToolGroup.ARTIFACT, inspect_shot), inspect_shot)
-    registry.register(_make("inspect_scene", ToolGroup.ARTIFACT, inspect_scene), inspect_scene)
-    registry.register(
-        _make("inspect_reference", ToolGroup.ARTIFACT, inspect_reference), inspect_reference
-    )
+    _register(registry, "list_artifacts", ToolGroup.ARTIFACT, list_artifacts)
+    _register(registry, "inspect_artifact", ToolGroup.ARTIFACT, inspect_artifact)
+    _register(registry, "list_assets", ToolGroup.ARTIFACT, list_assets)
+    _register(registry, "list_shots", ToolGroup.ARTIFACT, list_shots)
+    _register(registry, "inspect_shot", ToolGroup.ARTIFACT, inspect_shot)
+    _register(registry, "inspect_scene", ToolGroup.ARTIFACT, inspect_scene)
+    _register(registry, "inspect_reference", ToolGroup.ARTIFACT, inspect_reference)
 
     # validation
-    registry.register(
-        _make("get_validation_report", ToolGroup.VALIDATION, get_validation_report),
-        get_validation_report,
-    )
-    registry.register(
-        _make("list_validation_issues", ToolGroup.VALIDATION, list_validation_issues),
-        list_validation_issues,
-    )
+    _register(registry, "get_validation_report", ToolGroup.VALIDATION, get_validation_report)
+    _register(registry, "list_validation_issues", ToolGroup.VALIDATION, list_validation_issues)
 
     # generation
-    registry.register(
-        _make("plan_generation_batch", ToolGroup.GENERATION, plan_generation_batch),
-        plan_generation_batch,
-    )
-    registry.register(
-        _make(
-            "preview_generation_prompts",
-            ToolGroup.GENERATION,
-            preview_generation_prompts,
-        ),
+    _register(registry, "plan_generation_batch", ToolGroup.GENERATION, plan_generation_batch)
+    _register(
+        registry,
+        "preview_generation_prompts",
+        ToolGroup.GENERATION,
         preview_generation_prompts,
     )
-    registry.register(
-        _make(
-            "generate_character_bible",
-            ToolGroup.GENERATION,
-            generate_character_bible,
-            mutates=True,
-        ),
+    _register(
+        registry,
+        "generate_character_bible",
+        ToolGroup.GENERATION,
         generate_character_bible,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "generate_environment_bible",
-            ToolGroup.GENERATION,
-            generate_environment_bible,
-            mutates=True,
-        ),
+    _register(
+        registry,
+        "generate_environment_bible",
+        ToolGroup.GENERATION,
         generate_environment_bible,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "generate_camera_bible",
-            ToolGroup.GENERATION,
-            generate_camera_bible,
-            mutates=True,
-        ),
+    _register(
+        registry,
+        "generate_camera_bible",
+        ToolGroup.GENERATION,
         generate_camera_bible,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "generate_style_bible",
-            ToolGroup.GENERATION,
-            generate_style_bible,
-            mutates=True,
-        ),
+    _register(
+        registry,
+        "generate_style_bible",
+        ToolGroup.GENERATION,
         generate_style_bible,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "generate_shot_bible",
-            ToolGroup.GENERATION,
-            generate_shot_bible,
-            mutates=True,
-        ),
+    _register(
+        registry,
+        "generate_shot_bible",
+        ToolGroup.GENERATION,
         generate_shot_bible,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "initialize_budget",
-            ToolGroup.GENERATION,
-            initialize_budget,
-            mutates=True,
-        ),
-        initialize_budget,
-    )
-    registry.register(
-        _make(
-            "generate_plan",
-            ToolGroup.GENERATION,
-            generate_plan,
-            mutates=True,
-        ),
-        generate_plan,
-    )
-    registry.register(
-        _make("run_validation", ToolGroup.VALIDATION, run_validation, mutates=True),
-        run_validation,
-    )
-    registry.register(
-        _make(
-            "generate_reference_images",
-            ToolGroup.GENERATION,
-            generate_reference_images,
-            mutates=True,
-        ),
+    _register(registry, "initialize_budget", ToolGroup.GENERATION, initialize_budget, mutates=True)
+    _register(registry, "generate_plan", ToolGroup.GENERATION, generate_plan, mutates=True)
+    # Registered in its historical slot so per-group registration order is unchanged.
+    _register(registry, "run_validation", ToolGroup.VALIDATION, run_validation, mutates=True)
+    _register(
+        registry,
+        "generate_reference_images",
+        ToolGroup.GENERATION,
         generate_reference_images,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "approve_generation_spend",
-            ToolGroup.GENERATION,
-            approve_generation_spend,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(
+        registry,
+        "approve_generation_spend",
+        ToolGroup.GENERATION,
         approve_generation_spend,
+        mutates=True,
+        confirm=True,
     )
-    registry.register(
-        _make("start_generation_batch", ToolGroup.GENERATION, start_generation_batch, mutates=True),
+    _register(
+        registry,
+        "start_generation_batch",
+        ToolGroup.GENERATION,
         start_generation_batch,
+        mutates=True,
     )
-    registry.register(
-        _make("get_generation_status", ToolGroup.GENERATION, get_generation_status),
-        get_generation_status,
-    )
-    registry.register(
-        _make(
-            "resume_generation_polling",
-            ToolGroup.GENERATION,
-            resume_generation_polling,
-            mutates=True,
-        ),
+    _register(registry, "get_generation_status", ToolGroup.GENERATION, get_generation_status)
+    _register(
+        registry,
+        "resume_generation_polling",
+        ToolGroup.GENERATION,
         resume_generation_polling,
+        mutates=True,
     )
-    registry.register(
-        _make("list_active_generations", ToolGroup.GENERATION, list_active_generations),
-        list_active_generations,
-    )
-    registry.register(
-        _make(
-            "cancel_generation_request",
-            ToolGroup.GENERATION,
-            cancel_generation_request,
-            mutates=True,
-        ),
+    _register(registry, "list_active_generations", ToolGroup.GENERATION, list_active_generations)
+    _register(
+        registry,
+        "cancel_generation_request",
+        ToolGroup.GENERATION,
         cancel_generation_request,
+        mutates=True,
     )
-    registry.register(
-        _make(
-            "promote_test_to_production",
-            ToolGroup.GENERATION,
-            promote_test_to_production,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(
+        registry,
+        "promote_test_to_production",
+        ToolGroup.GENERATION,
         promote_test_to_production,
+        mutates=True,
+        confirm=True,
     )
 
     # kb
-    registry.register(_make("kb_search", ToolGroup.KB, kb_search), kb_search)
-    registry.register(_make("kb_get_item", ToolGroup.KB, kb_get_item), kb_get_item)
-    registry.register(
-        _make("kb_get_context_packet", ToolGroup.KB, kb_get_context_packet), kb_get_context_packet
-    )
-    registry.register(
-        _make("kb_explain_context_choice", ToolGroup.KB, kb_explain_context_choice),
-        kb_explain_context_choice,
-    )
+    _register(registry, "kb_search", ToolGroup.KB, kb_search)
+    _register(registry, "kb_get_item", ToolGroup.KB, kb_get_item)
+    _register(registry, "kb_get_context_packet", ToolGroup.KB, kb_get_context_packet)
+    _register(registry, "kb_explain_context_choice", ToolGroup.KB, kb_explain_context_choice)
 
     # checkpoint
-    registry.register(
-        _make("list_checkpoints", ToolGroup.CHECKPOINT, list_checkpoints), list_checkpoints
-    )
-    registry.register(
-        _make("create_checkpoint", ToolGroup.CHECKPOINT, create_checkpoint, mutates=True),
-        create_checkpoint,
-    )
-    registry.register(_make("get_checkpoint", ToolGroup.CHECKPOINT, get_checkpoint), get_checkpoint)
-    registry.register(
-        _make("compare_versions", ToolGroup.CHECKPOINT, compare_versions), compare_versions
-    )
-    registry.register(
-        _make("list_artifact_versions", ToolGroup.CHECKPOINT, list_artifact_versions),
-        list_artifact_versions,
-    )
-    registry.register(
-        _make(
-            "rollback_artifact", ToolGroup.CHECKPOINT, rollback_artifact, mutates=True, confirm=True
-        ),
+    _register(registry, "list_checkpoints", ToolGroup.CHECKPOINT, list_checkpoints)
+    _register(registry, "create_checkpoint", ToolGroup.CHECKPOINT, create_checkpoint, mutates=True)
+    _register(registry, "get_checkpoint", ToolGroup.CHECKPOINT, get_checkpoint)
+    _register(registry, "compare_versions", ToolGroup.CHECKPOINT, compare_versions)
+    _register(registry, "list_artifact_versions", ToolGroup.CHECKPOINT, list_artifact_versions)
+    _register(
+        registry,
+        "rollback_artifact",
+        ToolGroup.CHECKPOINT,
         rollback_artifact,
+        mutates=True,
+        confirm=True,
     )
-    registry.register(
-        _make(
-            "rollback_to_checkpoint",
-            ToolGroup.CHECKPOINT,
-            rollback_to_checkpoint,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(
+        registry,
+        "rollback_to_checkpoint",
+        ToolGroup.CHECKPOINT,
         rollback_to_checkpoint,
+        mutates=True,
+        confirm=True,
     )
-    registry.register(
-        _make("get_invalidation_report", ToolGroup.CHECKPOINT, get_invalidation_report),
-        get_invalidation_report,
-    )
+    _register(registry, "get_invalidation_report", ToolGroup.CHECKPOINT, get_invalidation_report)
 
     # operator
-    registry.register(
-        _make("add_operator_comment", ToolGroup.OPERATOR, add_operator_comment, mutates=True),
-        add_operator_comment,
+    _register(
+        registry, "add_operator_comment", ToolGroup.OPERATOR, add_operator_comment, mutates=True
     )
-    registry.register(
-        _make("list_operator_comments", ToolGroup.OPERATOR, list_operator_comments),
-        list_operator_comments,
-    )
+    _register(registry, "list_operator_comments", ToolGroup.OPERATOR, list_operator_comments)
 
     # audit
-    registry.register(_make("get_audit_log", ToolGroup.AUDIT, get_audit_log), get_audit_log)
-    registry.register(
-        _make("explain_last_decision", ToolGroup.AUDIT, explain_last_decision),
-        explain_last_decision,
-    )
-    registry.register(
-        _make("explain_agent_routing", ToolGroup.AUDIT, explain_agent_routing),
-        explain_agent_routing,
-    )
-    registry.register(
-        _make("explain_kb_context", ToolGroup.AUDIT, explain_kb_context), explain_kb_context
-    )
+    _register(registry, "get_audit_log", ToolGroup.AUDIT, get_audit_log)
+    _register(registry, "explain_last_decision", ToolGroup.AUDIT, explain_last_decision)
+    _register(registry, "explain_agent_routing", ToolGroup.AUDIT, explain_agent_routing)
+    _register(registry, "explain_kb_context", ToolGroup.AUDIT, explain_kb_context)
 
     # provider
-    registry.register(
-        _make("check_provider_health", ToolGroup.PROVIDER, check_provider_health),
-        check_provider_health,
-    )
-    registry.register(
-        _make("resolve_provider_block", ToolGroup.PROVIDER, resolve_provider_block, mutates=True),
+    _register(registry, "check_provider_health", ToolGroup.PROVIDER, check_provider_health)
+    _register(
+        registry,
+        "resolve_provider_block",
+        ToolGroup.PROVIDER,
         resolve_provider_block,
+        mutates=True,
     )
-    registry.register(_make("list_providers", ToolGroup.PROVIDER, list_providers), list_providers)
+    _register(registry, "list_providers", ToolGroup.PROVIDER, list_providers)
 
     # config / profile
-    registry.register(_make("list_profiles", ToolGroup.CONFIG, list_profiles), list_profiles)
-    registry.register(_make("inspect_profile", ToolGroup.CONFIG, inspect_profile), inspect_profile)
-    registry.register(
-        _make("get_runtime_mode", ToolGroup.CONFIG, get_runtime_mode), get_runtime_mode
+    _register(registry, "list_profiles", ToolGroup.CONFIG, list_profiles)
+    _register(registry, "inspect_profile", ToolGroup.CONFIG, inspect_profile)
+    _register(registry, "get_runtime_mode", ToolGroup.CONFIG, get_runtime_mode)
+    _register(
+        registry, "propose_profile_change", ToolGroup.CONFIG, propose_profile_change, mutates=True
     )
-    registry.register(
-        _make(
-            "propose_profile_change",
-            ToolGroup.CONFIG,
-            propose_profile_change,
-            mutates=True,
-        ),
-        propose_profile_change,
-    )
-    registry.register(
-        _make(
-            "approve_profile_change",
-            ToolGroup.CONFIG,
-            approve_profile_change,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(
+        registry,
+        "approve_profile_change",
+        ToolGroup.CONFIG,
         approve_profile_change,
+        mutates=True,
+        confirm=True,
     )
 
     # coverage
-    registry.register(
-        _make("plan_coverage_group", ToolGroup.COVERAGE, plan_coverage_group, mutates=True),
-        plan_coverage_group,
+    _register(
+        registry, "plan_coverage_group", ToolGroup.COVERAGE, plan_coverage_group, mutates=True
     )
-    registry.register(
-        _make("list_coverage_groups", ToolGroup.COVERAGE, list_coverage_groups),
-        list_coverage_groups,
-    )
-    registry.register(
-        _make("inspect_coverage_group", ToolGroup.COVERAGE, inspect_coverage_group),
-        inspect_coverage_group,
-    )
-    registry.register(
-        _make(
-            "approve_coverage_generation",
-            ToolGroup.COVERAGE,
-            approve_coverage_generation,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(registry, "list_coverage_groups", ToolGroup.COVERAGE, list_coverage_groups)
+    _register(registry, "inspect_coverage_group", ToolGroup.COVERAGE, inspect_coverage_group)
+    _register(
+        registry,
+        "approve_coverage_generation",
+        ToolGroup.COVERAGE,
         approve_coverage_generation,
+        mutates=True,
+        confirm=True,
     )
 
     # assembly
-    registry.register(
-        _make("assemble_review_cut", ToolGroup.ASSEMBLY, assemble_review_cut, mutates=True),
-        assemble_review_cut,
+    _register(
+        registry, "assemble_review_cut", ToolGroup.ASSEMBLY, assemble_review_cut, mutates=True
     )
-    registry.register(
-        _make("assemble_final_cut", ToolGroup.ASSEMBLY, assemble_final_cut, mutates=True),
-        assemble_final_cut,
-    )
-    registry.register(
-        _make(
-            "export_delivery_package",
-            ToolGroup.ASSEMBLY,
-            export_delivery_package,
-            mutates=True,
-            confirm=True,
-        ),
+    _register(registry, "assemble_final_cut", ToolGroup.ASSEMBLY, assemble_final_cut, mutates=True)
+    _register(
+        registry,
+        "export_delivery_package",
+        ToolGroup.ASSEMBLY,
         export_delivery_package,
+        mutates=True,
+        confirm=True,
     )
 
 
