@@ -11,7 +11,14 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.schemas._base import GenerationMode, GenerationStatus
+from film_pipeline.schemas._base import (
+    ArtifactStatus,
+    ArtifactType,
+    FilmPhase,
+    GenerationMode,
+    GenerationStatus,
+)
+from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.generation import (
     GenerationLedger,
     GenerationLedgerRow,
@@ -41,8 +48,6 @@ class GenerationLedgerManager:
     def load(self, project_id: str) -> GenerationLedger:
         """Load the ledger for *project_id*, or create if missing."""
         try:
-            from film_pipeline.schemas._base import FilmPhase
-
             data = self._store.load(project_id, FilmPhase.GENERATION, LEDGER_ARTIFACT_ID, 1)
             return GenerationLedger.model_validate(data)
         except FileNotFoundError:
@@ -101,39 +106,8 @@ class GenerationLedgerManager:
         If *max_cost_usd* is set (>= 0), rejects if estimated cost exceeds budget.
         """
         ledger = self.load(project_id)
-        now = datetime.now(UTC)
-        new_rows: list[GenerationLedgerRow] = []
-        submitted_count = 0
-
-        for row in ledger.rows:
-            if row.status == GenerationStatus.SUBMITTED:
-                # Already submitted — skip (duplicate-prevention)
-                new_rows.append(row)
-                continue
-
-            if row.status == GenerationStatus.PREPARED:
-                submitted_count += 1
-                row = row.model_copy(
-                    update={
-                        "status": GenerationStatus.SUBMITTED,
-                        "submitted_at": now,
-                        "next_action": "poll",
-                    }
-                )
-            new_rows.append(row)
-
-        if max_cost_usd >= 0:
-            total_cost = sum(
-                r.estimated_cost_usd for r in new_rows if r.status == GenerationStatus.SUBMITTED
-            )
-            if total_cost > max_cost_usd:
-                # Revert the rows we just transitioned
-                raise ValueError(
-                    f"Total estimated cost ${total_cost:.2f} exceeds budget ${max_cost_usd:.2f}. "
-                    f"({submitted_count} new request(s) would be submitted). "
-                    "Reduce batch or increase max_cost_usd."
-                )
-
+        new_rows, submitted_count = _submit_prepared_rows(ledger.rows)
+        _raise_if_over_budget(new_rows, max_cost_usd, submitted_count)
         ledger = ledger.model_copy(update={"rows": new_rows})
         self._persist(ledger)
         return ledger
@@ -164,8 +138,6 @@ class GenerationLedgerManager:
 
         If *shot_ids* is provided, only promotes those specific shots.
         """
-        from film_pipeline.schemas._base import GenerationMode
-
         ledger = self.load(project_id)
         promoted: list[str] = []
         new_rows: list[GenerationLedgerRow] = []
@@ -239,9 +211,6 @@ class GenerationLedgerManager:
     # ── helpers ──────────────────────────────────────────────────────────
 
     def _persist(self, ledger: GenerationLedger) -> None:
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
-
         meta = ArtifactMetadata(
             artifact_id=LEDGER_ARTIFACT_ID,
             artifact_type=ArtifactType.GENERATION_LEDGER,
@@ -254,3 +223,51 @@ class GenerationLedgerManager:
             created_at=datetime.now(UTC),
         )
         self._store.save(ledger, meta)
+
+
+def _submit_prepared_rows(
+    rows: list[GenerationLedgerRow],
+) -> tuple[list[GenerationLedgerRow], int]:
+    """Return copies of *rows* with PREPARED ones moved to SUBMITTED, and how many moved.
+
+    Rows in any other status (including already-SUBMITTED ones) pass through unchanged,
+    which is what makes duplicate submission impossible.
+    """
+    now = datetime.now(UTC)
+    new_rows: list[GenerationLedgerRow] = []
+    submitted_count = 0
+
+    for row in rows:
+        if row.status == GenerationStatus.PREPARED:
+            submitted_count += 1
+            row = row.model_copy(
+                update={
+                    "status": GenerationStatus.SUBMITTED,
+                    "submitted_at": now,
+                    "next_action": "poll",
+                }
+            )
+        new_rows.append(row)
+
+    return new_rows, submitted_count
+
+
+def _raise_if_over_budget(
+    rows: list[GenerationLedgerRow],
+    max_cost_usd: float,
+    submitted_count: int,
+) -> None:
+    """Reject the batch when estimated cost of SUBMITTED rows exceeds *max_cost_usd*.
+
+    A negative *max_cost_usd* means "no limit". Raises instead of persisting, so a
+    rejection leaves the stored ledger untouched.
+    """
+    if max_cost_usd < 0:
+        return
+    total_cost = sum(r.estimated_cost_usd for r in rows if r.status == GenerationStatus.SUBMITTED)
+    if total_cost > max_cost_usd:
+        raise ValueError(
+            f"Total estimated cost ${total_cost:.2f} exceeds budget ${max_cost_usd:.2f}. "
+            f"({submitted_count} new request(s) would be submitted). "
+            "Reduce batch or increase max_cost_usd."
+        )
