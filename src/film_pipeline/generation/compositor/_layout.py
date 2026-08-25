@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -113,27 +114,38 @@ def _load_font(size: int = 14) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     return ImageFont.load_default()
 
 
+@dataclass(frozen=True)
+class _PaletteTile:
+    """Placement rectangle and source colors for the palette swatch tile."""
+
+    x: int
+    y: int
+    w: int
+    h: int
+    colors: list[str] | None
+
+
 def _render_color_palette(
     canvas: Image.Image,
-    x: int,
-    y: int,
-    w: int,
-    h: int,
-    palette_colors: list[str] | None,
+    tile: _PaletteTile,
     draw: ImageDraw.ImageDraw,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
 ) -> None:
     """Render hex color swatches in the palette tile area.
 
-    When *palette_colors* is empty or None, renders a placeholder.
+    When *tile.colors* yields no valid entries, renders a placeholder.
     """
-    if not palette_colors:
-        _paste_placeholder(canvas, x, y, w, h, "color-palette")
+    rgb_colors = _parse_valid_hex_colors(tile.colors)
+    if not rgb_colors:
+        _paste_placeholder(canvas, tile.x, tile.y, tile.w, tile.h, "color-palette")
         return
+    _render_swatch_row(canvas, tile, rgb_colors, draw, font)
 
-    # Parse hex colors, skip invalid entries
+
+def _parse_valid_hex_colors(hex_strings: list[str] | None) -> list[tuple[int, int, int]]:
+    """Parse six-digit hex strings to RGB tuples, skipping invalid entries."""
     rgb_colors: list[tuple[int, int, int]] = []
-    for c in palette_colors:
+    for c in hex_strings or []:
         try:
             hex_str = c.strip().lstrip("#")
             if len(hex_str) == 6:
@@ -142,26 +154,32 @@ def _render_color_palette(
                 )
         except (ValueError, IndexError):
             continue
+    return rgb_colors
 
-    if not rgb_colors:
-        _paste_placeholder(canvas, x, y, w, h, "color-palette")
-        return
 
-    # Render equal-width swatches
-    swatch_w = w // len(rgb_colors)
+def _render_swatch_row(
+    canvas: Image.Image,
+    tile: _PaletteTile,
+    rgb_colors: list[tuple[int, int, int]],
+    draw: ImageDraw.ImageDraw,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> None:
+    """Paste equal-width swatches across *tile* with centered hex labels."""
+    swatch_w = tile.w // len(rgb_colors)
     for i, color in enumerate(rgb_colors):
-        sx = x + i * swatch_w
-        swatch = Image.new("RGB", (swatch_w, h), color)
-        canvas.paste(swatch, (sx, y))
-        # Draw hex label centered in swatch (white text on dark, dark on light)
-        hex_label = f"#{palette_colors[i].strip().lstrip('#')}"
+        sx = tile.x + i * swatch_w
+        swatch = Image.new("RGB", (swatch_w, tile.h), color)
+        canvas.paste(swatch, (sx, tile.y))
+        # Label comes from the i-th source entry even when earlier entries
+        # were skipped during parsing — kept verbatim from the original.
+        hex_label = f"#{(tile.colors or [])[i].strip().lstrip('#')}"
         luminance = 0.299 * color[0] + 0.587 * color[1] + 0.114 * color[2]
         text_color = (255, 255, 255) if luminance < 128 else (30, 30, 30)
         bbox = draw.textbbox((0, 0), hex_label, font=font)
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
         draw.text(
-            (sx + (swatch_w - tw) // 2, y + (h - th) // 2),
+            (sx + (swatch_w - tw) // 2, tile.y + (tile.h - th) // 2),
             hex_label,
             fill=text_color,
             font=font,
