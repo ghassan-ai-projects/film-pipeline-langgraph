@@ -143,23 +143,20 @@ def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) 
     state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
 
 
-def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
-    """Approve the current phase and advance.
+def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_phase: str) -> bool:
+    """True when approval made no progress or a stale generation blocker remains."""
+    return not _approval_made_progress(
+        state, current_phase
+    ) or _has_stale_generation_request_blocker(state, active)
 
-    Resumes the graph via ``Command(resume={"action": "approve"})``
-    when a checkpoint exists. Falls back to manual phase advance
-    when no graph checkpoint has been created (e.g. after direct
-    ``_run_phase_node`` calls).
-    """
+
+def _resume_after_approval(
+    rt: StudioRuntime,
+    active: dict[str, Any],
+    current_phase: str,
+) -> Any:
+    """Resume the graph at the approval gate; fall back to manual advance."""
     from langgraph.types import Command
-
-    active = rt.get_active()
-    if not active:
-        raise ValueError("No active project.")
-
-    current_phase = str(active.get("current_phase", ""))
-    if not current_phase:
-        raise ValueError("No active phase to approve.")
 
     graph = ensure_graph(rt)
     config: dict[str, Any] = {
@@ -178,16 +175,31 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
         )
         _preserve_external_generation_requests(state, active)
         _strip_stale_generation_request_blockers(state)
-        if not _approval_made_progress(
-            state, current_phase
-        ) or _has_stale_generation_request_blocker(state, active):
-            state = advance_to_next_phase(rt, dict(active))
+        if _approval_stalled(state, active, current_phase):
+            return advance_to_next_phase(rt, dict(active))
+        return state
     except Exception:
         # No checkpoint exists — advance manually via phase nodes
-        state = advance_to_next_phase(rt, dict(active))
+        return advance_to_next_phase(rt, dict(active))
     finally:
         _gn._SERVICES_CTX.reset(token)
-    state = cast(dict[str, Any], state)
+
+
+def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
+    """Approve the current phase and advance.
+
+    Resumes the graph at the approval gate (see ``_resume_after_approval``)
+    via ``Command(resume={"action": "approve", ...})``, then persists state,
+    checkpoints, and records the audit trail.
+    """
+    active = rt.get_active()
+    if not active:
+        raise ValueError("No active project.")
+    current_phase = str(active.get("current_phase", ""))
+    if not current_phase:
+        raise ValueError("No active phase to approve.")
+
+    state = cast(dict[str, Any], _resume_after_approval(rt, active, current_phase))
 
     rt.projects[active["project_id"]] = state
     rt._persist_project_state(active["project_id"])
