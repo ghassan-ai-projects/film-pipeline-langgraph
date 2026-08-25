@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Button, Static
 
 from film_pipeline.tui.view_models.models import GRAPH_PHASES
+
+if TYPE_CHECKING:
+    from film_pipeline.tui.app import AppState
 
 _STAGE_LABELS: dict[str, str] = {
     "intake": "Intake",
@@ -121,14 +126,9 @@ class StageNav(Vertical):
         self._refresh_view()
 
     @staticmethod
-    def _count_issues(state: object) -> dict[str, dict[str, int]]:
-        from film_pipeline.tui.app import AppState
-
-        if (
-            not isinstance(state, AppState)
-            or state.snapshot is None
-            or state.snapshot.validation is None
-        ):
+    def _count_issues(state: AppState) -> dict[str, dict[str, int]]:
+        """Count blocking and warning issues per phase."""
+        if state.snapshot is None or state.snapshot.validation is None:
             return {}
         counts: dict[str, dict[str, int]] = {}
         for issue in state.snapshot.validation.blocking_issues:
@@ -151,34 +151,42 @@ class StageNav(Vertical):
             else -1
         )
         for index, stage in enumerate(self._phase_order):
-            button = self.query_one(f"#stage_{stage}", Button)
-            classes = set(button.classes)
-            classes.discard("stage-selected")
-            classes.discard("stage-current")
-            classes.discard("stage-done")
-            classes.discard("stage-blocked")
+            self._refresh_stage_button(stage, index, current_index)
 
-            done = 0 <= index < current_index
-            blocked = bool(self._issue_counts.get(stage, {}).get("blocking", 0))
-            if stage == self._selected_stage:
-                classes.add("stage-selected")
-            if stage == self._current_phase:
-                classes.add("stage-current")
-            elif done:
-                classes.add("stage-done")
-            if blocked:
-                classes.add("stage-blocked")
-            button.classes = classes
+    def _refresh_stage_button(self, stage: str, index: int, current_index: int) -> None:
+        """Re-render one stage row's status classes and glyph."""
+        button = self.query_one(f"#stage_{stage}", Button)
+        done = 0 <= index < current_index
+        current = stage == self._current_phase
+        blocked = bool(self._issue_counts.get(stage, {}).get("blocking", 0))
 
-            if blocked:
-                glyph = "!"
-            elif stage == self._current_phase:
-                glyph = "▸"
-            elif done:
-                glyph = "✔"
-            else:
-                glyph = "·"
-            button.label = f"{glyph} {_STAGE_LABELS.get(stage, stage)}"
+        classes = set(button.classes)
+        classes.discard("stage-selected")
+        classes.discard("stage-current")
+        classes.discard("stage-done")
+        classes.discard("stage-blocked")
+        if stage == self._selected_stage:
+            classes.add("stage-selected")
+        if current:
+            classes.add("stage-current")
+        elif done:
+            classes.add("stage-done")
+        if blocked:
+            classes.add("stage-blocked")
+        button.classes = classes
+
+        glyph = self._stage_glyph(done=done, current=current, blocked=blocked)
+        button.label = f"{glyph} {_STAGE_LABELS.get(stage, stage)}"
+
+    @staticmethod
+    def _stage_glyph(*, done: bool, current: bool, blocked: bool) -> str:
+        if blocked:
+            return "!"
+        if current:
+            return "▸"
+        if done:
+            return "✔"
+        return "·"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         button_id = event.button.id or ""
