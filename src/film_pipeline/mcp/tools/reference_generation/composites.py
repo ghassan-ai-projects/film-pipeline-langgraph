@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from film_pipeline.artifacts.store import ArtifactStore
 
 _logger = logging.getLogger(__name__)
 
@@ -19,28 +22,36 @@ def _palette_from_bible(bible: object) -> list[str] | None:
     return None
 
 
+def _load_environment_palette(
+    artifact_store: ArtifactStore,
+    project_id: str,
+) -> list[str] | None:
+    """Load the visual-dev EnvironmentBible palette (None when unavailable)."""
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
+        return _palette_from_bible(bible)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
 def _collect_environment_palettes(
-    artifact_store: Any,
+    artifact_store: ArtifactStore,
     project_id: str,
     entries: list[dict[str, object]],
 ) -> dict[str, list[str]]:
     """Resolve color palettes from EnvironmentBible artifacts."""
-    from film_pipeline.schemas._base import FilmPhase
-
+    palette = _load_environment_palette(artifact_store, project_id)
+    if not palette:
+        return {}
     env_palettes: dict[str, list[str]] = {}
     for entry in entries:
         if str(entry.get("subject_type", "")) != "environment":
             continue
         subject_id = str(entry.get("subject_id", "")).strip()
-        if not subject_id or subject_id in env_palettes:
-            continue
-        try:
-            bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
-            palette = _palette_from_bible(bible)
-            if palette:
-                env_palettes[subject_id] = palette
-        except (FileNotFoundError, ValueError):
-            pass
+        if subject_id and subject_id not in env_palettes:
+            env_palettes[subject_id] = palette
     return env_palettes
 
 
@@ -65,6 +76,16 @@ def _collect_subject_frames(
         if frame_path.exists():
             frames_by_subject.setdefault(subject_id, {})[role] = frame_path
     return frames_by_subject
+
+
+def _collect_full_body_frames(char_frames: dict[str, dict[str, Path]]) -> dict[str, Path]:
+    """Map each character to its existing full-body frame."""
+    full_body_frames: dict[str, Path] = {}
+    for subject_id, frames in char_frames.items():
+        frame = frames.get("full-body")
+        if frame and frame.exists():
+            full_body_frames[subject_id] = frame
+    return full_body_frames
 
 
 def _build_identity_sheets(project_root: Path, char_frames: dict[str, dict[str, Path]]) -> None:
@@ -111,7 +132,7 @@ def _build_composites(
     project_root: Path,
     project_id: str,
     entries: list[dict[str, object]],
-    artifact_store: Any,
+    artifact_store: ArtifactStore,
 ) -> None:
     """Build composite sheets from generated frames (Phase 7)."""
     env_palettes = _collect_environment_palettes(artifact_store, project_id, entries)
@@ -132,13 +153,15 @@ def _build_optional_sheets(
     env_palettes: dict[str, list[str]],
 ) -> None:
     """Build expression sheets, scale sheet, and style board (non-blocking)."""
-    from film_pipeline.generation.compositor import (
-        build_expression_sheet,
-        build_scale_sheet,
-        build_style_board,
-    )
+    _build_expression_sheets(project_root, char_frames)
+    _build_scale_sheet(project_root, project_id, char_frames)
+    _build_style_board(project_root, project_id, env_palettes)
 
-    # Expression sheet per character
+
+def _build_expression_sheets(project_root: Path, char_frames: dict[str, dict[str, Path]]) -> None:
+    """Build one expression sheet per character (non-blocking)."""
+    from film_pipeline.generation.compositor import build_expression_sheet
+
     for subject_id, frames in char_frames.items():
         try:
             sheet_path = (
@@ -148,27 +171,48 @@ def _build_optional_sheets(
         except Exception as exc:
             _logger.warning("Expression sheet build failed for %s: %s", subject_id, exc)
 
-    # Scale sheet — all characters' full-body frames
-    full_body_frames: dict[str, Path] = {}
-    for subject_id, frames in char_frames.items():
-        fb = frames.get("full-body")
-        if fb and fb.exists():
-            full_body_frames[subject_id] = fb
-    if full_body_frames:
-        try:
-            sheet_path = project_root / "references" / "scale" / "scale-sheet.png"
-            build_scale_sheet(project_id, full_body_frames, sheet_path)
-        except Exception as exc:
-            _logger.warning("Scale sheet build failed for %s: %s", project_id, exc)
 
-    # Style board — use first environment's palette or defaults
-    palette: list[str] = []
-    for p in env_palettes.values():
-        palette = p
-        break
+def _build_scale_sheet(
+    project_root: Path,
+    project_id: str,
+    char_frames: dict[str, dict[str, Path]],
+) -> None:
+    """Build the combined scale sheet from characters' full-body frames."""
+    from film_pipeline.generation.compositor import build_scale_sheet
+
+    full_body_frames = _collect_full_body_frames(char_frames)
+    if not full_body_frames:
+        return
+    try:
+        sheet_path = project_root / "references" / "scale" / "scale-sheet.png"
+        build_scale_sheet(project_id, full_body_frames, sheet_path)
+    except Exception as exc:
+        _logger.warning("Scale sheet build failed for %s: %s", project_id, exc)
+
+
+def _first_environment_palette(env_palettes: dict[str, list[str]]) -> list[str]:
+    """Return the first environment's palette, or empty for compositor defaults."""
+    return next(iter(env_palettes.values()), [])
+
+
+def _build_style_board(
+    project_root: Path,
+    project_id: str,
+    env_palettes: dict[str, list[str]],
+) -> None:
+    """Build the style board from the first environment palette (non-blocking)."""
+    from film_pipeline.generation.compositor import build_style_board
+
     try:
         sheet_path = project_root / "references" / "style" / "style-board.png"
-        build_style_board(project_id, palette, "", "", "", sheet_path)
+        build_style_board(
+            project_id,
+            _first_environment_palette(env_palettes),
+            "",
+            "",
+            "",
+            sheet_path,
+        )
     except Exception as exc:
         _logger.warning("Style board build failed for %s: %s", project_id, exc)
 
