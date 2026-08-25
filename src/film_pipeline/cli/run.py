@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.cli.driver import HeadlessDriverError, run_headless
+from film_pipeline.cli.driver import HeadlessDriverError, HeadlessRunSpec, run_headless
 from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
 
 
 @dataclass(frozen=True)
 class RunRequest:
-    """Immutable parameter object describing one headless pipeline run."""
+    """Read-only field bindings describing one headless pipeline run."""
 
     file_path: Path
     project_id: str
@@ -228,17 +228,19 @@ def _run_headless_pipeline(request: RunRequest) -> dict[str, Any]:
 
     return asyncio.run(
         run_headless(
-            file_path=request.file_path,
-            project_id=request.project_id,
-            title=request.title,
-            slug=request.slug,
-            runtime_mode=request.runtime_mode,
-            runtime_root=request.runtime_root,
-            profile_stack=request.profile_stack,
-            target_phase=request.target_phase,
-            target_runtime_seconds=request.target_runtime_seconds,
-            target_scene_count=request.target_scene_count,
-            constraints=request.constraints,
+            HeadlessRunSpec(
+                file_path=request.file_path,
+                project_id=request.project_id,
+                title=request.title,
+                slug=request.slug,
+                runtime_mode=request.runtime_mode,
+                runtime_root=request.runtime_root,
+                profile_stack=request.profile_stack,
+                target_phase=request.target_phase,
+                target_runtime_seconds=request.target_runtime_seconds,
+                target_scene_count=request.target_scene_count,
+                constraints=request.constraints,
+            )
         )
     )
 

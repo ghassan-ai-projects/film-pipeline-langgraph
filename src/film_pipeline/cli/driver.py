@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,23 @@ from film_pipeline.cli.io import read_idea_file
 
 class HeadlessDriverError(RuntimeError):
     """Raised when the headless driver cannot continue."""
+
+
+@dataclass(frozen=True)
+class HeadlessRunSpec:
+    """Immutable request describing one headless pipeline run."""
+
+    file_path: Path
+    project_id: str
+    title: str
+    slug: str
+    runtime_mode: str
+    runtime_root: Path
+    profile_stack: list[str]
+    target_phase: str = "shot_bible"
+    target_runtime_seconds: int | None = None
+    target_scene_count: int | None = None
+    constraints: dict[str, Any] | None = None
 
 
 class HeadlessDriver:
@@ -201,36 +219,23 @@ def _blocker_summary(state: dict[str, Any]) -> str:
     return "; ".join(str(b.get("message", b.get("code", "unknown"))) for b in blockers)
 
 
-async def run_headless(
-    file_path: Path,
-    *,
-    project_id: str,
-    title: str,
-    slug: str,
-    runtime_mode: str,
-    runtime_root: Path,
-    profile_stack: list[str],
-    target_phase: str = "shot_bible",
-    target_runtime_seconds: int | None = None,
-    target_scene_count: int | None = None,
-    constraints: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+async def run_headless(spec: HeadlessRunSpec) -> dict[str, Any]:
     """High-level helper: create runtime, project, submit idea, and run to target.
 
     This is the synchronous-friendly entry point used by the CLI.
     """
-    rt = HeadlessDriver.setup_runtime(runtime_mode, runtime_root)
-    driver = HeadlessDriver(rt, project_id, target_phase=target_phase)
+    rt = HeadlessDriver.setup_runtime(spec.runtime_mode, spec.runtime_root)
+    driver = HeadlessDriver(rt, spec.project_id, target_phase=spec.target_phase)
     await driver.create_project(
-        title=title,
-        slug=slug,
-        runtime_mode=runtime_mode,
-        profile_stack=profile_stack,
-        target_runtime_seconds=target_runtime_seconds,
+        title=spec.title,
+        slug=spec.slug,
+        runtime_mode=spec.runtime_mode,
+        profile_stack=spec.profile_stack,
+        target_runtime_seconds=spec.target_runtime_seconds,
     )
     await driver.submit_idea_from_file(
-        file_path,
-        target_scene_count=target_scene_count,
-        constraints=constraints,
+        spec.file_path,
+        target_scene_count=spec.target_scene_count,
+        constraints=spec.constraints,
     )
     return await driver.run_to_target()
