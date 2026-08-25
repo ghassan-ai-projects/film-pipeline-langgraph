@@ -239,6 +239,31 @@ async def get_active_project(args: dict[str, object]) -> dict[str, object]:
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
+def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, object]]:
+    """Summarize every stored artifact of a project across all film phases."""
+    # Imported here to match the lazy-import pattern used by tools.helpers,
+    # which keeps tool-module import time independent of schema enum loading.
+    from film_pipeline.schemas._base import FilmPhase
+
+    summaries: list[dict[str, object]] = []
+    for phase in FilmPhase:
+        try:
+            artifacts = store.list_artifacts(project_id, phase)
+            for artifact in artifacts:
+                summaries.append(
+                    {
+                        "artifact_id": artifact.artifact_id,
+                        "artifact_type": str(artifact.artifact_type.value),
+                        "phase": str(artifact.phase.value),
+                        "version": artifact.version,
+                        "status": str(artifact.status.value),
+                    }
+                )
+        except Exception:
+            continue
+    return summaries
+
+
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
     rt = tools_pkg.get_runtime()
@@ -249,29 +274,7 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     if state is None:
         return _error("No active project.")
     project_id = str(state["project_id"])
-
-    # Gather all artifacts across phases
-    from film_pipeline.schemas._base import FilmPhase
-
-    store = _services(rt).artifact_store
-    artifact_summary: list[dict[str, object]] = []
-    for phase in FilmPhase:
-        try:
-            artifacts = store.list_artifacts(project_id, phase)
-            for a in artifacts:
-                artifact_summary.append(
-                    {
-                        "artifact_id": a.artifact_id,
-                        "artifact_type": str(a.artifact_type.value),
-                        "phase": str(a.phase.value),
-                        "version": a.version,
-                        "status": str(a.status.value),
-                    }
-                )
-        except Exception:
-            continue
-
-    # Collect routing decisions
+    artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])
 
     return _ok(
