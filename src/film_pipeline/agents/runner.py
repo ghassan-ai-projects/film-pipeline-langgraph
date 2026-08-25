@@ -7,14 +7,24 @@ ModelRouter — no hardcoded model strings in execution paths.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter
+from film_pipeline.providers.failure_classifier import (
+    compress_prompt_for_retry,
+    is_token_limit_exceeded,
+)
 from film_pipeline.schemas.handoff import AgentHandoff, AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
+
+if TYPE_CHECKING:
+    from film_pipeline.agents.prompt_templates.registry import PromptTemplate
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -142,9 +152,6 @@ class PromptRunner:
     @staticmethod
     def _generic_mock_fallback(core_task: str) -> dict[str, Any]:
         """Return the canned response used when no mock matched and no adapter exists."""
-        import logging
-
-        _logger = logging.getLogger(__name__)
         _logger.warning(
             "PromptRunner.call_model falling back to generic mock — "
             "task '%s' not in mock_responses and no model_adapter configured.",
@@ -222,14 +229,6 @@ class PromptRunner:
         Returns ``(result, rendered_prompt)`` where result is None when the
         attempt ladder must continue and rendered_prompt reflects any compression.
         """
-        import logging
-
-        from film_pipeline.providers.failure_classifier import (
-            compress_prompt_for_retry,
-            is_token_limit_exceeded,
-        )
-
-        _logger = logging.getLogger(__name__)
         rendered_prompt = prompt.rendered
         try:
             return (
@@ -269,14 +268,6 @@ class PromptRunner:
         Returns ``(result, retry_prompt)`` where retry_prompt carries any further
         compression forward into the fallback-model attempt.
         """
-        import logging
-
-        from film_pipeline.providers.failure_classifier import (
-            compress_prompt_for_retry,
-            is_token_limit_exceeded,
-        )
-
-        _logger = logging.getLogger(__name__)
         retry_prompt = self._json_instruction_suffix(rendered_prompt)
         try:
             return (
@@ -301,6 +292,22 @@ class PromptRunner:
                 raise
         return None, retry_prompt
 
+    @staticmethod
+    def _all_retries_exhausted(
+        params: _ResolvedCallParams, *, fallback_model: str | None = None
+    ) -> dict[str, Any]:
+        """Build the terminal error dict returned when the 3-attempt ladder exhausts."""
+        failure: dict[str, Any] = {
+            "status": "model_failure",
+            "agent": "prompt_runner",
+            "error": "all_retries_exhausted",
+            "profile": params.model_profile,
+            "model": params.model_id,
+        }
+        if fallback_model is not None:
+            failure["fallback_model"] = fallback_model
+        return failure
+
     def _attempt_fallback_model(
         self,
         prompt: RCTCOPrompt,
@@ -308,22 +315,13 @@ class PromptRunner:
         retry_prompt: str,
     ) -> dict[str, Any]:
         """Attempt 3 — distinct fallback model, else terminal exhaustion dict."""
-        import logging
-
-        _logger = logging.getLogger(__name__)
         if params.fallback_model == params.model_id:
             _logger.error(
                 "PromptRunner.call_model all 3 attempts failed for profile '%s'. "
                 "No distinct fallback model available.",
                 params.model_profile,
             )
-            return {
-                "status": "model_failure",
-                "agent": "prompt_runner",
-                "error": "all_retries_exhausted",
-                "profile": params.model_profile,
-                "model": params.model_id,
-            }
+            return self._all_retries_exhausted(params)
 
         _logger.warning(
             "PromptRunner.call_model attempt 2 failed. Retrying with fallback model %s.",
@@ -343,14 +341,7 @@ class PromptRunner:
                 params.model_id,
                 params.fallback_model,
             )
-            return {
-                "status": "model_failure",
-                "agent": "prompt_runner",
-                "error": "all_retries_exhausted",
-                "profile": params.model_profile,
-                "model": params.model_id,
-                "fallback_model": params.fallback_model,
-            }
+            return self._all_retries_exhausted(params, fallback_model=params.fallback_model)
 
     def call_model(
         self,
@@ -405,7 +396,7 @@ class PromptRunner:
 
     def run_from_template(
         self,
-        template: Any,  # PromptTemplate (lazy import to avoid circular)
+        template: PromptTemplate,
         _kb_context: KBContextPacket,
         task: str,
         *,
@@ -432,7 +423,7 @@ class PromptRunner:
         return self._ensure_dict_output(raw), template.template_id, model_profile
 
     @staticmethod
-    def _template_to_prompt(template: Any, task: str, rendered_text: str) -> RCTCOPrompt:
+    def _template_to_prompt(template: PromptTemplate, task: str, rendered_text: str) -> RCTCOPrompt:
         """Wrap a rendered dedicated template in a prompt for call_model compatibility.
 
         Mock dispatch keys off ``core_task``, so the lightweight prompt carries
