@@ -132,47 +132,67 @@ class StudioRuntime:
         """
         if project_id not in self.projects:
             return False
-        state = self.projects[project_id]
-        if not can_delete_project(state, force=force):
-            raise ProductionDataError(
-                f"Refusing to delete production project '{project_id}'. "
-                "Set force=True or FILM_PIPELINE_ALLOW_DELETE=1 to override."
+        self._require_deletable_project(project_id, force=force)
+        project_root = self._detach_project_state(project_id)
+        if project_root is not None:
+            self._archive_directory(
+                project_root, trash_prefix=f"runtime-{project_id}-", force=force
             )
+        self._archive_project_artifacts(project_id, force=force)
+        self._drop_project_checkpoints(project_id)
+        return True
 
+    def _require_deletable_project(self, project_id: str, *, force: bool) -> None:
+        """Raise ProductionDataError unless the project may be deleted."""
+        state = self.projects[project_id]
+        if can_delete_project(state, force=force):
+            return
+        raise ProductionDataError(
+            f"Refusing to delete production project '{project_id}'. "
+            "Set force=True or FILM_PIPELINE_ALLOW_DELETE=1 to override."
+        )
+
+    def _detach_project_state(self, project_id: str) -> Path | None:
+        """Forget every in-memory registration for the project and return its former root."""
         project_root = self.project_roots.pop(project_id, None)
         self.checkpoint_managers.pop(project_id, None)
         self.projects.pop(project_id, None)
         if self.active_project_id == project_id:
             self.active_project_id = ""
         self._record_audit("system", "delete_project", project_id=project_id)
+        return project_root
 
-        if project_root is not None and project_root.exists():
-            try:
-                move_to_trash(project_root, prefix=f"runtime-{project_id}-")
-            except ProductionDataError:
-                if force:
-                    shutil.rmtree(project_root, ignore_errors=True)
-                else:
-                    raise
+    def _archive_directory(self, path: Path, *, trash_prefix: str, force: bool) -> None:
+        """Move a directory to the trash, hard-removing it only when ``force`` allows."""
+        try:
+            move_to_trash(path, prefix=trash_prefix)
+        except ProductionDataError:
+            if not force:
+                raise
+            shutil.rmtree(path, ignore_errors=True)
 
-        artifact_root = Path("projects")
+    def _archive_project_artifacts(self, project_id: str, *, force: bool) -> None:
+        """Move the project's stored artifacts to the trash."""
+        project_artifact_dir = self._artifact_root() / project_id
+        if not project_artifact_dir.exists():
+            return
+        self._archive_directory(
+            project_artifact_dir, trash_prefix=f"artifacts-{project_id}-", force=force
+        )
+
+    def _artifact_root(self) -> Path:
+        """Resolve the directory where the artifact store keeps project artifacts."""
         if self.services is not None and hasattr(self.services.artifact_store, "_root"):
-            artifact_root = self.services.artifact_store._root
-        project_artifact_dir = artifact_root / project_id
-        if project_artifact_dir.exists():
-            try:
-                move_to_trash(project_artifact_dir, prefix=f"artifacts-{project_id}-")
-            except ProductionDataError:
-                if force:
-                    shutil.rmtree(project_artifact_dir, ignore_errors=True)
-                else:
-                    raise
+            return self.services.artifact_store._root
+        return Path("projects")
+
+    def _drop_project_checkpoints(self, project_id: str) -> None:
+        """Forget every checkpoint belonging to the deleted project."""
         self.checkpoints = {
             checkpoint_id: meta
             for checkpoint_id, meta in self.checkpoints.items()
             if meta.project_id != project_id
         }
-        return True
 
     def set_active(self, project_id: str) -> None:
         if project_id not in self.projects:
