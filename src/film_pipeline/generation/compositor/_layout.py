@@ -142,18 +142,24 @@ def _render_color_palette(
     _render_swatch_row(canvas, tile, rgb_colors, draw, font)
 
 
+def _hex_to_rgb(value: str) -> tuple[int, int, int] | None:
+    """Parse a six-digit hex color string to RGB, or None when invalid."""
+    try:
+        hex_str = value.strip().lstrip("#")
+        if len(hex_str) == 6:
+            return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
 def _parse_valid_hex_colors(hex_strings: list[str] | None) -> list[tuple[int, int, int]]:
     """Parse six-digit hex strings to RGB tuples, skipping invalid entries."""
     rgb_colors: list[tuple[int, int, int]] = []
     for c in hex_strings or []:
-        try:
-            hex_str = c.strip().lstrip("#")
-            if len(hex_str) == 6:
-                rgb_colors.append(
-                    (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
-                )
-        except (ValueError, IndexError):
-            continue
+        rgb = _hex_to_rgb(c)
+        if rgb is not None:
+            rgb_colors.append(rgb)
     return rgb_colors
 
 
@@ -232,12 +238,6 @@ def _parse_palette(hex_strings: list[str]) -> list[tuple[int, int, int]]:
     """Parse hex strings to RGB tuples, defaulting to gray on failure."""
     result: list[tuple[int, int, int]] = []
     for c in hex_strings:
-        try:
-            h = c.strip().lstrip("#")
-            if len(h) == 6:
-                result.append((int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
-                continue
-        except (ValueError, IndexError):
-            pass
-        result.append((180, 180, 190))
+        rgb = _hex_to_rgb(c)
+        result.append(rgb if rgb is not None else (180, 180, 190))
     return result
