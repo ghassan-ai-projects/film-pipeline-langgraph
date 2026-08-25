@@ -158,6 +158,36 @@ _PHASE_KEYWORDS: tuple[str, ...] = (
 )
 
 
+def _merged_unique(existing: list[Any], extra: list[Any]) -> list[Any]:
+    """Concatenate two lists, deduplicating while preserving order."""
+    combined: list[Any] = []
+    seen: set[Any] = set()
+    for item in existing + extra:
+        if item not in seen:
+            seen.add(item)
+            combined.append(item)
+    return combined
+
+
+def _merge_hints(extracted: dict[str, Any], hints: dict[str, Any]) -> dict[str, Any]:
+    """Overlay hint values onto extracted constraints.
+
+    Hints take precedence; list hints merge into extracted lists instead of
+    replacing them, but a hint value of ``[]`` is respected.
+    """
+    merged = dict(extracted)
+    for key, value in hints.items():
+        if value is None:
+            continue
+        # extracted values are pre-filtered upstream, so merged[key] is never
+        # None here — the isinstance check alone is sufficient.
+        if isinstance(value, list) and isinstance(merged.get(key), list):
+            merged[key] = _merged_unique(list(merged[key]), value)
+        else:
+            merged[key] = value
+    return merged
+
+
 class ConstraintExtractor:
     """Extract ``ProjectConstraints`` from free-form idea text."""
 
@@ -176,7 +206,22 @@ class ConstraintExtractor:
         ignored by the Pydantic model.
         """
         normalized = self._normalize(text)
-        extracted: dict[str, Any] = {
+
+        # Remove None / empty defaults so hints can cleanly override.
+        extracted = {
+            key: value
+            for key, value in self._extracted_constraints(normalized).items()
+            if value is not None and value != []
+        }
+
+        if hints:
+            extracted = _merge_hints(extracted, hints)
+
+        return ProjectConstraints(**extracted)
+
+    def _extracted_constraints(self, normalized: str) -> dict[str, Any]:
+        """Run every facet extractor over the normalized text."""
+        return {
             "project_id": self.project_id,
             "target_runtime_seconds": self._extract_runtime(normalized),
             "target_scene_count": self._extract_scene_count(normalized),
@@ -199,31 +244,6 @@ class ConstraintExtractor:
             "character_constraints": self._extract_character_constraints(normalized),
             "target_phase": self._extract_target_phase(normalized),
         }
-
-        # Remove None / empty defaults so hints can cleanly override.
-        extracted = {k: v for k, v in extracted.items() if v is not None and v != []}
-
-        if hints:
-            # Hints take precedence; merge lists instead of replacing when it
-            # makes sense, but a hint value of [] should be respected.
-            merged = dict(extracted)
-            for key, value in hints.items():
-                if value is None:
-                    continue
-                if isinstance(value, list) and key in merged and isinstance(merged[key], list):
-                    # Deduplicate while preserving order.
-                    seen: set[Any] = set()
-                    combined: list[Any] = []
-                    for item in merged[key] + value:
-                        if item not in seen:
-                            seen.add(item)
-                            combined.append(item)
-                    merged[key] = combined
-                else:
-                    merged[key] = value
-            extracted = merged
-
-        return ProjectConstraints(**extracted)
 
     @staticmethod
     def _normalize(text: str) -> str:
