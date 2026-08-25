@@ -52,6 +52,27 @@ _VALIDATOR_MAP: dict[str, str] = {
 }
 
 
+def _skipped_validator_update(validator_id: str, reason: str | None = None) -> dict[str, object]:
+    """Build the worker update recording why a validator did not run."""
+    report: dict[str, object] = {"validator_id": validator_id, "status": "skipped"}
+    if reason is not None:
+        report["reason"] = reason
+    return _worker_update(report)
+
+
+def _failed_validator_update(validator_id: str) -> dict[str, object]:
+    """Build the worker update recorded when a validator run raises."""
+    return _worker_update({"validator_id": validator_id, "status": "failed"})
+
+
+def _worker_update(report: dict[str, object]) -> dict[str, object]:
+    """Wrap a single validator report into both QC report channels."""
+    return {
+        "_qc_reports": [report],
+        "_qc_raw_reports": [report],
+    }
+
+
 def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
@@ -60,39 +81,20 @@ def _run_validator(
 
     srv: Any = _get_services(dict(state))
     if srv is None:
-        report = {"validator_id": validator_id, "status": "skipped"}
-        return {
-            "_qc_reports": [report],
-            "_qc_raw_reports": [report],
-        }
+        return _skipped_validator_update(validator_id)
 
     validator = _resolve_validator_instance(srv, validator_id)
     if validator is None:
-        report = {"validator_id": validator_id, "status": "skipped"}
-        return {
-            "_qc_reports": [report],
-            "_qc_raw_reports": [report],
-        }
+        return _skipped_validator_update(validator_id)
 
     artifact = _load_artifact_for_validator(state, validator_id)
     if not artifact:
-        report = {
-            "validator_id": validator_id,
-            "status": "skipped",
-            "reason": "no artifact",
-        }
-        return {
-            "_qc_reports": [report],
-            "_qc_raw_reports": [report],
-        }
+        return _skipped_validator_update(validator_id, reason="no artifact")
 
     try:
         report = validator.run(artifact)
     except Exception:
-        return {
-            "_qc_reports": [{"validator_id": validator_id, "status": "failed"}],
-            "_qc_raw_reports": [{"validator_id": validator_id, "status": "failed"}],
-        }
+        return _failed_validator_update(validator_id)
 
     return {
         "_qc_reports": [
@@ -198,20 +200,45 @@ def _load_artifact_for_validator(
 
 # ── Fan-out router ─────────────────────────────────────────────────────
 
+# Worker node names in fan-out order; the Send router, the conditional-edge
+# path map, and the worker→reduce edges must all agree on this sequence.
+_WORKER_NODES: tuple[str, ...] = (
+    "script_structure",
+    "dialogue_voice",
+    "reference_usability",
+    "prompt_readiness",
+    "scene_continuity",
+    "assembly",
+)
+
 
 def fan_out_validators(state: StudioGraphState) -> list[Send]:
     """Create one Send per validator for parallel execution."""
-    return [
-        Send("script_structure", dict(state)),
-        Send("dialogue_voice", dict(state)),
-        Send("reference_usability", dict(state)),
-        Send("prompt_readiness", dict(state)),
-        Send("scene_continuity", dict(state)),
-        Send("assembly", dict(state)),
-    ]
+    return [Send(node, dict(state)) for node in _WORKER_NODES]
 
 
 # ── Reduce node ────────────────────────────────────────────────────────
+
+
+def _findings_to_issues(raw_reports: list[dict[str, Any]]) -> list[dict[str, object]]:
+    """Translate raw validator findings into issues the approval gate can see."""
+    issues: list[dict[str, object]] = []
+    for report in raw_reports:
+        validator_id = str(report.get("validator_id", ""))
+        for severity, key in (("blocking", "blocking_issues"), ("warning", "warnings")):
+            for finding in report.get(key, []) or []:
+                if not isinstance(finding, dict):
+                    continue
+                issues.append(
+                    {
+                        "issue_id": f"val:{validator_id}:{finding.get('code', '?')}",
+                        "severity": severity,
+                        "code": str(finding.get("code", "?")),
+                        "message": str(finding.get("message", "")),
+                        "validator_id": validator_id,
+                    }
+                )
+    return issues
 
 
 def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
@@ -227,23 +254,6 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
 
-    issues: list[dict[str, object]] = []
-    for report in raw:
-        validator_id = str(report.get("validator_id", ""))
-        for severity, key in (("blocking", "blocking_issues"), ("warning", "warnings")):
-            for finding in report.get(key, []) or []:
-                if not isinstance(finding, dict):
-                    continue
-                issues.append(
-                    {
-                        "issue_id": f"val:{validator_id}:{finding.get('code', '?')}",
-                        "severity": severity,
-                        "code": str(finding.get("code", "?")),
-                        "message": str(finding.get("message", "")),
-                        "validator_id": validator_id,
-                    }
-                )
-
     auto = not _require_human_approval(dict(state))
     update: dict[str, object] = {
         # _qc_reports/_qc_raw_reports are reducer channels already holding the
@@ -256,6 +266,7 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     }
     if not raw:
         update["_qc_reports"] = []
+    issues = _findings_to_issues(raw)
     if issues:
         update["issues"] = issues
     return update
@@ -281,24 +292,10 @@ def build_qc_subgraph() -> CompiledStateGraph:
     builder.add_conditional_edges(
         "fan_start",
         fan_out_validators,  # type: ignore[arg-type]
-        [
-            "script_structure",
-            "dialogue_voice",
-            "reference_usability",
-            "prompt_readiness",
-            "scene_continuity",
-            "assembly",
-        ],
+        list(_WORKER_NODES),
     )
 
-    for worker in (
-        "script_structure",
-        "dialogue_voice",
-        "reference_usability",
-        "prompt_readiness",
-        "scene_continuity",
-        "assembly",
-    ):
+    for worker in _WORKER_NODES:
         builder.add_edge(worker, "reduce_qc_reports")
 
     builder.add_edge("reduce_qc_reports", END)
