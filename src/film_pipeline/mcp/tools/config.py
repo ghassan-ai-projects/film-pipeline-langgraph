@@ -120,64 +120,41 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     human approves it via ``approve_profile_change``.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
+    active = _active_state(rt, args)
+    if active is None:
         return _error("No active project.")
-    state = rt.get_project(project_id)
-    if state is None:
-        return _error("No active project.")
+    project_id, state = active
 
     reason = str(args.get("reason", "")).strip()
     if not reason:
         return _error("reason is required.")
-
     proposed_by = str(args.get("proposed_by", "operator")).strip() or "operator"
 
-    changes: dict[str, str] = {}
-    for key in _PROFILE_STACK_KEYS:
-        value = args.get(key)
-        if value is not None:
-            changes[key] = str(value).strip()
-
+    changes = _requested_profile_changes(args)
     if not changes:
         return _error("At least one profile change is required.")
 
     current_stack = _load_profile_stack(state)
     new_stack = _merge_profile_changes(current_stack, changes)
 
-    try:
-        resolved_current = resolve_project_config(current_stack)
-        resolved_new = resolve_project_config(new_stack)
-    except FileNotFoundError as e:
-        return _error(f"Profile not found: {e}")
-    except Exception as e:
-        return _error(f"Failed to resolve profiles: {e}")
+    configs = _resolve_config_pair(current_stack, new_stack)
+    if isinstance(configs, str):
+        return _error(configs)
+    resolved_current, resolved_new = configs
+    diff = _config_diff(_resolved_raw(resolved_current), _resolved_raw(resolved_new))
 
-    diff = _config_diff(
-        cast(dict[str, Any], resolved_current.get("raw", {})),
-        cast(dict[str, Any], resolved_new.get("raw", {})),
+    proposal = _new_proposal(
+        project_id,
+        proposed_by,
+        reason,
+        int(state.get("profile_version", 0)),
+        (current_stack, new_stack),
+        diff,
     )
-
-    proposal_id = f"profile-change:{uuid4().hex[:8]}"
-    previous_version = int(state.get("profile_version", 0))
-
-    proposal = ProfileChangeProposal(
-        proposal_id=proposal_id,
-        project_id=project_id,
-        proposed_by=proposed_by,
-        reason=reason,
-        previous_profile_stack=current_stack,
-        proposed_profile_stack=new_stack,
-        previous_profile_version=previous_version,
-        projected_config_diff=diff,
-        status="pending",
-        created_at=datetime.now(UTC),
-    )
-
     proposal_ref = _save_proposal_artifact(rt, project_id, proposal)
 
     return _ok(
-        proposal_id=proposal_id,
+        proposal_id=proposal.proposal_id,
         project_id=project_id,
         previous_profile_stack=current_stack,
         proposed_profile_stack=new_stack,
@@ -195,12 +172,10 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     downstream artifacts, and records the approval.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
+    active = _active_state(rt, args)
+    if active is None:
         return _error("No active project.")
-    state = rt.get_project(project_id)
-    if state is None:
-        return _error("No active project.")
+    project_id, state = active
 
     proposal_id = str(args.get("proposal_id", "")).strip()
     if not proposal_id:
@@ -209,64 +184,29 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     approved_by = str(args.get("approved_by", "operator")).strip() or "operator"
     note = str(args.get("note", ""))
 
-    proposal = _load_proposal_artifact(rt, project_id, proposal_id)
-    if proposal is None:
-        return _error(f"Profile change proposal '{proposal_id}' not found.")
-    if proposal.status != "pending":
-        return _error(f"Proposal '{proposal_id}' is {proposal.status}, not pending.")
+    proposal = _load_pending_proposal(rt, project_id, proposal_id)
+    if isinstance(proposal, str):
+        return _error(proposal)
 
     new_stack = dict(proposal.proposed_profile_stack)
-    try:
-        resolved = resolve_project_config(new_stack)
-    except FileNotFoundError as e:
-        return _error(f"Profile not found: {e}")
-    except Exception as e:
-        return _error(f"Failed to resolve profiles: {e}")
+    resolved = _resolve_config_or_error(new_stack)
+    if isinstance(resolved, str):
+        return _error(resolved)
 
     new_version = int(state.get("profile_version", 0)) + 1
-    state["profile_version"] = new_version
-    state["profile_stack"] = new_stack
-    state["resolved_config"] = cast(dict[str, object], resolved.get("raw", {}))
-    state["resolved_config_sources"] = resolved.get("sources", [])
-    state["config_conflicts"] = list(cast(list[Any], resolved.get("conflicts", [])))
+    _apply_resolved_config(state, new_stack, resolved, new_version)
+    register_project_providers(rt, new_stack, _resolved_raw(resolved))
 
-    register_project_providers(rt, new_stack, cast(dict[str, object], resolved.get("raw", {})))
-
-    config_ref = _save_resolved_config_artifact(
-        rt, project_id, new_version, cast(dict[str, object], resolved.get("raw", {})), new_stack
+    config_ref, inv_ref = _commit_profile_config(
+        rt, project_id, proposal_id, new_version, resolved, new_stack
     )
-    inv_ref = _invalidate_for_profile_change(rt, project_id, proposal_id)
 
-    approval_id = f"profile-approval:{uuid4().hex[:8]}"
-    approval = ProfileChangeApproval(
-        approval_id=approval_id,
-        proposal_id=proposal_id,
-        project_id=project_id,
-        approved_by=approved_by,
-        note=note,
-        profile_version=new_version,
-        new_profile_stack=new_stack,
-        new_resolved_config_ref=config_ref,
-        invalidation_report_ref=inv_ref,
-        created_at=datetime.now(UTC),
-    )
+    approval = _approval_record(proposal, approved_by, note, new_version, config_ref, inv_ref)
     approval_ref = _save_approval_artifact(rt, project_id, approval)
-
-    approved_proposal = proposal.model_copy(update={"status": "approved"})
-    _save_proposal_artifact(rt, project_id, approved_proposal)
-
-    rt._persist_project_state(project_id)
-    rt._record_audit(
-        approved_by,
-        "approve_profile_change",
-        project_id=project_id,
-        proposal_id=proposal_id,
-        profile_version=str(new_version),
-        approval_id=approval_id,
-    )
+    _finalize_approval(rt, project_id, proposal, approval)
 
     return _ok(
-        approval_id=approval_id,
+        approval_id=approval.approval_id,
         proposal_id=proposal_id,
         project_id=project_id,
         profile_version=new_version,
@@ -275,6 +215,170 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
         invalidation_report_ref=inv_ref,
         approval_ref=approval_ref,
         message="Profile change approved and applied.",
+    )
+
+
+def _active_state(rt: Any, args: dict[str, object]) -> tuple[str, Any] | None:
+    """Resolve ``(project_id, state)`` for the request, or ``None`` without one."""
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return None
+    state = rt.get_project(project_id)
+    if state is None:
+        return None
+    return project_id, state
+
+
+def _requested_profile_changes(args: dict[str, object]) -> dict[str, str]:
+    """Collect the non-empty profile-stack changes requested in tool args."""
+    changes: dict[str, str] = {}
+    for key in _PROFILE_STACK_KEYS:
+        value = args.get(key)
+        if value is not None:
+            changes[key] = str(value).strip()
+    return changes
+
+
+def _profile_resolution_error(exc: Exception) -> str:
+    """Map a profile-resolution failure to its tool error message."""
+    if isinstance(exc, FileNotFoundError):
+        return f"Profile not found: {exc}"
+    return f"Failed to resolve profiles: {exc}"
+
+
+def _resolve_config_pair(
+    current_stack: dict[str, str],
+    new_stack: dict[str, str],
+) -> tuple[dict[str, object], dict[str, object]] | str:
+    """Resolve the current and projected stacks, or return the error message."""
+    try:
+        resolved_current = resolve_project_config(current_stack)
+        resolved_new = resolve_project_config(new_stack)
+    except Exception as exc:
+        return _profile_resolution_error(exc)
+    return resolved_current, resolved_new
+
+
+def _resolve_config_or_error(stack: dict[str, str]) -> dict[str, object] | str:
+    """Resolve one profile stack, or return the mapped error message."""
+    try:
+        return resolve_project_config(stack)
+    except Exception as exc:
+        return _profile_resolution_error(exc)
+
+
+def _resolved_raw(resolved: dict[str, object]) -> dict[str, Any]:
+    """Return the merged raw configuration of a resolved stack."""
+    return cast(dict[str, Any], resolved.get("raw", {}))
+
+
+def _load_pending_proposal(
+    rt: Any,
+    project_id: str,
+    proposal_id: str,
+) -> ProfileChangeProposal | str:
+    """Load the proposal, returning an error message when missing or not pending."""
+    proposal = _load_proposal_artifact(rt, project_id, proposal_id)
+    if proposal is None:
+        return f"Profile change proposal '{proposal_id}' not found."
+    if proposal.status != "pending":
+        return f"Proposal '{proposal_id}' is {proposal.status}, not pending."
+    return proposal
+
+
+def _new_proposal(
+    project_id: str,
+    proposed_by: str,
+    reason: str,
+    previous_version: int,
+    stacks: tuple[dict[str, str], dict[str, str]],
+    diff: dict[str, Any],
+) -> ProfileChangeProposal:
+    """Build the pending ``ProfileChangeProposal`` body."""
+    current_stack, new_stack = stacks
+    return ProfileChangeProposal(
+        proposal_id=f"profile-change:{uuid4().hex[:8]}",
+        project_id=project_id,
+        proposed_by=proposed_by,
+        reason=reason,
+        previous_profile_stack=current_stack,
+        proposed_profile_stack=new_stack,
+        previous_profile_version=previous_version,
+        projected_config_diff=diff,
+        status="pending",
+        created_at=datetime.now(UTC),
+    )
+
+
+def _apply_resolved_config(
+    state: Any,
+    new_stack: dict[str, str],
+    resolved: dict[str, object],
+    new_version: int,
+) -> None:
+    """Bump the project's profile version and cache the resolved configuration."""
+    state["profile_version"] = new_version
+    state["profile_stack"] = new_stack
+    state["resolved_config"] = cast(dict[str, object], resolved.get("raw", {}))
+    state["resolved_config_sources"] = resolved.get("sources", [])
+    state["config_conflicts"] = list(cast(list[Any], resolved.get("conflicts", [])))
+
+
+def _commit_profile_config(
+    rt: Any,
+    project_id: str,
+    proposal_id: str,
+    profile_version: int,
+    resolved: dict[str, object],
+    profile_stack: dict[str, str],
+) -> tuple[str, str]:
+    """Persist the resolved config artifact and invalidate downstream artifacts."""
+    config_ref = _save_resolved_config_artifact(
+        rt, project_id, profile_version, _resolved_raw(resolved), profile_stack
+    )
+    inv_ref = _invalidate_for_profile_change(rt, project_id, proposal_id)
+    return config_ref, inv_ref
+
+
+def _approval_record(
+    proposal: ProfileChangeProposal,
+    approved_by: str,
+    note: str,
+    profile_version: int,
+    config_ref: str,
+    invalidation_report_ref: str,
+) -> ProfileChangeApproval:
+    """Build the approval record for an approved proposal."""
+    return ProfileChangeApproval(
+        approval_id=f"profile-approval:{uuid4().hex[:8]}",
+        proposal_id=proposal.proposal_id,
+        project_id=proposal.project_id,
+        approved_by=approved_by,
+        note=note,
+        profile_version=profile_version,
+        new_profile_stack=dict(proposal.proposed_profile_stack),
+        new_resolved_config_ref=config_ref,
+        invalidation_report_ref=invalidation_report_ref,
+        created_at=datetime.now(UTC),
+    )
+
+
+def _finalize_approval(
+    rt: Any,
+    project_id: str,
+    proposal: ProfileChangeProposal,
+    approval: ProfileChangeApproval,
+) -> None:
+    """Mark the proposal approved, persist project state, and record the audit entry."""
+    _save_proposal_artifact(rt, project_id, proposal.model_copy(update={"status": "approved"}))
+    rt._persist_project_state(project_id)
+    rt._record_audit(
+        approval.approved_by,
+        "approve_profile_change",
+        project_id=project_id,
+        proposal_id=approval.proposal_id,
+        profile_version=str(approval.profile_version),
+        approval_id=approval.approval_id,
     )
 
 
