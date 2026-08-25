@@ -6,13 +6,19 @@ through this store so the project directory stays consistent.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
 from film_pipeline.artifacts.metadata import read_metadata, write_metadata
-from film_pipeline.artifacts.paths import artifact_path, current_artifact_path
+from film_pipeline.artifacts.paths import (
+    artifact_dir,
+    artifact_path,
+    current_artifact_path,
+    phase_dir,
+)
 from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 
@@ -44,10 +50,8 @@ class ArtifactStore:
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> dict[str, Any]:
         """Load an artifact's content as a raw dict."""
-        p = self._artifact_path(project_id, phase.value, artifact_id, version)
-        from json import loads
-
-        data: dict[str, Any] = loads(p.read_text())
+        content_path = self._artifact_path(project_id, phase.value, artifact_id, version)
+        data: dict[str, Any] = json.loads(content_path.read_text())
         return data
 
     def list_artifacts(
@@ -56,8 +60,6 @@ class ArtifactStore:
         """List all artifact metadata in a project, optionally filtered by phase."""
         base = self._root / project_id
         if phase is not None:
-            from film_pipeline.artifacts.paths import phase_dir
-
             base = phase_dir(project_id, phase.value, root=self._root)
         results: list[ArtifactMetadata] = []
         for meta_path in base.rglob("current.meta.json"):
@@ -70,8 +72,6 @@ class ArtifactStore:
         Scans existing artifact files in the phase directory and returns
         max(version) + 1, or 1 if no prior versions exist.
         """
-        from film_pipeline.artifacts.paths import artifact_dir
-
         version_dir = artifact_dir(project_id, phase, artifact_id, root=self._root) / "versions"
         if not version_dir.exists():
             return 1
@@ -106,29 +106,50 @@ class ArtifactStore:
         approval_ref: str | None = None,
     ) -> ArtifactMetadata:
         """Transition an artifact version from CANDIDATE to APPROVED."""
-        meta = self.load_metadata(project_id, phase, artifact_id, version)
-        if meta.status != ArtifactStatus.CANDIDATE:
-            raise ValueError(
-                f"Cannot approve {artifact_id} v{version}: status is {meta.status.value}, "
-                "expected candidate"
-            )
-        updated = meta.model_copy(
-            update={"status": ArtifactStatus.APPROVED, "approval_ref": approval_ref}
+        return self._transition_status(
+            project_id,
+            phase,
+            artifact_id,
+            version,
+            expected_status=ArtifactStatus.CANDIDATE,
+            next_status=ArtifactStatus.APPROVED,
+            action="approve",
+            extra_updates={"approval_ref": approval_ref},
         )
-        self._write_metadata_for(project_id, phase, artifact_id, version, updated)
-        return updated
 
     def supersede(
         self, project_id: str, phase: str, artifact_id: str, version: int
     ) -> ArtifactMetadata:
         """Transition an artifact version from APPROVED to SUPERSEDED."""
+        return self._transition_status(
+            project_id,
+            phase,
+            artifact_id,
+            version,
+            expected_status=ArtifactStatus.APPROVED,
+            next_status=ArtifactStatus.SUPERSEDED,
+            action="supersede",
+        )
+
+    def _transition_status(
+        self,
+        project_id: str,
+        phase: str,
+        artifact_id: str,
+        version: int,
+        expected_status: ArtifactStatus,
+        next_status: ArtifactStatus,
+        action: str,
+        extra_updates: dict[str, Any] | None = None,
+    ) -> ArtifactMetadata:
+        """Require one status on a version and persist its successor."""
         meta = self.load_metadata(project_id, phase, artifact_id, version)
-        if meta.status != ArtifactStatus.APPROVED:
+        if meta.status != expected_status:
             raise ValueError(
-                f"Cannot supersede {artifact_id} v{version}: status is {meta.status.value}, "
-                "expected approved"
+                f"Cannot {action} {artifact_id} v{version}: status is {meta.status.value}, "
+                f"expected {expected_status.value}"
             )
-        updated = meta.model_copy(update={"status": ArtifactStatus.SUPERSEDED})
+        updated = meta.model_copy(update={"status": next_status, **(extra_updates or {})})
         self._write_metadata_for(project_id, phase, artifact_id, version, updated)
         return updated
 
