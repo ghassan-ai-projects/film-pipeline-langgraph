@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from film_pipeline.graph.nodes._shared import (
     _get_services,
@@ -11,10 +11,8 @@ from film_pipeline.graph.nodes._shared import (
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
+from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
-
-if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
 
 _logger = logging.getLogger(__name__)
 
@@ -99,8 +97,6 @@ def _constitution_summary(state: dict[str, Any]) -> str:
         return "(not available)"
     try:
         parsed = _parse_ref(str(constitution_ref))
-        from film_pipeline.schemas._base import FilmPhase
-
         data = services.artifact_store.load(
             str(state.get("project_id", "")),
             FilmPhase("constitution"),
@@ -148,7 +144,25 @@ def _summarize_phase_artifact(artifact: str, data: dict[str, Any]) -> tuple[list
     Counts are -1 when the underlying key is absent so callers can reproduce
     the historical last-write-wins totals across artifacts.
     """
-    lines = [f"\n{artifact}:"]
+    count_lines, scene_count, shot_count = _collection_count_lines(data)
+    lines = [
+        f"\n{artifact}:",
+        *count_lines,
+        *_scene_preview_lines(data),
+        *_shot_preview_lines(data),
+        *_descriptive_field_lines(data),
+    ]
+    return lines, scene_count, shot_count
+
+
+def _collection_count_lines(data: dict[str, Any]) -> tuple[list[str], int, int]:
+    """One 'key: N items' line per list-valued collection key, with tallies.
+
+    The scene and shot counts are -1 when their underlying key is absent so
+    callers can reproduce the historical last-write-wins totals across
+    artifacts.
+    """
+    lines: list[str] = []
     scene_count = -1
     shot_count = -1
     for key in ("scenes", "scene_list", "rows", "shot_count"):
@@ -159,27 +173,49 @@ def _summarize_phase_artifact(artifact: str, data: dict[str, Any]) -> tuple[list
                 scene_count = len(val)
             elif key == "rows":
                 shot_count = len(val)
+    return lines, scene_count, shot_count
+
+
+def _scene_preview_lines(data: dict[str, Any]) -> list[str]:
+    """First five scenes as '<scene_id>: <truncated dramatic_function>'."""
+    lines: list[str] = []
     scenes = data.get("scenes", [])
-    if isinstance(scenes, list):
-        for s in scenes[:5]:
-            if isinstance(s, dict):
-                sid = s.get("scene_id", "?")
-                func = str(s.get("dramatic_function", ""))[:80]
-                lines.append(f"  {sid}: {func}")
+    if not isinstance(scenes, list):
+        return lines
+    for scene in scenes[:5]:
+        if not isinstance(scene, dict):
+            continue
+        scene_id = scene.get("scene_id", "?")
+        dramatic_function = str(scene.get("dramatic_function", ""))[:80]
+        lines.append(f"  {scene_id}: {dramatic_function}")
+    return lines
+
+
+def _shot_preview_lines(data: dict[str, Any]) -> list[str]:
+    """First five shots as '<shot_id>: <duration_seconds>s'."""
+    lines: list[str] = []
     rows = data.get("rows", [])
-    if isinstance(rows, list):
-        for r in rows[:5]:
-            if isinstance(r, dict):
-                sid = r.get("shot_id", "?")
-                dur = r.get("duration_seconds", "?")
-                lines.append(f"  {sid}: {dur}s")
+    if not isinstance(rows, list):
+        return lines
+    for row in rows[:5]:
+        if not isinstance(row, dict):
+            continue
+        shot_id = row.get("shot_id", "?")
+        duration_seconds = row.get("duration_seconds", "?")
+        lines.append(f"  {shot_id}: {duration_seconds}s")
+    return lines
+
+
+def _descriptive_field_lines(data: dict[str, Any]) -> list[str]:
+    """Truncated string or list values of the artifact's descriptive fields."""
+    lines: list[str] = []
     for key in ("text", "theme", "themes", "title"):
         val = data.get(key)
         if isinstance(val, str) and val:
             lines.append(f"  {key}: {val[:150]}")
         elif isinstance(val, list):
             lines.append(f"  {key}: {', '.join(str(x)[:60] for x in val[:3])}")
-    return lines, scene_count, shot_count
+    return lines
 
 
 def _metrics_summary(target: int, scenes: int, shots: int) -> str:
@@ -216,8 +252,6 @@ def _apply_phase_output_sections(state: dict[str, Any], ctx: dict[str, str]) -> 
     services = _get_services(state)
     if services is None:
         return
-    from film_pipeline.schemas._base import FilmPhase
-
     project_id = str(state.get("project_id", ""))
     phase = FilmPhase(ctx["current_phase"])
     lines: list[str] = []
@@ -338,8 +372,6 @@ def _compact_upstream_content(
 ) -> str:
     """Load one upstream artifact and compact it to the configured char budget."""
     parsed = _parse_ref(ref)
-    from film_pipeline.schemas._base import FilmPhase
-
     data = services.artifact_store.load(
         project_id,
         FilmPhase(phase_name),
