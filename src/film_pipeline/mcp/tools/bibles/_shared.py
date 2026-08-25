@@ -68,6 +68,20 @@ def _load_artifact_if_present(store: Any, project_id: str, phase: str, artifact_
         return None
 
 
+def _load_script_text(store: Any, project_id: str) -> str | None:
+    """Load the Script artifact and flatten it; None when unavailable."""
+    try:
+        script_data = _load_versioned_artifact(store, project_id, "script", "script")
+        return _extract_script_text(script_data)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _constitution_theme(constitution: Any) -> str:
+    """Theme text from the FilmConstitution mapping, if shaped as one."""
+    return str(constitution.get("theme", "")) if isinstance(constitution, dict) else ""
+
+
 def _save_visual_dev_candidate(
     store: Any,
     project_id: str,

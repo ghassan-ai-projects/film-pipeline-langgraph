@@ -8,31 +8,17 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
-    _extract_script_text,
+    _constitution_theme,
     _load_artifact_if_present,
-    _load_versioned_artifact,
+    _load_script_text,
     _register_active_artifact_ref,
     _save_visual_dev_candidate,
 )
 
 
-def _load_script_text(store: Any, project_id: str) -> str | None:
-    """Load the Script artifact and flatten it; None when unavailable."""
-    try:
-        script_data = _load_versioned_artifact(store, project_id, "script", "script")
-        return _extract_script_text(script_data)
-    except (FileNotFoundError, ValueError):
-        return None
-
-
 def _constitution_visual_language(constitution: Any) -> str:
     """Visual-language text from the FilmConstitution mapping, if shaped as one."""
     return str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
-
-
-def _constitution_theme(constitution: Any) -> str:
-    """Theme text from the FilmConstitution mapping, if shaped as one."""
-    return str(constitution.get("theme", "")) if isinstance(constitution, dict) else ""
 
 
 def _environment_prompt_mission(environment_name: str, environment_id: str) -> str:
