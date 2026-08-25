@@ -10,7 +10,7 @@ import base64
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from film_pipeline.generation.gemini_client import call_gemini
 
@@ -45,6 +45,11 @@ _PASS_THRESHOLD = 28.0
 # ── Selective validation ──────────────────────────────────────────────────
 
 
+def _spot_check(frame_role: str, frame_index: int, *, per_ten: int) -> bool:
+    """Sample *per_ten* frames out of every ten for paid review."""
+    return (hash(frame_role + str(frame_index)) % 10) < per_ten
+
+
 def should_review_frame(entry: dict[str, Any], *, frame_index: int = 0) -> bool:
     """Decide whether a frame warrants a paid Gemini review.
 
@@ -60,7 +65,7 @@ def should_review_frame(entry: dict[str, Any], *, frame_index: int = 0) -> bool:
             return False
         if frame_role.startswith("alt-angle-"):
             # Spot-check 30% of environment alt angles
-            return (hash(frame_role + str(frame_index)) % 10) < 3
+            return _spot_check(frame_role, frame_index, per_ten=3)
         # Detail insets: skip
         return not (frame_role.startswith("detail-") or frame_role == "color-palette")
 
@@ -74,13 +79,13 @@ def should_review_frame(entry: dict[str, Any], *, frame_index: int = 0) -> bool:
 
     # Character alt angles: spot-check 30%
     if frame_role in ("3-4-left", "3-4-right", "profile-left", "profile-right"):
-        return (hash(frame_role + str(frame_index)) % 10) < 3
+        return _spot_check(frame_role, frame_index, per_ten=3)
 
     # Character expressions: first 3, then spot-check
     if frame_role and frame_role.startswith("expression-"):
         if frame_index < 3:
             return True
-        return (hash(frame_role + str(frame_index)) % 10) < 5
+        return _spot_check(frame_role, frame_index, per_ten=5)
 
     # Scale references and props: once
     if asset_type in ("scale_sheet", "prop_sheet"):
@@ -170,23 +175,29 @@ def _build_review_prompt(prompt_text: str, subject_type: str) -> str:
     )
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Remove wrapping markdown code fences, if present."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = stripped.split("\n", 1)[-1]
+        if stripped.endswith("```"):
+            stripped = stripped[:-3]
+    return stripped.strip()
+
+
+def _candidate_text(response: dict[str, Any]) -> str:
+    """Extract the raw text payload of the first Gemini candidate."""
+    first = response.get("candidates", [])[0]
+    return str(first.get("content", {}).get("parts", [{}])[0].get("text", ""))
+
+
 def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameReviewResult:
     try:
-        candidates = response.get("candidates", [])
-        if not candidates:
+        if not response.get("candidates"):
             return FrameReviewResult(
                 frame_id=frame_id, passed=False, error="No candidates in response"
             )
-
-        text = str(candidates[0].get("content", {}).get("parts", [{}])[0].get("text", ""))
-        # Strip markdown fences if present
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-
+        text = _strip_markdown_fences(_candidate_text(response))
         data = json.loads(text)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
         return FrameReviewResult(
@@ -198,12 +209,13 @@ def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameRev
     for domain in ("subject", "prompt_match", "artifacts", "technical"):
         domain_data = data.get("scores", {}).get(domain, {})
         if isinstance(domain_data, dict):
+            score_value = float(domain_data.get("score", 0))
             scores[domain] = {
-                "score": float(domain_data.get("score", 0)),
+                "score": score_value,
                 "max": float(domain_data.get("max", 10)),
                 "notes": str(domain_data.get("notes", "")),
             }
-            total += float(cast(float, scores[domain]["score"]))
+            total += score_value
 
     return FrameReviewResult(
         frame_id=str(data.get("frame_id", frame_id)),
