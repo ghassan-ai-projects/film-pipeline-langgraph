@@ -2,11 +2,61 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import _active_project_id, _error, _ok, _services
+
+if TYPE_CHECKING:
+    from film_pipeline.schemas._base import FilmPhase
+
+
+def _collect_phase_artifacts(
+    store: Any, project_id: str, phase: FilmPhase
+) -> list[dict[str, object]]:
+    """Summarize the artifacts stored for the reviewed phase."""
+    artifacts = store.list_artifacts(project_id, phase)
+    return [
+        {
+            "artifact_id": a.artifact_id,
+            "artifact_type": a.artifact_type,
+            "phase": str(a.phase.value),
+            "version": a.version,
+            "status": a.status,
+        }
+        for a in artifacts
+    ]
+
+
+def _build_review_package(
+    state: dict[str, Any],
+    phase: FilmPhase,
+    phase_label: str,
+    artifact_list: list[dict[str, object]],
+    router_result: Any,
+    blocking_issues: list[dict[str, Any]],
+) -> Any | None:
+    """Build the structured review package; None when generation fails."""
+    from film_pipeline.review.generator import ReviewPackageGenerator
+
+    try:
+        generator = ReviewPackageGenerator()
+        pkg = generator.build(
+            project_id=str(state["project_id"]),
+            phase=phase,
+            summary=f"Review package for {phase_label} phase",
+            current_artifacts=cast(list[str], [a["artifact_id"] for a in artifact_list]),
+            validation_results=[
+                r.get("validator_id", "") for r in state.get("_validation_reports", [])
+            ],
+            open_issues=[i.get("message", "") for i in blocking_issues],
+            orchestrator_recommendation=_build_orchestrator_recommendation(state, router_result),
+            has_blocking_issues=len(blocking_issues) > 0,
+        )
+    except Exception:
+        return None
+    return pkg
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
@@ -35,43 +85,19 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
         return _error(f"Unknown phase: {phase}")
 
     store = _services(rt).artifact_store
-    artifacts = store.list_artifacts(project_id, fp)
-    artifact_list = [
-        {
-            "artifact_id": a.artifact_id,
-            "artifact_type": a.artifact_type,
-            "phase": str(a.phase.value),
-            "version": a.version,
-            "status": a.status,
-        }
-        for a in artifacts
-    ]
+    artifact_list = _collect_phase_artifacts(store, project_id, fp)
 
     # Build a review package using the ReviewPackageGenerator
     from film_pipeline.graph import orchestrator_state as ostate
     from film_pipeline.graph.router import compute_actions
-    from film_pipeline.review.generator import ReviewPackageGenerator
 
     ostate.ensure_orchestrator_state(state)
 
     router_result = compute_actions(state)
     blocking_issues = [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
 
-    try:
-        generator = ReviewPackageGenerator()
-        pkg = generator.build(
-            project_id=project_id,
-            phase=fp,
-            summary=f"Review package for {phase} phase",
-            current_artifacts=[a["artifact_id"] for a in artifact_list],
-            validation_results=[
-                r.get("validator_id", "") for r in state.get("_validation_reports", [])
-            ],
-            open_issues=[i.get("message", "") for i in blocking_issues],
-            orchestrator_recommendation=_build_orchestrator_recommendation(state, router_result),
-            has_blocking_issues=len(blocking_issues) > 0,
-        )
-    except Exception:
+    pkg = _build_review_package(state, fp, phase, artifact_list, router_result, blocking_issues)
+    if pkg is None:
         # Fallback to simple artifact list if generator fails
         return _ok(artifacts=artifact_list, phase=phase)
 
