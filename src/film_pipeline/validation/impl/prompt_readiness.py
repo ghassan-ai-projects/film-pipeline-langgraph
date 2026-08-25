@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from film_pipeline.schemas._base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
@@ -12,9 +12,11 @@ from film_pipeline.schemas.registries.validator_registry import (
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
 
-MAX_PROMPT_LENGTH = 8000  # characters
+MAX_PROMPT_LENGTH: Final[int] = 8000  # characters
 
-_AMBIGUOUS_PHRASES = frozenset({"maybe", "if possible", "optional", "preferably", "sort of"})
+_AMBIGUOUS_PHRASES: Final[frozenset[str]] = frozenset(
+    {"maybe", "if possible", "optional", "preferably", "sort of"}
+)
 
 
 def _empty_prompt_readiness_result() -> dict[str, Any]:
