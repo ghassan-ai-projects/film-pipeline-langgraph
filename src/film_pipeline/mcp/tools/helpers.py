@@ -81,27 +81,66 @@ def _coerce_runtime_arg(args: dict[str, object]) -> int:
     return 0
 
 
+def _profile_source(
+    args: dict[str, object],
+    key: str,
+    prefixes: tuple[str, ...],
+) -> Any | None:
+    """Load the profile named by ``args[key]``, or ``None`` when absent/unloadable."""
+    val = args.get(key)
+    if not val or not isinstance(val, str):
+        return None
+    try:
+        _loader, src = load_profile_flex(str(val), prefixes)
+    except FileNotFoundError:
+        return None
+    return src
+
+
+def _dict_entry_ids(entries: Any, field: str) -> list[str]:
+    """Collect non-empty ``field`` strings from the dict entries in ``entries``."""
+    ids: list[str] = []
+    for entry in entries:
+        if isinstance(entry, dict):
+            value = str(entry.get(field, ""))
+            if value:
+                ids.append(value)
+    return ids
+
+
+def _order_provider_ids(order_entries: Any) -> list[str]:
+    """Collect non-empty provider ids from a profile's ``order`` list."""
+    ids: list[str] = []
+    for provider_id in order_entries:
+        pid = str(provider_id)
+        if pid:
+            ids.append(pid)
+    return ids
+
+
+def _provider_ids_from_raw(raw: Any) -> list[str]:
+    """Collect provider ids from a resolved provider profile's raw mapping."""
+    providers = raw.get("providers", {})
+    pids: list[str] = []
+    for section in ("video", "image"):
+        pids.extend(_dict_entry_ids(providers.get(section, []), "provider_id"))
+    pids.extend(_order_provider_ids(providers.get("order", [])))
+    return pids
+
+
+def _model_ids_from_raw(raw: Any) -> list[str]:
+    """Collect model ids from a resolved quality profile's raw mapping."""
+    models = raw.get("models", {})
+    return _dict_entry_ids(models.get("available", []), "model_id")
+
+
 def _collect_profile_providers(args: dict[str, object]) -> list[str]:
     """Extract provider ids from profile args for real-mode rejection."""
     pids: list[str] = []
     for key in ("provider_profile",):
-        val = args.get(key)
-        if val and isinstance(val, str) and val:
-            try:
-                _loader, src = load_profile_flex(str(val), ("provider",))
-                providers = src.raw.get("providers", {})
-                for section in ("video", "image"):
-                    for entry in providers.get(section, []):
-                        if isinstance(entry, dict):
-                            pid = str(entry.get("provider_id", ""))
-                            if pid:
-                                pids.append(pid)
-                for provider_id in providers.get("order", []):
-                    pid = str(provider_id)
-                    if pid:
-                        pids.append(pid)
-            except FileNotFoundError:
-                continue
+        src = _profile_source(args, key, ("provider",))
+        if src is not None:
+            pids.extend(_provider_ids_from_raw(src.raw))
     return pids
 
 
@@ -109,18 +148,9 @@ def _collect_profile_models(args: dict[str, object]) -> list[str]:
     """Extract model ids from profile args for real-mode rejection."""
     mids: list[str] = []
     for key in ("quality_profile",):
-        val = args.get(key)
-        if val and isinstance(val, str) and val:
-            try:
-                _loader, src = load_profile_flex(str(val), ("quality",))
-                models = src.raw.get("models", {})
-                for entry in models.get("available", []):
-                    if isinstance(entry, dict):
-                        mid = str(entry.get("model_id", ""))
-                        if mid:
-                            mids.append(mid)
-            except FileNotFoundError:
-                continue
+        src = _profile_source(args, key, ("quality",))
+        if src is not None:
+            mids.extend(_model_ids_from_raw(src.raw))
     return mids
 
 
