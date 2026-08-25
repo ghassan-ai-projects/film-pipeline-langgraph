@@ -11,7 +11,7 @@ import base64
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from film_pipeline.generation.gemini_client import call_gemini
 
@@ -186,14 +186,14 @@ def _strip_code_fence(text: str) -> str:
 def _normalized_scores(data: dict[str, Any]) -> tuple[dict[str, dict[str, object]], float]:
     scores: dict[str, dict[str, object]] = {}
     total = 0.0
-    for domain in data.get("scores", {}):
-        d = data["scores"][domain]
+    for domain, raw in data.get("scores", {}).items():
+        score = float(raw.get("score", 0))
         scores[domain] = {
-            "score": float(d.get("score", 0)),
-            "max": float(d.get("max", 0)),
-            "notes": str(d.get("notes", "")),
+            "score": score,
+            "max": float(raw.get("max", 0)),
+            "notes": str(raw.get("notes", "")),
         }
-        total += float(cast(float, scores[domain]["score"]))
+        total += score
     return scores, total
 
 
@@ -220,9 +220,7 @@ def _parse_sheet_response(
         text = _strip_code_fence(_candidate_text(candidates))
         data = json.loads(text)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        return SheetReviewResult(
-            sheet_id=subject_id, sheet_type=sheet_type, passed=False, error=f"Parse error: {exc}"
-        )
+        return _failed_result(subject_id, sheet_type, f"Parse error: {exc}")
 
     scores, total = _normalized_scores(data)
 
