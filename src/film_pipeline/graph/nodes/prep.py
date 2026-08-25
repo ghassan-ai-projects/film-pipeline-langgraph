@@ -25,6 +25,80 @@ from film_pipeline.graph.nodes._shared import (
 from film_pipeline.schemas.constraints import ProjectConstraints
 
 
+def _runtime_directive(user_runtime: int) -> str:
+    """Authoritative-runtime instruction appended to the intake task."""
+    if user_runtime > 0:
+        return (
+            f" The user REQUIRES a target runtime of {user_runtime} seconds — adopt it "
+            "exactly as target_runtime_seconds; do not estimate your own."
+        )
+    return " Estimate a realistic runtime from the story's scope."
+
+
+def _extract_intake_constraints(state: dict[str, Any]) -> ProjectConstraints:
+    """Extract user-intent constraints before intake classification.
+
+    This is deterministic/heuristic and runs offline so the intake agent and
+    scope contract both see explicit creative requirements.
+    """
+    idea_text = str(state.get("idea", ""))
+    constraints_hints = state.get("constraints_hints") or {}
+    return extract_constraints(
+        text=idea_text,
+        project_id=str(state.get("project_id", "")),
+        hints=constraints_hints if isinstance(constraints_hints, dict) else {},
+    )
+
+
+def _classify_film_idea(state: dict[str, Any], user_runtime: int) -> Any:
+    """Run the intake classifier and return its project profile."""
+    result = _run_agent(
+        state,
+        agent_id="intake-classifier-agent",
+        phase="intake",
+        task=(
+            "Classify the user's film idea: determine genre, tone, audience, "
+            "aspect ratio, and delivery format." + _runtime_directive(user_runtime) + " "
+            "Identify risks and produce a structured project profile."
+        ),
+    )
+    return result.get("profile")
+
+
+def _lock_profile_runtime(profile: Any, user_runtime: int) -> Any:
+    """Authority override: lock the user's runtime onto the saved profile so
+    the persisted artifact and downstream state agree."""
+    if user_runtime > 0 and hasattr(profile, "model_copy"):
+        return profile.model_copy(update={"target_runtime_seconds": user_runtime})
+    return profile
+
+
+def _profile_state_updates(profile: Any, user_runtime: int) -> dict[str, Any]:
+    """State keys derived from the classified profile (runtime, film type)."""
+    out: dict[str, Any] = {}
+    if user_runtime > 0:
+        out["target_runtime_seconds"] = user_runtime
+    elif hasattr(profile, "target_runtime_seconds"):
+        out["target_runtime_seconds"] = profile.target_runtime_seconds
+    if hasattr(profile, "film_type"):
+        out["film_type"] = str(profile.film_type)
+    return out
+
+
+def _merge_profile_into_constraints(
+    constraints: ProjectConstraints,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge profile-derived values into constraints where they were not already
+    supplied explicitly, so the artifact reflects the locked project config."""
+    merged: dict[str, Any] = constraints.model_dump(mode="json", exclude_none=True)
+    if updates.get("target_runtime_seconds") and not merged.get("target_runtime_seconds"):
+        merged["target_runtime_seconds"] = updates["target_runtime_seconds"]
+    if updates.get("film_type") and not merged.get("film_type"):
+        merged["film_type"] = updates["film_type"]
+    return merged
+
+
 def intake_node(state: dict[str, Any]) -> dict[str, Any]:
     """Intake: classify input, infer config, present for approval."""
     new_state = deepcopy(state)
@@ -33,60 +107,18 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # User-supplied runtime (seeded before the graph ran) is authoritative.
     user_runtime = _coerce_user_runtime(new_state)
-    runtime_clause = (
-        f" The user REQUIRES a target runtime of {user_runtime} seconds — adopt it "
-        "exactly as target_runtime_seconds; do not estimate your own."
-        if user_runtime > 0
-        else " Estimate a realistic runtime from the story's scope."
-    )
+    constraints = _extract_intake_constraints(new_state)
 
-    # ── Extract user-intent constraints before intake classification ──────
-    # This is deterministic/heuristic and runs offline so the intake agent and
-    # scope contract both see explicit creative requirements.
-    idea_text = str(new_state.get("idea", ""))
-    constraints_hints = new_state.get("constraints_hints") or {}
-    constraints = extract_constraints(
-        text=idea_text,
-        project_id=str(new_state.get("project_id", "")),
-        hints=constraints_hints if isinstance(constraints_hints, dict) else {},
-    )
-
-    result = _run_agent(
-        new_state,
-        agent_id="intake-classifier-agent",
-        phase="intake",
-        task=(
-            "Classify the user's film idea: determine genre, tone, audience, "
-            "aspect ratio, and delivery format." + runtime_clause + " "
-            "Identify risks and produce a structured project profile."
-        ),
-    )
-    profile = result.get("profile")
+    profile = _lock_profile_runtime(_classify_film_idea(new_state, user_runtime), user_runtime)
     if profile is not None:
-        # Authority override: lock the user's runtime onto the saved profile so the
-        # persisted artifact and downstream state agree.
-        if user_runtime > 0 and hasattr(profile, "model_copy"):
-            profile = profile.model_copy(update={"target_runtime_seconds": user_runtime})
         ref = _save_artifact(new_state, profile, "project_profile", "intake")
         if ref:
             updates["profile_ref"] = ref
             new_refs.append(ref)
-        if user_runtime > 0:
-            updates["target_runtime_seconds"] = user_runtime
-        elif hasattr(profile, "target_runtime_seconds"):
-            updates["target_runtime_seconds"] = profile.target_runtime_seconds
-        if hasattr(profile, "film_type"):
-            updates["film_type"] = str(profile.film_type)
+        updates.update(_profile_state_updates(profile, user_runtime))
 
-    # Merge profile-derived values into constraints where they were not already
-    # supplied explicitly, so the artifact reflects the locked project config.
-    merged_constraints: dict[str, Any] = constraints.model_dump(mode="json", exclude_none=True)
-    if updates.get("target_runtime_seconds") and not merged_constraints.get(
-        "target_runtime_seconds"
-    ):
-        merged_constraints["target_runtime_seconds"] = updates["target_runtime_seconds"]
-    if updates.get("film_type") and not merged_constraints.get("film_type"):
-        merged_constraints["film_type"] = updates["film_type"]
+    merged_constraints = _merge_profile_into_constraints(constraints, updates)
+
     # scene count from explicit hints (or extraction) takes precedence over the
     # runtime-derived default; seed it so the scope contract honors it.
     if merged_constraints.get("target_scene_count"):
