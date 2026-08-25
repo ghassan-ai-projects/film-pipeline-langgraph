@@ -253,10 +253,7 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
         scene_count = len(getattr(scene_list, "scenes", []) or [])
         node_issues += validate_scene_count(new_state, scene_count)
 
-    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
-    if fresh_issues:
-        updates["issues"] = fresh_issues
-        _withhold_auto_approval_on_blockers(updates, fresh_issues)
+    _report_new_issues(state, updates, node_issues)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
@@ -310,15 +307,30 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
             new_state, script_scene_count, dev_scene_count
         )
 
-    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
-    if fresh_issues:
-        updates["issues"] = fresh_issues
-        _withhold_auto_approval_on_blockers(updates, fresh_issues)
+    _report_new_issues(state, updates, node_issues)
 
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates, state)
     return updates
+
+
+def _report_new_issues(
+    state: dict[str, Any],
+    updates: dict[str, Any],
+    node_issues: list[dict[str, Any]],
+) -> None:
+    """Report this node's gate issues that original state does not already list.
+
+    Issues with an issue_id absent from ``state`` are copied into
+    ``updates["issues"]``; when any of them is blocking, the phase's
+    pre-approved gate is cancelled (see
+    ``_withhold_auto_approval_on_blockers``).
+    """
+    fresh_issues = [i for i in node_issues if _is_new_issue(i, state)]
+    if fresh_issues:
+        updates["issues"] = fresh_issues
+        _withhold_auto_approval_on_blockers(updates, fresh_issues)
 
 
 def _withhold_auto_approval_on_blockers(
