@@ -11,6 +11,7 @@ from ._shared import _extract_script_text
 
 if TYPE_CHECKING:
     from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+    from film_pipeline.schemas._base import ArtifactType
 
 from film_pipeline.schemas.continuity import (
     ContinuityLedger,
@@ -54,20 +55,25 @@ def _continuity_entries(matrix: Any) -> list[ContinuityLedgerEntry]:
     return entries
 
 
-def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLedger) -> str:
-    """Save the ledger as a new continuity_ledger artifact version."""
+def _save_next_candidate_version(
+    store: Any,
+    project_id: str,
+    artifact_id: str,
+    artifact_type: ArtifactType,
+    payload: Any,
+) -> str:
+    """Save payload as the next CANDIDATE version of an artifact in the shot_bible phase."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
 
     next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), "continuity_ledger")
-        + 1
+        _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), artifact_id) + 1
     )
     meta = ArtifactMetadata(
-        artifact_id="continuity_ledger",
-        artifact_type=ArtifactType.CONTINUITY_LEDGER,
+        artifact_id=artifact_id,
+        artifact_type=artifact_type,
         project_id=project_id,
         phase=FilmPhase("shot_bible"),
         version=next_version,
@@ -76,14 +82,21 @@ def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLe
         created_by="mcp.generate_shot_bible",
         created_at=datetime.now(UTC),
     )
-    return cast(str, store.save(ledger, meta))
+    return cast(str, store.save(payload, meta))
+
+
+def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLedger) -> str:
+    """Save the ledger as a new continuity_ledger artifact version."""
+    from film_pipeline.schemas._base import ArtifactType
+
+    return _save_next_candidate_version(
+        store, project_id, "continuity_ledger", ArtifactType.CONTINUITY_LEDGER, ledger
+    )
 
 
 def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str | None:
     """Generate a basic continuity ledger from the shot matrix."""
     try:
-        from film_pipeline.schemas.continuity import ContinuityLedger
-
         ledger = ContinuityLedger(project_id=project_id, entries=_continuity_entries(matrix))
         return _persist_continuity_ledger(store, project_id, ledger)
     except Exception:
@@ -177,27 +190,11 @@ def _request_matrix_output(
 
 def _persist_shot_matrix(store: Any, project_id: str, matrix: Any) -> str:
     """Save the matrix as a new master_film_matrix artifact version."""
-    from datetime import UTC, datetime
+    from film_pipeline.schemas._base import ArtifactType
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-
-    next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), "master_film_matrix")
-        + 1
+    return _save_next_candidate_version(
+        store, project_id, "master_film_matrix", ArtifactType.MASTER_FILM_MATRIX, matrix
     )
-    meta = ArtifactMetadata(
-        artifact_id="master_film_matrix",
-        artifact_type=ArtifactType.MASTER_FILM_MATRIX,
-        project_id=project_id,
-        phase=FilmPhase("shot_bible"),
-        version=next_version,
-        status=ArtifactStatus.CANDIDATE,
-        parents=[],
-        created_by="mcp.generate_shot_bible",
-        created_at=datetime.now(UTC),
-    )
-    return cast(str, store.save(matrix, meta))
 
 
 async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
