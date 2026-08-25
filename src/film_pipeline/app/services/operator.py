@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any, cast
 
-from film_pipeline.app.runtime import StudioRuntime, get_runtime
+from film_pipeline.app.runtime import StudioRuntime, get_runtime, reset_runtime
 from film_pipeline.app.services import _browse_ops, _generation_ops
 from film_pipeline.app.services._project_discovery import (
     discover_project_folders,
@@ -51,59 +52,79 @@ class OperatorService:
 
     def list_projects(self) -> list[ProjectListItem]:
         """List all known projects with operator status fields."""
-        items: list[ProjectListItem] = []
-        for project_id, state in sorted(self.runtime.projects.items()):
-            phase = str(state.get("current_phase", ""))
-            has_blockers = self._has_blockers(state)
-            items.append(
-                ProjectListItem(
-                    project_id=project_id,
-                    title=str(state.get("title") or project_id),
-                    slug=str(state.get("slug", project_id)),
-                    current_phase=phase,
-                    status=self._status_for_state(state),
-                    has_blockers=has_blockers,
-                    awaiting_review=bool(state.get("human_approval_required")),
-                    last_updated_at=self._last_updated_at(project_id),
-                    project_kind=project_kind_for_state(state, project_id),
-                    project_root=str(self.runtime.project_roots.get(project_id, "")),
-                )
-            )
+        items = [
+            self._project_list_item(project_id, state)
+            for project_id, state in sorted(self.runtime.projects.items())
+        ]
         known_ids = {item.project_id for item in items}
         items.extend(discover_project_folders(self, known_ids))
         return items
+
+    def _project_list_item(self, project_id: str, state: dict[str, Any]) -> ProjectListItem:
+        """Map one persisted project state to its operator-facing row."""
+        return ProjectListItem(
+            project_id=project_id,
+            title=str(state.get("title") or project_id),
+            slug=str(state.get("slug", project_id)),
+            current_phase=str(state.get("current_phase", "")),
+            status=self._status_for_state(state),
+            has_blockers=self._has_blockers(state),
+            awaiting_review=bool(state.get("human_approval_required")),
+            last_updated_at=self._last_updated_at(project_id),
+            project_kind=project_kind_for_state(state, project_id),
+            project_root=str(self.runtime.project_roots.get(project_id, "")),
+        )
 
     def _last_updated_at(self, project_id: str) -> str:
         """ISO timestamp of the project's last persisted state change."""
         root = self.runtime.project_roots.get(project_id)
         if root is None:
             return ""
-        state_path = root / "project-state.json"
         try:
-            mtime = state_path.stat().st_mtime
+            mtime = (root / "project-state.json").stat().st_mtime
         except OSError:
             return ""
-        from datetime import UTC, datetime
-
         return datetime.fromtimestamp(mtime, tz=UTC).isoformat()
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
         """Create a project, set it active, and optionally submit the idea."""
-        if not request.project_id.strip():
+        project_id = request.project_id.strip()
+        title = request.title.strip()
+        if not project_id:
             raise BackendOperationError("project_id is required.")
-        if not request.title.strip():
+        if not title:
             raise BackendOperationError("title is required.")
 
         state = self.runtime.create_project(
-            project_id=request.project_id.strip(),
-            title=request.title.strip(),
-            slug=request.slug.strip() or request.project_id.strip(),
+            project_id=project_id,
+            title=title,
+            slug=request.slug.strip() or project_id,
         )
+        self._apply_requested_settings(state, request)
+        self._activate_new_project(project_id, state, request)
+        current_phase = self._run_intake_when_idea_supplied(project_id, state, request)
+
+        return MutationResult(
+            ok=True,
+            project_id=str(state["project_id"]),
+            current_phase=current_phase,
+            message="Project created.",
+        )
+
+    def _apply_requested_settings(
+        self, state: dict[str, Any], request: ProjectCreateRequest
+    ) -> None:
+        """Copy the operator-chosen modes, kind, and policy into the fresh state."""
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
         state["project_kind"] = normalize_project_kind(request.project_kind)
         state["generation_policy"] = request.generation_policy
+        self._resolve_and_store_profiles(state, request)
 
+    def _resolve_and_store_profiles(
+        self, state: dict[str, Any], request: ProjectCreateRequest
+    ) -> None:
+        """Canonicalize the request's profile stack, store its resolution, register providers."""
         profile_stack = _profiles.canonicalize_profile_stack(
             {
                 "film_type_profile": request.film_type_profile,
@@ -122,31 +143,31 @@ class OperatorService:
             self.runtime, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
 
-        self.runtime.set_active(request.project_id.strip())
-
+    def _activate_new_project(
+        self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest
+    ) -> None:
+        """Make the new project active and seed its user-supplied target runtime."""
+        self.runtime.set_active(project_id)
         if request.target_runtime_seconds > 0:
             # User-supplied runtime is authoritative — seed it before intake runs
             # so the classifier adopts it instead of guessing.
             state["target_runtime_seconds"] = request.target_runtime_seconds
 
-        # When the caller already supplied an idea (e.g. the TUI new-project
-        # form), run intake immediately so the project opens with data. When no
-        # idea is supplied we stay aligned with MCP create_film_project and only
-        # set up state; submit_idea is then responsible for advancing.
-        current_phase = ""
-        if request.idea and request.idea.strip():
-            state["idea"] = request.idea.strip()
-            next_state = self.runtime.run_graph(state)
-            next_state["generation_policy"] = request.generation_policy
-            self.runtime.projects[request.project_id.strip()] = next_state
-            current_phase = str(next_state.get("current_phase", ""))
+    def _run_intake_when_idea_supplied(
+        self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest
+    ) -> str:
+        """Run intake immediately when an idea was supplied; return the phase reached.
 
-        return MutationResult(
-            ok=True,
-            project_id=str(state["project_id"]),
-            current_phase=current_phase,
-            message="Project created.",
-        )
+        When no idea is supplied we stay aligned with MCP ``create_film_project``
+        and only set up state; ``submit_idea`` is then responsible for advancing.
+        """
+        if not (request.idea and request.idea.strip()):
+            return ""
+        state["idea"] = request.idea.strip()
+        next_state = self.runtime.run_graph(state)
+        next_state["generation_policy"] = request.generation_policy
+        self.runtime.projects[project_id] = next_state
+        return str(next_state.get("current_phase", ""))
 
     def set_runtime_mode(self, mode: str) -> str:
         """Switch the session runtime mode, rebuilding the runtime when it changes.
@@ -154,8 +175,6 @@ class OperatorService:
         Returns the active mode after the switch. A no-op when the requested
         mode already matches, so it is safe to call before every create.
         """
-        from film_pipeline.app.runtime import get_runtime, reset_runtime
-
         if self._runtime is not None:
             if self._runtime.server_mode != mode:
                 raise BackendOperationError(
@@ -248,9 +267,7 @@ class OperatorService:
         router_result = compute_actions(state)
         artifacts = self.list_artifacts(str(state["project_id"]), phase=phase)
         blocking_issues = [
-            str(issue.get("message", issue))
-            for issue in cast(list[Mapping[str, Any]], state.get("issues", []))
-            if issue.get("severity") == "blocking"
+            str(issue.get("message", issue)) for issue in self._blocking_state_issues(state)
         ]
         recommendation = self._recommendation(router_result.next_action, phase)
         return ReviewWorkspace(
@@ -420,12 +437,16 @@ class OperatorService:
     def _has_blockers(self, state: dict[str, Any]) -> bool:
         project_id = str(state.get("project_id", ""))
         runtime_blockers = self.runtime.get_blockers(project_id) if project_id else []
-        issue_blockers = [
+        return bool(runtime_blockers or self._blocking_state_issues(state))
+
+    @staticmethod
+    def _blocking_state_issues(state: dict[str, Any]) -> list[Mapping[str, Any]]:
+        """Issues stored on the project whose severity blocks advancement."""
+        return [
             issue
             for issue in cast(list[Mapping[str, Any]], state.get("issues", []))
             if issue.get("severity") == "blocking"
         ]
-        return bool(runtime_blockers or issue_blockers)
 
     @staticmethod
     def _status_for_state(state: dict[str, Any]) -> str:
