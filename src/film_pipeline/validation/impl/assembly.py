@@ -151,7 +151,7 @@ def _flag_audio_sync_issues(
     """Flag cue points that exist without any dialogue track references."""
     cue_points: list[dict[str, Any]] = audio_plan.get("cue_points", [])
     dialogue_tracks: list[str] = audio_plan.get("dialogue_track_refs", [])
-    if not (cue_points and not dialogue_tracks):
+    if not cue_points or dialogue_tracks:
         return 0
     issues.append(
         {
