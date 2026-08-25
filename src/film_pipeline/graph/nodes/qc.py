@@ -29,10 +29,12 @@ _ValidatorRunner = Callable[
     None,
 ]
 
+# Ref-valued state keys qc_node copies into its update once validators set them.
+_QC_REF_KEYS: tuple[str, ...] = ("consensus_report_ref", "qc_patch_ref")
+
 
 def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    original = state
     gate_updates = _phase_gate_updates(new_state, phase="qc", gate="qc")
     new_state.update(gate_updates)
 
@@ -40,6 +42,18 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     _emit_matrix_patch_from_findings(new_state)
     _synthesize_consensus_report(new_state)
 
+    updates = _collect_updates(gate_updates, new_state, state, _QC_REF_KEYS)
+    _propagate_side_effects(new_state, updates, state)
+    return updates
+
+
+def _collect_updates(
+    gate_updates: dict[str, Any],
+    new_state: dict[str, Any],
+    original: dict[str, Any],
+    ref_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Compute the partial update from a before/after diff of the node state."""
     updates: dict[str, Any] = dict(gate_updates)
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
     if new_refs:
@@ -47,11 +61,10 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
-    for key in ("consensus_report_ref", "qc_patch_ref"):
+    for key in ref_keys:
         val = new_state.get(key)
         if val:
             updates[key] = val
-    _propagate_side_effects(new_state, updates, state)
     return updates
 
 
@@ -236,6 +249,32 @@ def _instantiate_validator(
     return instance
 
 
+def _validate_artifact(
+    vcls: type[Any],
+    artifact: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+    services: Any,
+    *,
+    with_templates: bool = False,
+    pass_state_as_context: bool = False,
+) -> None:
+    """Record one validator's findings on an artifact; a failing validator is skipped.
+
+    A validator that cannot instantiate or run must not abort the whole QC
+    pass, so its exception is swallowed here (matching every call site).
+    """
+    try:
+        instance = _instantiate_validator(vcls, services, with_templates=with_templates)
+        if pass_state_as_context:
+            report = instance.run(artifact, context=state)
+        else:
+            report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
 def _run_script_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
@@ -250,12 +289,15 @@ def _run_script_validators(
     if artifact is None:
         return
     for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
-        try:
-            instance = _instantiate_validator(vcls, services, with_templates=True)
-            report = instance.run(artifact, context=state)
-        except Exception:
-            continue
-        _append_validator_report(report, issues, state)
+        _validate_artifact(
+            vcls,
+            artifact,
+            issues,
+            state,
+            services,
+            with_templates=True,
+            pass_state_as_context=True,
+        )
 
 
 def _run_reference_validators(
@@ -268,14 +310,8 @@ def _run_reference_validators(
     from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
     artifact = _pick_artifact(artifact_data, "reference_index")
-    if artifact is None:
-        return
-    try:
-        instance = _instantiate_validator(ReferenceUsabilityValidator, services)
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(ReferenceUsabilityValidator, artifact, issues, state, services)
 
 
 def _run_prompt_validators(
@@ -288,14 +324,8 @@ def _run_prompt_validators(
     from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     artifact = _pick_artifact(artifact_data, "prompt_registry", "execution_brief")
-    if artifact is None:
-        return
-    try:
-        instance = _instantiate_validator(PromptReadinessValidator, services)
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(PromptReadinessValidator, artifact, issues, state, services)
 
 
 def _run_continuity_validators(
@@ -308,15 +338,14 @@ def _run_continuity_validators(
     from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     artifact = _pick_artifact(artifact_data, "shot_matrix", "shot_bible")
-    if artifact is None:
-        return
-    artifact = _as_shots_view(artifact)
-    try:
-        instance = _instantiate_validator(SceneContinuityValidator, services)
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(
+            SceneContinuityValidator,
+            _as_shots_view(artifact),
+            issues,
+            state,
+            services,
+        )
 
 
 def _run_assembly_validators(
@@ -329,14 +358,8 @@ def _run_assembly_validators(
     from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     artifact = _pick_artifact(artifact_data, "assembly_manifest", "review_cut", "final_cut")
-    if artifact is None:
-        return
-    try:
-        instance = _instantiate_validator(AssemblyValidator, services)
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(AssemblyValidator, artifact, issues, state, services)
 
 
 def _run_delivery_validators(
@@ -351,14 +374,8 @@ def _run_delivery_validators(
     )
 
     artifact = _pick_artifact(artifact_data, "delivery_manifest", "delivery_package")
-    if artifact is None:
-        return
-    try:
-        instance = _instantiate_validator(DeliveryCompletenessValidator, services)
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(DeliveryCompletenessValidator, artifact, issues, state, services)
 
 
 _VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
