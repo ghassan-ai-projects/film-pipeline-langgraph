@@ -191,6 +191,23 @@ def _save_report(
     return store.save(report, meta)
 
 
+def _run_validators_saving_reports(
+    store: ArtifactStore,
+    project_id: str,
+    fp: FilmPhase,
+    validators: tuple[type[Any], ...],
+    art_data: Any,
+) -> tuple[list[dict[str, object]], list[Path]]:
+    """Run validators over one artifact, returning summaries with saved refs."""
+    reports: list[dict[str, object]] = []
+    saved_refs: list[Path] = []
+    for vcls in validators:
+        report = vcls().run(art_data)
+        reports.append(_report_summary(report))
+        saved_refs.append(_save_report(store, report, project_id, fp))
+    return reports, saved_refs
+
+
 def _validate_visual_dev(
     rt: Any,
     store: ArtifactStore,
@@ -199,35 +216,21 @@ def _validate_visual_dev(
     state: dict[str, object],
 ) -> tuple[list[dict[str, object]], list[Path]]:
     """Validate the latest reference index when one exists."""
-    reports: list[dict[str, object]] = []
-    refs: list[Path] = []
     art_data = _load_latest_reference_index(rt, project_id, state)
     if art_data is None:
-        return reports, refs
-
-    for vcls in _reference_validators():
-        report = vcls().run(art_data)
-        reports.append(_report_summary(report))
-        refs.append(_save_report(store, report, project_id, fp))
-    return reports, refs
+        return [], []
+    return _run_validators_saving_reports(store, project_id, fp, _reference_validators(), art_data)
 
 
 def _validate_script(
     store: ArtifactStore, project_id: str, fp: FilmPhase
 ) -> tuple[list[dict[str, object]], list[Path]]:
     """Validate the versioned script when one exists."""
-    reports: list[dict[str, object]] = []
-    refs: list[Path] = []
     try:
         art_data = store.load(project_id, fp, "script", 1)
     except (FileNotFoundError, ValueError):
-        return reports, refs
-
-    for vcls in _script_validators():
-        report = vcls().run(art_data)
-        reports.append(_report_summary(report))
-        refs.append(_save_report(store, report, project_id, fp))
-    return reports, refs
+        return [], []
+    return _run_validators_saving_reports(store, project_id, fp, _script_validators(), art_data)
 
 
 def _is_issue_row(issue: object) -> TypeGuard[dict[str, object]]:
