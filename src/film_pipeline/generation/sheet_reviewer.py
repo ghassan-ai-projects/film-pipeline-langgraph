@@ -100,41 +100,46 @@ def review_composite_sheet(
     """
     rubric_data = _RUBRICS.get(sheet_type)
     if rubric_data is None:
-        return SheetReviewResult(
-            sheet_id=subject_id,
-            sheet_type=sheet_type,
-            passed=False,
-            error=f"Unknown sheet type: {sheet_type}",
-        )
+        return _failed_result(subject_id, sheet_type, f"Unknown sheet type: {sheet_type}")
 
     domains, max_score = rubric_data
 
     try:
-        image_b64 = base64.b64encode(sheet_path.read_bytes()).decode("ascii")
+        image_b64 = _encode_sheet_image(sheet_path)
     except Exception as exc:
-        return SheetReviewResult(
-            sheet_id=subject_id,
-            sheet_type=sheet_type,
-            passed=False,
-            error=f"Cannot read sheet: {exc}",
-        )
+        return _failed_result(subject_id, sheet_type, f"Cannot read sheet: {exc}")
 
     prompt = _build_sheet_review_prompt(sheet_type, subject_id, prompt_text, domains, max_score)
 
     try:
         response = call_gemini(prompt, image_b64, model, http_opener, api_key)
     except Exception as exc:
-        return SheetReviewResult(
-            sheet_id=subject_id,
-            sheet_type=sheet_type,
-            passed=False,
-            error=f"Gemini API error: {exc}",
-        )
+        return _failed_result(subject_id, sheet_type, f"Gemini API error: {exc}")
 
     return _parse_sheet_response(response, subject_id, sheet_type, max_score)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
+
+
+def _failed_result(subject_id: str, sheet_type: str, error: str) -> SheetReviewResult:
+    return SheetReviewResult(
+        sheet_id=subject_id,
+        sheet_type=sheet_type,
+        passed=False,
+        error=error,
+    )
+
+
+def _encode_sheet_image(sheet_path: Path) -> str:
+    return base64.b64encode(sheet_path.read_bytes()).decode("ascii")
+
+
+def _format_rubric_lines(domains: dict[str, tuple[int, str]]) -> str:
+    rubric_lines = []
+    for domain, (pts, description) in domains.items():
+        rubric_lines.append(f"- {domain.upper()} ({pts} pts): {description}")
+    return "\n".join(rubric_lines)
 
 
 def _build_sheet_review_prompt(
@@ -144,10 +149,7 @@ def _build_sheet_review_prompt(
     domains: dict[str, tuple[int, str]],
     max_score: int,
 ) -> str:
-    rubric_lines = []
-    for domain, (pts, description) in domains.items():
-        rubric_lines.append(f"- {domain.upper()} ({pts} pts): {description}")
-    rubric_text = "\n".join(rubric_lines)
+    rubric_text = _format_rubric_lines(domains)
 
     threshold = _pass_threshold(max_score)
 
@@ -167,31 +169,21 @@ def _build_sheet_review_prompt(
     )
 
 
-def _parse_sheet_response(
-    response: dict[str, Any],
-    subject_id: str,
-    sheet_type: str,
-    max_score: int,
-) -> SheetReviewResult:
-    try:
-        candidates = response.get("candidates", [])
-        if not candidates:
-            return SheetReviewResult(
-                sheet_id=subject_id, sheet_type=sheet_type, passed=False, error="No candidates"
-            )
-        text = str(candidates[0].get("content", {}).get("parts", [{}])[0].get("text", ""))
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        data = json.loads(text)
-    except (json.JSONDecodeError, KeyError, IndexError) as exc:
-        return SheetReviewResult(
-            sheet_id=subject_id, sheet_type=sheet_type, passed=False, error=f"Parse error: {exc}"
-        )
+def _candidate_text(candidates: list[Any]) -> str:
+    text = str(candidates[0].get("content", {}).get("parts", [{}])[0].get("text", ""))
+    return text.strip()
 
+
+def _strip_code_fence(text: str) -> str:
+    if not text.startswith("```"):
+        return text
+    stripped = text.split("\n", 1)[-1]
+    if stripped.endswith("```"):
+        stripped = stripped[:-3]
+    return stripped.strip()
+
+
+def _normalized_scores(data: dict[str, Any]) -> tuple[dict[str, dict[str, object]], float]:
     scores: dict[str, dict[str, object]] = {}
     total = 0.0
     for domain in data.get("scores", {}):
@@ -202,17 +194,42 @@ def _parse_sheet_response(
             "notes": str(d.get("notes", "")),
         }
         total += float(cast(float, scores[domain]["score"]))
+    return scores, total
 
-    threshold = _pass_threshold(max_score)
-    passed = total >= threshold
 
-    status = (
+def _review_status(passed: bool, data: dict[str, Any]) -> str:
+    return (
         "approved"
         if passed
         else "needs_delta_fix"
         if data.get("failing_tiles")
         else "needs_regeneration"
     )
+
+
+def _parse_sheet_response(
+    response: dict[str, Any],
+    subject_id: str,
+    sheet_type: str,
+    max_score: int,
+) -> SheetReviewResult:
+    try:
+        candidates = response.get("candidates", [])
+        if not candidates:
+            return _failed_result(subject_id, sheet_type, "No candidates")
+        text = _strip_code_fence(_candidate_text(candidates))
+        data = json.loads(text)
+    except (json.JSONDecodeError, KeyError, IndexError) as exc:
+        return SheetReviewResult(
+            sheet_id=subject_id, sheet_type=sheet_type, passed=False, error=f"Parse error: {exc}"
+        )
+
+    scores, total = _normalized_scores(data)
+
+    threshold = _pass_threshold(max_score)
+    passed = total >= threshold
+
+    status = _review_status(passed, data)
 
     return SheetReviewResult(
         sheet_id=str(data.get("sheet_id", subject_id)),
