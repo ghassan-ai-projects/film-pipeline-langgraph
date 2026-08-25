@@ -30,6 +30,7 @@ from film_pipeline.app.services.errors import ServiceError
 from film_pipeline.app.services.models import (
     ArtifactDetail,
     DashboardSummary,
+    GenerationWorkspace,
     MutationResult,
     ProjectCreateRequest,
     ProjectListItem,
@@ -198,17 +199,8 @@ class FilmStudioApp(App[None]):
         validation = self.gateway.get_validation_workspace(project_id) if project_id else None
         providers = self.gateway.list_provider_status()
         comments = self.gateway.list_operator_comments(project_id) if project_id else []
-        generation = (
-            self.gateway.get_generation_workspace(project_id)
-            if project_id and dashboard and dashboard.current_phase == "generation"
-            else None
-        )
-        prompt_phases = {"generation", "gen_planning"}
-        prompts = (
-            self.gateway.preview_generation_prompts(project_id)
-            if project_id and dashboard and dashboard.current_phase in prompt_phases
-            else []
-        )
+        generation = self._load_generation_workspace(project_id, dashboard)
+        prompts = self._load_generation_prompts(project_id, dashboard)
         return StudioSnapshot(
             projects=projects,
             dashboard=dashboard,
@@ -221,6 +213,21 @@ class FilmStudioApp(App[None]):
             generation=generation,
             prompts=prompts,
         )
+
+    def _load_generation_workspace(
+        self, project_id: str | None, dashboard: DashboardSummary | None
+    ) -> GenerationWorkspace | None:
+        if project_id and dashboard and dashboard.current_phase == "generation":
+            return self.gateway.get_generation_workspace(project_id)
+        return None
+
+    def _load_generation_prompts(
+        self, project_id: str | None, dashboard: DashboardSummary | None
+    ) -> list[dict[str, object]]:
+        prompt_phases = {"generation", "gen_planning"}
+        if project_id and dashboard and dashboard.current_phase in prompt_phases:
+            return self.gateway.preview_generation_prompts(project_id)
+        return []
 
     def _resolve_active_project(self, projects: list[ProjectListItem]) -> ProjectListItem | None:
         if self.active_project_id:
@@ -360,67 +367,89 @@ class FilmStudioApp(App[None]):
         normalized = command.lower().strip()
         if not normalized:
             return
-        if normalized in {"help", "commands"}:
-            self._set_status(
-                "Commands: next, approve, revise <note>, validate, generate, "
-                "project <id>, stage <name>, create, home, assets"
-            )
-            return
+        handled = (
+            self._show_command_help(normalized)
+            or self._navigate_for_command(normalized)
+            or self._create_from_command(command, normalized)
+            or self._dispatch_studio_action(normalized)
+            or self._apply_command_target(command, normalized)
+        )
+        if not handled:
+            self._set_status(f"Unknown command: {command}. Try 'help'.")
+
+    def _show_command_help(self, normalized: str) -> bool:
+        if normalized not in {"help", "commands"}:
+            return False
+        self._set_status(
+            "Commands: next, approve, revise <note>, validate, generate, "
+            "project <id>, stage <name>, create, home, assets"
+        )
+        return True
+
+    def _navigate_for_command(self, normalized: str) -> bool:
         if normalized == "home":
             self.switch_screen(ProjectGalleryScreen(id="home_screen"))
-            return
+            return True
         if normalized == "assets":
             self._show_studio_tab("tab_assets")
-            return
+            return True
         if normalized == "create":
             self.action_new_project()
-            return
-        if normalized.startswith("create "):
-            parts = command.removeprefix("create ").split(" | ")
-            if len(parts) >= 3:
-                request = ProjectCreateRequest(
-                    project_id=parts[0].strip(),
-                    title=parts[1].strip(),
-                    slug=parts[0].strip(),
-                    idea=parts[2].strip(),
-                    runtime_mode=parts[3].strip() if len(parts) >= 4 else "mock",
-                    workflow_mode="manual",
-                    project_kind="production",
-                    generation_policy=parts[4].strip() if len(parts) >= 5 else "generate",
-                )
-                self.create_project(request)
-                return
-        if normalized == "next":
-            self._dispatch_to_studio("_do_next_action")
-            return
-        if normalized == "approve":
-            self._dispatch_to_studio("_approve_phase")
-            return
-        if normalized == "validate":
-            self._dispatch_to_studio("_run_validation")
-            return
-        if normalized == "generate":
-            self._dispatch_to_studio("_run_generation")
-            return
+            return True
+        return False
+
+    def _create_from_command(self, command: str, normalized: str) -> bool:
+        if not normalized.startswith("create "):
+            return False
+        parts = command.removeprefix("create ").split(" | ")
+        if len(parts) < 3:
+            return False
+        request = ProjectCreateRequest(
+            project_id=parts[0].strip(),
+            title=parts[1].strip(),
+            slug=parts[0].strip(),
+            idea=parts[2].strip(),
+            runtime_mode=parts[3].strip() if len(parts) >= 4 else "mock",
+            workflow_mode="manual",
+            project_kind="production",
+            generation_policy=parts[4].strip() if len(parts) >= 5 else "generate",
+        )
+        self.create_project(request)
+        return True
+
+    def _dispatch_studio_action(self, normalized: str) -> bool:
+        studio_actions: dict[str, str] = {
+            "next": "_do_next_action",
+            "approve": "_approve_phase",
+            "validate": "_run_validation",
+            "generate": "_run_generation",
+        }
+        method_name = studio_actions.get(normalized)
+        if method_name is None:
+            return False
+        self._dispatch_to_studio(method_name)
+        return True
+
+    def _apply_command_target(self, command: str, normalized: str) -> bool:
         if normalized.startswith("revise "):
             note = command.removeprefix("revise ").strip()
             self._submit_revision(note)
-            return
+            return True
         if normalized.startswith("project "):
             project_id = command.removeprefix("project ").strip()
             try:
                 self.open_project(project_id)
             except Exception as exc:
                 self._set_status(f"Could not open project: {exc}")
-            return
+            return True
         if normalized.startswith("stage "):
             stage = command.removeprefix("stage ").strip()
             if stage in GRAPH_PHASES:
                 self.set_selected_stage(stage)
             else:
                 self._set_status(f"Unknown stage: {stage}")
-            return
-        self._set_status(f"Unknown command: {command}. Try 'help'.")
+            return True
+        return False
 
     def _show_studio_tab(self, tab_id: str) -> None:
         """Switch the studio content tabs, if the studio is active."""
