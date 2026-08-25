@@ -23,6 +23,124 @@ from .helpers import (
 )
 
 
+def _resolve_runtime_mode(
+    args: dict[str, object], server_mode: str
+) -> tuple[str, dict[str, object] | None]:
+    """Align the requested runtime mode with the MCP server mode.
+
+    Returns the effective runtime mode plus an error payload when the
+    request is rejected (empty error payload on success).
+    """
+    # --- Runtime mode alignment ---
+    requested_mode = str(args.get("runtime_mode", "")).lower()
+    if requested_mode not in ("", "mock", "real"):
+        return "", _error(f"runtime_mode must be 'mock' or 'real', got '{requested_mode}'")
+
+    runtime_mode = requested_mode or server_mode
+    if runtime_mode != server_mode:
+        return (
+            "",
+            _error(
+                "Project runtime_mode must match the MCP server mode.",
+                server_mode=server_mode,
+                requested_runtime_mode=runtime_mode,
+            ),
+        )
+    return runtime_mode, None
+
+
+def _reject_mock_ids(args: dict[str, object], runtime_mode: str) -> dict[str, object] | None:
+    """Reject mock provider/model ids when running in real mode."""
+    if runtime_mode != "real":
+        return None
+    for pid in _collect_profile_providers(args):
+        if pid.startswith("mock-"):
+            return _error(f"Provider '{pid}' is not allowed in real mode.")
+    for mid in _collect_profile_models(args):
+        if mid.startswith("mock-"):
+            return _error(f"Model '{mid}' is not allowed in real mode.")
+    return None
+
+
+def _extract_conflicts(resolved_config: dict[str, Any]) -> list[Any]:
+    """Normalize the conflict list reported by the profile resolver."""
+    return list(cast(list[Any], resolved_config.get("conflicts", [])))
+
+
+def _validate_resolved_profile(
+    profile_stack: Any,
+    resolved_config: dict[str, Any],
+    runtime_mode: str,
+) -> dict[str, object] | None:
+    """Reject blocking conflicts and missing real-mode provider credentials."""
+    conflicts = _extract_conflicts(resolved_config)
+    if conflicts:
+        blocking = [c for c in conflicts if c.get("severity") == "blocking"]
+        if blocking:
+            return _error(
+                "Resolved profile stack has blocking conflicts.",
+                conflicts=conflicts,
+            )
+    if runtime_mode == "real":
+        missing_credentials = missing_provider_credentials(
+            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        )
+        if missing_credentials:
+            return _error(
+                "Real-mode provider credentials are missing.",
+                missing_credentials=missing_credentials,
+            )
+    return None
+
+
+def _populate_project_state(
+    state: dict[str, object],
+    args: dict[str, object],
+    *,
+    profile_stack: Any,
+    resolved_config: dict[str, Any],
+    runtime_mode: str,
+    server_mode: str,
+) -> None:
+    """Persist runtime mode and resolved profile stack onto the project state."""
+    state["runtime_mode"] = runtime_mode
+    state["profile_stack"] = profile_stack
+    state["server_mode"] = server_mode
+    state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
+    state["resolved_config_sources"] = resolved_config["sources"]
+    state["config_conflicts"] = _extract_conflicts(resolved_config)
+    state["generation_policy"] = str(args.get("generation_policy", "generate"))
+    user_runtime = _coerce_runtime_arg(args)
+    if user_runtime > 0:
+        # User-supplied expected length is authoritative for the whole pipeline.
+        state["target_runtime_seconds"] = user_runtime
+
+
+def _audit_project_creation(rt: Any, project_id: str, runtime_mode: str, server_mode: str) -> None:
+    """Record the project creation in the runtime audit trail."""
+    rt._record_audit(
+        "system",
+        "create_film_project",
+        project_id=project_id,
+        runtime_mode=runtime_mode,
+        server_mode=server_mode,
+    )
+
+
+def _run_intake_for_idea(
+    rt: Any, state: dict[str, object], args: dict[str, object], project_id: str
+) -> dict[str, object]:
+    """Run the intake graph when an idea accompanies the request."""
+    idea = str(args.get("idea", "")).strip()
+    if idea:
+        rt.set_active(project_id)
+        state["idea"] = idea
+        state = rt.run_graph(state)
+        state["generation_policy"] = str(args.get("generation_policy", "generate"))
+        rt.projects[project_id] = state
+    return state
+
+
 async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     """Create a new film project — wired to runtime.
 
@@ -35,84 +153,39 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         return _error("project_id is required")
 
     server_mode = rt.server_mode
+    runtime_mode, mode_error = _resolve_runtime_mode(args, server_mode)
+    if mode_error is not None:
+        return mode_error
 
-    # --- Runtime mode alignment ---
-    requested_mode = str(args.get("runtime_mode", "")).lower()
-    if requested_mode not in ("", "mock", "real"):
-        return _error(f"runtime_mode must be 'mock' or 'real', got '{requested_mode}'")
-
-    runtime_mode = requested_mode or server_mode
-    if runtime_mode != server_mode:
-        return _error(
-            "Project runtime_mode must match the MCP server mode.",
-            server_mode=server_mode,
-            requested_runtime_mode=runtime_mode,
-        )
-
-    if runtime_mode == "real":
-        # Reject mock provider/model ids
-        for pid in _collect_profile_providers(args):
-            if pid.startswith("mock-"):
-                return _error(f"Provider '{pid}' is not allowed in real mode.")
-        for mid in _collect_profile_models(args):
-            if mid.startswith("mock-"):
-                return _error(f"Model '{mid}' is not allowed in real mode.")
+    mock_error = _reject_mock_ids(args, runtime_mode)
+    if mock_error is not None:
+        return mock_error
 
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        conflicts = list(cast(list[Any], resolved_config.get("conflicts", [])))
-        if conflicts:
-            blocking = [c for c in conflicts if c.get("severity") == "blocking"]
-            if blocking:
-                return _error(
-                    "Resolved profile stack has blocking conflicts.",
-                    conflicts=conflicts,
-                )
-        if runtime_mode == "real":
-            missing_credentials = missing_provider_credentials(
-                profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
-            )
-            if missing_credentials:
-                return _error(
-                    "Real-mode provider credentials are missing.",
-                    missing_credentials=missing_credentials,
-                )
+        profile_error = _validate_resolved_profile(profile_stack, resolved_config, runtime_mode)
+        if profile_error is not None:
+            return profile_error
 
         state = rt.create_project(
             project_id=project_id,
             title=str(args.get("title", "")),
             slug=str(args.get("slug", "")),
         )
-        # Persist runtime mode and resolved profile stack
-        state["runtime_mode"] = runtime_mode
-        state["profile_stack"] = profile_stack
-        state["server_mode"] = server_mode
-        state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
-        state["resolved_config_sources"] = resolved_config["sources"]
-        state["config_conflicts"] = conflicts
-        state["generation_policy"] = str(args.get("generation_policy", "generate"))
-        user_runtime = _coerce_runtime_arg(args)
-        if user_runtime > 0:
-            # User-supplied expected length is authoritative for the whole pipeline.
-            state["target_runtime_seconds"] = user_runtime
-        register_project_providers(
-            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
-        )
-        rt._record_audit(
-            "system",
-            "create_film_project",
-            project_id=project_id,
+        _populate_project_state(
+            state,
+            args,
+            profile_stack=profile_stack,
+            resolved_config=resolved_config,
             runtime_mode=runtime_mode,
             server_mode=server_mode,
         )
-        idea = str(args.get("idea", "")).strip()
-        if idea:
-            rt.set_active(project_id)
-            state["idea"] = idea
-            state = rt.run_graph(state)
-            state["generation_policy"] = str(args.get("generation_policy", "generate"))
-            rt.projects[project_id] = state
+        register_project_providers(
+            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        )
+        _audit_project_creation(rt, project_id, runtime_mode, server_mode)
+        state = _run_intake_for_idea(rt, state, args, project_id)
         return _ok(
             project_id=project_id,
             current_phase=str(state.get("current_phase", "")),
