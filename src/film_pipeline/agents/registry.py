@@ -57,6 +57,14 @@ class AgentRegistry:
 
     def _validate_contract(self, contract: AgentRegistration) -> None:
         """Validate fields that otherwise fail much later in routing."""
+        self._reject_empty_contract_fields(contract)
+        self._reject_unknown_model_profile(contract)
+        self._reject_blank_list_values(contract)
+        self._reject_overlapping_kb_domains(contract)
+        self._warn_about_unknown_kb_domains(contract)
+        self._reject_unknown_output_artifacts(contract)
+
+    def _reject_empty_contract_fields(self, contract: AgentRegistration) -> None:
         if not contract.agent_id.strip():
             raise ValueError("Agent id must be non-empty.")
         if not contract.capabilities:
@@ -65,12 +73,15 @@ class AgentRegistry:
             raise ValueError(f"Agent '{contract.agent_id}' must declare output artifacts.")
         if not contract.default_model_profile.strip():
             raise ValueError(f"Agent '{contract.agent_id}' must declare a default model profile.")
+
+    def _reject_unknown_model_profile(self, contract: AgentRegistration) -> None:
         if contract.default_model_profile not in self.known_model_profiles:
             raise ValueError(
                 f"Agent '{contract.agent_id}' references unknown model profile "
                 f"'{contract.default_model_profile}'."
             )
 
+    def _reject_blank_list_values(self, contract: AgentRegistration) -> None:
         for field_name, values in (
             ("capabilities", contract.capabilities),
             ("input_artifacts", contract.input_artifacts),
@@ -82,6 +93,7 @@ class AgentRegistry:
         ):
             self._reject_blank_values(contract.agent_id, field_name, values)
 
+    def _reject_overlapping_kb_domains(self, contract: AgentRegistration) -> None:
         overlap = set(contract.allowed_kb_domains).intersection(contract.blocked_kb_domains)
         if overlap:
             raise ValueError(
@@ -89,25 +101,29 @@ class AgentRegistry:
                 f"{', '.join(sorted(overlap))}."
             )
 
-        if self.known_kb_domains is not None:
-            unknown_domains = (
-                set(contract.allowed_kb_domains).union(contract.blocked_kb_domains)
-                - self.known_kb_domains
+    def _warn_about_unknown_kb_domains(self, contract: AgentRegistration) -> None:
+        if self.known_kb_domains is None:
+            return
+        unknown_domains = (
+            set(contract.allowed_kb_domains).union(contract.blocked_kb_domains)
+            - self.known_kb_domains
+        )
+        if unknown_domains:
+            _logger.warning(
+                "Agent '%s' references unknown KB domain(s): %s",
+                contract.agent_id,
+                ", ".join(sorted(unknown_domains)),
             )
-            if unknown_domains:
-                _logger.warning(
-                    "Agent '%s' references unknown KB domain(s): %s",
-                    contract.agent_id,
-                    ", ".join(sorted(unknown_domains)),
-                )
 
-        if self.known_output_artifacts is not None:
-            unknown_outputs = set(contract.output_artifacts) - self.known_output_artifacts
-            if unknown_outputs:
-                raise ValueError(
-                    f"Agent '{contract.agent_id}' produces unknown artifact type(s): "
-                    f"{', '.join(sorted(unknown_outputs))}."
-                )
+    def _reject_unknown_output_artifacts(self, contract: AgentRegistration) -> None:
+        if self.known_output_artifacts is None:
+            return
+        unknown_outputs = set(contract.output_artifacts) - self.known_output_artifacts
+        if unknown_outputs:
+            raise ValueError(
+                f"Agent '{contract.agent_id}' produces unknown artifact type(s): "
+                f"{', '.join(sorted(unknown_outputs))}."
+            )
 
     @staticmethod
     def _reject_blank_values(agent_id: str, field_name: str, values: list[str]) -> None:
