@@ -56,10 +56,55 @@ def _default_checkpointer() -> BaseCheckpointSaver[Any]:
     return SqliteSaver(conn=conn)
 
 
-def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledStateGraph:
-    """Construct the supervisor graph with all phases and approval gates."""
-    builder = StateGraph(StudioGraphState)
+# Phase key → phase node name, in pipeline order.
+_PHASE_TO_NODE: dict[str, str] = {
+    "intake": "intake_node",
+    "constitution": "constitution_node",
+    "development": "development_node",
+    "script": "script_node",
+    "visual_dev": "visual_dev_node",
+    "shot_bible": "shot_bible_node",
+    "gen_planning": "gen_planning_node",
+    "generation": "generation_node",
+    "qc": "qc_node",
+    "post": "post_node",
+    "delivery": "delivery_node",
+}
 
+# Destinations reachable from any phase node via after_phase().
+_AFTER_PHASE_DESTINATIONS: dict[str, str] = {
+    "consistency_check": "consistency_check",
+    "await_approval": "await_approval",
+    "repair": "repair",
+    "end": "end",
+    **_PHASE_TO_NODE,
+}
+
+# phase_router dispatches straight into the current phase's node.
+_ROUTER_DESTINATIONS: dict[Hashable, str] = {
+    node_name: node_name for node_name in _PHASE_TO_NODE.values()
+}
+
+# Approval gate outcomes.
+_APPROVAL_DESTINATIONS: dict[Hashable, str] = {
+    "constitution": "constitution_node",
+    "development": "development_node",
+    "script": "script_node",
+    "visual_dev": "visual_dev_node",
+    "shot_bible": "shot_bible_node",
+    "gen_planning": "gen_planning_node",
+    "generation": "generation_node",
+    "qc": "qc_node",
+    "post": "post_node",
+    "delivery": "delivery_node",
+    "end": "end",
+    "repair": "repair",
+    "await_approval": "await_approval",
+}
+
+
+def _register_nodes(builder: StateGraph) -> None:
+    """Register the router passthrough, all phase nodes, and gate nodes."""
     builder.add_node("phase_router", _passthrough)
 
     # Phase nodes
@@ -83,48 +128,19 @@ def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Compile
     builder.add_node("repair", repair_phase_node)
     builder.add_node("end", _passthrough)
 
-    # Entry
+
+def _wire_entry_router(builder: StateGraph) -> None:
+    """Set the entry point and its per-phase conditional dispatch."""
     builder.set_entry_point("phase_router")
     builder.add_conditional_edges(
         "phase_router",
         _route_current_phase,
-        {
-            "intake_node": "intake_node",
-            "constitution_node": "constitution_node",
-            "development_node": "development_node",
-            "script_node": "script_node",
-            "visual_dev_node": "visual_dev_node",
-            "shot_bible_node": "shot_bible_node",
-            "gen_planning_node": "gen_planning_node",
-            "generation_node": "generation_node",
-            "qc_node": "qc_node",
-            "post_node": "post_node",
-            "delivery_node": "delivery_node",
-        },
+        _ROUTER_DESTINATIONS,
     )
 
-    _PHASE_TO_NODE: dict[str, str] = {
-        "intake": "intake_node",
-        "constitution": "constitution_node",
-        "development": "development_node",
-        "script": "script_node",
-        "visual_dev": "visual_dev_node",
-        "shot_bible": "shot_bible_node",
-        "gen_planning": "gen_planning_node",
-        "generation": "generation_node",
-        "qc": "qc_node",
-        "post": "post_node",
-        "delivery": "delivery_node",
-    }
-    _AFTER_PHASE_DESTINATIONS: dict[str, str] = {
-        "consistency_check": "consistency_check",
-        "await_approval": "await_approval",
-        "repair": "repair",
-        "end": "end",
-        **_PHASE_TO_NODE,
-    }
 
-    # Phase → dynamic routing via compute_actions()/after_phase()
+def _wire_phase_transitions(builder: StateGraph) -> None:
+    """Route every phase node through after_phase() for dynamic next-step routing."""
     after_phase_destinations = cast(dict[Hashable, str], _AFTER_PHASE_DESTINATIONS)
     for phase_node in _PHASE_TO_NODE.values():
         builder.add_conditional_edges(
@@ -133,35 +149,33 @@ def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Compile
             after_phase_destinations,
         )
 
+
+def _wire_gate_edges(builder: StateGraph) -> None:
+    """Wire the human-gate cycle: consistency → approval → next/repair."""
     # Consistency → await_approval (always passes through)
     builder.add_edge("consistency_check", "await_approval")
 
     # Approval gate → next phase or repair
-    builder.add_conditional_edges(
-        "await_approval",
-        after_approval,
-        {
-            "constitution": "constitution_node",
-            "development": "development_node",
-            "script": "script_node",
-            "visual_dev": "visual_dev_node",
-            "shot_bible": "shot_bible_node",
-            "gen_planning": "gen_planning_node",
-            "generation": "generation_node",
-            "qc": "qc_node",
-            "post": "post_node",
-            "delivery": "delivery_node",
-            "end": "end",
-            "repair": "repair",
-            "await_approval": "await_approval",
-        },
-    )
+    builder.add_conditional_edges("await_approval", after_approval, _APPROVAL_DESTINATIONS)
 
     # Approve/revision → await_approval
     builder.add_edge("approve_phase", "await_approval")
     builder.add_edge("request_revision", "await_approval")
     builder.add_edge("repair", "await_approval")
     builder.add_edge("end", END)
+
+
+def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledStateGraph:
+    """Construct the supervisor graph with all phases and approval gates."""
+    builder = StateGraph(StudioGraphState)
+
+    _register_nodes(builder)
+
+    _wire_entry_router(builder)
+
+    _wire_phase_transitions(builder)
+
+    _wire_gate_edges(builder)
 
     return builder.compile(checkpointer=checkpointer or _default_checkpointer())
 
