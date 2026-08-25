@@ -2,12 +2,43 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.rollback import RollbackManager
+from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.checkpoint import RollbackRecord
 
 from .helpers import _active_project_id, _error, _ok, _services
+
+_RECENT_CHECKPOINT_LIMIT = 20
+
+
+def _persist_candidate(
+    store: Any,
+    project_id: str,
+    artifact_type: ArtifactType,
+    artifact_id: str,
+    payload: Any,
+) -> str:
+    """Persist one candidate artifact and return its artifact ref."""
+    version = store.next_version(project_id, "intake", artifact_id)
+    meta = ArtifactMetadata(
+        artifact_id=artifact_id,
+        artifact_type=artifact_type,
+        project_id=project_id,
+        phase=FilmPhase("intake"),
+        version=version,
+        status=ArtifactStatus.CANDIDATE,
+        created_by="rollback_tool",
+        created_at=datetime.now(UTC),
+    )
+    store.save(payload, meta)
+    return f"artifact:{artifact_id}:v{version}"
 
 
 def _save_rollback_artifacts(
@@ -18,14 +49,6 @@ def _save_rollback_artifacts(
     performed_by: str,
 ) -> tuple[str, str]:
     """Persist an InvalidationReport and RollbackRecord to the artifact store."""
-    from datetime import UTC, datetime
-    from uuid import uuid4
-
-    from film_pipeline.checkpoints.invalidation import InvalidationEngine
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-    from film_pipeline.schemas.checkpoint import RollbackRecord
-
     engine = InvalidationEngine()
     invalidation_report = engine.report(
         rollback_target=rollback_target,
@@ -34,23 +57,12 @@ def _save_rollback_artifacts(
 
     store = _services(rt).artifact_store
     inv_id = f"invalidation_report_{uuid4().hex[:8]}"
-    inv_version = store.next_version(project_id, "intake", inv_id)
-    inv_meta = ArtifactMetadata(
-        artifact_id=inv_id,
-        artifact_type=ArtifactType.INVALIDATION_REPORT,
-        project_id=project_id,
-        phase=FilmPhase("intake"),
-        version=inv_version,
-        status=ArtifactStatus.CANDIDATE,
-        created_by="rollback_tool",
-        created_at=datetime.now(UTC),
+    inv_ref = _persist_candidate(
+        store, project_id, ArtifactType.INVALIDATION_REPORT, inv_id, invalidation_report
     )
-    store.save(invalidation_report, inv_meta)
-    inv_ref = f"artifact:{inv_id}:v{inv_version}"
 
-    rollback_id = f"rollback:{project_id}:{uuid4().hex[:8]}"
     record = RollbackRecord(
-        rollback_id=rollback_id,
+        rollback_id=f"rollback:{project_id}:{uuid4().hex[:8]}",
         project_id=project_id,
         target_checkpoint_id=rollback_target,
         invalidation_report_ref=inv_ref,
@@ -59,20 +71,13 @@ def _save_rollback_artifacts(
         outcome="success",
     )
     rec_id = f"rollback_record_{uuid4().hex[:8]}"
-    rec_version = store.next_version(project_id, "intake", rec_id)
-    rec_meta = ArtifactMetadata(
-        artifact_id=rec_id,
-        artifact_type=ArtifactType.ROLLBACK_RECORD,
-        project_id=project_id,
-        phase=FilmPhase("intake"),
-        version=rec_version,
-        status=ArtifactStatus.CANDIDATE,
-        created_by="rollback_tool",
-        created_at=datetime.now(UTC),
-    )
-    store.save(record, rec_meta)
-    rec_ref = f"artifact:{rec_id}:v{rec_version}"
+    rec_ref = _persist_candidate(store, project_id, ArtifactType.ROLLBACK_RECORD, rec_id, record)
     return inv_ref, rec_ref
+
+
+def _recent_checkpoints(cps: list[Any]) -> list[Any]:
+    """Return only the most recent checkpoints for version listing."""
+    return cps[-_RECENT_CHECKPOINT_LIMIT:]
 
 
 async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
@@ -149,12 +154,89 @@ async def list_artifact_versions(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     cps = rt.list_checkpoints()
     versions: list[dict[str, str]] = []
-    for c in cps[-20:]:
+    for c in _recent_checkpoints(cps):
         for art_type, ver in c.artifact_versions.items():
             versions.append(
                 {"checkpoint_id": c.checkpoint_id, "artifact_type": art_type, "version": ver}
             )
     return _ok(versions=versions)
+
+
+def _unconfirmed_preview(rt: Any, checkpoint_id: str, artifact_id: str) -> dict[str, object]:
+    """Describe the rollback an unconfirmed call would have performed."""
+    preview_cp = rt.get_checkpoint(checkpoint_id) if checkpoint_id else None
+    artifact_types = [artifact_id]
+    if preview_cp is not None:
+        artifact_types = list(preview_cp.artifact_versions.keys()) or artifact_types
+    return {
+        "rollback_target": checkpoint_id or f"latest:{artifact_id}",
+        "artifact_types": artifact_types,
+    }
+
+
+def _restore_artifact_at_commit(
+    rt: Any,
+    project_id: str,
+    artifact_id: str,
+    cp: Any,
+    rollback_target: str,
+) -> dict[str, object]:
+    """Restore one artifact at a checkpoint commit and persist rollback bookkeeping."""
+    manager = rt.checkpoint_managers.get(project_id)
+    if manager is None:
+        raise LookupError("No checkpoint manager for project.")
+    rm = RollbackManager(checkpoint_manager=manager, git=manager.git)
+    rm.rollback_artifact(artifact_id, cp.git_commit, performed_by="operator")
+    inv_ref, rec_ref = _save_rollback_artifacts(
+        rt,
+        project_id,
+        rollback_target,
+        list(cp.artifact_versions.keys()) or [artifact_id],
+        performed_by="operator",
+    )
+    return _ok(
+        artifact_id=artifact_id,
+        restored_from=rollback_target,
+        git_commit=cp.git_commit[:8],
+        invalidation_report_ref=inv_ref,
+        rollback_record_ref=rec_ref,
+    )
+
+
+def _rollback_artifact_to_checkpoint(
+    rt: Any,
+    project_id: str,
+    artifact_id: str,
+    checkpoint_id: str,
+) -> dict[str, object]:
+    """Restore one artifact using an explicit checkpoint as the restore target."""
+    cp = rt.get_checkpoint(checkpoint_id)
+    if cp is None:
+        return _error(f"Checkpoint '{checkpoint_id}' not found.")
+    if not cp.git_commit:
+        return _error(f"Checkpoint '{checkpoint_id}' has no git commit ref.")
+    try:
+        return _restore_artifact_at_commit(rt, project_id, artifact_id, cp, checkpoint_id)
+    except Exception as e:
+        return _error(str(e))
+
+
+def _rollback_artifact_from_latest(
+    rt: Any,
+    project_id: str,
+    artifact_id: str,
+) -> dict[str, object]:
+    """Restore one artifact from the newest checkpoint containing it."""
+    cps = rt.list_checkpoints(project_id)
+    for cp in sorted(cps, key=lambda c: c.created_at, reverse=True):
+        if cp.git_commit and artifact_id in cp.artifact_versions:
+            try:
+                return _restore_artifact_at_commit(
+                    rt, project_id, artifact_id, cp, cp.checkpoint_id
+                )
+            except Exception:
+                continue
+    return _error(f"No checkpoint found containing artifact '{artifact_id}'.")
 
 
 async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
@@ -170,76 +252,40 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
 
     confirmed = bool(args.get("confirmed"))
     if not confirmed:
-        preview_cp = rt.get_checkpoint(checkpoint_id) if checkpoint_id else None
-        artifact_types = [artifact_id]
-        if preview_cp is not None:
-            artifact_types = list(preview_cp.artifact_versions.keys()) or artifact_types
         return _error(
             "Rollback requires confirmation. Set confirmed=True to proceed.",
-            invalidation_preview={
-                "rollback_target": checkpoint_id or f"latest:{artifact_id}",
-                "artifact_types": artifact_types,
-            },
+            invalidation_preview=_unconfirmed_preview(rt, checkpoint_id, artifact_id),
         )
-
-    # If a specific checkpoint is given, use it as the restore target
     if checkpoint_id:
-        cp = rt.get_checkpoint(checkpoint_id)
-        if cp is None:
-            return _error(f"Checkpoint '{checkpoint_id}' not found.")
-        if not cp.git_commit:
-            return _error(f"Checkpoint '{checkpoint_id}' has no git commit ref.")
-        try:
-            manager = rt.checkpoint_managers.get(project_id)
-            if manager is None:
-                return _error("No checkpoint manager for project.")
-            rm = RollbackManager(checkpoint_manager=manager, git=manager.git)
-            rm.rollback_artifact(artifact_id, cp.git_commit, performed_by="operator")
-            inv_ref, rec_ref = _save_rollback_artifacts(
-                rt,
-                project_id,
-                checkpoint_id,
-                list(cp.artifact_versions.keys()) or [artifact_id],
-                performed_by="operator",
-            )
-            return _ok(
-                artifact_id=artifact_id,
-                restored_from=checkpoint_id,
-                git_commit=cp.git_commit[:8],
-                invalidation_report_ref=inv_ref,
-                rollback_record_ref=rec_ref,
-            )
-        except Exception as e:
-            return _error(str(e))
+        return _rollback_artifact_to_checkpoint(rt, project_id, artifact_id, checkpoint_id)
+    return _rollback_artifact_from_latest(rt, project_id, artifact_id)
 
-    # Fallback: find latest checkpoint that contains this artifact
-    cps = rt.list_checkpoints(project_id)
-    for cp in sorted(cps, key=lambda c: c.created_at, reverse=True):
-        if cp.git_commit and artifact_id in cp.artifact_versions:
-            try:
-                manager = rt.checkpoint_managers.get(project_id)
-                if manager is None:
-                    continue
-                rm = RollbackManager(checkpoint_manager=manager, git=manager.git)
-                rm.rollback_artifact(artifact_id, cp.git_commit, performed_by="operator")
-                inv_ref, rec_ref = _save_rollback_artifacts(
-                    rt,
-                    project_id,
-                    cp.checkpoint_id,
-                    list(cp.artifact_versions.keys()),
-                    performed_by="operator",
-                )
-                return _ok(
-                    artifact_id=artifact_id,
-                    restored_from=cp.checkpoint_id,
-                    git_commit=cp.git_commit[:8],
-                    invalidation_report_ref=inv_ref,
-                    rollback_record_ref=rec_ref,
-                )
-            except Exception:
-                continue
 
-    return _error(f"No checkpoint found containing artifact '{artifact_id}'.")
+def _run_checkpoint_rollback(
+    rt: Any,
+    project_id: str,
+    checkpoint_id: str,
+    cp: Any,
+) -> dict[str, object]:
+    """Roll the project back to a checkpoint and persist rollback bookkeeping."""
+    manager = rt.checkpoint_managers.get(project_id)
+    rm = RollbackManager(checkpoint_manager=manager, git=manager.git)
+    _record, _report = rm.rollback_to_checkpoint(checkpoint_id, performed_by="operator")
+    inv_ref, rec_ref = _save_rollback_artifacts(
+        rt,
+        project_id,
+        checkpoint_id,
+        list(cp.artifact_versions.keys()),
+        performed_by="operator",
+    )
+    return _ok(
+        rollback_target=checkpoint_id,
+        phase=cp.phase.value,
+        reason=cp.reason,
+        invalidation_report_ref=inv_ref,
+        rollback_record_ref=rec_ref,
+        message="Rollback completed. Invalidation report and rollback record saved.",
+    )
 
 
 async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
@@ -265,23 +311,7 @@ async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
         return _error("No checkpoint manager for project.")
 
     try:
-        rm = RollbackManager(checkpoint_manager=manager, git=manager.git)
-        _record, _report = rm.rollback_to_checkpoint(checkpoint_id, performed_by="operator")
-        inv_ref, rec_ref = _save_rollback_artifacts(
-            rt,
-            project_id,
-            checkpoint_id,
-            list(cp.artifact_versions.keys()),
-            performed_by="operator",
-        )
-        return _ok(
-            rollback_target=checkpoint_id,
-            phase=cp.phase.value,
-            reason=cp.reason,
-            invalidation_report_ref=inv_ref,
-            rollback_record_ref=rec_ref,
-            message="Rollback completed. Invalidation report and rollback record saved.",
-        )
+        return _run_checkpoint_rollback(rt, project_id, checkpoint_id, cp)
     except Exception as e:
         return _error(str(e))
 
@@ -292,8 +322,6 @@ async def get_invalidation_report(args: dict[str, object]) -> dict[str, object]:
     cp = rt.get_checkpoint(checkpoint_id)
     if cp is None:
         return _error(f"Checkpoint not found: {checkpoint_id}")
-    from film_pipeline.checkpoints.invalidation import InvalidationEngine
-
     engine = InvalidationEngine()
     report = engine.report(
         rollback_target=checkpoint_id,
