@@ -47,7 +47,7 @@ class MCPServer:
             actor_id=actor_id,
             actor_type=actor_type,
         )
-        resolved = self._resolve_tool_and_project(tool_name, arguments, envelope)
+        resolved = self._resolve_tool_and_project(tool_name, envelope)
         if isinstance(resolved, MCPResponse):
             return resolved
         reg, resolved_envelope = resolved
@@ -59,12 +59,9 @@ class MCPServer:
     def _resolve_tool_and_project(
         self,
         tool_name: str,
-        arguments: dict[str, object],
         envelope: RequestEnvelope,
     ) -> MCPResponse | tuple[ToolRegistration, RequestEnvelope]:
         """Resolve the tool registration and project ref into a pair or an early error."""
-        # Signature parity with the confirmation gate; project_ref lives on the envelope.
-        del arguments
         reg = self._registration_for(tool_name, envelope)
         if isinstance(reg, MCPResponse):
             return reg
