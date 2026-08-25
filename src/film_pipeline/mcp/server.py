@@ -10,7 +10,12 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-from film_pipeline.mcp.contract import ToolRegistry, make_registry
+from film_pipeline.mcp.contract import (
+    ToolHandler,
+    ToolRegistration,
+    ToolRegistry,
+    make_registry,
+)
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
 from film_pipeline.mcp.resolution import (
@@ -42,8 +47,40 @@ class MCPServer:
             actor_id=actor_id,
             actor_type=actor_type,
         )
+        resolved = self._resolve_tool_and_project(tool_name, arguments, envelope)
+        if isinstance(resolved, MCPResponse):
+            return resolved
+        reg, resolved_envelope = resolved
+        confirmation = self._check_confirmation(reg, tool_name, arguments, resolved_envelope)
+        if confirmation is not None:
+            return confirmation
+        return await self._dispatch_handler(reg.handler, arguments, resolved_envelope)
+
+    def _resolve_tool_and_project(
+        self,
+        tool_name: str,
+        arguments: dict[str, object],
+        envelope: RequestEnvelope,
+    ) -> MCPResponse | tuple[ToolRegistration, RequestEnvelope]:
+        """Resolve the tool registration and project ref into a pair or an early error."""
+        # Signature parity with the confirmation gate; project_ref lives on the envelope.
+        del arguments
+        reg = self._registration_for(tool_name, envelope)
+        if isinstance(reg, MCPResponse):
+            return reg
+        resolved = self._resolve_project_ref(reg, envelope)
+        if isinstance(resolved, MCPResponse):
+            return resolved
+        return reg, resolved
+
+    def _registration_for(
+        self,
+        tool_name: str,
+        envelope: RequestEnvelope,
+    ) -> ToolRegistration | MCPResponse:
+        """Look up the tool registration; UNKNOWN_TOOL response on a miss."""
         try:
-            reg = self.tools.get(tool_name)
+            return self.tools.get(tool_name)
         except KeyError:
             return MCPResponse(
                 success=False,
@@ -54,85 +91,104 @@ class MCPServer:
                 ),
             )
 
-        if envelope.project_ref:
-            try:
-                project = self.projects.resolve_or_raise(envelope.project_ref)
-                envelope = RequestEnvelope(
-                    request_id=envelope.request_id,
-                    project_ref=envelope.project_ref,
-                    resolved_project_id=project.project_id,
-                    active_phase=envelope.active_phase,
-                    user_intent=envelope.user_intent,
-                    requires_confirmation=envelope.requires_confirmation,
-                    actor_id=envelope.actor_id,
-                    actor_type=envelope.actor_type,
-                    received_at=envelope.received_at,
-                )
-                if reg.contract.mutates_state:
-                    self.active_project_id = project.project_id
-            except AmbiguousProjectError as exc:
-                return MCPResponse(
-                    success=False,
-                    request_id=envelope.request_id,
-                    error=MCPError(
-                        code=MCPErrorCode.AMBIGUOUS_PROJECT,
-                        message=str(exc),
-                        details={
-                            "candidates": ", ".join(p.project_id for p in exc.candidates),
-                        },
-                    ),
-                )
-            except KeyError as exc:
-                # Fall back: if the project exists in the runtime but not in
-                # the server's registry, auto-register it. This fixes the gap
-                # where create_film_project registers with the runtime but the
-                # server's ProjectRegistry is a separate in-memory structure.
-                from film_pipeline.app.runtime import get_runtime
+    def _resolve_project_ref(
+        self,
+        reg: ToolRegistration,
+        envelope: RequestEnvelope,
+    ) -> MCPResponse | RequestEnvelope:
+        """Resolve envelope.project_ref against the registry when present."""
+        if not envelope.project_ref:
+            return envelope
+        try:
+            project = self.projects.resolve_or_raise(envelope.project_ref)
+        except AmbiguousProjectError as exc:
+            return self._ambiguous_response(envelope, exc)
+        except KeyError as exc:
+            # Fall back: if the project exists in the runtime but not in
+            # the server's registry, auto-register it. This fixes the gap
+            # where create_film_project registers with the runtime but the
+            # server's ProjectRegistry is a separate in-memory structure.
+            return self._unknown_project_fallback(reg, envelope, exc)
+        envelope = _resolved_envelope(envelope, project.project_id)
+        if reg.contract.mutates_state:
+            self.active_project_id = project.project_id
+        return envelope
 
-                project_ref = envelope.project_ref
-                if not project_ref:
-                    return MCPResponse(
-                        success=False,
-                        request_id=envelope.request_id,
-                        error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
-                    )
-                rt = get_runtime()
-                rt_project = rt.get_project(project_ref) or (
-                    # Also try resolving by exact match across all runtime projects
-                    next(
-                        (p for pid, p in rt.projects.items() if pid == envelope.project_ref),
-                        None,
-                    )
-                )
-                if rt_project is not None:
-                    pid = str(rt_project.get("project_id", envelope.project_ref))
-                    record = ProjectRecord(
-                        project_id=pid,
-                        slug=str(rt_project.get("slug", pid)),
-                        title=str(rt_project.get("title", pid)),
-                    )
-                    self.projects.register(record)
-                    if reg.contract.mutates_state:
-                        self.active_project_id = pid
-                    envelope = RequestEnvelope(
-                        request_id=envelope.request_id,
-                        project_ref=envelope.project_ref,
-                        resolved_project_id=pid,
-                        active_phase=envelope.active_phase,
-                        user_intent=envelope.user_intent,
-                        requires_confirmation=envelope.requires_confirmation,
-                        actor_id=envelope.actor_id,
-                        actor_type=envelope.actor_type,
-                        received_at=envelope.received_at,
-                    )
-                else:
-                    return MCPResponse(
-                        success=False,
-                        request_id=envelope.request_id,
-                        error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
-                    )
+    def _ambiguous_response(
+        self,
+        envelope: RequestEnvelope,
+        exc: AmbiguousProjectError,
+    ) -> MCPResponse:
+        """Shape an ambiguous project_ref into an AMBIGUOUS_PROJECT response."""
+        return MCPResponse(
+            success=False,
+            request_id=envelope.request_id,
+            error=MCPError(
+                code=MCPErrorCode.AMBIGUOUS_PROJECT,
+                message=str(exc),
+                details={
+                    "candidates": ", ".join(p.project_id for p in exc.candidates),
+                },
+            ),
+        )
 
-        if reg.contract.requires_confirmation and not arguments.get("confirmed"):
+    def _unknown_project_fallback(
+        self,
+        reg: ToolRegistration,
+        envelope: RequestEnvelope,
+        exc: KeyError,
+    ) -> MCPResponse | RequestEnvelope:
+        """Auto-register a runtime-known project; UNKNOWN_PROJECT otherwise."""
+        project_ref = envelope.project_ref
+        if not project_ref:
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
+            )
+        pid = self._auto_register_from_runtime(project_ref)
+        if pid is None:
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
+            )
+        if reg.contract.mutates_state:
+            self.active_project_id = pid
+        return _resolved_envelope(envelope, pid)
+
+    def _auto_register_from_runtime(self, project_ref: str) -> str | None:
+        """Register a runtime-known project missing here; None when unknown everywhere."""
+        from film_pipeline.app.runtime import get_runtime
+
+        rt = get_runtime()
+        rt_project = rt.get_project(project_ref) or (
+            # Also try resolving by exact match across all runtime projects
+            next(
+                (p for pid, p in rt.projects.items() if pid == project_ref),
+                None,
+            )
+        )
+        if rt_project is None:
+            return None
+        pid = str(rt_project.get("project_id", project_ref))
+        record = ProjectRecord(
+            project_id=pid,
+            slug=str(rt_project.get("slug", pid)),
+            title=str(rt_project.get("title", pid)),
+        )
+        self.projects.register(record)
+        return pid
+
+    def _check_confirmation(
+        self,
+        registration: ToolRegistration,
+        tool_name: str,
+        arguments: dict[str, object],
+        envelope: RequestEnvelope,
+    ) -> MCPResponse | None:
+        """Return a CONFIRMATION_REQUIRED response, or None when the gate passes."""
+        if registration.contract.requires_confirmation and not arguments.get("confirmed"):
             return MCPResponse(
                 success=False,
                 request_id=envelope.request_id,
@@ -145,9 +201,16 @@ class MCPServer:
                     details={"tool": tool_name},
                 ),
             )
+        return None
 
+    async def _dispatch_handler(
+        self,
+        handler: ToolHandler,
+        arguments: dict[str, object],
+        envelope: RequestEnvelope,
+    ) -> MCPResponse:
+        """Invoke the handler (sync or async) and shape result or failure into a response."""
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
-        handler = reg.handler
         try:
             if inspect.iscoroutinefunction(handler):
                 data: object = await handler(new_args)
@@ -183,19 +246,7 @@ async def handle_jsonrpc(server: MCPServer, request: dict[str, Any]) -> dict[str
         params = {}
 
     if method == "initialize":
-        return _jsonrpc_success(
-            request_id,
-            {
-                "protocolVersion": "2025-03-26",
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                },
-                "serverInfo": {
-                    "name": "film-pipeline-mcp",
-                    "version": "0.2.0",
-                },
-            },
-        )
+        return _jsonrpc_success(request_id, _initialize_result())
     if method == "notifications/initialized":
         return None
     if method == "ping":
@@ -211,34 +262,7 @@ async def handle_jsonrpc(server: MCPServer, request: dict[str, Any]) -> dict[str
         ]
         return _jsonrpc_success(request_id, {"tools": tools})
     if method == "tools/call":
-        tool_name = params.get("name")
-        arguments = params.get("arguments", {})
-        if not isinstance(tool_name, str):
-            return _jsonrpc_error(request_id, -32602, "tools/call requires string param 'name'.")
-        if not isinstance(arguments, dict):
-            return _jsonrpc_error(
-                request_id, -32602, "tools/call requires object param 'arguments'."
-            )
-        tool_response = await server.call(tool_name, arguments)
-        if not tool_response.success:
-            error = tool_response.error
-            message = error.message if error is not None else "Tool call failed."
-            return _jsonrpc_error(request_id, -32000, message)
-        structured = tool_response.data if isinstance(tool_response.data, dict) else {}
-        is_error = bool(isinstance(structured, dict) and structured.get("ok") is False)
-        return _jsonrpc_success(
-            request_id,
-            {
-                "content": [
-                    {
-                        "type": "text",
-                        "text": json.dumps(structured, default=str),
-                    }
-                ],
-                "structuredContent": structured,
-                "isError": is_error,
-            },
-        )
+        return await _serve_tools_call(server, request_id, params)
     return _jsonrpc_error(request_id, -32601, f"Method not found: {method}")
 
 
@@ -256,16 +280,88 @@ def main() -> int:
 
     issues = validate_environment()
     if issues:
-        print("[film-pipeline-mcp] Bootstrap warnings:", file=sys.stderr)
-        for issue in issues:
-            print(f"  - {issue}", file=sys.stderr)
-        print(
-            "[film-pipeline-mcp] Server starting anyway — "
-            "tools that require missing resources will return errors.",
-            file=sys.stderr,
-        )
+        _warn_bootstrap_issues(issues)
 
-    server = MCPServer()
+    return _serve_stdio(MCPServer())
+
+
+def _resolved_envelope(envelope: RequestEnvelope, project_id: str) -> RequestEnvelope:
+    """Copy the envelope with resolved_project_id set; every other field verbatim."""
+    return RequestEnvelope(
+        request_id=envelope.request_id,
+        project_ref=envelope.project_ref,
+        resolved_project_id=project_id,
+        active_phase=envelope.active_phase,
+        user_intent=envelope.user_intent,
+        requires_confirmation=envelope.requires_confirmation,
+        actor_id=envelope.actor_id,
+        actor_type=envelope.actor_type,
+        received_at=envelope.received_at,
+    )
+
+
+def _initialize_result() -> dict[str, Any]:
+    """Static capabilities payload for the initialize handshake."""
+    return {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {
+            "tools": {"listChanged": False},
+        },
+        "serverInfo": {
+            "name": "film-pipeline-mcp",
+            "version": "0.2.0",
+        },
+    }
+
+
+async def _serve_tools_call(
+    server: MCPServer,
+    request_id: object,
+    params: dict[str, Any],
+) -> dict[str, Any]:
+    """Run one tools/call request and map the MCP response onto JSON-RPC framing."""
+    tool_name = params.get("name")
+    arguments = params.get("arguments", {})
+    if not isinstance(tool_name, str):
+        return _jsonrpc_error(request_id, -32602, "tools/call requires string param 'name'.")
+    if not isinstance(arguments, dict):
+        return _jsonrpc_error(request_id, -32602, "tools/call requires object param 'arguments'.")
+    tool_response = await server.call(tool_name, arguments)
+    if not tool_response.success:
+        error = tool_response.error
+        message = error.message if error is not None else "Tool call failed."
+        return _jsonrpc_error(request_id, -32000, message)
+    structured = tool_response.data if isinstance(tool_response.data, dict) else {}
+    is_error = bool(isinstance(structured, dict) and structured.get("ok") is False)
+    return _jsonrpc_success(
+        request_id,
+        {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(structured, default=str),
+                }
+            ],
+            "structuredContent": structured,
+            "isError": is_error,
+        },
+    )
+
+
+def _warn_bootstrap_issues(issues: list[str]) -> None:
+    """Print bootstrap warnings to stderr without blocking startup."""
+    print("[film-pipeline-mcp] Bootstrap warnings:", file=sys.stderr)
+    for issue in issues:
+        print(f"  - {issue}", file=sys.stderr)
+    print(
+        "[film-pipeline-mcp] Server starting anyway — "
+        "tools that require missing resources will return errors.",
+        file=sys.stderr,
+    )
+
+
+def _serve_stdio(server: MCPServer) -> int:
+    """Serve JSON-RPC over stdio until stdin closes; returns the process exit code."""
     stdin = sys.stdin.buffer
     stdout = sys.stdout.buffer
 
