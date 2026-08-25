@@ -168,21 +168,6 @@ def _collect_artifacts(
     return artifact_data
 
 
-def _execute_phase_validators(
-    state: dict[str, Any],
-    artifacts: dict[str, Any],
-    issues: list[dict[str, Any]],
-    services: Any,
-) -> None:
-    """Run each validator runner whose phase membership contains the current phase."""
-    if not artifacts:
-        return
-    phase = str(state.get("current_phase", ""))
-    for phases, runner in _VALIDATOR_RUNNERS:
-        if phase in phases:
-            runner(artifacts, issues, state, services)
-
-
 def _build_consensus_if_needed(state: dict[str, Any], phase: str) -> None:
     """Build a consensus report when multiple validators produced reports."""
     reports = state.get("_validation_reports", [])
@@ -384,6 +369,21 @@ _VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
     ({"post", "assembly", "qc"}, _run_assembly_validators),
     ({"delivery"}, _run_delivery_validators),
 )
+
+
+def _execute_phase_validators(
+    state: dict[str, Any],
+    artifacts: dict[str, Any],
+    issues: list[dict[str, Any]],
+    services: Any,
+) -> None:
+    """Run each validator runner whose phase membership contains the current phase."""
+    if not artifacts:
+        return
+    phase = str(state.get("current_phase", ""))
+    for phases, runner in _VALIDATOR_RUNNERS:
+        if phase in phases:
+            runner(artifacts, issues, state, services)
 
 
 def _append_validator_report(
