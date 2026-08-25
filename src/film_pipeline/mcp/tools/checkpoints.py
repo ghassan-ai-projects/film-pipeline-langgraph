@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from pydantic import BaseModel
+
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.rollback import RollbackManager
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
-from film_pipeline.schemas.checkpoint import RollbackRecord
+from film_pipeline.schemas.checkpoint import CheckpointMetadata, RollbackRecord
 
 from .helpers import _active_project_id, _error, _ok, _services
 
@@ -19,11 +22,11 @@ _RECENT_CHECKPOINT_LIMIT = 20
 
 
 def _persist_candidate(
-    store: Any,
+    store: ArtifactStore,
     project_id: str,
     artifact_type: ArtifactType,
     artifact_id: str,
-    payload: Any,
+    payload: BaseModel,
 ) -> str:
     """Persist one candidate artifact and return its artifact ref."""
     version = store.next_version(project_id, "intake", artifact_id)
@@ -75,12 +78,12 @@ def _save_rollback_artifacts(
     return inv_ref, rec_ref
 
 
-def _recent_checkpoints(cps: list[Any]) -> list[Any]:
+def _recent_checkpoints(cps: list[CheckpointMetadata]) -> list[CheckpointMetadata]:
     """Return only the most recent checkpoints for version listing."""
     return cps[-_RECENT_CHECKPOINT_LIMIT:]
 
 
-def _checkpoint_summary(cp: Any) -> dict[str, object]:
+def _checkpoint_summary(cp: CheckpointMetadata) -> dict[str, object]:
     """Serialize one checkpoint into the summary shape exposed by the tools."""
     return {
         "checkpoint_id": cp.checkpoint_id,
@@ -172,7 +175,7 @@ def _restore_artifact_at_commit(
     rt: Any,
     project_id: str,
     artifact_id: str,
-    cp: Any,
+    cp: CheckpointMetadata,
     rollback_target: str,
 ) -> dict[str, object]:
     """Restore one artifact at a checkpoint commit and persist rollback bookkeeping."""
@@ -259,7 +262,7 @@ def _run_checkpoint_rollback(
     rt: Any,
     project_id: str,
     checkpoint_id: str,
-    cp: Any,
+    cp: CheckpointMetadata,
 ) -> dict[str, object]:
     """Roll the project back to a checkpoint and persist rollback bookkeeping."""
     manager = rt.checkpoint_managers.get(project_id)
