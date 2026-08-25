@@ -15,8 +15,14 @@ from film_pipeline.providers.credentials import lookup, redact
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
 GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
+_FALLBACK_MODEL = "imagen-4.0-fast-generate-001"
 _DEFAULT_PERSON_GENERATION = "allow_adult"
 _DEFAULT_IMAGE_SIZE = "1K"
+
+
+def _accepts_large_images(model: str) -> bool:
+    """Ultra-tier and non-fast ``generate-001`` models accept 1K images."""
+    return "ultra" in model or ("generate-001" in model and "fast" not in model)
 
 
 class Imagen4GeminiProvider(BaseProviderAdapter):
@@ -37,8 +43,12 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
             raise RuntimeError("GOOGLE_API_KEY is not set.")
         return key
 
+    def _model_id(self, fallback: str = _FALLBACK_MODEL) -> str:
+        """First configured model id, or ``fallback`` when none are listed."""
+        return self.entry.models[0] if self.entry.models else fallback
+
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
-        model = self.entry.models[0] if self.entry.models else "imagen-4.0-fast-generate-001"
+        model = self._model_id()
         req = urllib.request.Request(
             f"{GEMINI_API}/{model}:predict",
             data=json.dumps(payload).encode(),
@@ -69,17 +79,17 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         seed: int | None = None,
     ) -> dict[str, Any]:
         _ = duration
+        _ = references
         # The standalone Imagen API does not support reference-image
         # conditioning (image-to-image).  Identity consistency is enforced
         # at the prompt level via the ID_REINFORCE block instead.
-        _ = references
         parameters: dict[str, Any] = {
             "sampleCount": 1,
             "aspectRatio": aspect_ratio,
             "personGeneration": _DEFAULT_PERSON_GENERATION,
         }
-        model = self.entry.models[0] if self.entry.models else "imagen-4.0-fast-generate-001"
-        if "ultra" in model or ("generate-001" in model and "fast" not in model):
+        model = self._model_id()
+        if _accepts_large_images(model):
             parameters["imageSize"] = _DEFAULT_IMAGE_SIZE
         if seed is not None:
             parameters["seed"] = seed
@@ -96,7 +106,7 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
             job_id=f"imagen-{uuid4().hex[:12]}",
             shot_id=shot_id,
             provider_id=self.entry.provider_id,
-            model=str(payload.get("model", self.entry.models[0] if self.entry.models else "")),
+            model=str(payload.get("model", self._model_id(fallback=""))),
             payload=payload,
             status="submitted",
             metadata={
@@ -147,7 +157,7 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
 
     def estimate_cost(self, duration: float, model: str | None = None) -> float:
         _ = duration
-        model_id = model or (self.entry.models[0] if self.entry.models else "")
+        model_id = model or self._model_id(fallback="")
         if "ultra" in model_id:
             return 0.10
         if "fast" in model_id:
