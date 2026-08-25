@@ -15,6 +15,7 @@ from ..helpers import _active_project_id, _error, _ok, _services
 
 if TYPE_CHECKING:
     from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
 def _resolve_generation_mode(args: dict[str, object]) -> GenerationMode:
@@ -40,6 +41,14 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
         executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
         shot_ids = executor.shot_ids(project_id)
     return shot_ids
+
+
+def _parse_max_cost_usd(args: dict[str, object]) -> float:
+    """Read the optional ``max_cost_usd`` spend cap; -1.0 means no cap."""
+    max_cost_raw = args.get("max_cost_usd", -1)
+    if max_cost_raw in (-1, None):
+        return -1.0
+    return float(str(max_cost_raw))
 
 
 async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
@@ -129,9 +138,8 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
-    # Budget gate: reject if max_cost_usd set and cost exceeds it
-    max_cost_raw = args.get("max_cost_usd", -1)
-    max_cost = float(str(max_cost_raw)) if max_cost_raw not in (-1, None) else -1.0
+    # Budget gate: the manager rejects the batch when estimated cost exceeds it.
+    max_cost = _parse_max_cost_usd(args)
 
     try:
         ledger = mgr.approve_spend(project_id, max_cost_usd=max_cost)
@@ -148,32 +156,30 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
     )
 
 
-def _sync_generation_requests_from_ledger(active: dict[str, Any], rows: list[Any]) -> None:
+def _sync_generation_requests_from_ledger(
+    active: dict[str, Any], rows: list[GenerationLedgerRow]
+) -> None:
     """Publish dispatchable generation requests from ledger rows into graph state."""
     requests: list[dict[str, object]] = []
     for row in rows:
-        shot_id = str(getattr(row, "shot_id", ""))
-        if not shot_id:
+        if not row.shot_id:
             continue
-        prompt_ref = str(getattr(row, "prompt_ref", ""))
         requests.append(
             {
-                "generation_request_id": str(getattr(row, "generation_request_id", "")),
-                "generation_id": str(getattr(row, "generation_id", "")),
-                "project_id": str(getattr(row, "project_id", active.get("project_id", ""))),
-                "shot_id": shot_id,
-                "mode": str(getattr(getattr(row, "mode", ""), "value", getattr(row, "mode", ""))),
-                "provider": str(getattr(row, "provider", "")),
-                "model": str(getattr(row, "model", "")),
-                "prompt_ref": prompt_ref,
+                "generation_request_id": row.generation_request_id,
+                "generation_id": row.generation_id,
+                "project_id": row.project_id,
+                "shot_id": row.shot_id,
+                "mode": row.mode.value,
+                "provider": row.provider,
+                "model": row.model,
+                "prompt_ref": row.prompt_ref,
                 "prompt_payload": {
-                    "prompt_ref": prompt_ref,
-                    "shot_id": shot_id,
+                    "prompt_ref": row.prompt_ref,
+                    "shot_id": row.shot_id,
                 },
-                "reference_refs": list(getattr(row, "reference_refs", [])),
-                "status": str(
-                    getattr(getattr(row, "status", ""), "value", getattr(row, "status", ""))
-                ),
+                "reference_refs": list(row.reference_refs),
+                "status": row.status.value,
             }
         )
     active["generation_requests"] = requests
