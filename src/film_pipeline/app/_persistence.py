@@ -27,6 +27,22 @@ AUDIT_FILENAME = "audit-log.json"
 # tree and is tracked by the asset manifest, not by checkpoint commits.
 _PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
+# Phase directories ordered newest-first; the first one holding any JSON
+# artifact decides a discovered project's current phase.
+_DISCOVERED_PHASE_ORDER: tuple[tuple[str, str], ...] = (
+    ("10-delivery", "delivery"),
+    ("09-post", "post"),
+    ("08-validation", "qc"),
+    ("07-generated-assets", "generation"),
+    ("06-generation-plan", "gen_planning"),
+    ("05-shot-bible", "shot_bible"),
+    ("04-visual-dev", "visual_dev"),
+    ("03-script", "script"),
+    ("02-development", "development"),
+    ("01-vision", "constitution"),
+    ("intake", "intake"),
+)
+
 PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
 RUNTIME_ROOT = PERSIST_ROOT / "runtime"
 
@@ -49,20 +65,7 @@ def looks_like_project_dir(project_dir: Path) -> bool:
 
 
 def latest_discovered_phase(project_dir: Path) -> str:
-    phase_order = (
-        ("10-delivery", "delivery"),
-        ("09-post", "post"),
-        ("08-validation", "qc"),
-        ("07-generated-assets", "generation"),
-        ("06-generation-plan", "gen_planning"),
-        ("05-shot-bible", "shot_bible"),
-        ("04-visual-dev", "visual_dev"),
-        ("03-script", "script"),
-        ("02-development", "development"),
-        ("01-vision", "constitution"),
-        ("intake", "intake"),
-    )
-    for dirname, phase in phase_order:
+    for dirname, phase in _DISCOVERED_PHASE_ORDER:
         candidate = project_dir / dirname
         if candidate.exists() and any(candidate.rglob("*.json")):
             return phase
@@ -113,6 +116,18 @@ def artifact_discovery_roots(rt: StudioRuntime) -> list[Path]:
     return roots
 
 
+def _read_json_file(path: Path) -> Any | None:
+    """Return the parsed JSON payload of ``path``.
+
+    Returns ``None`` when the file is unreadable or not valid JSON; callers
+    treat that as "nothing persisted here" rather than a fatal error.
+    """
+    try:
+        return json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def _restore_state_project(rt: StudioRuntime, state_path: Path) -> bool:
     """Load one persisted runtime state file into the registries.
 
@@ -123,10 +138,7 @@ def _restore_state_project(rt: StudioRuntime, state_path: Path) -> bool:
     project_id = project_root.name
     if project_id in rt.projects or project_id.startswith("."):
         return False
-    try:
-        state = json.loads(state_path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return False
+    state = _read_json_file(state_path)
     if not isinstance(state, dict):
         return False
     # Discovered projects may carry a project_id that differs from the
@@ -223,12 +235,7 @@ def load_persisted_projects(rt: StudioRuntime) -> int:
 
 def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) -> None:
     path = project_root / CHECKPOINTS_FILENAME
-    if not path.exists():
-        return
-    try:
-        raw = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return
+    raw = _read_json_file(path)
     if not isinstance(raw, list):
         return
     manager = rt.checkpoint_managers.get(project_id)
@@ -244,12 +251,7 @@ def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) 
 
 def restore_audit_events(rt: StudioRuntime, project_root: Path) -> None:
     path = project_root / AUDIT_FILENAME
-    if not path.exists():
-        return
-    try:
-        raw = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
-        return
+    raw = _read_json_file(path)
     if not isinstance(raw, list):
         return
     known_ids = {event.get("event_id") for event in rt.audit_events}
