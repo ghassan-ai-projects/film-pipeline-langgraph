@@ -13,6 +13,44 @@ from film_pipeline.generation.compositor import replace_tile
 from film_pipeline.generation.sheet_reviewer import SheetReviewResult, review_composite_sheet
 
 
+def _swap_regenerated_tile(
+    entry: dict[str, Any],
+    tile_name: str,
+    feedback: str,
+    sheet_path: Path,
+    regenerate_fn: Any,
+    all_failing: list[str],
+) -> None:
+    """Regenerate one tile and splice it into the composite sheet."""
+    try:
+        new_path = regenerate_fn(entry, feedback)
+        if new_path and new_path.exists():
+            replace_tile(sheet_path, tile_name, new_path)
+            if tile_name not in all_failing:
+                all_failing.append(tile_name)
+    except Exception:
+        pass
+
+
+def _regenerate_all_failing(
+    sheet_review: SheetReviewResult,
+    entries: list[dict[str, Any]],
+    sheet_path: Path,
+    regenerate_fn: Any,
+    all_failing: list[str],
+) -> None:
+    """Regenerate every failing tile of the current review round."""
+    for tile_name in sheet_review.failing_tiles:
+        entry = _find_entry_by_role(entries, tile_name)
+        if entry is None:
+            continue
+        asset_path = str(entry.get("asset_path", ""))
+        if not asset_path:
+            continue
+        feedback = sheet_review.actionable_feedback or f"Fix {tile_name}"
+        _swap_regenerated_tile(entry, tile_name, feedback, sheet_path, regenerate_fn, all_failing)
+
+
 def regenerate_failing_tiles(
     sheet_review: SheetReviewResult,
     entries: list[dict[str, Any]],
@@ -45,27 +83,12 @@ def regenerate_failing_tiles(
             break
 
         # Regenerate each failing tile
-        for tile_name in sheet_review.failing_tiles:
-            entry = _find_entry_by_role(entries, tile_name)
-            if entry is None:
-                continue
-            asset_path = str(entry.get("asset_path", ""))
-            if not asset_path:
-                continue
-            feedback = sheet_review.actionable_feedback or f"Fix {tile_name}"
-            try:
-                new_path = regenerate_fn(entry, feedback)
-                if new_path and new_path.exists():
-                    replace_tile(sheet_path, tile_name, new_path)
-                    if tile_name not in all_failing:
-                        all_failing.append(tile_name)
-            except Exception:
-                continue
+        _regenerate_all_failing(sheet_review, entries, sheet_path, regenerate_fn, all_failing)
 
         # Re-validate the sheet
-        sheet_type = sheet_review.sheet_type
-        subject_id = sheet_review.sheet_id
-        sheet_review = review_composite_sheet(sheet_path, sheet_type, subject_id, model=model)
+        sheet_review = review_composite_sheet(
+            sheet_path, sheet_review.sheet_type, sheet_review.sheet_id, model=model
+        )
 
         if sheet_review.total > best_score:
             best_score = sheet_review.total
