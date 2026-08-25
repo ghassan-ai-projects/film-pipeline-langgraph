@@ -12,6 +12,7 @@ from film_pipeline.tui.view_models.helpers import compact_dict
 
 if TYPE_CHECKING:
     from film_pipeline.tui.app import AppState
+    from film_pipeline.tui.view_models.models import ReaderView
 
 
 class Reader(VerticalScroll):
@@ -90,25 +91,35 @@ class Reader(VerticalScroll):
         if state.reader is None:
             return False
         reader = state.reader
+        self._show(
+            reader.title,
+            reader.subtitle,
+            reader.body,
+            self._reader_entry_extras(reader),
+        )
+        self.scroll_home(animate=False)
+        return True
+
+    @staticmethod
+    def _reader_entry_extras(view: ReaderView) -> str:
+        """Build the metadata/comments/validation footer for the loaded entry."""
         extras: list[str] = []
-        if reader.metadata:
-            extras.append(compact_dict(reader.metadata))
-        if reader.linked_comments:
+        if view.metadata:
+            extras.append(compact_dict(view.metadata))
+        if view.linked_comments:
             extras.append("")
             extras.append("Comments")
             extras.extend(
-                f"- {comment.target_id}: {comment.body}" for comment in reader.linked_comments[:8]
+                f"- {comment.target_id}: {comment.body}" for comment in view.linked_comments[:8]
             )
-        if reader.linked_validation:
+        if view.linked_validation:
             extras.append("")
             extras.append("Validation")
             extras.extend(
                 f"- {issue.get('severity', '')}: {issue.get('message', '')}"
-                for issue in reader.linked_validation[:8]
+                for issue in view.linked_validation[:8]
             )
-        self._show(reader.title, reader.subtitle, reader.body, "\n".join(extras))
-        self.scroll_home(animate=False)
-        return True
+        return "\n".join(extras)
 
     def _render_selected_target(self, state: AppState) -> bool:
         if state.selected_target is None:
@@ -154,12 +165,10 @@ class Reader(VerticalScroll):
         self.query_one("#reader_extras", Static).update(extras)
 
     @staticmethod
-    def _format_generation(state: object) -> str:
-        from film_pipeline.tui.app import AppState
-
-        if not isinstance(state, AppState) or state.snapshot is None:
-            return ""
+    def _format_generation(state: AppState) -> str:
         snapshot = state.snapshot
+        if snapshot is None:
+            return ""
         lines: list[str] = []
         if snapshot.generation is not None:
             gen = snapshot.generation
