@@ -69,22 +69,29 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
         return _error(f"Artifact '{artifact_id}' not found in phase '{phase_str}'.")
 
 
-async def list_shots(args: dict[str, object]) -> dict[str, object]:
-    """List shots from the shot bible artifact, if available."""
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
+def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
+    """Return the shot matrix rows from the project's shot bible, or None when absent."""
     from film_pipeline.schemas._base import FilmPhase
 
     try:
         data = _services(rt).artifact_store.load(
             project_id, FilmPhase("shot_bible"), "shot_matrix", 1
         )
-        shots = data.get("rows", [])
-        return _ok(shots=shots)
     except (FileNotFoundError, ValueError):
+        return None
+    return cast(list[Any], data.get("rows", []))
+
+
+async def list_shots(args: dict[str, object]) -> dict[str, object]:
+    """List shots from the shot bible artifact, if available."""
+    rt = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return _error("No active project.")
+    shots = _load_shot_bible_rows(rt, project_id)
+    if shots is None:
         return _ok(shots=[], note="Shot bible not yet generated.")
+    return _ok(shots=shots)
 
 
 async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
@@ -96,21 +103,15 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     project_id = _active_project_id(args, rt)
     if project_id is None:
         return _error("No active project.")
-    from film_pipeline.schemas._base import FilmPhase
-
-    try:
-        data = _services(rt).artifact_store.load(
-            project_id, FilmPhase("shot_bible"), "shot_matrix", 1
-        )
-        shots = data.get("rows", [])
-        match = next(
-            (s for s in shots if str(s.get("shot_id", s.get("scene_id", ""))) == shot_id), None
-        )
-        if match is None:
-            return _error(f"Shot '{shot_id}' not found.")
-        return _ok(shot=match)
-    except (FileNotFoundError, ValueError):
+    shots = _load_shot_bible_rows(rt, project_id)
+    if shots is None:
         return _error("Shot bible not yet generated.")
+    match = next(
+        (s for s in shots if str(s.get("shot_id", s.get("scene_id", ""))) == shot_id), None
+    )
+    if match is None:
+        return _error(f"Shot '{shot_id}' not found.")
+    return _ok(shot=match)
 
 
 async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
