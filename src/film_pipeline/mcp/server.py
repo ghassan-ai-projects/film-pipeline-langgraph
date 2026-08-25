@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
-import asyncio
 import inspect
-import json
 import os
-import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
+from film_pipeline.mcp._stdio_transport import (
+    _read_message as _read_message,
+)
+from film_pipeline.mcp._stdio_transport import (
+    _serve_stdio,
+    _warn_bootstrap_issues,
+)
+from film_pipeline.mcp._stdio_transport import (
+    _write_message as _write_message,
+)
+from film_pipeline.mcp._stdio_transport import (
+    handle_jsonrpc as handle_jsonrpc,
+)
 from film_pipeline.mcp.contract import (
     ToolHandler,
     ToolRegistration,
@@ -136,14 +146,7 @@ class MCPServer:
         exc: KeyError,
     ) -> MCPResponse | RequestEnvelope:
         """Auto-register a runtime-known project; UNKNOWN_PROJECT otherwise."""
-        project_ref = envelope.project_ref
-        if not project_ref:
-            return MCPResponse(
-                success=False,
-                request_id=envelope.request_id,
-                error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
-            )
-        pid = self._auto_register_from_runtime(project_ref)
+        pid = self._auto_register_from_runtime(envelope.project_ref)
         if pid is None:
             return MCPResponse(
                 success=False,
@@ -154,18 +157,14 @@ class MCPServer:
             self.active_project_id = pid
         return _resolved_envelope(envelope, pid)
 
-    def _auto_register_from_runtime(self, project_ref: str) -> str | None:
+    def _auto_register_from_runtime(self, project_ref: str | None) -> str | None:
         """Register a runtime-known project missing here; None when unknown everywhere."""
+        if not project_ref:
+            return None
         from film_pipeline.app.runtime import get_runtime
 
         rt = get_runtime()
-        rt_project = rt.get_project(project_ref) or (
-            # Also try resolving by exact match across all runtime projects
-            next(
-                (p for pid, p in rt.projects.items() if pid == project_ref),
-                None,
-            )
-        )
+        rt_project = rt.get_project(project_ref)
         if rt_project is None:
             return None
         pid = str(rt_project.get("project_id", project_ref))
@@ -210,10 +209,10 @@ class MCPServer:
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
         try:
             if inspect.iscoroutinefunction(handler):
-                data: object = await handler(new_args)
+                data: Any = await handler(new_args)
             else:
                 data = handler(new_args)
-            return MCPResponse(success=True, request_id=envelope.request_id, data=data)  # type: ignore[arg-type]
+            return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
         except Exception as exc:  # pragma: no cover — defensive
@@ -230,37 +229,6 @@ class MCPServer:
         self.projects.register(record)
         if self.active_project_id is None:
             self.active_project_id = record.project_id
-
-
-async def handle_jsonrpc(server: MCPServer, request: dict[str, Any]) -> dict[str, Any] | None:
-    """Handle one JSON-RPC request for the MCP stdio transport."""
-    method = request.get("method")
-    request_id = request.get("id")
-    params = request.get("params", {})
-    if not isinstance(method, str):
-        return _jsonrpc_error(request_id, -32600, "Invalid request: missing method.")
-    if not isinstance(params, dict):
-        params = {}
-
-    if method == "initialize":
-        return _jsonrpc_success(request_id, _initialize_result())
-    if method == "notifications/initialized":
-        return None
-    if method == "ping":
-        return _jsonrpc_success(request_id, {})
-    if method == "tools/list":
-        tools = [
-            {
-                "name": item["name"],
-                "description": item["description"],
-                "inputSchema": item["input_schema"],
-            }
-            for item in server.catalog()
-        ]
-        return _jsonrpc_success(request_id, {"tools": tools})
-    if method == "tools/call":
-        return await _serve_tools_call(server, request_id, params)
-    return _jsonrpc_error(request_id, -32601, f"Method not found: {method}")
 
 
 def main() -> int:
@@ -284,142 +252,11 @@ def main() -> int:
 
 def _resolved_envelope(envelope: RequestEnvelope, project_id: str) -> RequestEnvelope:
     """Copy the envelope with resolved_project_id set; every other field verbatim."""
-    return RequestEnvelope(
-        request_id=envelope.request_id,
-        project_ref=envelope.project_ref,
-        resolved_project_id=project_id,
-        active_phase=envelope.active_phase,
-        user_intent=envelope.user_intent,
-        requires_confirmation=envelope.requires_confirmation,
-        actor_id=envelope.actor_id,
-        actor_type=envelope.actor_type,
-        received_at=envelope.received_at,
-    )
-
-
-def _initialize_result() -> dict[str, Any]:
-    """Static capabilities payload for the initialize handshake."""
-    return {
-        "protocolVersion": "2025-03-26",
-        "capabilities": {
-            "tools": {"listChanged": False},
-        },
-        "serverInfo": {
-            "name": "film-pipeline-mcp",
-            "version": "0.2.0",
-        },
-    }
-
-
-async def _serve_tools_call(
-    server: MCPServer,
-    request_id: object,
-    params: dict[str, Any],
-) -> dict[str, Any]:
-    """Run one tools/call request and map the MCP response onto JSON-RPC framing."""
-    tool_name = params.get("name")
-    arguments = params.get("arguments", {})
-    if not isinstance(tool_name, str):
-        return _jsonrpc_error(request_id, -32602, "tools/call requires string param 'name'.")
-    if not isinstance(arguments, dict):
-        return _jsonrpc_error(request_id, -32602, "tools/call requires object param 'arguments'.")
-    tool_response = await server.call(tool_name, arguments)
-    if not tool_response.success:
-        error = tool_response.error
-        message = error.message if error is not None else "Tool call failed."
-        return _jsonrpc_error(request_id, -32000, message)
-    structured = tool_response.data if isinstance(tool_response.data, dict) else {}
-    is_error = bool(isinstance(structured, dict) and structured.get("ok") is False)
-    return _jsonrpc_success(
-        request_id,
-        {
-            "content": [
-                {
-                    "type": "text",
-                    "text": json.dumps(structured, default=str),
-                }
-            ],
-            "structuredContent": structured,
-            "isError": is_error,
-        },
-    )
-
-
-def _warn_bootstrap_issues(issues: list[str]) -> None:
-    """Print bootstrap warnings to stderr without blocking startup."""
-    print("[film-pipeline-mcp] Bootstrap warnings:", file=sys.stderr)
-    for issue in issues:
-        print(f"  - {issue}", file=sys.stderr)
-    print(
-        "[film-pipeline-mcp] Server starting anyway — "
-        "tools that require missing resources will return errors.",
-        file=sys.stderr,
-    )
-
-
-def _serve_stdio(server: MCPServer) -> int:
-    """Serve JSON-RPC over stdio until stdin closes; returns the process exit code."""
-    stdin = sys.stdin.buffer
-    stdout = sys.stdout.buffer
-
-    print("[film-pipeline-mcp] Server ready, waiting for JSON-RPC on stdin.", file=sys.stderr)
-    sys.stderr.flush()
-
-    while True:
-        message = _read_message(stdin)
-        if message is None:
-            print("[film-pipeline-mcp] stdin closed, exiting.", file=sys.stderr)
-            return 0
-        response = asyncio.run(handle_jsonrpc(server, message))
-        if response is not None:
-            _write_message(stdout, response)
+    return replace(envelope, resolved_project_id=project_id)
 
 
 def _opt_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
-
-
-def _jsonrpc_success(request_id: object, result: dict[str, Any]) -> dict[str, Any]:
-    return {"jsonrpc": "2.0", "id": request_id, "result": result}
-
-
-def _jsonrpc_error(request_id: object, code: int, message: str) -> dict[str, Any]:
-    return {
-        "jsonrpc": "2.0",
-        "id": request_id,
-        "error": {"code": code, "message": message},
-    }
-
-
-def _read_message(stream: Any) -> dict[str, Any] | None:
-    content_length: int | None = None
-    while True:
-        line = stream.readline()
-        if not line:
-            return None
-        if line in {b"\r\n", b"\n"}:
-            break
-        header = line.decode("utf-8").strip()
-        if header.lower().startswith("content-length:"):
-            value = header.split(":", 1)[1].strip()
-            content_length = int(value)
-    if content_length is None:
-        raise ValueError("Missing Content-Length header.")
-    body = stream.read(content_length)
-    if not body:
-        return None
-    raw: Any = json.loads(body.decode("utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError("Expected JSON object request.")
-    return raw
-
-
-def _write_message(stream: Any, payload: dict[str, Any]) -> None:
-    body = json.dumps(payload).encode("utf-8")
-    header = f"Content-Length: {len(body)}\r\n\r\n".encode()
-    stream.write(header)
-    stream.write(body)
-    stream.flush()
 
 
 if __name__ == "__main__":

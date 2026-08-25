@@ -139,4 +139,3 @@ select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "PIE", "PTH", "RET", "ARG"
 "src/film_pipeline/providers/**/*.py" = ["S104"]
 "src/film_pipeline/graph/services.py" = ["E501"]
 "src/film_pipeline/mcp/tools/**/*.py" = ["ARG001"]
-"src/film_pipeline/mcp/server.py" = ["ARG001"]
