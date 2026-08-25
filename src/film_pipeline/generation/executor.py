@@ -430,7 +430,9 @@ class GenerationExecutor:
         job: Any,
     ) -> list[str]:
         """Download a completed job into the project asset tree + manifest."""
-        output_dir = self._output_dir(project_id, row)
+        shot_row = self._shot_rows_by_id(project_id).get(row.shot_id, {})
+        scene_id = str(shot_row.get("scene_id", "") or "unassigned")
+        output_dir = self._output_dir(project_id, row, scene_id)
         output_dir.mkdir(parents=True, exist_ok=True)
         primary = adapter.download(job, str(output_dir))
         produced = sorted(
@@ -438,19 +440,17 @@ class GenerationExecutor:
             for path in output_dir.iterdir()
             if path.is_file() and not path.name.endswith("_metadata.json")
         )
-        self._record_assets(project_id, row, produced)
+        self._record_assets(project_id, row, produced, scene_id)
         return [primary, *[str(path) for path in produced if str(path) != primary]]
 
-    def _output_dir(self, project_id: str, row: Any) -> Path:
+    def _output_dir(self, project_id: str, row: Any, scene_id: str) -> Path:
         """Target directory for a row's generated assets, keyed by scene id."""
-        shot_row = self._shot_rows_by_id(project_id).get(row.shot_id, {})
-        scene_id = str(shot_row.get("scene_id", "") or "unassigned")
         return generated_asset_dir(project_id, scene_id, row.shot_id, root=self._root())
 
-    def _record_assets(self, project_id: str, row: Any, produced: list[Path]) -> None:
+    def _record_assets(
+        self, project_id: str, row: Any, produced: list[Path], scene_id: str
+    ) -> None:
         """Record every produced file in the asset manifest under the next take."""
-        shot_row = self._shot_rows_by_id(project_id).get(row.shot_id, {})
-        scene_id = str(shot_row.get("scene_id", "") or "unassigned")
         take = self._next_take(project_id, row.shot_id)
         manifest = read_manifest(project_id, root=self._root()) or AssetManifest(
             project_id=project_id
