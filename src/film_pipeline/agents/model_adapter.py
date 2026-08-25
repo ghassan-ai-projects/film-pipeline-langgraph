@@ -5,21 +5,31 @@ so tests can mock the network without any test-only dependency.
 
 Model selection is ALWAYS explicit: no hardcoded defaults. Callers must resolve
 the model through the routing layer before invoking this adapter.
+
+Transport concerns live in ``_http_transport`` and model-text JSON recovery in
+``_json_extraction``; this module stays with request shaping, key resolution,
+and provider payload/response mapping.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import urllib.error
-import urllib.request
-from collections.abc import Callable
 from dataclasses import dataclass
-from inspect import Parameter, signature
 from typing import Any
 
+# Historical import paths kept stable for callers and tests (explicit alias
+# form so mypy strict's no_implicit_reexport passes them through).
+from film_pipeline.agents._http_transport import (
+    _accepts_timeout_kw as _accepts_timeout_kw,
+)
+from film_pipeline.agents._http_transport import (
+    _open_with_timeout as _open_with_timeout,
+)
+from film_pipeline.agents._http_transport import post_json
+from film_pipeline.agents._json_extraction import extract_json_object
 from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
-from film_pipeline.providers.credentials import lookup, redact
+from film_pipeline.providers.credentials import lookup
 
 
 @dataclass(frozen=True)
@@ -84,10 +94,11 @@ class ModelAdapter:
         ``request.model`` is REQUIRED — no hardcoded default. The caller must
         resolve the model through config/routing before invoking.
         """
-        data = _openrouter_payload(request)
-        return self._post_json(
+        return post_json(
             f"{OPENROUTER_API}/chat/completions",
-            data,
+            _openrouter_payload(request),
+            http_opener=self._http_opener,
+            timeout_seconds=self.request_timeout_seconds,
             headers={
                 "Authorization": f"Bearer {self._api_key()}",
                 "Content-Type": "application/json",
@@ -95,30 +106,6 @@ class ModelAdapter:
             error_prefix="OpenRouter chat completions failed",
             redact_body=True,
         )
-
-    def _post_json(
-        self,
-        url: str,
-        data_bytes: bytes,
-        *,
-        headers: dict[str, str],
-        error_prefix: str,
-        redact_body: bool,
-    ) -> dict[str, Any]:
-        """POST ``data_bytes`` and return parsed JSON with normalized HTTP errors."""
-        req = urllib.request.Request(url, data=data_bytes, headers=headers, method="POST")
-        opener: Any = self._http_opener or urllib.request.build_opener()
-        try:
-            with _open_with_timeout(opener.open, req, self.request_timeout_seconds) as resp:
-                raw: Any = json.loads(resp.read())
-                return dict(raw)
-        except (urllib.error.HTTPError, OSError) as e:
-            detail = str(e)
-            if isinstance(e, urllib.error.HTTPError):
-                body_text = e.read().decode(errors="replace")
-                body_detail = redact(body_text)[:200] if redact_body else body_text[:200]
-                detail = f"HTTP {e.code}: {body_detail}"
-            raise RuntimeError(f"{error_prefix}: {detail}") from e
 
     def chat(
         self,
@@ -203,11 +190,11 @@ class ModelAdapter:
 
     def _call_gemini_api(self, request: _GeminiRequest) -> str:
         """Call Gemini's generateContent API with text + inline images."""
-        url = self._gemini_url(request.model)
-        data = json.dumps(_build_gemini_payload(request)).encode("utf-8")
-        response = self._post_json(
-            url,
-            data,
+        response = post_json(
+            self._gemini_url(request.model),
+            json.dumps(_build_gemini_payload(request)).encode("utf-8"),
+            http_opener=self._http_opener,
+            timeout_seconds=self.request_timeout_seconds,
             headers={"Content-Type": "application/json"},
             error_prefix="Gemini generateContent failed",
             redact_body=False,
@@ -251,21 +238,14 @@ class ModelAdapter:
             frequency_penalty=frequency_penalty,
         ).strip()
 
-        for extract in (
-            _parse_direct_json,
-            _parse_fenced_json,
-            _parse_braced_json,
-            _parse_bracketed_json,
-        ):
-            extracted = extract(text)
-            if extracted is not None:
-                return extracted
-
-        raise ValueError(
-            f"Model response is not valid JSON after 4 extraction strategies. "
-            f"Response length: {len(text)} chars. "
-            f"Preview: {text[:300]}"
-        )
+        extracted = extract_json_object(text)
+        if extracted is None:
+            raise ValueError(
+                f"Model response is not valid JSON after 4 extraction strategies. "
+                f"Response length: {len(text)} chars. "
+                f"Preview: {text[:300]}"
+            )
+        return extracted
 
 
 def _openrouter_payload(request: _ChatRequest) -> bytes:
@@ -308,86 +288,4 @@ def _warn_dropped_images(count: int, model: str) -> None:
         "chat_multimodal: dropping %d images for non-Google model '%s'",
         count,
         model,
-    )
-
-
-def _parse_direct_json(text: str) -> dict[str, Any] | None:
-    """Strategy 1: direct JSON parse."""
-    try:
-        return dict(json.loads(text))
-    except json.JSONDecodeError:
-        return None
-
-
-def _parse_fenced_json(text: str) -> dict[str, Any] | None:
-    """Strategy 2: extract from markdown fences (most common with Gemini)."""
-    for fence_start in ("```json", "```JSON", "```"):
-        if fence_start not in text:
-            continue
-        # Find the LAST opening fence and FIRST closing fence after it
-        # (Gemini sometimes has multiple code blocks)
-        last_open = text.rfind(fence_start)
-        block = text[last_open + len(fence_start) :]
-        close_idx = block.find("```")
-        if close_idx != -1:
-            block = block[:close_idx]
-        candidate = block.strip()
-        if not candidate:
-            continue
-        # Handle Gemini injecting trailing content right after closing ````
-        try:
-            result: Any = json.loads(candidate)
-            return dict(result)
-        except json.JSONDecodeError:
-            pass
-    return None
-
-
-def _parse_braced_json(text: str) -> dict[str, Any] | None:
-    """Strategy 3: find the outermost brace pair anywhere in text."""
-    brace_start = text.find("{")
-    brace_end = text.rfind("}")
-    if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
-        candidate = text[brace_start : brace_end + 1]
-        try:
-            result = json.loads(candidate)
-            return dict(result)
-        except json.JSONDecodeError:
-            pass
-    return None
-
-
-def _parse_bracketed_json(text: str) -> dict[str, Any] | None:
-    """Strategy 4: find outermost bracket pair (for array responses)."""
-    bracket_start = text.find("[")
-    bracket_end = text.rfind("]")
-    if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
-        candidate = text[bracket_start : bracket_end + 1]
-        try:
-            result = json.loads(candidate)
-            return dict(result)
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return None
-
-
-def _open_with_timeout(
-    open_fn: Callable[..., Any],
-    req: urllib.request.Request,
-    timeout_seconds: float | None,
-) -> Any:
-    """Call opener.open with a timeout when the injected opener supports it."""
-    if timeout_seconds is None or not _accepts_timeout_kw(open_fn):
-        return open_fn(req)
-    return open_fn(req, timeout=timeout_seconds)
-
-
-def _accepts_timeout_kw(open_fn: Callable[..., Any]) -> bool:
-    """Return whether a callable can accept a ``timeout=`` keyword."""
-    try:
-        params = signature(open_fn).parameters
-    except (TypeError, ValueError):
-        return True
-    return any(param.kind == Parameter.VAR_KEYWORD for param in params.values()) or any(
-        name == "timeout" for name in params
     )
