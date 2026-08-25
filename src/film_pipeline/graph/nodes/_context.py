@@ -278,8 +278,9 @@ _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
 
 def _infer_artifact_type(artifact: Any) -> _ArtifactType:
     """Infer ArtifactType from the object's class name."""
+    class_name = type(artifact).__name__
     try:
-        return _ArtifactType(_ARTIFACT_TYPE_BY_CLASS.get(type(artifact).__name__, "script"))
+        return _ArtifactType(_ARTIFACT_TYPE_BY_CLASS.get(class_name, "script"))
     except ValueError:
         return _ArtifactType.SCRIPT
 
@@ -291,26 +292,6 @@ def _parse_ref(ref_str: str) -> _ArtifactRef:
     version_str = parts[2] if len(parts) > 2 else "1"
     version = int(version_str.lstrip("v"))
     return _ArtifactRef(artifact_id=artifact_id, version=version)
-
-
-def _inject_artifact_context(
-    state: dict[str, Any],
-    services: GraphServices,
-    context_vars: dict[str, str],
-) -> None:
-    """Load upstream artifact content into prompt context to preserve continuity."""
-    if not str(state.get("project_id", "")):
-        return
-
-    for ref_key, (phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
-        ref = str(state.get(ref_key, "") or "").strip()
-        if not ref:
-            continue
-        try:
-            context_vars[content_key] = _compact_upstream_content(state, services, phase_name, ref)
-        except (FileNotFoundError, ValueError, KeyError) as exc:
-            _record_context_load_failure(state, ref_key, ref, exc)
-            continue
 
 
 _UPSTREAM_CONTENT_SOURCES: dict[str, tuple[str, str]] = {
@@ -325,9 +306,33 @@ _UPSTREAM_CONTENT_SOURCES: dict[str, tuple[str, str]] = {
 }
 
 
+def _inject_artifact_context(
+    state: dict[str, Any],
+    services: GraphServices,
+    context_vars: dict[str, str],
+) -> None:
+    """Load upstream artifact content into prompt context to preserve continuity."""
+    project_id = str(state.get("project_id", ""))
+    if not project_id:
+        return
+
+    for ref_key, (phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
+        ref = str(state.get(ref_key, "") or "").strip()
+        if not ref:
+            continue
+        try:
+            context_vars[content_key] = _compact_upstream_content(
+                state, services, project_id, phase_name, ref
+            )
+        except (FileNotFoundError, ValueError, KeyError) as exc:
+            _record_context_load_failure(state, ref_key, ref, exc)
+            continue
+
+
 def _compact_upstream_content(
     state: dict[str, Any],
     services: GraphServices,
+    project_id: str,
     phase_name: str,
     ref: str,
 ) -> str:
@@ -336,7 +341,7 @@ def _compact_upstream_content(
     from film_pipeline.schemas._base import FilmPhase
 
     data = services.artifact_store.load(
-        str(state.get("project_id", "")),
+        project_id,
         FilmPhase(phase_name),
         parsed.artifact_id,
         parsed.version,
