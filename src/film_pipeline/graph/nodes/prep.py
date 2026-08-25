@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from typing import Any
 
@@ -23,6 +24,8 @@ from film_pipeline.graph.nodes._shared import (
     _phase_gate_updates,
 )
 from film_pipeline.schemas.constraints import ProjectConstraints
+
+_logger = logging.getLogger(__name__)
 
 
 def _runtime_directive(user_runtime: int) -> str:
@@ -369,7 +372,8 @@ def _development_scene_count(state: dict[str, Any]) -> int:
             parsed.artifact_id,
             parsed.version,
         )
-    except (FileNotFoundError, ValueError, KeyError):
+    except (FileNotFoundError, ValueError, KeyError) as exc:
+        _logger.warning("Could not load development scene list for scene-count gate: %s", exc)
         return 0
     if isinstance(data, dict):
         scenes = data.get("scenes", [])
