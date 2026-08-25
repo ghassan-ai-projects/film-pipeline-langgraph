@@ -2,7 +2,8 @@
 
 Speaks to ``film_pipeline.mcp.server`` over stdin/stdout, translating
 TUI view-model calls into MCP tool invocations so the TUI exercises the
-same tool surface as OpenClaw.
+same tool surface as OpenClaw. Payload-to-view-model translation lives in
+``_translations``; this module owns orchestration and error surfacing.
 """
 
 from __future__ import annotations
@@ -24,6 +25,19 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.tui.gateway import StudioGateway
+from film_pipeline.tui.gateways._translations import (
+    artifact_detail_from_response,
+    audit_event_from_entry,
+    dashboard_summary_from_response,
+    generation_workspace_from_rows,
+    mutation_result_from_response,
+    operator_comment_from_entry,
+    project_create_arguments,
+    project_list_item_from_summary,
+    review_workspace_from_response,
+    text_only_generation_workspace,
+    validation_workspace_from_response,
+)
 from film_pipeline.tui.gateways._transport import MCPProcessTransport
 
 
@@ -42,60 +56,19 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
             if not isinstance(pid, str):
                 continue
             summary = self._tool("get_project_summary", {"project_ref": pid})
-            current_phase = str(summary.get("current_phase", ""))
-            status = str(summary.get("status", ""))
-            if not status:
-                status = "in_progress" if current_phase else "created"
-            items.append(
-                ProjectListItem(
-                    project_id=pid,
-                    title=str(summary.get("title", pid)),
-                    slug=str(summary.get("slug", pid)),
-                    current_phase=current_phase,
-                    status=status,
-                    has_blockers=bool(summary.get("has_blockers")),
-                    awaiting_review=status == "awaiting_review",
-                )
-            )
+            items.append(project_list_item_from_summary(pid, summary))
         return items
 
     def create_project(self, request: ProjectCreateRequest) -> MutationResult:
-        args: dict[str, object] = {
-            "project_id": request.project_id,
-            "title": request.title,
-        }
-        if request.slug:
-            args["slug"] = request.slug
-        if request.idea:
-            args["idea"] = request.idea
-        if request.runtime_mode:
-            args["runtime_mode"] = request.runtime_mode
-        if request.target_runtime_seconds:
-            args["target_runtime_seconds"] = request.target_runtime_seconds
-        if request.film_type_profile:
-            args["film_type_profile"] = request.film_type_profile
-        if request.quality_profile:
-            args["quality_profile"] = request.quality_profile
-        if request.provider_profile:
-            args["provider_profile"] = request.provider_profile
-        if request.review_profile:
-            args["review_profile"] = request.review_profile
-        if request.auto_approve_profile:
-            args["auto_approve_profile"] = request.auto_approve_profile
-        if request.generation_policy:
-            args["generation_policy"] = request.generation_policy
-        r = self._tool("create_film_project", args)
-        return MutationResult(
-            ok=bool(r.get("ok")),
-            project_id=str(r.get("project_id", request.project_id)),
-            current_phase=str(r.get("current_phase", "")),
-            message="Project created." if r.get("ok") else str(r.get("error", "")),
+        r = self._tool("create_film_project", project_create_arguments(request))
+        return mutation_result_from_response(
+            r,
+            fallback_project_id=request.project_id,
+            success_message="Project created.",
         )
 
     def set_active_project(self, project_id: str) -> DashboardSummary:
-        r = self._tool("set_active_project", {"project_ref": project_id})
-        if not r.get("ok"):
-            raise RuntimeError(str(r.get("error", "set_active_project failed")))
+        self._invoke_tool_or_raise("set_active_project", {"project_ref": project_id})
         return self.get_dashboard(project_id)
 
     def set_runtime_mode(self, mode: str) -> str:
@@ -104,54 +77,26 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
     def submit_idea(self, project_id: str, idea: str) -> MutationResult:
         self._set_active(project_id)
         r = self._tool("submit_idea", {"idea": idea})
-        return MutationResult(
-            ok=bool(r.get("ok")),
-            project_id=str(r.get("project_id", project_id)),
-            current_phase=str(r.get("current_phase", "")),
-            message="Idea submitted." if r.get("ok") else str(r.get("error", "")),
+        return mutation_result_from_response(
+            r,
+            fallback_project_id=project_id,
+            success_message="Idea submitted.",
         )
 
     def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
         self._set_active(project_id)
         r = self._tool("get_project_summary", {})
-        return DashboardSummary(
-            project_id=str(r.get("project_id", "")),
-            title=str(r.get("title", "")),
-            slug=str(r.get("slug", "")),
-            current_phase=str(r.get("current_phase", "")),
-            runtime_mode=str(r.get("runtime_mode", "mock")),
-            workflow_mode="manual",
-            status=str(r.get("status", "")),
-            next_action="",
-            route_reason="",
-            issue_count=int(r.get("issue_count", 0)),
-            artifact_count=int(r.get("artifact_count", 0)),
-            checkpoint_count=int(r.get("checkpoint_count", 0)),
-            has_blockers=bool(r.get("has_blockers")),
-            generation_policy=str(r.get("generation_policy", "generate")),
-        )
+        return dashboard_summary_from_response(r)
 
     def get_review_workspace(self, project_id: str | None = None) -> ReviewWorkspace:
         self._set_active(project_id)
         r = self._tool("review_phase_artifacts", {})
-        return ReviewWorkspace(
-            project_id=str(r.get("project_id", "")),
-            phase=str(r.get("phase", "")),
-            recommendation="Review the phase outputs and approve or request revision.",
-            candidate_artifacts=list(r.get("artifacts", []))
-            if isinstance(r.get("artifacts"), list)
-            else [],
-        )
+        return review_workspace_from_response(r)
 
     def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
         self._set_active(project_id)
         r = self._tool("get_validation_report", {})
-        return ValidationWorkspace(
-            project_id=str(r.get("project_id", "")),
-            phase=str(r.get("phase", "")),
-            source=str(r.get("source", "")),
-            reports=list(r.get("reports", [])) if isinstance(r.get("reports"), list) else [],
-        )
+        return validation_workspace_from_response(r)
 
     def run_validation(self, project_id: str | None = None) -> ValidationWorkspace:
         self._set_active(project_id)
@@ -164,86 +109,47 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
         return str(r.get("generation_policy", "")).lower() == "text_only"
 
     def _text_only_workspace(self, project_id: str | None) -> GenerationWorkspace:
-        assets = self.list_assets(project_id)
-        completed = any(
-            str(asset.get("kind", "")).lower() == "text_only_delivery" for asset in assets
-        )
-        return GenerationWorkspace(
-            project_id=project_id or "",
-            phase="generation",
-            provider="",
-            model="",
-            estimated_cost_usd=0.0,
-            rows=[],
-            planned=0,
-            submitted=0,
-            running=0,
-            completed=1 if completed else 0,
-            failed=0,
-            next_step="approve_phase" if completed else "plan",
-        )
+        return text_only_generation_workspace(project_id, self.list_assets(project_id))
 
     def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
         if self._is_text_only(project_id):
             return self._text_only_workspace(project_id)
         r = self._tool("list_active_generations", {})
-        rows_raw = r.get("rows", [])
-        rows = [dict(row) for row in rows_raw] if isinstance(rows_raw, list) else []
-        running = sum(1 for row in rows if row.get("status") == "running")
-        return GenerationWorkspace(
-            project_id=project_id or "",
-            phase="generation",
-            provider="",
-            model="",
-            estimated_cost_usd=0.0,
-            rows=rows,
-            running=running,
-            next_step="poll" if running else "plan",
-        )
+        return generation_workspace_from_rows(project_id, r.get("rows", []))
+
+    def _current_generation_workspace(self, project_id: str | None) -> GenerationWorkspace:
+        """Return the workspace view matching the project's generation policy."""
+        if self._is_text_only(project_id):
+            return self._text_only_workspace(project_id)
+        return self.get_generation_workspace(project_id)
 
     def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
-        if self._is_text_only(project_id):
-            result = self._tool("plan_generation_batch", {})
-            if not result.get("ok"):
-                raise RuntimeError(str(result.get("error", "plan_generation_batch failed")))
-            return self._text_only_workspace(project_id)
-        result = self._tool("plan_generation_batch", {})
-        if not result.get("ok"):
-            raise RuntimeError(str(result.get("error", "plan_generation_batch failed")))
-        return self.get_generation_workspace(project_id)
+        self._invoke_tool_or_raise("plan_generation_batch", {})
+        return self._current_generation_workspace(project_id)
 
     def approve_generation_spend(
         self, project_id: str | None = None, max_cost_usd: float = -1.0
     ) -> GenerationWorkspace:
         self._set_active(project_id)
-        if self._is_text_only(project_id):
-            result = self._tool("approve_generation_spend", {"max_cost_usd": max_cost_usd})
-            if not result.get("ok"):
-                raise RuntimeError(str(result.get("error", "approve_generation_spend failed")))
-            return self._text_only_workspace(project_id)
-        result = self._tool("approve_generation_spend", {"max_cost_usd": max_cost_usd})
-        if not result.get("ok"):
-            raise RuntimeError(str(result.get("error", "approve_generation_spend failed")))
-        return self.get_generation_workspace(project_id)
+        self._invoke_tool_or_raise("approve_generation_spend", {"max_cost_usd": max_cost_usd})
+        return self._current_generation_workspace(project_id)
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
-        if self._is_text_only(project_id):
-            result = self._tool("start_generation_batch", {})
-            if not result.get("ok"):
-                raise RuntimeError(str(result.get("error", "start_generation_batch failed")))
-            return self._text_only_workspace(project_id)
-        result = self._tool("start_generation_batch", {})
-        if not result.get("ok"):
-            raise RuntimeError(str(result.get("error", "start_generation_batch failed")))
-        return self.get_generation_workspace(project_id)
+        self._invoke_tool_or_raise("start_generation_batch", {})
+        return self._current_generation_workspace(project_id)
 
     def poll_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         self._set_active(project_id)
         if self._is_text_only(project_id):
             return self._text_only_workspace(project_id)
+        self._resume_inflight_generations()
+        return self.get_generation_workspace(project_id)
+
+    def _resume_inflight_generations(self) -> None:
+        """Resume server-side polling for every row with a provider job."""
         active = self._tool("list_active_generations", {})
         rows = active.get("rows", [])
         if isinstance(rows, list):
@@ -253,7 +159,12 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
                         "resume_generation_polling",
                         {"generation_id": str(row.get("generation_id", ""))},
                     )
-        return self.get_generation_workspace(project_id)
+
+    def _invoke_tool_or_raise(self, tool_name: str, arguments: dict[str, object]) -> None:
+        """Invoke ``tool_name`` and raise RuntimeError when it reports failure."""
+        result = self._tool(tool_name, arguments)
+        if not result.get("ok"):
+            raise RuntimeError(str(result.get("error", f"{tool_name} failed")))
 
     def preview_generation_prompts(self, project_id: str | None = None) -> list[dict[str, object]]:
         """Resolve the exact prompt each shot will send to its provider."""
@@ -266,21 +177,19 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
     def approve_phase(self, project_id: str | None = None) -> MutationResult:
         self._set_active(project_id)
         r = self._tool("approve_phase", {"confirmed": True})
-        return MutationResult(
-            ok=bool(r.get("ok")),
-            project_id=str(r.get("project_id", "")),
-            current_phase=str(r.get("current_phase", "")),
-            message="Phase approved." if r.get("ok") else str(r.get("error", "")),
+        return mutation_result_from_response(
+            r,
+            fallback_project_id="",
+            success_message="Phase approved.",
         )
 
     def request_revision(self, note: str, project_id: str | None = None) -> MutationResult:
         self._set_active(project_id)
         r = self._tool("request_revision", {"note": note, "confirmed": True})
-        return MutationResult(  # pragma: no cover
-            ok=bool(r.get("ok")),
-            project_id=str(r.get("project_id", "")),
-            current_phase=str(r.get("current_phase", "")),
-            message="Revision requested." if r.get("ok") else str(r.get("error", "")),
+        return mutation_result_from_response(
+            r,
+            fallback_project_id="",
+            success_message="Revision requested.",
         )
 
     def add_operator_comment(
@@ -322,18 +231,9 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
         if not isinstance(comments, list):  # pragma: no cover
             return []
         return [
-            OperatorComment(
-                comment_id=str(c.get("comment_id", "")),
-                project_id=str(c.get("project_id", project_id or "")),
-                target_type=str(c.get("target_type", "")),
-                target_id=str(c.get("target_id", "")),
-                body=str(c.get("body", "")),
-                phase=str(c.get("phase", "")),
-                source=str(c.get("source", "")),
-                created_at=str(c.get("created_at", "")),
-            )
-            for c in comments
-            if isinstance(c, dict)
+            operator_comment_from_entry(comment, project_id)
+            for comment in comments
+            if isinstance(comment, dict)
         ]
 
     def list_artifacts(
@@ -363,14 +263,7 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
             "inspect_artifact",
             {"artifact_id": artifact_id, "phase": phase, "version": version},
         )
-        return ArtifactDetail(
-            artifact_id=artifact_id,
-            artifact_type=str(r.get("artifact_type", artifact_id)),
-            phase=phase,
-            version=version,
-            status=str(r.get("status", "candidate")),
-            body=dict(r.get("content", {})) if isinstance(r.get("content"), dict) else {},
-        )
+        return artifact_detail_from_response(artifact_id, phase, version, r)
 
     def list_checkpoints(self, project_id: str | None = None) -> list[dict[str, str]]:
         self._set_active(project_id)
@@ -395,20 +288,7 @@ class MCPStudioGateway(MCPProcessTransport, StudioGateway):
         if isinstance(events, list):
             for event in events[:limit]:
                 if isinstance(event, dict):
-                    details = event.get("details", {})
-                    if not isinstance(details, dict):  # pragma: no cover
-                        details = {}
-                    feed.append(
-                        AuditEvent(
-                            timestamp=str(event.get("timestamp", "")),
-                            actor=str(event.get("actor", "")),
-                            action=str(event.get("action", "")),
-                            target=str(details.get("project_id", "")),
-                            summary=(
-                                f"{event.get('action', '')} {details.get('project_id', '')}"
-                            ).strip(),
-                        )
-                    )
+                    feed.append(audit_event_from_entry(event))
         return feed
 
 
