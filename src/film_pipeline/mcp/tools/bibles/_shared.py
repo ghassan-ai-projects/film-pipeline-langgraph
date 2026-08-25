@@ -4,31 +4,106 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from ..helpers import _latest_artifact_version
 
-def _extract_script_text(script_data: dict[str, object] | None) -> str:
+
+def _dialogue_line(dialogue: object) -> str | None:
+    """Format one dialogue entry as 'character: line'; None for non-mappings."""
+    if not isinstance(dialogue, dict):
+        return None
+    char = dialogue.get("character_id", dialogue.get("character", ""))
+    line = dialogue.get("line", dialogue.get("text", ""))
+    return f"{char}: {line}"
+
+
+def _scene_lines(scene: object) -> list[str]:
+    """Collect heading, action, and dialogue lines from one scene."""
+    if not isinstance(scene, dict):
+        return []
+    lines: list[str] = []
+    heading = scene.get("heading", scene.get("scene_heading", ""))
+    if heading:
+        lines.append(str(heading))
+    for action in cast(list[Any], scene.get("action_lines", scene.get("actions", []))):
+        lines.append(str(action))
+    for dialogue in cast(list[Any], scene.get("dialogue_lines", scene.get("dialogue", []))):
+        line = _dialogue_line(dialogue)
+        if line is not None:
+            lines.append(line)
+    return lines
+
+
+def _scenes_text(scenes: object) -> str | None:
+    """Join all scene lines; None when scenes is not a list."""
+    if not isinstance(scenes, list):
+        return None
+    lines: list[str] = []
+    for scene in scenes:
+        lines.extend(_scene_lines(scene))
+    return "\n".join(lines)
+
+
+def _extract_script_text(script_data: object | None) -> str:
     """Extract readable text from the Script artifact."""
-    if script_data is None:
-        return ""
-    if isinstance(script_data, dict):
-        scenes = script_data.get("scenes", script_data.get("content", []))
-        if isinstance(scenes, list):
-            lines: list[str] = []
-            for scene in scenes:
-                if isinstance(scene, dict):
-                    heading = scene.get("heading", scene.get("scene_heading", ""))
-                    if heading:
-                        lines.append(str(heading))
-                    if scene is not None:
-                        for action in cast(
-                            list[Any], scene.get("action_lines", scene.get("actions", []))
-                        ):
-                            lines.append(str(action))
-                        for dialogue in cast(
-                            list[Any], scene.get("dialogue_lines", scene.get("dialogue", []))
-                        ):
-                            if isinstance(dialogue, dict):
-                                char = dialogue.get("character_id", dialogue.get("character", ""))
-                                line = dialogue.get("line", dialogue.get("text", ""))
-                                lines.append(f"{char}: {line}")
-            return "\n".join(lines)
-    return str(script_data)
+    if not isinstance(script_data, dict):
+        return "" if script_data is None else str(script_data)
+    joined = _scenes_text(script_data.get("scenes", script_data.get("content", [])))
+    if joined is None:
+        return str(script_data)
+    return joined
+
+
+def _load_versioned_artifact(store: Any, project_id: str, phase: str, artifact_id: str) -> Any:
+    """Load version 1 of an artifact from its creation phase."""
+    from film_pipeline.schemas._base import FilmPhase
+
+    return store.load(project_id, FilmPhase(phase), artifact_id, 1)
+
+
+def _load_artifact_if_present(store: Any, project_id: str, phase: str, artifact_id: str) -> Any:
+    """Load version 1 of an artifact; None when missing or unreadable."""
+    try:
+        return _load_versioned_artifact(store, project_id, phase, artifact_id)
+    except (FileNotFoundError, ValueError):
+        return None
+
+
+def _save_visual_dev_candidate(
+    store: Any,
+    project_id: str,
+    artifact_id: str,
+    artifact_type: Any,
+    created_by: str,
+    bible: Any,
+) -> Any:
+    """Persist a bible as the next CANDIDATE version in visual_dev."""
+    from datetime import UTC, datetime
+
+    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactMetadata
+
+    next_version = (
+        _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), artifact_id) + 1
+    )
+    meta = ArtifactMetadata(
+        artifact_id=artifact_id,
+        artifact_type=artifact_type,
+        project_id=project_id,
+        phase=FilmPhase("visual_dev"),
+        version=next_version,
+        status=ArtifactStatus.CANDIDATE,
+        parents=[],
+        created_by=created_by,
+        created_at=datetime.now(UTC),
+    )
+    return store.save(bible, meta)
+
+
+def _register_active_artifact_ref(
+    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
+) -> None:
+    """Record an artifact reference on the active project and persist state."""
+    active[state_key] = ref
+    active.setdefault("artifact_refs", []).append(ref)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
