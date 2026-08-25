@@ -6,6 +6,16 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+# What makes a delivery package complete, stated once:
+# (inclusion-flag attribute on DeliveryPackage, missing-item label).
+_COMPLETION_REQUIREMENTS: tuple[tuple[str, str], ...] = (
+    ("subtitles_included", "subtitles"),
+    ("audio_stems_included", "audio_stems"),
+    ("validation_report_included", "validation_report"),
+    ("cost_report_included", "cost_report"),
+    ("credits_included", "credits"),
+)
+
 
 @dataclass
 class DeliveryPackage:
@@ -26,29 +36,45 @@ class DeliveryPackage:
 
     @property
     def is_complete(self) -> bool:
-        required = [
-            self.subtitles_included,
-            self.audio_stems_included,
-            self.validation_report_included,
-            self.cost_report_included,
-            self.credits_included,
-        ]
-        return all(required)
+        return all(getattr(self, attribute) for attribute, _label in _COMPLETION_REQUIREMENTS)
 
     @property
     def missing_items(self) -> list[str]:
-        missing: list[str] = []
-        if not self.subtitles_included:
-            missing.append("subtitles")
-        if not self.audio_stems_included:
-            missing.append("audio_stems")
-        if not self.validation_report_included:
-            missing.append("validation_report")
-        if not self.cost_report_included:
-            missing.append("cost_report")
-        if not self.credits_included:
-            missing.append("credits")
-        return missing
+        return [
+            label for attribute, label in _COMPLETION_REQUIREMENTS if not getattr(self, attribute)
+        ]
+
+
+def _completeness_check_artifact(package: DeliveryPackage) -> dict[str, Any]:
+    """Shape a package as the artifact dict DeliveryCompletenessValidator reads.
+
+    Canonical basenames stand in for real paths because the validator only
+    checks that each manifest slot is present and non-empty.
+    """
+    artifact_dict: dict[str, Any] = {
+        "manifest": {
+            "files": package.files,
+            "subtitles": [],
+            "stills": [],
+            "validation_report_ref": "",
+            "cost_report_ref": "",
+            "credits_ref": "",
+        }
+    }
+
+    # Populate from package state
+    if package.subtitles_included:
+        artifact_dict["manifest"]["subtitles"] = ["subtitles.srt"]
+    if package.stills_included:
+        artifact_dict["manifest"]["stills"] = ["still_01.png"]
+    if package.validation_report_included:
+        artifact_dict["manifest"]["validation_report_ref"] = "validation_report.json"
+    if package.cost_report_included:
+        artifact_dict["manifest"]["cost_report_ref"] = "cost_report.json"
+    if package.credits_included:
+        artifact_dict["manifest"]["credits_ref"] = "credits.txt"
+
+    return artifact_dict
 
 
 @dataclass
@@ -165,29 +191,7 @@ class DeliveryPackagingAgent:
             DeliveryCompletenessValidator,
         )
 
-        # Build artifact dict for validator
-        artifact_dict = {
-            "manifest": {
-                "files": package.files,
-                "subtitles": [],
-                "stills": [],
-                "validation_report_ref": "",
-                "cost_report_ref": "",
-                "credits_ref": "",
-            }
-        }
-
-        # Populate from package state
-        if package.subtitles_included:
-            artifact_dict["manifest"]["subtitles"] = ["subtitles.srt"]
-        if package.stills_included:
-            artifact_dict["manifest"]["stills"] = ["still_01.png"]
-        if package.validation_report_included:
-            artifact_dict["manifest"]["validation_report_ref"] = "validation_report.json"
-        if package.cost_report_included:
-            artifact_dict["manifest"]["cost_report_ref"] = "cost_report.json"
-        if package.credits_included:
-            artifact_dict["manifest"]["credits_ref"] = "credits.txt"
+        artifact_dict = _completeness_check_artifact(package)
 
         validator = DeliveryCompletenessValidator()
         report = validator.run(artifact_dict)
