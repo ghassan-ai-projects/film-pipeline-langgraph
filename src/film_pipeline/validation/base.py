@@ -177,6 +177,17 @@ class BaseValidator(ABC):
             or ValidationModality.VIDEO in self.entry.modalities
         )
 
+    @staticmethod
+    def _image_data(item: object) -> str | None:
+        """Return the base64 image carried by one list item, when present."""
+        if isinstance(item, str):
+            return item
+        if isinstance(item, dict):
+            b64 = item.get("data") or item.get("b64") or item.get("image_b64")
+            if b64:
+                return str(b64)
+        return None
+
     def _extract_images(self, artifact: dict[str, Any]) -> list[str]:
         """Extract base64-encoded images from the artifact.
 
@@ -187,12 +198,9 @@ class BaseValidator(ABC):
             if isinstance(value, list) and value:
                 images: list[str] = []
                 for item in value:
-                    if isinstance(item, str):
-                        images.append(item)
-                    elif isinstance(item, dict):
-                        b64 = item.get("data") or item.get("b64") or item.get("image_b64")
-                        if b64:
-                            images.append(str(b64))
+                    image = self._image_data(item)
+                    if image is not None:
+                        images.append(image)
                 if images:
                     return images
         return []
