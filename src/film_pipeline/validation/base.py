@@ -8,6 +8,8 @@ dispatches to ``_validate_llm()`` which uses the shared LLM infrastructure
 
 from __future__ import annotations
 
+import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
 from uuid import uuid4
@@ -18,6 +20,8 @@ from film_pipeline.schemas.registries.validator_registry import (
 )
 from film_pipeline.schemas.validation import ValidationIssue, ValidationReport
 from film_pipeline.validation.thresholds import score_to_status
+
+_logger = logging.getLogger(__name__)
 
 
 class BaseValidator(ABC):
@@ -84,9 +88,7 @@ class BaseValidator(ABC):
             try:
                 return self._validate_llm(artifact, context)
             except Exception:
-                import logging
-
-                logging.warning(
+                _logger.warning(
                     "Validator '%s': LLM validation failed, falling back to rule-based check.",
                     self.entry.validator_id,
                 )
@@ -196,19 +198,13 @@ class BaseValidator(ABC):
         for key in ("images", "frames", "asset_data", "clips"):
             value = artifact.get(key)
             if isinstance(value, list) and value:
-                images: list[str] = []
-                for item in value:
-                    image = self._image_data(item)
-                    if image is not None:
-                        images.append(image)
+                images = [image for item in value if (image := self._image_data(item)) is not None]
                 if images:
                     return images
         return []
 
     def _parse_validation_response(self, text: str) -> dict[str, Any]:
         """Parse LLM response into the expected raw dict format."""
-        import json
-
         text = text.strip()
         try:
             return dict(json.loads(text))
@@ -299,7 +295,7 @@ class BaseValidator(ABC):
 
 
 class _SafeDict(dict[str, str]):
-    """Dict that returns the missing key as the value for missing keys."""
+    """Format-map dict that leaves unknown placeholders as ``{key}`` text."""
 
     def __missing__(self, key: str) -> str:
         return f"{{{key}}}"
