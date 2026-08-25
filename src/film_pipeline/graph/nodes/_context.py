@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from film_pipeline.graph.nodes._shared import (
     _get_services,
@@ -12,6 +12,9 @@ from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
+
+if TYPE_CHECKING:
+    from film_pipeline.schemas._base import FilmPhase
 
 _logger = logging.getLogger(__name__)
 
@@ -51,16 +54,20 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
-# Upstream context a phase cannot do good work without. If one of these refs is
-# set but failed to load, the agent ran context-blind — block instead of
-
-
 def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
     """Build context vars for the orchestrator review agent.
 
     Summarises the target film, current phase output, and structural metrics
     so the orchestrator can assess quality without loading every artifact.
     """
+    ctx = _initial_phase_context(state)
+    ctx["constitution_summary"] = _constitution_summary(state)
+    _apply_phase_output_sections(state, ctx)
+    return ctx
+
+
+def _initial_phase_context(state: dict[str, Any]) -> dict[str, str]:
+    """Default context values with the orchestrator convergence round resolved."""
     ctx: dict[str, str] = {
         "target_runtime_seconds": str(state.get("target_runtime_seconds", "300")),
         "film_type": str(state.get("film_type", "narrative")),
@@ -73,123 +80,161 @@ def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
         "consistency_warnings": "(none)",
     }
 
-    # Convergence round from orchestrator state
     conv = state.get("_orchestrator__convergence", {})
     if isinstance(conv, dict):
         phase_conv = conv.get(ctx["current_phase"], {})
         if isinstance(phase_conv, dict):
             ctx["convergence_round"] = str(phase_conv.get("round_count", 1))
 
-    # Constitution summary
+    return ctx
+
+
+def _constitution_summary(state: dict[str, Any]) -> str:
+    """Constitution digest for prompts, or the placeholder when unavailable."""
     constitution_ref = state.get("constitution_ref", "")
-    if constitution_ref and isinstance(constitution_ref, str) and constitution_ref.strip():
-        services = _get_services(state)
-        if services is not None:
-            try:
-                parsed = _parse_ref(str(constitution_ref))
-                from film_pipeline.schemas._base import FilmPhase
-
-                data = services.artifact_store.load(
-                    str(state.get("project_id", "")),
-                    FilmPhase("constitution"),
-                    parsed.artifact_id,
-                    parsed.version,
-                )
-                if isinstance(data, dict):
-                    ctx["constitution_summary"] = (
-                        f"theme: {data.get('theme', '?')}\n"
-                        f"tone: {data.get('tone', '?')}\n"
-                        f"visual_language: {str(data.get('visual_language', ''))[:200]}"
-                    )
-            except Exception as exc:
-                _logger.warning("Could not load constitution summary for context: %s", exc)
-
-    # Phase output summary — load current phase artifacts
+    if not (constitution_ref and isinstance(constitution_ref, str) and constitution_ref.strip()):
+        return "(not available)"
     services = _get_services(state)
-    if services is not None:
+    if services is None:
+        return "(not available)"
+    try:
+        parsed = _parse_ref(str(constitution_ref))
         from film_pipeline.schemas._base import FilmPhase
 
-        project_id = str(state.get("project_id", ""))
+        data = services.artifact_store.load(
+            str(state.get("project_id", "")),
+            FilmPhase("constitution"),
+            parsed.artifact_id,
+            parsed.version,
+        )
+        if isinstance(data, dict):
+            return (
+                f"theme: {data.get('theme', '?')}\n"
+                f"tone: {data.get('tone', '?')}\n"
+                f"visual_language: {str(data.get('visual_language', ''))[:200]}"
+            )
+    except Exception as exc:
+        _logger.warning("Could not load constitution summary for context: %s", exc)
+    return "(not available)"
+
+
+def _load_phase_artifacts(
+    services: GraphServices,
+    project_id: str,
+    phase: FilmPhase,
+) -> list[tuple[str, dict[str, Any]]]:
+    """List and load a phase's artifacts as (versioned label, data) pairs.
+
+    Listing or load failures are skipped silently, matching prior behavior.
+    """
+    try:
+        artifacts = services.artifact_store.list_artifacts(project_id, phase)
+    except Exception:
+        return []
+    loaded: list[tuple[str, dict[str, Any]]] = []
+    for a in artifacts:
         try:
-            artifacts = services.artifact_store.list_artifacts(
-                project_id, FilmPhase(ctx["current_phase"])
-            )
+            data = services.artifact_store.load(project_id, phase, a.artifact_id, a.version)
         except Exception:
-            artifacts = []
+            continue
+        if isinstance(data, dict):
+            loaded.append((f"{a.artifact_id} (v{a.version})", data))
+    return loaded
 
-        lines: list[str] = []
-        total_scenes = 0
-        total_shots = 0
-        for a in artifacts:
-            try:
-                data = services.artifact_store.load(
-                    project_id, FilmPhase(ctx["current_phase"]), a.artifact_id, a.version
-                )
-            except Exception:
-                continue
-            if isinstance(data, dict):
-                lines.append(f"\n{a.artifact_id} (v{a.version}):")
-                # Extract key metrics
-                for key in ("scenes", "scene_list", "rows", "shot_count"):
-                    val = data.get(key)
-                    if isinstance(val, list):
-                        lines.append(f"  {key}: {len(val)} items")
-                        if key == "scenes":
-                            total_scenes = len(val)
-                        elif key == "rows":
-                            total_shots = len(val)
-                # Scene-level preview
-                scenes = data.get("scenes", [])
-                if isinstance(scenes, list):
-                    for s in scenes[:5]:
-                        if isinstance(s, dict):
-                            sid = s.get("scene_id", "?")
-                            func = str(s.get("dramatic_function", ""))[:80]
-                            lines.append(f"  {sid}: {func}")
-                rows = data.get("rows", [])
-                if isinstance(rows, list):
-                    for r in rows[:5]:
-                        if isinstance(r, dict):
-                            sid = r.get("shot_id", "?")
-                            dur = r.get("duration_seconds", "?")
-                            lines.append(f"  {sid}: {dur}s")
-                # Key text fields
-                for key in ("text", "theme", "themes", "title"):
-                    val = data.get(key)
-                    if isinstance(val, str) and val:
-                        lines.append(f"  {key}: {val[:150]}")
-                    elif isinstance(val, list):
-                        lines.append(f"  {key}: {', '.join(str(x)[:60] for x in val[:3])}")
 
-        ctx["phase_output_summary"] = "\n".join(lines) if lines else "(no artifacts produced)"
+def _summarize_phase_artifact(artifact: str, data: dict[str, Any]) -> tuple[list[str], int, int]:
+    """Preview lines for one artifact plus its scene/shot counts.
 
-        # Metrics
-        target = int(ctx["target_runtime_seconds"])
-        metrics_parts: list[str] = []
-        if total_scenes:
-            avg_scene = target / max(total_scenes, 1)
-            metrics_parts.append(
-                f"scene_count: {total_scenes} (~{avg_scene:.0f}s per scene for {target}s target)"
-            )
-        if total_shots:
-            metrics_parts.append(f"shot_count: {total_shots}")
-        if total_shots and total_scenes:
-            metrics_parts.append(f"shots_per_scene: {total_shots / max(total_scenes, 1):.1f}")
-        ctx["metrics_summary"] = "\n".join(metrics_parts) if metrics_parts else "(no metrics)"
+    Counts are -1 when the underlying key is absent so callers can reproduce
+    the historical last-write-wins totals across artifacts.
+    """
+    lines = [f"\n{artifact}:"]
+    scene_count = -1
+    shot_count = -1
+    for key in ("scenes", "scene_list", "rows", "shot_count"):
+        val = data.get(key)
+        if isinstance(val, list):
+            lines.append(f"  {key}: {len(val)} items")
+            if key == "scenes":
+                scene_count = len(val)
+            elif key == "rows":
+                shot_count = len(val)
+    scenes = data.get("scenes", [])
+    if isinstance(scenes, list):
+        for s in scenes[:5]:
+            if isinstance(s, dict):
+                sid = s.get("scene_id", "?")
+                func = str(s.get("dramatic_function", ""))[:80]
+                lines.append(f"  {sid}: {func}")
+    rows = data.get("rows", [])
+    if isinstance(rows, list):
+        for r in rows[:5]:
+            if isinstance(r, dict):
+                sid = r.get("shot_id", "?")
+                dur = r.get("duration_seconds", "?")
+                lines.append(f"  {sid}: {dur}s")
+    for key in ("text", "theme", "themes", "title"):
+        val = data.get(key)
+        if isinstance(val, str) and val:
+            lines.append(f"  {key}: {val[:150]}")
+        elif isinstance(val, list):
+            lines.append(f"  {key}: {', '.join(str(x)[:60] for x in val[:3])}")
+    return lines, scene_count, shot_count
 
-        # Consistency warnings
-        warnings = state.get("consistency_warnings", [])
-        if warnings:
-            ctx["consistency_warnings"] = "\n".join(
-                str(w)[:200] for w in (warnings if isinstance(warnings, list) else [])
-            )
-            if (
-                isinstance(ctx["consistency_warnings"], str)
-                and len(ctx["consistency_warnings"]) > 800
-            ):
-                ctx["consistency_warnings"] = ctx["consistency_warnings"][:800] + "..."
 
-    return ctx
+def _metrics_summary(target: int, scenes: int, shots: int) -> str:
+    """Structural pacing metrics derived from counted scenes/shots."""
+    metrics_parts: list[str] = []
+    if scenes:
+        avg_scene = target / max(scenes, 1)
+        metrics_parts.append(
+            f"scene_count: {scenes} (~{avg_scene:.0f}s per scene for {target}s target)"
+        )
+    if shots:
+        metrics_parts.append(f"shot_count: {shots}")
+    if shots and scenes:
+        metrics_parts.append(f"shots_per_scene: {shots / max(scenes, 1):.1f}")
+    return "\n".join(metrics_parts) if metrics_parts else "(no metrics)"
+
+
+def _consistency_warnings_text(state: dict[str, Any]) -> str:
+    """Joined consistency warnings, truncated past 800 chars."""
+    warnings = state.get("consistency_warnings", [])
+    if not warnings:
+        return "(none)"
+    text = "\n".join(str(w)[:200] for w in (warnings if isinstance(warnings, list) else []))
+    if len(text) > 800:
+        return text[:800] + "..."
+    return text
+
+
+def _apply_phase_output_sections(state: dict[str, Any], ctx: dict[str, str]) -> None:
+    """Fill phase output summary, metrics, and warnings sections in place.
+
+    No-op when services are unavailable so the placeholder defaults survive.
+    """
+    services = _get_services(state)
+    if services is None:
+        return
+    from film_pipeline.schemas._base import FilmPhase
+
+    project_id = str(state.get("project_id", ""))
+    phase = FilmPhase(ctx["current_phase"])
+    lines: list[str] = []
+    total_scenes = 0
+    total_shots = 0
+    for artifact, data in _load_phase_artifacts(services, project_id, phase):
+        artifact_lines, scene_count, shot_count = _summarize_phase_artifact(artifact, data)
+        lines.extend(artifact_lines)
+        if scene_count >= 0:
+            total_scenes = scene_count
+        if shot_count >= 0:
+            total_shots = shot_count
+    ctx["phase_output_summary"] = "\n".join(lines) if lines else "(no artifacts produced)"
+    ctx["metrics_summary"] = _metrics_summary(
+        int(ctx["target_runtime_seconds"]), total_scenes, total_shots
+    )
+    ctx["consistency_warnings"] = _consistency_warnings_text(state)
 
 
 def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
@@ -233,10 +278,8 @@ _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
 
 def _infer_artifact_type(artifact: Any) -> _ArtifactType:
     """Infer ArtifactType from the object's class name."""
-    class_name = type(artifact).__name__
-    mapped = _ARTIFACT_TYPE_BY_CLASS.get(class_name, "script")
     try:
-        return _ArtifactType(mapped)
+        return _ArtifactType(_ARTIFACT_TYPE_BY_CLASS.get(type(artifact).__name__, "script"))
     except ValueError:
         return _ArtifactType.SCRIPT
 
@@ -256,52 +299,70 @@ def _inject_artifact_context(
     context_vars: dict[str, str],
 ) -> None:
     """Load upstream artifact content into prompt context to preserve continuity."""
-    project_id = str(state.get("project_id", ""))
-    if not project_id:
+    if not str(state.get("project_id", "")):
         return
 
-    from film_pipeline.schemas._base import FilmPhase
-
-    artifact_map = {
-        "constitution_ref": ("constitution", "constitution_content"),
-        "treatment_ref": ("development", "treatment_content"),
-        "scene_list_ref": ("development", "scene_list_content"),
-        "story_bible_ref": ("script", "story_bible_content"),
-        "script_ref": ("script", "script_content"),
-        "shot_matrix_ref": ("shot_bible", "shot_matrix_content"),
-        "visual_refs": ("visual_dev", "visual_refs_content"),
-        "execution_brief_ref": ("shot_bible", "execution_brief_content"),
-    }
-    for ref_key, (phase_name, content_key) in artifact_map.items():
+    for ref_key, (phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
         ref = str(state.get(ref_key, "") or "").strip()
         if not ref:
             continue
         try:
-            parsed = _parse_ref(ref)
-            data = services.artifact_store.load(
-                project_id,
-                FilmPhase(phase_name),
-                parsed.artifact_id,
-                parsed.version,
-            )
-            context_vars[content_key] = compact_json_context(
-                data,
-                max_chars=_artifact_context_max_chars(state),
-            )
+            context_vars[content_key] = _compact_upstream_content(state, services, phase_name, ref)
         except (FileNotFoundError, ValueError, KeyError) as exc:
-            # Do NOT swallow silently — a missing upstream artifact means the
-            # agent would run context-blind (a hidden cause of weak output).
-            # Log it and record the failure so the phase gate can block.
-            _logger.warning(
-                "Could not load upstream artifact for prompt context: %s=%s (%s)",
-                ref_key,
-                ref,
-                exc,
-            )
-            failures = state.setdefault("_context_load_failures", [])
-            if ref_key not in failures:
-                failures.append(ref_key)
+            _record_context_load_failure(state, ref_key, ref, exc)
             continue
+
+
+_UPSTREAM_CONTENT_SOURCES: dict[str, tuple[str, str]] = {
+    "constitution_ref": ("constitution", "constitution_content"),
+    "treatment_ref": ("development", "treatment_content"),
+    "scene_list_ref": ("development", "scene_list_content"),
+    "story_bible_ref": ("script", "story_bible_content"),
+    "script_ref": ("script", "script_content"),
+    "shot_matrix_ref": ("shot_bible", "shot_matrix_content"),
+    "visual_refs": ("visual_dev", "visual_refs_content"),
+    "execution_brief_ref": ("shot_bible", "execution_brief_content"),
+}
+
+
+def _compact_upstream_content(
+    state: dict[str, Any],
+    services: GraphServices,
+    phase_name: str,
+    ref: str,
+) -> str:
+    """Load one upstream artifact and compact it to the configured char budget."""
+    parsed = _parse_ref(ref)
+    from film_pipeline.schemas._base import FilmPhase
+
+    data = services.artifact_store.load(
+        str(state.get("project_id", "")),
+        FilmPhase(phase_name),
+        parsed.artifact_id,
+        parsed.version,
+    )
+    return compact_json_context(data, max_chars=_artifact_context_max_chars(state))
+
+
+def _record_context_load_failure(
+    state: dict[str, Any],
+    ref_key: str,
+    ref: str,
+    exc: Exception,
+) -> None:
+    # Upstream context a phase cannot do good work without. If one of these refs
+    # is set but failed to load, the agent ran context-blind (a hidden cause of
+    # weak output) — do NOT swallow silently: log it and record the failure so
+    # the phase gate can block.
+    _logger.warning(
+        "Could not load upstream artifact for prompt context: %s=%s (%s)",
+        ref_key,
+        ref,
+        exc,
+    )
+    failures = state.setdefault("_context_load_failures", [])
+    if ref_key not in failures:
+        failures.append(ref_key)
 
 
 def _model_overrides_for(state: dict[str, Any], model_profile: str) -> dict[str, Any] | None:
@@ -327,26 +388,32 @@ def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) 
     if not isinstance(resolved_config, dict):
         return
     budget = resolved_config.get("budget", {})
-    providers = resolved_config.get("providers", {})
     if isinstance(budget, dict):
         for key in ("project_cap_usd", "max_total_usd"):
             value = budget.get(key)
             if value is not None:
                 context_vars["budget_cap"] = str(value)
                 break
-    preferred: list[str] = []
-    if isinstance(providers, dict):
-        order = providers.get("order", [])
-        if isinstance(order, list):
-            preferred = [str(item) for item in order if str(item)]
-        elif isinstance(providers.get("video"), list):
-            preferred = [
-                str(entry.get("provider_id", ""))
-                for entry in providers["video"]
-                if isinstance(entry, dict) and str(entry.get("provider_id", ""))
-            ]
+    preferred = _preferred_providers(resolved_config.get("providers", {}))
     if preferred:
         context_vars["preferred_providers"] = ", ".join(preferred)
+
+
+def _preferred_providers(providers: Any) -> list[str]:
+    """Ordered provider ids from config: explicit order list, else video entries."""
+    if not isinstance(providers, dict):
+        return []
+    order = providers.get("order", [])
+    if isinstance(order, list):
+        return [str(item) for item in order if str(item)]
+    video = providers.get("video")
+    if isinstance(video, list):
+        return [
+            str(entry.get("provider_id", ""))
+            for entry in video
+            if isinstance(entry, dict) and str(entry.get("provider_id", ""))
+        ]
+    return []
 
 
 def _artifact_context_max_chars(state: dict[str, Any]) -> int:
