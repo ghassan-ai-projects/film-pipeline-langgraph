@@ -13,7 +13,7 @@ from ..helpers import _error, _ok, _services
 
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import ProviderJob
+    from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
     from film_pipeline.schemas._base import GenerationStatus
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
@@ -150,7 +150,7 @@ def _poll_row_status(
     mgr: GenerationLedgerManager,
     project_id: str,
     generation_id: str,
-    adapter: Any,
+    adapter: BaseProviderAdapter,
     job: ProviderJob,
 ) -> tuple[str, int] | str:
     """Poll the provider job, recording poll failures on the ledger row.
