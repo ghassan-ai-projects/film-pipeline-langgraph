@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from film_pipeline.graph.nodes._agent import (
     _propagate_side_effects,
@@ -20,6 +20,10 @@ from film_pipeline.graph.nodes._shared import (
     _phase_gate_updates,
 )
 from film_pipeline.graph.services import GraphServices
+
+if TYPE_CHECKING:
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas._base import GenerationMode
 
 
 def _load_artifact_data(
@@ -72,6 +76,37 @@ def _find_matrix_row(rows: list[dict[str, Any]], shot_id: str) -> dict[str, Any]
     return None
 
 
+def _prompt_entry_from_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Map a master-matrix row onto the structured prompt-builder entry shape."""
+    characters = row.get("characters") or []
+    environment = str(row.get("environment", "") or "")
+    subject_type = "environment" if not characters else "character"
+    subject_id = environment if not characters else str(characters[0])
+    return {
+        "subject_type": subject_type,
+        "subject_id": subject_id,
+        "frame_role": str(row.get("camera_profile", "") or ""),
+        "prompt_text": str(row.get("story_function", "") or ""),
+        "lighting": str(row.get("lighting_state", "") or ""),
+        "notes": str(row.get("environment_state", "") or ""),
+    }
+
+
+def _load_visual_dev_bible(
+    services: GraphServices,
+    project_id: str,
+    bible_id: str,
+) -> dict[str, Any] | None:
+    """Load a visual_dev bible, returning None when absent or malformed."""
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        data = services.artifact_store.load(project_id, FilmPhase("visual_dev"), bible_id, 1)
+    except (FileNotFoundError, ValueError, KeyError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _build_prompt_from_matrix_row(
     state: dict[str, Any],
     services: GraphServices,
@@ -82,17 +117,8 @@ def _build_prompt_from_matrix_row(
 
     characters = row.get("characters") or []
     environment = str(row.get("environment", "") or "")
-    subject_type = "environment" if not characters else "character"
-    subject_id = environment if not characters else str(characters[0])
 
-    entry: dict[str, Any] = {
-        "subject_type": subject_type,
-        "subject_id": subject_id,
-        "frame_role": str(row.get("camera_profile", "") or ""),
-        "prompt_text": str(row.get("story_function", "") or ""),
-        "lighting": str(row.get("lighting_state", "") or ""),
-        "notes": str(row.get("environment_state", "") or ""),
-    }
+    entry = _prompt_entry_from_row(row)
 
     constitution_ref = str(state.get("constitution_ref", "") or "")
     constitution = (
@@ -103,32 +129,37 @@ def _build_prompt_from_matrix_row(
     constitution = constitution if isinstance(constitution, dict) else None
 
     character_bible: dict[str, Any] | None = None
-    environment_bible: dict[str, Any] | None = None
     project_id = str(state.get("project_id", ""))
-    from film_pipeline.schemas._base import FilmPhase
-
     if characters:
-        try:
-            character_bible = services.artifact_store.load(
-                project_id, FilmPhase("visual_dev"), "character_bible", 1
-            )
-        except (FileNotFoundError, ValueError, KeyError):
-            character_bible = None
-        character_bible = character_bible if isinstance(character_bible, dict) else None
+        character_bible = _load_visual_dev_bible(services, project_id, "character_bible")
     elif environment:
-        try:
-            environment_bible = services.artifact_store.load(
-                project_id, FilmPhase("visual_dev"), "environment_bible", 1
-            )
-        except (FileNotFoundError, ValueError, KeyError):
-            environment_bible = None
-        environment_bible = environment_bible if isinstance(environment_bible, dict) else None
+        # Loaded despite being unconsumed here, matching the historical load path.
+        _load_visual_dev_bible(services, project_id, "environment_bible")
 
     return build_structured_prompt(
         entry,
         character_bible=character_bible,
         constitution=constitution,
     )
+
+
+def _compose_prompt_from_rctco(rctco: dict[str, Any]) -> str:
+    """Compose fallback prompt text from an entry's RCTCO block."""
+    parts: list[str] = []
+    if rctco.get("r"):
+        parts.append(str(rctco["r"]))
+    if rctco.get("c1"):
+        parts.append(str(rctco["c1"]))
+    constraints = rctco.get("c2") or []
+    if constraints:
+        parts.append("Constraints:")
+        parts.extend(f"- {c}" for c in constraints)
+    context = rctco.get("t") or {}
+    if context:
+        parts.append("Context:")
+        for key, value in context.items():
+            parts.append(f"- {key}: {value}")
+    return "\n\n".join(parts)
 
 
 def _resolve_prompt_for_request(
@@ -143,38 +174,200 @@ def _resolve_prompt_for_request(
 
     if prompt_ref and services:
         data = _load_artifact_data(state, services, prompt_ref, ["gen_planning", "shot_bible"])
-        if isinstance(data, dict):
-            entries = data.get("entries") or []
-            for entry in entries:
-                if not isinstance(entry, dict):
-                    continue
-                if str(entry.get("shot_id", "")) == shot_id:
-                    rendered = str(entry.get("rendered_prompt", "") or "")
-                    if rendered:
-                        return rendered
-                    rctco = entry.get("rctco")
-                    if isinstance(rctco, dict):
-                        parts: list[str] = []
-                        if rctco.get("r"):
-                            parts.append(str(rctco["r"]))
-                        if rctco.get("c1"):
-                            parts.append(str(rctco["c1"]))
-                        constraints = rctco.get("c2") or []
-                        if constraints:
-                            parts.append("Constraints:")
-                            parts.extend(f"- {c}" for c in constraints)
-                        context = rctco.get("t") or {}
-                        if context:
-                            parts.append("Context:")
-                            for key, value in context.items():
-                                parts.append(f"- {key}: {value}")
-                        return "\n\n".join(parts)
+        entries = (data.get("entries") or []) if isinstance(data, dict) else []
+        for entry in entries:
+            if not isinstance(entry, dict) or str(entry.get("shot_id", "")) != shot_id:
+                continue
+            rendered = str(entry.get("rendered_prompt", "") or "")
+            if rendered:
+                return rendered
+            rctco = entry.get("rctco")
+            if isinstance(rctco, dict):
+                return _compose_prompt_from_rctco(rctco)
 
     row = _find_matrix_row(matrix_rows, shot_id)
     if row is not None:
         return _build_prompt_from_matrix_row(state, services, row)
 
     return str(req.get("prompt", "") or "")
+
+
+def _parse_generation_mode(mode_str: str) -> GenerationMode:
+    """Parse a generation mode string, falling back to TEST when unknown."""
+    from film_pipeline.schemas._base import GenerationMode
+
+    mode = GenerationMode.TEST
+    with contextlib.suppress(ValueError):
+        mode = GenerationMode(mode_str)
+    return mode
+
+
+def _approve_spend_with_ceiling(
+    new_state: dict[str, Any],
+    services: GraphServices,
+    mgr: GenerationLedgerManager,
+    project_id: str,
+) -> None:
+    """Approve spend under a ceiling derived from the cost estimate (+10%)."""
+    max_cost_usd = -1.0
+    cost_estimate_ref = str(new_state.get("cost_estimate_ref", "") or "")
+    if cost_estimate_ref:
+        ce_data = _load_artifact_data(new_state, services, cost_estimate_ref, ["gen_planning"])
+        if isinstance(ce_data, dict):
+            raw_cost = ce_data.get("estimated_cost_usd")
+            if raw_cost is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    max_cost_usd = float(raw_cost) * 1.1
+    try:
+        mgr.approve_spend(project_id, max_cost_usd=max_cost_usd)
+    except ValueError as exc:
+        new_state.setdefault("issues", []).append(
+            {
+                "severity": "blocking",
+                "code": "generation_budget_exceeded",
+                "message": str(exc),
+            }
+        )
+
+
+def _ledger_rows_by_shot(
+    services: GraphServices,
+    project_id: str,
+) -> dict[str, str]:
+    """Map shot_id -> generation_id from the persisted generation ledger."""
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    mgr = GenerationLedgerManager(services.artifact_store)
+    return {row.shot_id: row.generation_id for row in mgr.load(project_id).rows}
+
+
+def _group_requests_by_batch(
+    resolved_requests: list[dict[str, Any]],
+) -> dict[tuple[str, str, str, str], list[str]]:
+    """Group request shot_ids by their shared (provider, model, mode, prompt_ref) batch key."""
+    from collections import defaultdict
+
+    groups: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
+    for req in resolved_requests:
+        shot_id = str(req.get("shot_id", ""))
+        if not shot_id:
+            continue
+        provider = str(req.get("provider", "mock-video-provider") or "mock-video-provider")
+        model = str(req.get("model", "mock-fast") or "mock-fast")
+        mode = _parse_generation_mode(str(req.get("mode", "test") or "test"))
+        prompt_ref = str(req.get("prompt_ref", "") or "")
+        groups[(provider, model, str(mode.value), prompt_ref)].append(shot_id)
+    return groups
+
+
+def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices | None) -> None:
+    """Resolve prompts, plan the batch by grouping key, approve spend, persist ledger."""
+    gen_requests = new_state.get("generation_requests")
+    if not gen_requests or services is None:
+        return
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    project_id = str(new_state.get("project_id", ""))
+    mgr = GenerationLedgerManager(services.artifact_store)
+    matrix_rows = _load_matrix_rows(new_state, services)
+
+    resolved_requests: list[dict[str, Any]] = []
+    for req in gen_requests:
+        if not isinstance(req, dict):
+            continue
+        req = dict(req)
+        resolved_prompt = _resolve_prompt_for_request(new_state, services, req, matrix_rows)
+        req.setdefault("prompt_payload", {})["resolved_prompt"] = resolved_prompt
+        resolved_requests.append(req)
+    new_state["generation_requests"] = resolved_requests
+
+    groups = _group_requests_by_batch(resolved_requests)
+
+    for (provider, model, mode_str, prompt_ref), shot_ids in groups.items():
+        mgr.plan_batch(
+            project_id=project_id,
+            shot_ids=shot_ids,
+            provider=provider,
+            model=model,
+            prompt_ref=prompt_ref,
+            mode=_parse_generation_mode(mode_str),
+        )
+
+    _approve_spend_with_ceiling(new_state, services, mgr, project_id)
+
+    ledger = mgr.load(project_id)
+    ledger_ref = _save_artifact(
+        new_state,
+        ledger,
+        "generation_ledger",
+        "generation",
+        artifact_type="generation_ledger",
+    )
+    if ledger_ref:
+        new_state["generation_ledger_ref"] = ledger_ref
+        new_state.setdefault("artifact_refs", []).append(ledger_ref)
+
+
+def _gate_dispatch_readiness(new_state: dict[str, Any]) -> None:
+    """Gate C: validate dispatch readiness over the enriched requests."""
+    gen_requests = new_state.get("generation_requests")
+    if gen_requests is None:
+        return
+    from film_pipeline.graph.orchestrator_validators import validate_dispatch_readiness
+
+    dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
+    new_state.setdefault("issues", []).extend(dispatch_issues)
+
+
+def _mark_matrix_rows_generated(new_state: dict[str, Any], services: GraphServices | None) -> None:
+    """Emit a matrix patch marking requested shots generated with asset refs."""
+    gen_requests = new_state.get("generation_requests")
+    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    if not gen_requests or not shot_matrix_ref:
+        return
+
+    from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
+
+    ledger_rows_by_shot: dict[str, str] = {}
+    if services is not None:
+        ledger_rows_by_shot = _ledger_rows_by_shot(services, str(new_state.get("project_id", "")))
+
+    row_updates: list[Any] = []
+    for req in gen_requests:
+        if isinstance(req, dict):
+            sid = str(req.get("shot_id", ""))
+            asset_ref = str(
+                req.get("asset_ref") or req.get("output_ref") or ledger_rows_by_shot.get(sid, "")
+            )
+            if sid:
+                row_updates.append(
+                    MatrixRowUpdate(
+                        shot_id=sid,
+                        set={"status": "generated"},
+                        append={"asset_refs": [asset_ref]} if asset_ref else {},
+                    )
+                )
+
+    if row_updates:
+        patch = MatrixPatch(
+            patch_id=f"generation_{new_state.get('project_id', '')}",
+            matrix_ref=shot_matrix_ref,
+            phase="generation",
+            reason="Clips generated — updating row asset references and status.",
+            updates=row_updates,
+            created_by_agent="generation-scheduler-agent",
+        )
+        patch_ref = _save_artifact(
+            new_state,
+            patch,
+            "matrix_patch_generation",
+            "generation",
+            artifact_type="generation_plan",
+        )
+        if patch_ref:
+            new_state["generation_patch_ref"] = patch_ref
+            new_state.setdefault("artifact_refs", []).append(patch_ref)
 
 
 def generation_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -184,157 +377,10 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state.update(gate_updates)
 
     services = _get_services(new_state)
-    gen_requests = new_state.get("generation_requests")
+    _plan_generation_ledger(new_state, services)
+    _gate_dispatch_readiness(new_state)
+    _mark_matrix_rows_generated(new_state, services)
 
-    # ── Ledger-backed dispatch preparation ───────────────────────────────
-    if gen_requests and services is not None:
-        from collections import defaultdict
-
-        from film_pipeline.generation.ledger import GenerationLedgerManager
-        from film_pipeline.schemas._base import GenerationMode
-
-        project_id = str(new_state.get("project_id", ""))
-        mgr = GenerationLedgerManager(services.artifact_store)
-        matrix_rows = _load_matrix_rows(new_state, services)
-
-        # Resolve prompt_ref to actual prompt text for every request.
-        resolved_requests: list[dict[str, Any]] = []
-        for req in gen_requests:
-            if not isinstance(req, dict):
-                continue
-            req = dict(req)
-            resolved_prompt = _resolve_prompt_for_request(new_state, services, req, matrix_rows)
-            req.setdefault("prompt_payload", {})["resolved_prompt"] = resolved_prompt
-            resolved_requests.append(req)
-        new_state["generation_requests"] = resolved_requests
-
-        # Plan the batch: group by (provider, model, mode, prompt_ref).
-        groups: dict[tuple[str, str, str, str], list[str]] = defaultdict(list)
-        for req in resolved_requests:
-            shot_id = str(req.get("shot_id", ""))
-            if not shot_id:
-                continue
-            provider = str(req.get("provider", "mock-video-provider") or "mock-video-provider")
-            model = str(req.get("model", "mock-fast") or "mock-fast")
-            mode_str = str(req.get("mode", "test") or "test")
-            mode = GenerationMode.TEST
-            with contextlib.suppress(ValueError):
-                mode = GenerationMode(mode_str)
-            prompt_ref = str(req.get("prompt_ref", "") or "")
-            groups[(provider, model, str(mode.value), prompt_ref)].append(shot_id)
-
-        for (provider, model, mode_str, prompt_ref), shot_ids in groups.items():
-            mode = GenerationMode.TEST
-            with contextlib.suppress(ValueError):
-                mode = GenerationMode(mode_str)
-            mgr.plan_batch(
-                project_id=project_id,
-                shot_ids=shot_ids,
-                provider=provider,
-                model=model,
-                prompt_ref=prompt_ref,
-                mode=mode,
-            )
-
-        # Approve spend with a budget ceiling derived from the cost estimate.
-        max_cost_usd = -1.0
-        cost_estimate_ref = str(new_state.get("cost_estimate_ref", "") or "")
-        if cost_estimate_ref:
-            ce_data = _load_artifact_data(new_state, services, cost_estimate_ref, ["gen_planning"])
-            if isinstance(ce_data, dict):
-                raw_cost = ce_data.get("estimated_cost_usd")
-                if raw_cost is not None:
-                    with contextlib.suppress(TypeError, ValueError):
-                        max_cost_usd = float(raw_cost) * 1.1
-
-        try:
-            mgr.approve_spend(project_id, max_cost_usd=max_cost_usd)
-        except ValueError as exc:
-            new_state.setdefault("issues", []).append(
-                {
-                    "severity": "blocking",
-                    "code": "generation_budget_exceeded",
-                    "message": str(exc),
-                }
-            )
-
-        # Persist the ledger as a versioned artifact and store its ref.
-        ledger = mgr.load(project_id)
-        ledger_ref = _save_artifact(
-            new_state,
-            ledger,
-            "generation_ledger",
-            "generation",
-            artifact_type="generation_ledger",
-        )
-        if ledger_ref:
-            new_state["generation_ledger_ref"] = ledger_ref
-            new_state.setdefault("artifact_refs", []).append(ledger_ref)
-
-        gen_requests = resolved_requests
-
-    # ── Gate C: validate dispatch readiness ──────────────────────────────
-    gen_requests = new_state.get("generation_requests")
-    if gen_requests is not None:
-        from film_pipeline.graph.orchestrator_validators import validate_dispatch_readiness
-
-        dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
-        new_state.setdefault("issues", []).extend(dispatch_issues)
-
-    # ── Emit matrix patch: mark rows as generated ────────────────────────
-    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
-    if gen_requests and shot_matrix_ref:
-        from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
-
-        # Map shot_id -> ledger row for asset references.
-        ledger_rows_by_shot: dict[str, str] = {}
-        if services is not None:
-            from film_pipeline.generation.ledger import GenerationLedgerManager
-
-            mgr = GenerationLedgerManager(services.artifact_store)
-            project_id = str(new_state.get("project_id", ""))
-            for row in mgr.load(project_id).rows:
-                ledger_rows_by_shot[row.shot_id] = row.generation_id
-
-        row_updates: list[Any] = []
-        for req in gen_requests:
-            if isinstance(req, dict):
-                sid = str(req.get("shot_id", ""))
-                asset_ref = str(
-                    req.get("asset_ref")
-                    or req.get("output_ref")
-                    or ledger_rows_by_shot.get(sid, "")
-                )
-                if sid:
-                    row_updates.append(
-                        MatrixRowUpdate(
-                            shot_id=sid,
-                            set={"status": "generated"},
-                            append={"asset_refs": [asset_ref]} if asset_ref else {},
-                        )
-                    )
-
-        if row_updates:
-            patch = MatrixPatch(
-                patch_id=f"generation_{new_state.get('project_id', '')}",
-                matrix_ref=shot_matrix_ref,
-                phase="generation",
-                reason="Clips generated — updating row asset references and status.",
-                updates=row_updates,
-                created_by_agent="generation-scheduler-agent",
-            )
-            patch_ref = _save_artifact(
-                new_state,
-                patch,
-                "matrix_patch_generation",
-                "generation",
-                artifact_type="generation_plan",
-            )
-            if patch_ref:
-                new_state["generation_patch_ref"] = patch_ref
-                new_state.setdefault("artifact_refs", []).append(patch_ref)
-
-    # Compute partial update from before/after diff
     updates: dict[str, Any] = dict(gate_updates)
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
     if new_refs:
