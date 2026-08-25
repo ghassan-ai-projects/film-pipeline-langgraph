@@ -6,7 +6,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter
@@ -14,6 +14,9 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas.kb import KBContextPacket
+
+if TYPE_CHECKING:
+    from film_pipeline.kb.packets import KBContextPacketBuilder
 
 
 def _default_artifact_root() -> Path:
@@ -26,6 +29,20 @@ def _default_artifact_root() -> Path:
             / "artifacts"
         )
     return Path("projects")
+
+
+def _mvp_agent_registry() -> AgentRegistry:
+    """Register every MVP agent into a fresh registry."""
+    from film_pipeline.agents.mvp import MVP_AGENTS
+
+    registry = AgentRegistry()
+    registry.register_many(MVP_AGENTS)
+    return registry
+
+
+def _artifact_store(artifacts_root: str | Path | None) -> ArtifactStore:
+    """Build an artifact store at ``artifacts_root`` or the environment default."""
+    return ArtifactStore(root=Path(artifacts_root or _default_artifact_root()))
 
 
 @dataclass
@@ -42,21 +59,17 @@ class GraphServices:
     artifact_store: ArtifactStore = field(default_factory=ArtifactStore)
     agent_registry: AgentRegistry | None = None
     validator_registry: Any = None  # ValidatorRegistry
-    kb_builder: Any = None  # KBContextPacketBuilder
+    kb_builder: KBContextPacketBuilder | None = None
 
     @classmethod
-    def for_mock_runtime(cls, artifacts_root: str | None = None) -> GraphServices:
+    def for_mock_runtime(cls, artifacts_root: str | Path | None = None) -> GraphServices:
         """Create services wired for mock-mode execution.
 
         Populates the agent registry with all MVP agents, sets up a
         PromptRunner with canned mock responses for the core spine agents,
         and wires a ModelRouter.
         """
-        from film_pipeline.agents.mvp import MVP_AGENTS
         from film_pipeline.testing.fixtures.mock_responses import default_mock_responses
-
-        registry = AgentRegistry()
-        registry.register_many(MVP_AGENTS)
 
         runner = PromptRunner(
             mock_responses=default_mock_responses(),
@@ -64,31 +77,26 @@ class GraphServices:
         )
         return cls(
             prompt_runner=runner,
-            artifact_store=ArtifactStore(root=Path(artifacts_root or _default_artifact_root())),
-            agent_registry=registry,
+            artifact_store=_artifact_store(artifacts_root),
+            agent_registry=_mvp_agent_registry(),
         )
 
     @classmethod
-    def for_real_runtime(cls, artifacts_root: str | None = None) -> GraphServices:
+    def for_real_runtime(cls, artifacts_root: str | Path | None = None) -> GraphServices:
         """Create services wired for real model execution.
 
         This keeps the same agent registry and artifact store contract as mock
         mode, but removes canned prompt responses and enables the real model
         adapter path through OpenRouter.
         """
-        from film_pipeline.agents.mvp import MVP_AGENTS
-
-        registry = AgentRegistry()
-        registry.register_many(MVP_AGENTS)
-
         runner = PromptRunner(
             model_adapter=ModelAdapter(),
             model_router=ModelRouter(),
         )
         return cls(
             prompt_runner=runner,
-            artifact_store=ArtifactStore(root=Path(artifacts_root or _default_artifact_root())),
-            agent_registry=registry,
+            artifact_store=_artifact_store(artifacts_root),
+            agent_registry=_mvp_agent_registry(),
         )
 
     def kb_for(
