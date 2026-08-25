@@ -254,11 +254,18 @@ def _print_summary(state: dict[str, Any], project_id: str) -> None:
     for ref in artifact_refs:
         print(f"  - {ref}")
     issues = state.get("issues", [])
-    blockers = [i for i in issues if isinstance(i, dict) and i.get("severity") == "blocking"]
+    blockers = _blocking_issues(issues)
     if blockers:
         print(f"Blockers: {len(blockers)}")
-        for b in blockers:
-            print(f"  - {b.get('code', 'unknown')}: {b.get('message', '')}")
+        for blocker in blockers:
+            print(f"  - {blocker.get('code', 'unknown')}: {blocker.get('message', '')}")
+
+
+def _blocking_issues(issues: Iterable[Any]) -> list[dict[str, Any]]:
+    """Return well-formed issues whose severity blocks delivery."""
+    return [
+        issue for issue in issues if isinstance(issue, dict) and issue.get("severity") == "blocking"
+    ]
 
 
 def _unique_strs(values: Iterable[Any]) -> list[str]:
