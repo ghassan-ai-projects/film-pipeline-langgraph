@@ -16,24 +16,31 @@ repos:
 
   - repo: local
     hooks:
+      # Scoped to staged files (pre-commit verifies exactly what is committed,
+      # inside its stash-protected window) and non-mutating beyond staged
+      # content: safe on a shared multi-agent tree. See .fleet/FLAGS.md #1.
       - id: ruff-check
-        name: ruff check
-        entry: uv run --python 3.12 --group dev ruff check --fix .
+        name: ruff check (staged files)
+        entry: uv run --python 3.12 --group dev ruff check --fix
         language: system
-        pass_filenames: false
+        types_or: [python, pyi]
 
       - id: ruff-format
-        name: ruff format
-        entry: uv run --python 3.12 --group dev ruff format .
+        name: ruff format (staged files)
+        entry: uv run --python 3.12 --group dev ruff format
         language: system
-        pass_filenames: false
+        types_or: [python, pyi]
 
+      # Full-repo verification lives at push time, next to pytest/build:
+      # correctness between commits is guaranteed by the fleet referee, which
+      # runs full mypy against the exact staged state right before committing.
       - id: mypy
-        name: mypy
+        name: mypy strict (full, push-time)
         entry: uv run --python 3.12 --group dev mypy --strict src tests
         language: system
         types: [python]
         pass_filenames: false
+        stages: [pre-push]
 
       - id: pytest
         name: pytest
