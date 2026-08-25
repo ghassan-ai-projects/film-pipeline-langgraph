@@ -31,7 +31,7 @@ def _persist_candidate(
         artifact_id=artifact_id,
         artifact_type=artifact_type,
         project_id=project_id,
-        phase=FilmPhase("intake"),
+        phase=FilmPhase.INTAKE,
         version=version,
         status=ArtifactStatus.CANDIDATE,
         created_by="rollback_tool",
@@ -80,24 +80,24 @@ def _recent_checkpoints(cps: list[Any]) -> list[Any]:
     return cps[-_RECENT_CHECKPOINT_LIMIT:]
 
 
+def _checkpoint_summary(cp: Any) -> dict[str, object]:
+    """Serialize one checkpoint into the summary shape exposed by the tools."""
+    return {
+        "checkpoint_id": cp.checkpoint_id,
+        "project_id": cp.project_id,
+        "phase": cp.phase.value,
+        "created_at": cp.created_at.isoformat(),
+        "reason": cp.reason,
+    }
+
+
 async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = str(args.get("project_id", "") or "")
     if not project_id and args.get("project_ref"):
         project_id = _active_project_id(args, rt) or ""
     cps = rt.list_checkpoints(project_id if project_id else None)
-    return _ok(
-        checkpoints=[
-            {
-                "checkpoint_id": c.checkpoint_id,
-                "project_id": c.project_id,
-                "phase": c.phase.value,
-                "created_at": c.created_at.isoformat(),
-                "reason": c.reason,
-            }
-            for c in cps
-        ]
-    )
+    return _ok(checkpoints=[_checkpoint_summary(c) for c in cps])
 
 
 async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
@@ -127,13 +127,7 @@ async def get_checkpoint(args: dict[str, object]) -> dict[str, object]:
     cp = rt.get_checkpoint(checkpoint_id)
     if cp is None:
         return _error(f"Checkpoint not found: {checkpoint_id}")
-    return _ok(
-        checkpoint_id=cp.checkpoint_id,
-        project_id=cp.project_id,
-        phase=cp.phase.value,
-        created_at=cp.created_at.isoformat(),
-        reason=cp.reason,
-    )
+    return _ok(**_checkpoint_summary(cp))
 
 
 async def compare_versions(args: dict[str, object]) -> dict[str, object]:
