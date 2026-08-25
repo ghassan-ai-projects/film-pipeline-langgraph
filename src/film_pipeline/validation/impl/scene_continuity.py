@@ -280,7 +280,7 @@ class SceneContinuityValidator(BaseValidator):
         # Warning items cost less
         score -= light_shift * 8.0
         score -= wd * 5.0
-        return max(0.0, min(100.0, max(score, 0.0)))
+        return max(0.0, min(100.0, score))
 
     def extract_issues(self, raw: dict[str, Any]) -> list[ValidationIssue]:
         return [
