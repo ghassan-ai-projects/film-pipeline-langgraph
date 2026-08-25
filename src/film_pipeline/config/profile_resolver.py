@@ -84,43 +84,66 @@ def provider_specs_from_raw(providers: object) -> list[dict[str, object]]:
     """Normalize a raw ``providers`` config block into provider specs."""
     if not isinstance(providers, dict):
         return []
+    specs = _specs_from_typed_sections(providers) + _specs_from_order_list(providers)
+    return _dedupe_by_provider_identity(specs)
+
+
+def _specs_from_typed_sections(providers: dict[str, Any]) -> list[dict[str, object]]:
+    """Collect specs declared under the typed ``video`` and ``image`` sections."""
     specs: list[dict[str, object]] = []
     for section, provider_type in (("video", "video"), ("image", "image")):
-        entries = providers.get(section, [])
-        if isinstance(entries, list):
-            for entry in entries:
-                if isinstance(entry, dict):
-                    provider_id = str(entry.get("provider_id", "")).strip()
-                    if provider_id:
-                        models = entry.get("models", [])
-                        specs.append(
-                            {
-                                "provider_id": provider_id,
-                                "provider_type": provider_type,
-                                "models": models if isinstance(models, list) else [],
-                            }
-                        )
-    order = providers.get("order", [])
-    if isinstance(order, list):
-        for item in order:
-            provider_id = str(item).strip()
-            if provider_id:
-                specs.append(
-                    {
-                        "provider_id": provider_id,
-                        "provider_type": "video",
-                        "models": [],
-                    }
-                )
+        for entry in _list_at(providers, section):
+            spec = _spec_from_section_entry(entry, provider_type)
+            if spec is not None:
+                specs.append(spec)
+    return specs
+
+
+def _spec_from_section_entry(entry: object, provider_type: str) -> dict[str, object] | None:
+    """Turn one raw section entry into a spec, or None when it names no provider."""
+    if not isinstance(entry, dict):
+        return None
+    provider_id = str(entry.get("provider_id", "")).strip()
+    if not provider_id:
+        return None
+    models = entry.get("models", [])
+    return {
+        "provider_id": provider_id,
+        "provider_type": provider_type,
+        "models": models if isinstance(models, list) else [],
+    }
+
+
+def _specs_from_order_list(providers: dict[str, Any]) -> list[dict[str, object]]:
+    """Add default video specs for bare provider ids listed under ``order``."""
+    specs: list[dict[str, object]] = []
+    for item in _list_at(providers, "order"):
+        provider_id = str(item).strip()
+        if not provider_id:
+            continue
+        specs.append({"provider_id": provider_id, "provider_type": "video", "models": []})
+    return specs
+
+
+def _dedupe_by_provider_identity(
+    specs: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Keep the first spec for every distinct ``(provider_id, provider_type)``."""
     deduped: list[dict[str, object]] = []
     seen: set[tuple[str, str]] = set()
     for spec in specs:
-        key = (str(spec["provider_id"]), str(spec["provider_type"]))
-        if key in seen:
+        identity = (str(spec["provider_id"]), str(spec["provider_type"]))
+        if identity in seen:
             continue
-        seen.add(key)
+        seen.add(identity)
         deduped.append(spec)
     return deduped
+
+
+def _list_at(mapping: dict[str, Any], key: str) -> list[Any]:
+    """Return the list stored at *key*, or an empty list when missing or not a list."""
+    entries = mapping.get(key, [])
+    return entries if isinstance(entries, list) else []
 
 
 def provider_specs(
