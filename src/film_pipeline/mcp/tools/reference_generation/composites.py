@@ -9,20 +9,24 @@ from typing import Any
 _logger = logging.getLogger(__name__)
 
 
-def _build_composites(
-    project_root: Path,
+def _palette_from_bible(bible: object) -> list[str] | None:
+    """Extract a non-empty color palette list from an EnvironmentBible."""
+    if not isinstance(bible, dict):
+        return None
+    palette = bible.get("color_palette", [])
+    if isinstance(palette, list) and palette:
+        return [str(c) for c in palette]
+    return None
+
+
+def _collect_environment_palettes(
+    artifact_store: Any,
     project_id: str,
     entries: list[dict[str, object]],
-    artifact_store: Any,
-) -> None:
-    """Build composite sheets from generated frames (Phase 7)."""
-    from film_pipeline.generation.compositor import (
-        build_character_identity_sheet,
-        build_environment_board,
-    )
+) -> dict[str, list[str]]:
+    """Resolve color palettes from EnvironmentBible artifacts."""
     from film_pipeline.schemas._base import FilmPhase
 
-    # Resolve color palettes from EnvironmentBible artifacts
     env_palettes: dict[str, list[str]] = {}
     for entry in entries:
         if str(entry.get("subject_type", "")) != "environment":
@@ -32,30 +36,40 @@ def _build_composites(
             continue
         try:
             bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
-            if isinstance(bible, dict):
-                palette = bible.get("color_palette", [])
-                if isinstance(palette, list) and palette:
-                    env_palettes[subject_id] = [str(c) for c in palette]
+            palette = _palette_from_bible(bible)
+            if palette:
+                env_palettes[subject_id] = palette
         except (FileNotFoundError, ValueError):
             pass
+    return env_palettes
 
-    # Group entries by character subject
-    char_frames: dict[str, dict[str, Path]] = {}
+
+def _collect_subject_frames(
+    project_root: Path,
+    entries: list[dict[str, object]],
+    subject_type: str,
+) -> dict[str, dict[str, Path]]:
+    """Group existing generated frame files by subject id and frame role."""
+    frames_by_subject: dict[str, dict[str, Path]] = {}
     for entry in entries:
-        if str(entry.get("subject_type", "")) != "character":
+        if str(entry.get("subject_type", "")) != subject_type:
             continue
         if entry.get("generation_status") not in ("validated", "generated"):
             continue
         subject_id = str(entry.get("subject_id", "")).strip()
-        if not subject_id:
-            continue
         role = str(entry.get("frame_role", "")).strip()
         asset = str(entry.get("asset_path", "")).strip()
-        if not role or not asset:
+        if not subject_id or not role or not asset:
             continue
         frame_path = project_root / asset
         if frame_path.exists():
-            char_frames.setdefault(subject_id, {})[role] = frame_path
+            frames_by_subject.setdefault(subject_id, {})[role] = frame_path
+    return frames_by_subject
+
+
+def _build_identity_sheets(project_root: Path, char_frames: dict[str, dict[str, Path]]) -> None:
+    """Build one identity sheet per character (Phase 7 + validation Phase 8)."""
+    from film_pipeline.generation.compositor import build_character_identity_sheet
 
     for subject_id, frames in char_frames.items():
         sheet_path = project_root / "references" / "characters" / subject_id / "identity-sheet.png"
@@ -66,23 +80,14 @@ def _build_composites(
         except Exception as exc:
             _logger.warning("Identity sheet build failed for %s: %s", subject_id, exc)
 
-    # Group entries by environment subject
-    env_frames: dict[str, dict[str, Path]] = {}
-    for entry in entries:
-        if str(entry.get("subject_type", "")) != "environment":
-            continue
-        if entry.get("generation_status") not in ("validated", "generated"):
-            continue
-        subject_id = str(entry.get("subject_id", "")).strip()
-        if not subject_id:
-            continue
-        role = str(entry.get("frame_role", "")).strip()
-        asset = str(entry.get("asset_path", "")).strip()
-        if not role or not asset:
-            continue
-        frame_path = project_root / asset
-        if frame_path.exists():
-            env_frames.setdefault(subject_id, {})[role] = frame_path
+
+def _build_environment_boards(
+    project_root: Path,
+    env_frames: dict[str, dict[str, Path]],
+    env_palettes: dict[str, list[str]],
+) -> None:
+    """Build one environment board per environment (Phase 7 + validation Phase 8)."""
+    from film_pipeline.generation.compositor import build_environment_board
 
     for subject_id, frames in env_frames.items():
         sheet_path = (
@@ -100,6 +105,21 @@ def _build_composites(
             _validate_composite(sheet_path, "environment_board", subject_id)
         except Exception as exc:
             _logger.warning("Environment board build failed for %s: %s", subject_id, exc)
+
+
+def _build_composites(
+    project_root: Path,
+    project_id: str,
+    entries: list[dict[str, object]],
+    artifact_store: Any,
+) -> None:
+    """Build composite sheets from generated frames (Phase 7)."""
+    env_palettes = _collect_environment_palettes(artifact_store, project_id, entries)
+    char_frames = _collect_subject_frames(project_root, entries, "character")
+    _build_identity_sheets(project_root, char_frames)
+
+    env_frames = _collect_subject_frames(project_root, entries, "environment")
+    _build_environment_boards(project_root, env_frames, env_palettes)
 
     # Phase 05 — Additional composite templates
     _build_optional_sheets(project_root, project_id, char_frames, env_palettes)
