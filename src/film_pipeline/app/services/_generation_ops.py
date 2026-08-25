@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.app._persistence import artifact_root
 from film_pipeline.app.services.errors import BackendOperationError
 from film_pipeline.app.services.models import GenerationWorkspace
 from film_pipeline.artifacts.manifest import read_manifest
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService
+    from film_pipeline.generation.executor import GenerationExecutor
 
 _STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
 
@@ -31,11 +33,7 @@ def get_generation_workspace(
 
     executor = _generation_executor(svc)
     rows = executor.status_rows(project_id_value)
-    counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
-    for row in rows:
-        status = str(row.get("status", ""))
-        if status in counts:
-            counts[status] += 1
+    counts = _count_rows_by_status(rows)
     return GenerationWorkspace(
         project_id=project_id_value,
         phase=str(state.get("current_phase", "")),
@@ -126,7 +124,7 @@ def preview_generation_prompts(
     provider, model = svc.runtime.default_video_provider()
     previews: list[dict[str, Any]] = []
     for row in executor.load_shot_rows(project_id_value):
-        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+        shot_id = _shot_row_id(row)
         if not shot_id:
             continue
         previews.append(
@@ -142,7 +140,7 @@ def preview_generation_prompts(
     return previews
 
 
-def _generation_executor(svc: OperatorService) -> Any:
+def _generation_executor(svc: OperatorService) -> GenerationExecutor:
     from film_pipeline.generation.executor import GenerationExecutor
 
     if svc.runtime.services is None:
@@ -160,6 +158,11 @@ def _sync_generation_requests(svc: OperatorService, state: dict[str, Any], proje
     if requests:
         state["generation_requests"] = requests
         _strip_stale_request_issues(state)
+    _store_project_state(svc, state, project_id)
+
+
+def _store_project_state(svc: OperatorService, state: dict[str, Any], project_id: str) -> None:
+    """Write the updated state back into the runtime and persist it."""
     svc.runtime.projects[project_id] = state
     svc.runtime._persist_project_state(project_id)
 
@@ -174,6 +177,15 @@ def _strip_stale_request_issues(state: dict[str, Any]) -> None:
         ]
 
 
+def _count_rows_by_status(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"prepared": 0, "submitted": 0, "running": 0, "completed": 0, "failed": 0}
+    for row in rows:
+        status = str(row.get("status", ""))
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
 def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) -> str:
     if not rows:
         return "plan"
@@ -186,6 +198,11 @@ def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) ->
     if counts["failed"] and not counts["completed"]:
         return "review_failures"
     return "approve_phase"
+
+
+def _shot_row_id(row: dict[str, Any]) -> str:
+    """Identify a shot-matrix row, falling back to its scene id."""
+    return str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
 
 
 def _is_text_only_policy(state: dict[str, Any]) -> bool:
@@ -207,7 +224,7 @@ def _complete_text_only_generation(
     provider, model = svc.runtime.default_video_provider()
     requests: list[dict[str, Any]] = []
     for row in shot_rows:
-        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+        shot_id = _shot_row_id(row)
         if not shot_id:
             continue
         requests.append(_text_only_request(project_id, shot_id, provider, model))
@@ -217,8 +234,7 @@ def _complete_text_only_generation(
     state["_text_only_generation_completed"] = True
     _strip_stale_request_issues(state)
     _record_text_only_manifest(svc, project_id)
-    svc.runtime.projects[project_id] = state
-    svc.runtime._persist_project_state(project_id)
+    _store_project_state(svc, state, project_id)
 
 
 def _text_only_request(project_id: str, shot_id: str, provider: str, model: str) -> dict[str, Any]:
@@ -271,9 +287,9 @@ def _text_only_workspace(
 def _record_text_only_manifest(svc: OperatorService, project_id: str) -> None:
     from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
 
-    if svc.runtime.services is None:
+    root = artifact_root(svc.runtime)
+    if root is None:
         return
-    root = svc.runtime.services.artifact_store._root
     manifest = read_manifest(project_id, root=root)
     entries = list(manifest.entries) if manifest else []
     if not any(entry.asset_id == "text-only-delivery" for entry in entries):
