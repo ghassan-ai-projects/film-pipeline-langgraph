@@ -115,7 +115,9 @@ def _delivery_validators() -> tuple[type[Any], ...]:
     return (DeliveryCompletenessValidator,)
 
 
-def _live_validator_specs(rt: Any, store: Any, project_id: str, fp: FilmPhase) -> list[_PhaseSpec]:
+def _live_validator_specs(
+    rt: Any, store: ArtifactStore, project_id: str, fp: FilmPhase
+) -> list[_PhaseSpec]:
     """Build the ordered phase→(loader, validators) table for one live run."""
     return [
         _PhaseSpec(
@@ -152,7 +154,7 @@ def _live_validator_specs(rt: Any, store: Any, project_id: str, fp: FilmPhase) -
 
 
 def _run_live_validators(
-    rt: Any, store: Any, project_id: str, fp: FilmPhase, phase_str: str
+    rt: Any, store: ArtifactStore, project_id: str, fp: FilmPhase, phase_str: str
 ) -> list[dict[str, object]]:
     """Run the phase-appropriate validators live against stored artifacts."""
     reports: list[dict[str, object]] = []
@@ -203,12 +205,10 @@ def _validate_visual_dev(
     if art_data is None:
         return reports, refs
 
-    from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
-
-    validator = ReferenceUsabilityValidator()
-    report = validator.run(art_data)
-    reports.append(_report_summary(report))
-    refs.append(_save_report(store, report, project_id, fp))
+    for vcls in _reference_validators():
+        report = vcls().run(art_data)
+        reports.append(_report_summary(report))
+        refs.append(_save_report(store, report, project_id, fp))
     return reports, refs
 
 
@@ -223,12 +223,8 @@ def _validate_script(
     except (FileNotFoundError, ValueError):
         return reports, refs
 
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
-
-    for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
-        validator = vcls()
-        report = validator.run(art_data)
+    for vcls in _script_validators():
+        report = vcls().run(art_data)
         reports.append(_report_summary(report))
         refs.append(_save_report(store, report, project_id, fp))
     return reports, refs
@@ -258,6 +254,20 @@ def _normalized_stored_issues(stored: object) -> list[dict[str, object]]:
     return issues
 
 
+def _record_validation_results(
+    rt: Any,
+    project_id: str,
+    active: dict[str, Any],
+    reports: list[dict[str, object]],
+    saved_refs: list[Path],
+) -> None:
+    """Write validation outcomes into project state and persist them."""
+    active["_validation_reports"] = reports
+    active.setdefault("validation_refs", []).extend(saved_refs)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
+
+
 async def run_validation(args: dict[str, object]) -> dict[str, object]:
     """Run validators for the current phase and persist ValidationReport."""
     rt = tools_pkg.get_runtime()
@@ -285,10 +295,7 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
 
     if not reports:
         return _ok(message="No validators found for this phase.")
-    active["_validation_reports"] = reports
-    active.setdefault("validation_refs", []).extend(saved_refs)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    _record_validation_results(rt, project_id, active, reports, saved_refs)
     return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
 
 
