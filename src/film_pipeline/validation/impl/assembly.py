@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
+from film_pipeline.schemas._base import (
+    LEGACY_TRANSITION_ALIASES,
+    TRANSITION_TYPES,
+    IssueSeverity,
+    ValidationModality,
+    ValidationScope,
+)
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
     ValidatorThresholds,
@@ -12,7 +18,12 @@ from film_pipeline.schemas.registries.validator_registry import (
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
 
-_VALID_TRANSITION_TYPES = frozenset({"cut", "dissolve", "fade", "wipe", "crossfade"})
+_VALID_TRANSITION_TYPES = frozenset(TRANSITION_TYPES)
+
+
+def _canonical_transition_type(raw_type: str) -> str:
+    """Resolve legacy transition spellings onto the canonical vocabulary."""
+    return LEGACY_TRANSITION_ALIASES.get(raw_type, raw_type)
 
 
 def _empty_assembly_result(
@@ -54,7 +65,8 @@ def _flag_broken_transitions(
     for transition in transitions:
         from_id = str(transition.get("from_shot_id", ""))
         to_id = str(transition.get("to_shot_id", ""))
-        transition_type = str(transition.get("transition_type", ""))
+        raw_type = str(transition.get("transition_type", ""))
+        transition_type = _canonical_transition_type(raw_type)
 
         if from_id not in shot_ids:
             broken += 1
@@ -268,7 +280,7 @@ class AssemblyValidator(BaseValidator):
             ValidationIssue(
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
-                severity=str(i.get("severity", "info")),
+                severity=IssueSeverity(i.get("severity", "info")),
                 suggestion=str(i.get("suggestion", "")),
                 affected_entity=str(i.get("affected_entity", "")),
                 affected_field=str(i.get("affected_field", "")),
