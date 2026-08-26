@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _active_project_id, _error, _ok, _services
+from .helpers import _active_project_state, _error, _ok, _services
 
 if TYPE_CHECKING:
     from film_pipeline.schemas._base import FilmPhase
@@ -73,10 +73,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     open issues, risks, cost impact, and recommended next actions.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
     phase = str(args.get("phase", state.get("current_phase", "")))

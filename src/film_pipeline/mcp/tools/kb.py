@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import film_pipeline.mcp.tools as tools_pkg
-
-from .helpers import _active_project_id, _error, _ok
+from .helpers import _active_project_state, _error, _ok
 
 if TYPE_CHECKING:
     from film_pipeline.kb.manifest import KBManifest
@@ -85,11 +83,7 @@ async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
 
 
 async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
     from film_pipeline.kb.packets import KBContextPacketBuilder
