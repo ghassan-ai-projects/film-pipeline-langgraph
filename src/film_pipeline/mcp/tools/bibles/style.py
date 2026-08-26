@@ -8,6 +8,7 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
+    _chat_json_or_mock,
     _constitution_tone,
     _constitution_visual_language,
     _load_artifact_if_present,
@@ -35,21 +36,22 @@ def _style_prompt(visual_language: str, tone: str, palette_hint: str) -> str:
     )
 
 
+def _style_mock_payload(project_id: str) -> dict[str, Any]:
+    """Minimal valid StyleBible response for mock mode."""
+    return {
+        "project_id": project_id,
+        "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
+        "texture": "gritty, painterly",
+        "grain": "subtle 16mm grain",
+        "visual_mood": "melancholic, high-contrast",
+        "reference_stills": [],
+        "must_not_change": ["color_palette"],
+    }
+
+
 def _request_style_bible_output(rt: Any, prompt: str, project_id: str) -> dict[str, Any]:
     """Obtain StyleBible JSON from the model adapter or mock fallback."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return {
-            "project_id": project_id,
-            "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
-            "texture": "gritty, painterly",
-            "grain": "subtle 16mm grain",
-            "visual_mood": "melancholic, high-contrast",
-            "reference_stills": [],
-            "must_not_change": ["color_palette"],
-        }
-    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
-    return raw if isinstance(raw, dict) else {}
+    return _chat_json_or_mock(rt, prompt, _style_mock_payload(project_id))
 
 
 def _execute_style_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
