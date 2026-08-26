@@ -28,9 +28,9 @@ def read_constraints_file(path: Path) -> dict[str, Any]:
     if not raw:
         return {}
 
-    if suffix == ".json":
-        import json
+    import json
 
+    if suffix == ".json":
         data = json.loads(raw)
     elif suffix in {".yaml", ".yml"}:
         import yaml
@@ -38,8 +38,6 @@ def read_constraints_file(path: Path) -> dict[str, Any]:
         data = yaml.safe_load(raw)
     else:
         # Default to JSON for unknown extensions.
-        import json
-
         try:
             data = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -77,6 +75,5 @@ def _read_pdf_text(path: Path) -> str:
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
-    pages: list[Any] = reader.pages if hasattr(reader, "pages") else []
-    text_parts = [str(page.extract_text() or "") for page in pages]
+    text_parts = [str(page.extract_text() or "") for page in reader.pages]
     return "\n\n".join(part.strip() for part in text_parts if part.strip())
