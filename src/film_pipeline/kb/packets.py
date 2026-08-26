@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 from uuid import uuid4
 
 from film_pipeline.kb.conflicts import KBConflictDetector
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.retrieval import KBRetrieval
-from film_pipeline.schemas.kb import KBContextPacket, KBExcludedRef
+from film_pipeline.schemas.kb import (
+    KBConflictRecord,
+    KBContextPacket,
+    KBExcludedRef,
+    KBItemMetadata,
+)
 
 
 def _resolve_authority_layers(
-    detector: KBConflictDetector, retrieved: dict[str, list[Any]]
-) -> tuple[list[Any], list[Any], list[Any], list[Any]]:
+    detector: KBConflictDetector, retrieved: dict[str, list[KBItemMetadata]]
+) -> tuple[list[KBItemMetadata], list[KBItemMetadata], list[KBItemMetadata], list[KBExcludedRef]]:
     """Resolve authority conflicts and supersessions across retrieved layers."""
     canonical, c_excluded = detector.resolve_authority(retrieved["canonical"])
     playbooks, p_excluded = detector.resolve_authority(retrieved["playbooks"])
@@ -25,7 +29,9 @@ def _resolve_authority_layers(
     return canonical, playbooks, case_studies, c_excluded + p_excluded + cs_excluded + sup_excluded
 
 
-def _note_unresolved_conflicts(conflicts: list[Any], all_excluded: list[KBExcludedRef]) -> None:
+def _note_unresolved_conflicts(
+    conflicts: list[KBConflictRecord], all_excluded: list[KBExcludedRef]
+) -> None:
     """Record unresolved conflicts as excluded refs with reasons."""
     # If there are unresolved conflicts, note them in excluded
     for conflict in conflicts:
@@ -38,7 +44,7 @@ def _note_unresolved_conflicts(conflicts: list[Any], all_excluded: list[KBExclud
             )
 
 
-def _build_payload_map(items: list[Any]) -> dict[str, str]:
+def _build_payload_map(items: list[KBItemMetadata]) -> dict[str, str]:
     """Map kept item ids to their first source path."""
     payload: dict[str, str] = {}
     for item in items:
