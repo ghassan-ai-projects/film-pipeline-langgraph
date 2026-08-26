@@ -8,7 +8,14 @@ from typing import Any, cast
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.artifacts.manifest import read_manifest
 
-from .helpers import _active_project_id, _error, _load_latest_reference_index, _ok, _services
+from .helpers import (
+    _active_project_id,
+    _active_project_state,
+    _error,
+    _load_latest_reference_index,
+    _ok,
+    _services,
+)
 
 
 async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
@@ -44,12 +51,10 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
 async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     """Load and return the content of a specific artifact."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
+    project_id = str(state["project_id"])
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
         return _error("artifact_id is required.")
@@ -142,12 +147,10 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     if not reference_id:
         return _error("reference_id is required.")
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
+    project_id = str(state["project_id"])
     data = _load_latest_reference_index(rt, project_id, state)
     if data is None:
         return _error("Reference index not yet generated.")

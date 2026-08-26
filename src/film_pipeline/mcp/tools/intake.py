@@ -6,7 +6,7 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _active_project_id, _coerce_runtime_arg, _error, _ok, _services
+from .helpers import _active_project_state, _coerce_runtime_arg, _error, _ok, _services
 
 
 def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None:
@@ -45,12 +45,10 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
 
 async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
+    project_id = str(state["project_id"])
     from film_pipeline.schemas._base import FilmPhase
 
     try:
