@@ -12,14 +12,10 @@ from uuid import uuid4
 
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
 from film_pipeline.providers.credentials import lookup
-from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
 
 class VeoFastProvider(BaseProviderAdapter):
     """Veo 3.1 Fast provider adapter. Stub pending API integration."""
-
-    def __init__(self, entry: ProviderRegistryEntry) -> None:
-        super().__init__(entry)
 
     def _api_key(self) -> str:
         key = lookup("veo-fast")
