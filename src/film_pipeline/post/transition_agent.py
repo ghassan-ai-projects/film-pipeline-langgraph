@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-TRANSITION_TYPES = ["cut", "dissolve", "fade_in", "fade_out", "crossfade"]
+# Closed vocabulary of transitions the post pipeline can execute.
+TRANSITION_TYPES: tuple[str, ...] = ("cut", "dissolve", "fade_in", "fade_out", "crossfade")
 
 
 @dataclass
