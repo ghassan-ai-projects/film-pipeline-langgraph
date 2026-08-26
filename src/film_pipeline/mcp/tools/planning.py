@@ -20,10 +20,7 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     store = _services(rt).artifact_store
 
     try:
-        from datetime import UTC, datetime
-
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas._base import ArtifactType
         from film_pipeline.schemas.budget import BudgetState
 
         budget = BudgetState(
@@ -38,30 +35,60 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
             max_auto_approved_cost_usd=1.0,
             human_approval_above_usd=5.0,
         )
-        next_version = (
-            _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), "budget_state")
-            + 1
+        ref = _save_gen_planning_candidate(
+            store,
+            project_id,
+            "budget_state",
+            ArtifactType.BUDGET_STATE,
+            "mcp.initialize_budget",
+            budget,
         )
-        meta = ArtifactMetadata(
-            artifact_id="budget_state",
-            artifact_type=ArtifactType.BUDGET_STATE,
-            project_id=project_id,
-            phase=FilmPhase("gen_planning"),
-            version=next_version,
-            status=ArtifactStatus.CANDIDATE,
-            parents=[],
-            created_by="mcp.initialize_budget",
-            created_at=datetime.now(UTC),
-        )
-        ref = store.save(budget, meta)
-        active["budget_state_ref"] = ref
-        active.setdefault("artifact_refs", []).append(ref)
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
+        _register_active_artifact_ref(rt, active, project_id, "budget_state_ref", ref)
 
         return _ok(budget_state_ref=ref, cap_usd=cap, remaining_usd=budget.remaining_usd)
     except Exception as exc:
         return _error(f"Budget initialization failed: {exc}")
+
+
+def _save_gen_planning_candidate(
+    store: Any,
+    project_id: str,
+    artifact_id: str,
+    artifact_type: Any,
+    created_by: str,
+    content: Any,
+) -> Any:
+    """Persist an artifact as the next CANDIDATE version in gen_planning."""
+    from datetime import UTC, datetime
+
+    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactMetadata
+
+    next_version = (
+        _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
+    )
+    meta = ArtifactMetadata(
+        artifact_id=artifact_id,
+        artifact_type=artifact_type,
+        project_id=project_id,
+        phase=FilmPhase("gen_planning"),
+        version=next_version,
+        status=ArtifactStatus.CANDIDATE,
+        parents=[],
+        created_by=created_by,
+        created_at=datetime.now(UTC),
+    )
+    return store.save(content, meta)
+
+
+def _register_active_artifact_ref(
+    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
+) -> None:
+    """Record an artifact reference on the active project and persist state."""
+    active[state_key] = ref
+    active.setdefault("artifact_refs", []).append(ref)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
 
 
 def _load_master_matrix(store: Any, project_id: str) -> Any:
@@ -102,32 +129,18 @@ def _build_generation_plan(project_id: str, matrix: Any) -> tuple[Any, float]:
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
     """Save the generation plan artifact and link it into the project state."""
-    from datetime import UTC, datetime
-
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas._base import ArtifactType
 
     store = _services(rt).artifact_store
-    next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), "generation_plan")
-        + 1
+    ref = _save_gen_planning_candidate(
+        store,
+        project_id,
+        "generation_plan",
+        ArtifactType.GENERATION_PLAN,
+        "mcp.generate_plan",
+        plan,
     )
-    meta = ArtifactMetadata(
-        artifact_id="generation_plan",
-        artifact_type=ArtifactType.GENERATION_PLAN,
-        project_id=project_id,
-        phase=FilmPhase("gen_planning"),
-        version=next_version,
-        status=ArtifactStatus.CANDIDATE,
-        parents=[],
-        created_by="mcp.generate_plan",
-        created_at=datetime.now(UTC),
-    )
-    ref = store.save(plan, meta)
-    active["generation_plan_ref"] = ref
-    active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    _register_active_artifact_ref(rt, active, project_id, "generation_plan_ref", ref)
     return ref
 
 
