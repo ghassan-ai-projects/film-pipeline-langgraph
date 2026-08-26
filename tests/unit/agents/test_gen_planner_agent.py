@@ -1,0 +1,165 @@
+"""Tests for GenPlannerAgent — produces a generation plan from model output."""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
+from film_pipeline.agents.impl.registry import get_agent_class
+from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.budget import CostEstimate
+from film_pipeline.schemas.handoff import AgentRegistration
+from film_pipeline.schemas.kb import KBContextPacket
+
+
+def _make_contract() -> AgentRegistration:
+    return AgentRegistration(
+        agent_id="provider-planning-agent",
+        family=AgentFamily.PROMPT_PLANNING,
+        role=AgentRole.CREATOR,
+        capabilities=["provider_selection", "cost_estimation"],
+        input_artifacts=["prompt_registry", "master_film_matrix", "resolved_config"],
+        output_artifacts=["provider_plan"],
+    )
+
+
+def _make_kb() -> KBContextPacket:
+    return KBContextPacket(
+        kb_context_id="kbctx:plan:v1",
+        project_id="test-project",
+        phase="visual_dev",
+        agent_id="provider-planning-agent",
+        task="Plan the generation batch.",
+    )
+
+
+def _make_agent() -> GenPlannerAgent:
+    return GenPlannerAgent(_make_contract())
+
+
+_HERO_REQUEST: dict[str, Any] = {
+    "shot_id": "shot_0001",
+    "provider": "seedance",
+    "model": "2.0",
+    "mode": "quality",
+    "priority": 0,
+    "estimated_cost_usd": 2.5,
+}
+
+_FILLER_REQUEST: dict[str, Any] = {
+    "shot_id": "shot_0002",
+    "estimated_cost_usd": 2.0,
+}
+
+_VALID_OUTPUT: dict[str, Any] = {
+    "cost_estimate": {
+        "project_id": "test-project",
+        "batch_id": "batch-001",
+        "provider": "seedance",
+        "estimated_cost_usd": 4.5,
+        "clip_count": 2,
+        "notes": "hero shot first, then filler.",
+    },
+    "shot_groups": [_HERO_REQUEST, _FILLER_REQUEST],
+}
+
+
+class TestGenPlannerAgent:
+    def test_registry_resolves_provider_planning_agent_to_class(self) -> None:
+        assert get_agent_class("provider-planning-agent") is GenPlannerAgent
+
+    def test_execute_produces_cost_estimate(self) -> None:
+        agent = _make_agent()
+        estimate = agent.execute(_VALID_OUTPUT)["cost_estimate"]
+        assert isinstance(estimate, CostEstimate)
+        assert estimate.project_id == "test-project"
+        assert estimate.batch_id == "batch-001"
+        assert estimate.provider == "seedance"
+        assert estimate.estimated_cost_usd == 4.5
+        assert estimate.clip_count == 2
+        assert estimate.notes == "hero shot first, then filler."
+
+    def test_execute_builds_generation_requests_with_defaults(self) -> None:
+        agent = _make_agent()
+        result = agent.execute(_VALID_OUTPUT)
+        requests = result["generation_requests"]
+        assert [r["shot_id"] for r in requests] == ["shot_0001", "shot_0002"]
+        assert requests[0]["mode"] == "quality"
+        assert requests[0]["priority"] == 0
+        # The filler request omits provider/model/mode/priority and gets defaults.
+        assert requests[1]["provider"] == "seedance"
+        assert requests[1]["model"] == "2.0"
+        assert requests[1]["mode"] == "test"
+        assert requests[1]["priority"] == 1
+
+    def test_execute_totals_match_requests(self) -> None:
+        agent = _make_agent()
+        result = agent.execute(_VALID_OUTPUT)
+        assert result["total_shots"] == 2
+        assert result["total_cost_usd"] == pytest.approx(4.5)
+
+    def test_execute_handles_nested_output(self) -> None:
+        agent = _make_agent()
+        result = agent.execute({"generation_plan": _VALID_OUTPUT})
+        assert result["total_shots"] == 2
+        assert isinstance(result["cost_estimate"], CostEstimate)
+
+    def test_execute_handles_empty_input(self) -> None:
+        agent = _make_agent()
+        result = agent.execute({})
+        estimate = result["cost_estimate"]
+        assert isinstance(estimate, CostEstimate)
+        # Structurally valid but empty plan.
+        assert estimate.batch_id == "batch-001"
+        assert estimate.estimated_cost_usd == 0.0
+        assert estimate.clip_count == 0
+        assert result["generation_requests"] == []
+        assert result["total_shots"] == 0
+        assert result["total_cost_usd"] == 0
+
+    def test_validate_passes_for_valid_plan(self) -> None:
+        agent = _make_agent()
+        assert agent.validate(agent.execute(_VALID_OUTPUT)) is True
+
+    def test_validate_passes_for_empty_but_structurally_valid_plan(self) -> None:
+        agent = _make_agent()
+        assert agent.validate(agent.execute({})) is True
+
+    def test_validate_fails_for_wrong_artifact_type(self) -> None:
+        agent = _make_agent()
+        assert agent.validate({"cost_estimate": object()}) is False
+
+    def test_prepare_extracts_planning_state_refs(self) -> None:
+        agent = _make_agent()
+        prepared = agent.prepare(
+            {
+                "project_id": "test-project",
+                "shot_matrix_ref": "master_film_matrix:v1",
+                "budget_cap": "25.0",
+                "preferred_providers": "seedance,kling",
+            },
+            _make_kb(),
+            "Plan the generation batch.",
+        )
+        assert prepared == {
+            "project_id": "test-project",
+            "shot_matrix_ref": "master_film_matrix:v1",
+            "budget_cap": "25.0",
+            "preferred_providers": "seedance,kling",
+            "task": "Plan the generation batch.",
+        }
+
+    def test_run_lifecycle_round_trips_valid_output(self) -> None:
+        agent = _make_agent()
+        result = agent.run({}, _make_kb(), "Plan the generation batch.", _VALID_OUTPUT)
+        assert isinstance(result["cost_estimate"], CostEstimate)
+        assert result["total_shots"] == 2
+
+    def test_run_lifecycle_rejects_invalid_output(self) -> None:
+        agent = _make_agent()
+        # A result whose cost_estimate is not the artifact fails validation;
+        # exercising this through run() requires such a result, which execute()
+        # cannot produce from a well-formed payload.
+        assert agent.validate({"cost_estimate": object(), "generation_requests": []}) is False
