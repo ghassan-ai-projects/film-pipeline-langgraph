@@ -1,4 +1,4 @@
-"""Generation ledger, request, and resume token."""
+"""Generation requests, ledger rows, shot plans, and resume tokens."""
 
 from __future__ import annotations
 
