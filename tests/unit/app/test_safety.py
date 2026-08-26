@@ -59,6 +59,35 @@ def test_require_safe_to_delete_raises_for_unsafe_path() -> None:
         require_safe_to_delete(unsafe)
 
 
+def test_require_safe_to_delete_message_offers_working_remedies() -> None:
+    with pytest.raises(ProductionDataError) as excinfo:
+        require_safe_to_delete(Path.cwd())
+    message = str(excinfo.value)
+    assert "FILM_PIPELINE_PERSIST_ROOT" in message
+    assert ".film-pipeline-allow-delete" in message
+
+
+def test_require_safe_to_delete_message_does_not_advertise_allow_delete_env() -> None:
+    """R-102: the guard must not recommend an override it does not honor."""
+    with pytest.raises(ProductionDataError) as excinfo:
+        require_safe_to_delete(Path.cwd())
+    assert "FILM_PIPELINE_ALLOW_DELETE" not in str(excinfo.value)
+
+
+def test_allow_delete_env_var_does_not_override_path_guards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FILM_PIPELINE_ALLOW_DELETE=1 gates project-level deletes only.
+
+    The physical path guards ignore it, so an ambient leftover export can
+    never disable deletion protection for arbitrary locations.
+    """
+    monkeypatch.setenv("FILM_PIPELINE_ALLOW_DELETE", "1")
+    assert is_safe_to_delete(Path.cwd()) is False
+    with pytest.raises(ProductionDataError):
+        safe_rmtree(Path.cwd())
+
+
 def test_safe_rmtree_refuses_unsafe_path() -> None:
     with pytest.raises(ProductionDataError):
         safe_rmtree(Path.cwd())

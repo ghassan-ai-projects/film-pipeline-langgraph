@@ -81,8 +81,7 @@ def require_safe_to_delete(path: Path) -> None:
         raise ProductionDataError(
             f"Refusing to delete production path: {path}. "
             "Set FILM_PIPELINE_PERSIST_ROOT to a temp directory, "
-            "create a .film-pipeline-allow-delete marker, "
-            "or use FILM_PIPELINE_ALLOW_DELETE=1 after confirming a backup."
+            "or create a .film-pipeline-allow-delete marker in the target directory."
         )
 
 
