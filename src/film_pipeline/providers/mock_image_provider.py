@@ -6,7 +6,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import (
+    BaseProviderAdapter,
+    ProviderJob,
+    ProviderJobStatus,
+)
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
 _MOCK_SIZE = 1024
@@ -62,11 +66,11 @@ class MockImageProvider(BaseProviderAdapter):
             provider_id=self.entry.provider_id,
             model=self.entry.models[0] if self.entry.models else "mock",
             payload=payload,
-            status="completed",
+            status=ProviderJobStatus.COMPLETED,
         )
 
     def poll(self, job: ProviderJob) -> ProviderJob:
-        job.status = "completed"
+        job.status = ProviderJobStatus.COMPLETED
         return job
 
     def download(self, job: ProviderJob, output_dir: str) -> str:

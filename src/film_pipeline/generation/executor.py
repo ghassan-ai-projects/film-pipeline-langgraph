@@ -26,7 +26,11 @@ from film_pipeline.generation.executor_prompts import (
     resolve_shot_prompt,
 )
 from film_pipeline.generation.ledger import GenerationLedgerManager
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import (
+    BaseProviderAdapter,
+    ProviderJob,
+    ProviderJobStatus,
+)
 from film_pipeline.schemas._base import FilmPhase, GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import GenerationLedgerRow
 
@@ -217,7 +221,7 @@ class GenerationExecutor:
             shot_id=row.shot_id,
             provider_id=row.provider,
             model=row.model,
-            status="submitted",
+            status=ProviderJobStatus.SUBMITTED,
             polls=row.poll_count,
         )
         try:

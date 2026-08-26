@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import (
+    BaseProviderAdapter,
+    ProviderJob,
+    ProviderJobStatus,
+)
 from film_pipeline.providers.credentials import lookup, redact
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
@@ -108,7 +112,7 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
             provider_id=self.entry.provider_id,
             model=str(payload.get("model", self._model_id(fallback=""))),
             payload=payload,
-            status="submitted",
+            status=ProviderJobStatus.SUBMITTED,
             metadata={
                 "response": response,
                 "image_bytes_b64": base64.b64encode(image_bytes).decode(),
@@ -117,7 +121,7 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         )
 
     def poll(self, job: ProviderJob) -> ProviderJob:
-        job.status = "completed"
+        job.status = ProviderJobStatus.COMPLETED
         job.polls += 1
         return job
 

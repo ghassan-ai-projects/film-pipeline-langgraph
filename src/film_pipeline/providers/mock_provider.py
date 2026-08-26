@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import (
+    BaseProviderAdapter,
+    ProviderJob,
+    ProviderJobStatus,
+)
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
 _MINIMAL_MP4 = (
@@ -101,14 +105,14 @@ class MockVideoProvider(BaseProviderAdapter):
         polls_needed = step.polls_before_complete if step else 1
 
         if step and step.error_code and self._poll_counts[job.job_id] > polls_needed:
-            job.status = "failed"
+            job.status = ProviderJobStatus.FAILED
             job.metadata = {"error": step.error_code}
             return job
 
         if self._poll_counts[job.job_id] >= polls_needed:
-            job.status = "completed"
+            job.status = ProviderJobStatus.COMPLETED
         else:
-            job.status = "processing"
+            job.status = ProviderJobStatus.PROCESSING
         return job
 
     def download(self, job: ProviderJob, output_dir: str) -> str:
@@ -181,5 +185,5 @@ class MockVideoProvider(BaseProviderAdapter):
         return 0.0
 
     def cancel(self, job: ProviderJob) -> bool:
-        job.status = "cancelled"
+        job.status = ProviderJobStatus.CANCELLED
         return True

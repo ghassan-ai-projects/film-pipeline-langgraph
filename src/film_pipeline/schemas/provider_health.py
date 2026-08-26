@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field
 
@@ -16,8 +17,14 @@ class ProviderHealthState(MutableSchemaBase):
     status: ProviderStatus = ProviderStatus.HEALTHY
     last_health_check_at: datetime | None = None
     last_successful_job_at: datetime | None = None
-    quota_state: str = Field(default="ok", description="'ok' | 'low' | 'exhausted'.")
-    credit_state: str = Field(default="ok", description="'ok' | 'low' | 'exhausted'.")
+    quota_state: Literal["ok", "low", "exhausted"] = Field(
+        default="ok",
+        description="'ok' | 'low' | 'exhausted'.",
+    )
+    credit_state: Literal["ok", "low", "exhausted"] = Field(
+        default="ok",
+        description="'ok' | 'low' | 'exhausted'.",
+    )
     known_outage: bool = False
     blocked_reason: str | None = None
     resume_requirements: str | None = None
