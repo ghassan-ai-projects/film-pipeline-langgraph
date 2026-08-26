@@ -76,7 +76,10 @@ naming inside files consistent, gates and tests earnest. The costs live in the c
   11 (composition root — expected); domain-to-domain edges that strain the law:
   `post→validation`, `config→providers`, `agents→providers`, `generation→{artifacts,providers}`.
   Exactly **one package-level cycle**: `{app ↔ mcp}`, held together by lazy imports and the documented
-  `get_runtime` binding hack. 198 lazy cross-package imports total (mcp 109, graph 42, app 24).
+  `get_runtime` binding hack. 198 lazy cross-package imports total (mcp 109, graph 42, app 24;
+  counted as function-body `import`/`from` statements, cross-package by top-level package — a
+  `from`-only scan undercounts to 194 by omitting 4 plain `import film_pipeline.x` sites; convention
+  and sites in [boundaries F-7](reviews/arch-lens-boundaries.md)).
 - **Hotspots** (LOC): `app/services/operator.py` 473 · `tui/screens/studio.py` 471 ·
   `agents/runner.py` 471 · `graph/nodes/_context.py` 470 · `mcp/tools/_profile_change.py` 467 ·
   `app/runtime.py` 464 · `graph/nodes/qc.py` 455 · `graph/orchestrator_state.py` 435.
