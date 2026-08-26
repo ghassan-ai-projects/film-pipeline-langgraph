@@ -76,7 +76,7 @@ class ArtifactType(StrEnum):
 
 
 class FilmPhase(StrEnum):
-    """The ten canonical production phases of a film."""
+    """The canonical production phases of a film."""
 
     INTAKE = "intake"
     CONSTITUTION = "constitution"

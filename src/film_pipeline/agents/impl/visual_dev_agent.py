@@ -38,58 +38,9 @@ class VisualDevAgent(BaseAgent):
         }
 
     def execute(self, model_output: Any) -> dict[str, Any]:
-        # --- Normalize model output ---
-        if isinstance(model_output, str):
-            # Model returned raw text — attempt JSON parse
-            try:
-                model_output = json.loads(model_output)
-            except (json.JSONDecodeError, TypeError):
-                model_output = {}
-
-        # Try extracting the nested "visual_dev" key first, then check for
-        # top-level "reference_entries" or "entries" keys, and finally
-        # treat the whole dict as the data container.
-        data = model_output.get("visual_dev")
-        if not isinstance(data, dict):
-            data = model_output
-
-        entries_data = data.get("reference_entries") or data.get("entries")
-        if not isinstance(entries_data, list):
-            # Model may have returned an array at top level (strategy 4 in chat_json)
-            entries_data = []
-
-        entries = [
-            ReferenceIndexEntry(
-                reference_id=str(e.get("reference_id", f"ref_{i:03d}")),
-                asset_path=str(e.get("asset_path", "")),
-                asset_type=str(e.get("asset_type", "character_identity_sheet")),
-                subject_type=str(e.get("subject_type", "character")),
-                subject_id=str(e.get("subject_id", "")),
-                approved_for=[str(a) for a in e.get("approved_for", ["prompt_anchor"])],
-                quality_score=float(e.get("quality_score", 80.0)),
-                provider=str(e.get("provider", "")),
-                tier=str(e.get("tier", "fast")),
-                frame_role=str(e.get("frame_role", "")),
-                expression=str(e.get("expression", "")),
-                lighting=str(e.get("lighting", "")),
-                prompt_text=str(e.get("prompt_text", e.get("notes", ""))),
-                prompt_refs=[str(p) for p in e.get("prompt_refs", []) if str(p)],
-                source_frames=[str(p) for p in e.get("source_frames", []) if str(p)],
-                notes=str(e.get("notes", "")),
-                moderation_risk=str(e.get("moderation_risk", "low")),
-                validation=ReferenceValidationSummary(
-                    status=str(e.get("validation", {}).get("status", "pending")),
-                    score=float(e.get("validation", {}).get("score", 0.0)),
-                    reports=[str(r) for r in e.get("validation", {}).get("reports", []) if str(r)],
-                ),
-                ai_usability=ReferenceAIUsability(
-                    score=float(e.get("ai_usability", {}).get("score", 0.0)),
-                    risks=[str(r) for r in e.get("ai_usability", {}).get("risks", []) if str(r)],
-                    notes=str(e.get("ai_usability", {}).get("notes", "")),
-                ),
-            )
-            for i, e in enumerate(entries_data)
-        ]
+        """Parse model output into a ReferenceIndex artifact."""
+        data, entries_data = _normalized_payload(model_output)
+        entries = [_build_reference_entry(e, i) for i, e in enumerate(entries_data)]
         reference_index = ReferenceIndex(
             project_id=str(data.get("project_id", "")),
             entries=entries,
@@ -101,3 +52,73 @@ class VisualDevAgent(BaseAgent):
         if not isinstance(index, ReferenceIndex):
             return False
         return len(index.entries) > 0
+
+
+def _normalized_payload(model_output: Any) -> tuple[dict[str, Any], list[Any]]:
+    """Normalize raw model output into (data container, reference entries).
+
+    Attempts JSON parse for raw text, then extracts the nested "visual_dev"
+    key first, then checks top-level "reference_entries" or "entries" keys,
+    and finally treats the whole dict as the data container.
+    """
+    if isinstance(model_output, str):
+        # Model returned raw text — attempt JSON parse
+        try:
+            model_output = json.loads(model_output)
+        except (json.JSONDecodeError, TypeError):
+            model_output = {}
+
+    data = model_output.get("visual_dev")
+    if not isinstance(data, dict):
+        data = model_output
+
+    entries_data = data.get("reference_entries") or data.get("entries")
+    if not isinstance(entries_data, list):
+        # Model may have returned an array at top level (strategy 4 in chat_json)
+        entries_data = []
+    return data, entries_data
+
+
+def _validation_summary(entry: dict[str, Any]) -> ReferenceValidationSummary:
+    """Build the validation summary sub-model from a raw entry."""
+    validation_data = entry.get("validation", {})
+    return ReferenceValidationSummary(
+        status=str(validation_data.get("status", "pending")),
+        score=float(validation_data.get("score", 0.0)),
+        reports=[str(r) for r in validation_data.get("reports", []) if str(r)],
+    )
+
+
+def _ai_usability(entry: dict[str, Any]) -> ReferenceAIUsability:
+    """Build the AI-usability sub-model from a raw entry."""
+    usability_data = entry.get("ai_usability", {})
+    return ReferenceAIUsability(
+        score=float(usability_data.get("score", 0.0)),
+        risks=[str(r) for r in usability_data.get("risks", []) if str(r)],
+        notes=str(usability_data.get("notes", "")),
+    )
+
+
+def _build_reference_entry(entry: dict[str, Any], index: int) -> ReferenceIndexEntry:
+    """Build one ReferenceIndexEntry from a raw mapping."""
+    return ReferenceIndexEntry(
+        reference_id=str(entry.get("reference_id", f"ref_{index:03d}")),
+        asset_path=str(entry.get("asset_path", "")),
+        asset_type=str(entry.get("asset_type", "character_identity_sheet")),
+        subject_type=str(entry.get("subject_type", "character")),
+        subject_id=str(entry.get("subject_id", "")),
+        approved_for=[str(a) for a in entry.get("approved_for", ["prompt_anchor"])],
+        quality_score=float(entry.get("quality_score", 80.0)),
+        provider=str(entry.get("provider", "")),
+        tier=str(entry.get("tier", "fast")),
+        frame_role=str(entry.get("frame_role", "")),
+        expression=str(entry.get("expression", "")),
+        lighting=str(entry.get("lighting", "")),
+        prompt_text=str(entry.get("prompt_text", entry.get("notes", ""))),
+        prompt_refs=[str(p) for p in entry.get("prompt_refs", []) if str(p)],
+        source_frames=[str(p) for p in entry.get("source_frames", []) if str(p)],
+        notes=str(entry.get("notes", "")),
+        moderation_risk=str(entry.get("moderation_risk", "low")),
+        validation=_validation_summary(entry),
+        ai_usability=_ai_usability(entry),
+    )

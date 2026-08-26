@@ -55,14 +55,6 @@ class ReviewPackageGenerator:
         current = current_artifacts or []
         previous = previous_approved_artifacts or []
 
-        # Compute artifact diff
-        diff_result = compute_artifact_diff(current, previous)
-        diff_dict: dict[str, list[str]] = {
-            "added": diff_result.added,
-            "changed": diff_result.changed,
-            "removed": diff_result.removed,
-        }
-
         # Compute available actions
         actions = compute_available_actions(
             has_blocking_issues=has_blocking_issues,
@@ -77,7 +69,7 @@ class ReviewPackageGenerator:
             type=REVIEW_TYPE_MAP.get(phase, "generic_review"),
             summary=summary,
             artifacts=current,
-            diff_from_approved=diff_dict,
+            diff_from_approved=_artifact_diff(current, previous),
             validation_results=validation_results or [],
             open_issues=open_issues or [],
             risks=risks or [],
@@ -86,3 +78,15 @@ class ReviewPackageGenerator:
             available_actions=actions.available,
             blocked_actions=actions.blocked,
         )
+
+
+def _artifact_diff(
+    current_artifacts: list[str], previous_approved_artifacts: list[str]
+) -> dict[str, list[str]]:
+    """Compute the added/changed/removed diff against the last approved version."""
+    diff_result = compute_artifact_diff(current_artifacts, previous_approved_artifacts)
+    return {
+        "added": diff_result.added,
+        "changed": diff_result.changed,
+        "removed": diff_result.removed,
+    }

@@ -51,19 +51,9 @@ def load_execution_brief(state: dict[str, Any]) -> ExecutionBrief | None:
 # ── Post-extraction: cross-validate ExecutionBrief against StoryBible ──────
 
 
-def validate_execution_brief(
-    state: dict[str, Any],
-    brief: ExecutionBrief,
-) -> list[dict[str, Any]]:
-    """Cross-validate the ExecutionBrief against the StoryBible and Script.
-
-    Ensures the extracted brief is internally consistent and matches the
-    actual story structure. Returns blocking issues if the brief is
-    mathematically impossible or contradicts the StoryBible.
-    """
+def _movement_count_issues(brief: ExecutionBrief) -> list[dict[str, Any]]:
+    """The StoryBible defines a 3-act structure; flag implausible movement counts."""
     issues: list[dict[str, Any]] = []
-
-    # 1. Act count must match StoryBible (always 3 acts: setup/confrontation/resolution)
     if len(brief.movements) < 2:
         issues.append(
             _blocking(
@@ -80,8 +70,115 @@ def validate_execution_brief(
                 "The StoryBible has a 3-act structure. More than 5 movements is suspicious.",
             )
         )
+    return issues
 
-    # 2. Runtime self-consistency: total shots * avg_duration ~= target_runtime
+
+def _runtime_inconsistency_issues(brief: ExecutionBrief, total_shots: int) -> list[dict[str, Any]]:
+    """Runtime self-consistency: total shots * avg_duration ~= target_runtime."""
+    from film_pipeline.graph.scope_contract import avg_shot_duration_for
+
+    avg_duration = avg_shot_duration_for(brief.pacing_style)
+    estimated_runtime = total_shots * avg_duration
+    target = brief.target_runtime_seconds
+    tolerance = target * 0.20  # 20% tolerance for estimated runtime
+
+    if abs(estimated_runtime - target) <= tolerance:
+        return []
+    return [
+        _blocking(
+            "brief_runtime_inconsistent",
+            f"ExecutionBrief runtime ({target}s) is inconsistent with "
+            f"{total_shots} shots at {brief.pacing_style} pacing "
+            f"(estimated ~{estimated_runtime:.0f}s, tolerance ±{tolerance:.0f}s). "
+            "Either adjust shot counts or target_runtime_seconds.",
+        )
+    ]
+
+
+def _act_structure_issues(bible_data: dict[str, Any], movement_count: int) -> list[dict[str, Any]]:
+    """Flag a movement count that contradicts the StoryBible's act structure."""
+    act_map = bible_data.get("act_map", {})
+    if not isinstance(act_map, dict):
+        return []
+    act_count = sum(
+        1 for k in ("act1_setup", "act2_confrontation", "act3_resolution") if act_map.get(k)
+    )
+    if not (act_count > 0 and movement_count != act_count):
+        return []
+    return [
+        _blocking(
+            "brief_act_count_mismatch",
+            f"StoryBible has {act_count} non-empty acts but "
+            f"ExecutionBrief defines {movement_count} movements. "
+            "Movement count must match act count.",
+        )
+    ]
+
+
+def _scene_coverage_issues(bible_data: dict[str, Any], total_shots: int) -> list[dict[str, Any]]:
+    """Each scene needs at least one shot allocated by the brief."""
+    scene_list = bible_data.get("scene_list", {})
+    if not isinstance(scene_list, dict):
+        return []
+    scenes = scene_list.get("scenes", [])
+    actual_scene_count = len(scenes) if isinstance(scenes, list) else 0
+    if not (actual_scene_count > 0 and total_shots < actual_scene_count):
+        return []
+    return [
+        _blocking(
+            "brief_shots_less_than_scenes",
+            f"StoryBible has {actual_scene_count} scenes but "
+            f"ExecutionBrief allocates only {total_shots} shots. "
+            "Each scene needs at least one shot.",
+        )
+    ]
+
+
+def _story_bible_cross_check(
+    state: dict[str, Any],
+    brief: ExecutionBrief,
+    total_shots: int,
+) -> list[dict[str, Any]]:
+    """Load the StoryBible from the artifact store and cross-check structure."""
+    story_bible_ref = str(state.get("story_bible_ref", ""))
+    if not story_bible_ref:
+        return []
+    from film_pipeline.graph.nodes import _get_services, _parse_ref
+    from film_pipeline.schemas._base import FilmPhase
+
+    services = _get_services(state)
+    if services is None:
+        return []
+    try:
+        parsed = _parse_ref(story_bible_ref)
+        bible_data = services.artifact_store.load(
+            str(state.get("project_id", "")),
+            FilmPhase.SCRIPT,
+            parsed.artifact_id,
+            parsed.version,
+        )
+        cross_issues: list[dict[str, Any]] = []
+        if isinstance(bible_data, dict):
+            cross_issues.extend(_act_structure_issues(bible_data, len(brief.movements)))
+            cross_issues.extend(_scene_coverage_issues(bible_data, total_shots))
+        return cross_issues
+    except (FileNotFoundError, ValueError, KeyError):
+        pass
+    return []
+
+
+def validate_execution_brief(
+    state: dict[str, Any],
+    brief: ExecutionBrief,
+) -> list[dict[str, Any]]:
+    """Cross-validate the ExecutionBrief against the StoryBible and Script.
+
+    Ensures the extracted brief is internally consistent and matches the
+    actual story structure. Returns blocking issues if the brief is
+    mathematically impossible or contradicts the StoryBible.
+    """
+    issues = _movement_count_issues(brief)
+
     total_shots = sum(m.shot_count for m in brief.movements)
     if total_shots == 0:
         issues.append(
@@ -92,25 +189,9 @@ def validate_execution_brief(
         )
         return issues
 
-    from film_pipeline.graph.scope_contract import avg_shot_duration_for
+    issues.extend(_runtime_inconsistency_issues(brief, total_shots))
 
-    avg_duration = avg_shot_duration_for(brief.pacing_style)
-    estimated_runtime = total_shots * avg_duration
-    target = brief.target_runtime_seconds
-    tolerance = target * 0.20  # 20% tolerance for estimated runtime
-
-    if abs(estimated_runtime - target) > tolerance:
-        issues.append(
-            _blocking(
-                "brief_runtime_inconsistent",
-                f"ExecutionBrief runtime ({target}s) is inconsistent with "
-                f"{total_shots} shots at {brief.pacing_style} pacing "
-                f"(estimated ~{estimated_runtime:.0f}s, tolerance ±{tolerance:.0f}s). "
-                "Either adjust shot counts or target_runtime_seconds.",
-            )
-        )
-
-    # 3. Check mandatory anchors — at minimum, there should be some
+    # Mandatory anchors — at minimum, there should be some.
     if not brief.mandatory_anchors:
         issues.append(
             _blocking(
@@ -120,54 +201,5 @@ def validate_execution_brief(
             )
         )
 
-    # 4. Load StoryBible from state and cross-check act structure
-    story_bible_ref = str(state.get("story_bible_ref", ""))
-    if story_bible_ref:
-        from film_pipeline.graph.nodes import _get_services, _parse_ref
-        from film_pipeline.schemas._base import FilmPhase
-
-        services = _get_services(state)
-        if services is not None:
-            try:
-                parsed = _parse_ref(story_bible_ref)
-                bible_data = services.artifact_store.load(
-                    str(state.get("project_id", "")),
-                    FilmPhase.SCRIPT,
-                    parsed.artifact_id,
-                    parsed.version,
-                )
-                if isinstance(bible_data, dict):
-                    act_map = bible_data.get("act_map", {})
-                    if isinstance(act_map, dict):
-                        act_count = sum(
-                            1
-                            for k in ("act1_setup", "act2_confrontation", "act3_resolution")
-                            if act_map.get(k)
-                        )
-                        if act_count > 0 and len(brief.movements) != act_count:
-                            issues.append(
-                                _blocking(
-                                    "brief_act_count_mismatch",
-                                    f"StoryBible has {act_count} non-empty acts but "
-                                    f"ExecutionBrief defines {len(brief.movements)} movements. "
-                                    "Movement count must match act count.",
-                                )
-                            )
-
-                    scene_list = bible_data.get("scene_list", {})
-                    if isinstance(scene_list, dict):
-                        scenes = scene_list.get("scenes", [])
-                        actual_scene_count = len(scenes) if isinstance(scenes, list) else 0
-                        if actual_scene_count > 0 and total_shots < actual_scene_count:
-                            issues.append(
-                                _blocking(
-                                    "brief_shots_less_than_scenes",
-                                    f"StoryBible has {actual_scene_count} scenes but "
-                                    f"ExecutionBrief allocates only {total_shots} shots. "
-                                    "Each scene needs at least one shot.",
-                                )
-                            )
-            except (FileNotFoundError, ValueError, KeyError):
-                pass
-
+    issues.extend(_story_bible_cross_check(state, brief, total_shots))
     return issues

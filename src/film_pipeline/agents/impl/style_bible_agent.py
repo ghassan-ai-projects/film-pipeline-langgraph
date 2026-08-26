@@ -27,18 +27,14 @@ class StyleBibleAgent(BaseAgent):
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         data = _normalize_model_output(model_output)
-        palette = data.get("color_palette", [])
-        if not isinstance(palette, list):
-            palette = []
-
         bible = StyleBible(
             project_id=str(data.get("project_id", "")),
-            color_palette=[str(c) for c in palette],
+            color_palette=_coerce_str_list(data.get("color_palette")),
             texture=str(data.get("texture", "")),
             grain=str(data.get("grain", "")),
             visual_mood=str(data.get("visual_mood", "")),
-            reference_stills=[str(r) for r in data.get("reference_stills", [])],
-            must_not_change=[str(m) for m in data.get("must_not_change", [])],
+            reference_stills=_coerce_str_list(data.get("reference_stills")),
+            must_not_change=_coerce_str_list(data.get("must_not_change")),
         )
         return {"style_bible": bible}
 
@@ -49,6 +45,13 @@ class StyleBibleAgent(BaseAgent):
         if not bible.project_id:
             return False
         return len(bible.color_palette) > 0 or bool(bible.visual_mood)
+
+
+def _coerce_str_list(value: object) -> list[str]:
+    """Coerce a model-provided list field to ``list[str]``; non-lists yield ``[]``."""
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value]
 
 
 def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:

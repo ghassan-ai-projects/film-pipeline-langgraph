@@ -47,7 +47,13 @@ class MatrixPatch(SchemaBase):
     created_by_agent: str = Field(default="", description="Agent that produced this patch.")
 
     def apply_to(self, rows: list[dict[str, object]]) -> list[dict[str, object]]:
-        """Apply this patch to a list of row dicts. Returns modified rows."""
+        """Apply this patch to row dicts, mutating them in place.
+
+        Updates whose ``shot_id`` matches no row are silently skipped. Before
+        applying, each update records the previous values it replaces into its
+        own ``old_values`` for rollback support. Returns the patched rows in
+        input order.
+        """
         row_map: dict[str, dict[str, object]] = {}
         ordered_ids: list[str] = []
         for r in rows:

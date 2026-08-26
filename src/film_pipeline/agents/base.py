@@ -13,7 +13,7 @@ class BaseAgent(ABC):
     """Standard agent lifecycle contract.
 
     Every agent implements:
-    - prepare(state, kb_context) → assembled prompt inputs
+    - prepare(state, kb_context, task) → assembled prompt inputs
     - execute(model_output) → parsed result
     - validate(result) → bool
     """
@@ -51,7 +51,9 @@ class BaseAgent(ABC):
         model_output: dict[str, Any],
     ) -> dict[str, Any]:
         """Full lifecycle: prepare → execute → validate."""
-        _inputs = self.prepare(state, kb_context, task)
+        # prepare() runs as the lifecycle step; the graph node layer assembles
+        # the actual prompt context, so its inputs are not consumed here.
+        self.prepare(state, kb_context, task)
         result = self.execute(model_output)
         if not self.validate(result):
             raise ValueError(f"Agent '{self.contract.agent_id}' produced invalid output.")

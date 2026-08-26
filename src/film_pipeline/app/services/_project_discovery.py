@@ -28,23 +28,28 @@ def discover_project_folders(svc: OperatorService, known_ids: set[str]) -> list[
         project_id = project_dir.name
         if project_id in known_ids or not looks_like_project_dir(project_dir):
             continue
-        discovered.append(
-            ProjectListItem(
-                project_id=project_id,
-                title=project_id.replace("-", " ").replace("_", " ").title(),
-                slug=project_id,
-                current_phase=latest_discovered_phase(project_dir),
-                status="discovered",
-                has_blockers=False,
-                awaiting_review=False,
-                project_kind=project_kind_for_path(project_dir),
-                project_root=str(project_dir),
-            )
-        )
+        discovered.append(_as_discovered_item(project_dir))
     return discovered
 
 
+def _as_discovered_item(project_dir: Path) -> ProjectListItem:
+    """Build the listing entry for a project folder found in artifact storage."""
+    project_id = project_dir.name
+    return ProjectListItem(
+        project_id=project_id,
+        title=project_title_from_id(project_id),
+        slug=project_id,
+        current_phase=latest_discovered_phase(project_dir),
+        status="discovered",
+        has_blockers=False,
+        awaiting_review=False,
+        project_kind=project_kind_for_path(project_dir),
+        project_root=str(project_dir),
+    )
+
+
 def load_discovered_project(svc: OperatorService, project_id: str) -> dict[str, Any] | None:
+    """Register a discovered artifact-storage folder as a live runtime project."""
     root = artifact_root(svc.runtime)
     if root is None:
         return None
@@ -53,7 +58,7 @@ def load_discovered_project(svc: OperatorService, project_id: str) -> dict[str, 
         return None
     state = svc.runtime.create_project(
         project_id=project_id,
-        title=project_id.replace("-", " ").replace("_", " ").title(),
+        title=project_title_from_id(project_id),
         slug=project_id,
     )
     state["current_phase"] = latest_discovered_phase(project_dir)
@@ -87,3 +92,8 @@ def normalize_project_kind(project_kind: str) -> str:
             f"project_kind must be 'production' or 'test', got '{project_kind}'."
         )
     return kind
+
+
+def project_title_from_id(project_id: str) -> str:
+    """Derive a human-readable title from a project folder name."""
+    return project_id.replace("-", " ").replace("_", " ").title()

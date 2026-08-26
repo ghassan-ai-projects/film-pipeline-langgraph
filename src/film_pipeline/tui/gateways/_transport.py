@@ -6,7 +6,7 @@ import json
 import subprocess
 import threading
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 
 class MCPProcessTransport:
@@ -45,32 +45,40 @@ class MCPProcessTransport:
             cwd=str(Path.cwd()),
         )
 
+    def _live_pipes(self) -> tuple[IO[str], IO[str]]:
+        proc = self._proc
+        if proc is None or proc.stdin is None or proc.stdout is None:  # pragma: no cover
+            raise RuntimeError("MCP server subprocess is not available.")
+        return proc.stdin, proc.stdout
+
     def _call(self, method: str, params: dict[str, object] | None = None) -> dict[str, Any]:
         with self._lock:
             self._ensure_started()
-            if (
-                self._proc is None or self._proc.stdin is None or self._proc.stdout is None
-            ):  # pragma: no cover
-                raise RuntimeError("MCP server subprocess is not available.")
+            stdin, stdout = self._live_pipes()
             self._request_id += 1
-            request: dict[str, object] = {
-                "jsonrpc": "2.0",
-                "id": self._request_id,
-                "method": method,
-            }
-            if params:
-                request["params"] = params
-            body = json.dumps(request)
-            self._proc.stdin.write(f"Content-Length: {len(body)}\r\n\r\n{body}")
-            self._proc.stdin.flush()
-            return self._read_response(self._request_id)
+            stdin.write(self._encode_request(self._request_id, method, params))
+            stdin.flush()
+            return self._read_response(stdout, self._request_id)
 
-    def _read_response(self, expected_id: int) -> dict[str, Any]:
-        if self._proc is None or self._proc.stdout is None:  # pragma: no cover
-            raise RuntimeError("MCP server subprocess is not available.")
+    @staticmethod
+    def _encode_request(request_id: int, method: str, params: dict[str, object] | None) -> str:
+        request: dict[str, object] = {"jsonrpc": "2.0", "id": request_id, "method": method}
+        if params:
+            request["params"] = params
+        body = json.dumps(request)
+        return f"Content-Length: {len(body)}\r\n\r\n{body}"
+
+    def _read_response(self, stdout: IO[str], expected_id: int) -> dict[str, Any]:
+        response = self._read_framed_message(stdout)
+        self._reject_mismatched_id(response, expected_id)
+        self._reject_rpc_error(response)
+        return self._unwrap_result(response)
+
+    @staticmethod
+    def _read_framed_message(stdout: IO[str]) -> dict[str, Any]:
         content_length: int | None = None
         while True:
-            line = self._proc.stdout.readline()
+            line = stdout.readline()
             if not line:
                 raise RuntimeError("MCP server closed stdout before response")
             if line in {"\r\n", "\n"}:
@@ -80,12 +88,22 @@ class MCPProcessTransport:
                 content_length = int(header.split(":", 1)[1].strip())
         if content_length is None:  # pragma: no cover
             raise RuntimeError("Missing Content-Length header in MCP response")
-        raw = self._proc.stdout.read(content_length)
-        response = json.loads(raw)
+        raw = stdout.read(content_length)
+        response: dict[str, Any] = json.loads(raw)
+        return response
+
+    @staticmethod
+    def _reject_mismatched_id(response: dict[str, Any], expected_id: int) -> None:
         if response.get("id") != expected_id:  # pragma: no cover
             raise RuntimeError(f"MCP response id mismatch: {response.get('id')} != {expected_id}")
+
+    @staticmethod
+    def _reject_rpc_error(response: dict[str, Any]) -> None:
         if "error" in response:
             raise RuntimeError(response["error"].get("message", "Unknown MCP error"))
+
+    @staticmethod
+    def _unwrap_result(response: dict[str, Any]) -> dict[str, Any]:
         result = response.get("result", {})
         if not isinstance(result, dict):  # pragma: no cover
             raise RuntimeError("MCP result is not an object")

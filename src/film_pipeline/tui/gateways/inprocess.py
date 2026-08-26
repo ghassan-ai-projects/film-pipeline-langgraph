@@ -16,9 +16,10 @@ from film_pipeline.app.services.models import (
     ValidationWorkspace,
 )
 from film_pipeline.app.services.operator import OperatorService
+from film_pipeline.tui.gateway import StudioGateway
 
 
-class InProcessStudioGateway:
+class InProcessStudioGateway(StudioGateway):
     """Gateway that calls application services directly."""
 
     def __init__(self, service: OperatorService | None = None) -> None:

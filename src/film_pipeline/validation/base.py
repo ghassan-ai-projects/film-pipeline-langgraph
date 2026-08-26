@@ -8,6 +8,8 @@ dispatches to ``_validate_llm()`` which uses the shared LLM infrastructure
 
 from __future__ import annotations
 
+import json
+import logging
 from abc import ABC, abstractmethod
 from typing import Any
 from uuid import uuid4
@@ -18,6 +20,8 @@ from film_pipeline.schemas.registries.validator_registry import (
 )
 from film_pipeline.schemas.validation import ValidationIssue, ValidationReport
 from film_pipeline.validation.thresholds import score_to_status
+
+_logger = logging.getLogger(__name__)
 
 
 class BaseValidator(ABC):
@@ -84,9 +88,7 @@ class BaseValidator(ABC):
             try:
                 return self._validate_llm(artifact, context)
             except Exception:
-                import logging
-
-                logging.warning(
+                _logger.warning(
                     "Validator '%s': LLM validation failed, falling back to rule-based check.",
                     self.entry.validator_id,
                 )
@@ -177,6 +179,17 @@ class BaseValidator(ABC):
             or ValidationModality.VIDEO in self.entry.modalities
         )
 
+    @staticmethod
+    def _image_data(item: object) -> str | None:
+        """Return the base64 image carried by one list item, when present."""
+        if isinstance(item, str):
+            return item
+        if isinstance(item, dict):
+            b64 = item.get("data") or item.get("b64") or item.get("image_b64")
+            if b64:
+                return str(b64)
+        return None
+
     def _extract_images(self, artifact: dict[str, Any]) -> list[str]:
         """Extract base64-encoded images from the artifact.
 
@@ -185,27 +198,17 @@ class BaseValidator(ABC):
         for key in ("images", "frames", "asset_data", "clips"):
             value = artifact.get(key)
             if isinstance(value, list) and value:
-                images: list[str] = []
-                for item in value:
-                    if isinstance(item, str):
-                        images.append(item)
-                    elif isinstance(item, dict):
-                        b64 = item.get("data") or item.get("b64") or item.get("image_b64")
-                        if b64:
-                            images.append(str(b64))
+                images = [image for item in value if (image := self._image_data(item)) is not None]
                 if images:
                     return images
         return []
 
     def _parse_validation_response(self, text: str) -> dict[str, Any]:
         """Parse LLM response into the expected raw dict format."""
-        import json
-
         text = text.strip()
-        try:
-            return dict(json.loads(text))
-        except json.JSONDecodeError:
-            pass
+        direct = _parse_json_dict_or_none(text)
+        if direct is not None:
+            return direct
 
         for fence in ("```json", "```JSON", "```"):
             if fence in text:
@@ -214,18 +217,16 @@ class BaseValidator(ABC):
                 close = block.find("```")
                 if close != -1:
                     block = block[:close]
-                try:
-                    return dict(json.loads(block.strip()))
-                except json.JSONDecodeError:
-                    pass
+                fenced = _parse_json_dict_or_none(block.strip())
+                if fenced is not None:
+                    return fenced
 
         brace_start = text.find("{")
         brace_end = text.rfind("}")
         if brace_start != -1 and brace_end > brace_start:
-            try:
-                return dict(json.loads(text[brace_start : brace_end + 1]))
-            except json.JSONDecodeError:
-                pass
+            embedded = _parse_json_dict_or_none(text[brace_start : brace_end + 1])
+            if embedded is not None:
+                return embedded
 
         raise ValueError(
             f"Validator '{self.entry.validator_id}' LLM response is not valid JSON. "
@@ -291,10 +292,18 @@ class BaseValidator(ABC):
 
 
 class _SafeDict(dict[str, str]):
-    """Dict that returns the missing key as the value for missing keys."""
+    """Format-map dict that leaves unknown placeholders as ``{key}`` text."""
 
     def __missing__(self, key: str) -> str:
         return f"{{{key}}}"
+
+
+def _parse_json_dict_or_none(text: str) -> dict[str, Any] | None:
+    """Return ``text`` decoded as a JSON object, or None when it is not valid JSON."""
+    try:
+        return dict(json.loads(text))
+    except json.JSONDecodeError:
+        return None
 
 
 def _recommended_actions(

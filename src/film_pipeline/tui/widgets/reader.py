@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from textual.app import ComposeResult
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
 from film_pipeline.tui.view_models.helpers import compact_dict
+
+if TYPE_CHECKING:
+    from film_pipeline.tui.app import AppState
+    from film_pipeline.tui.view_models.models import ReaderView
 
 
 class Reader(VerticalScroll):
@@ -66,68 +72,91 @@ class Reader(VerticalScroll):
         if state is None:
             self._show("Reader", "", "Open a project to start reading.", "")
             return
-
-        if state.reader is not None:
-            reader = state.reader
-            extras: list[str] = []
-            if reader.metadata:
-                extras.append(compact_dict(reader.metadata))
-            if reader.linked_comments:
-                extras.append("")
-                extras.append("Comments")
-                extras.extend(
-                    f"- {comment.target_id}: {comment.body}"
-                    for comment in reader.linked_comments[:8]
-                )
-            if reader.linked_validation:
-                extras.append("")
-                extras.append("Validation")
-                extras.extend(
-                    f"- {issue.get('severity', '')}: {issue.get('message', '')}"
-                    for issue in reader.linked_validation[:8]
-                )
-            self._show(reader.title, reader.subtitle, reader.body, "\n".join(extras))
-            self.scroll_home(animate=False)
+        if self._render_reader_view(state):
             return
-
-        if state.selected_target is not None:
-            target = state.selected_target
-            self._show(
-                f"{target.target_type}: {target.target_id}",
-                target.phase or "",
-                compact_dict(dict(target.detail)),
-                "",
-            )
-            self.scroll_home(animate=False)
+        if self._render_selected_target(state):
             return
-
-        if state.snapshot is not None and (
-            state.snapshot.generation is not None or state.snapshot.prompts
-        ):
-            phase = state.dashboard.current_phase if state.dashboard is not None else "generation"
-            self._show("Generation", phase, self._format_generation(state), "")
+        if self._render_generation_view(state):
             return
-
-        if state.dashboard is not None:
-            from film_pipeline.tui.view_models.builders_reader import build_overview_reader
-
-            blocking = (
-                len(state.snapshot.validation.blocking_issues)
-                if state.snapshot and state.snapshot.validation
-                else 0
-            )
-            overview = build_overview_reader(state.dashboard, blocking_issues=blocking)
-            self._show(
-                overview.title, overview.subtitle, overview.body, compact_dict(overview.metadata)
-            )
+        if self._render_overview(state):
             return
-
         self._show(
             "Reader",
             "",
             "Select a scene, artifact, or asset to read it here.",
             "",
         )
+
+    def _render_reader_view(self, state: AppState) -> bool:
+        if state.reader is None:
+            return False
+        reader = state.reader
+        self._show(
+            reader.title,
+            reader.subtitle,
+            reader.body,
+            self._reader_entry_extras(reader),
+        )
+        self.scroll_home(animate=False)
+        return True
+
+    @staticmethod
+    def _reader_entry_extras(view: ReaderView) -> str:
+        """Build the metadata/comments/validation footer for the loaded entry."""
+        extras: list[str] = []
+        if view.metadata:
+            extras.append(compact_dict(view.metadata))
+        if view.linked_comments:
+            extras.append("")
+            extras.append("Comments")
+            extras.extend(
+                f"- {comment.target_id}: {comment.body}" for comment in view.linked_comments[:8]
+            )
+        if view.linked_validation:
+            extras.append("")
+            extras.append("Validation")
+            extras.extend(
+                f"- {issue.get('severity', '')}: {issue.get('message', '')}"
+                for issue in view.linked_validation[:8]
+            )
+        return "\n".join(extras)
+
+    def _render_selected_target(self, state: AppState) -> bool:
+        if state.selected_target is None:
+            return False
+        target = state.selected_target
+        self._show(
+            f"{target.target_type}: {target.target_id}",
+            target.phase or "",
+            compact_dict(dict(target.detail)),
+            "",
+        )
+        self.scroll_home(animate=False)
+        return True
+
+    def _render_generation_view(self, state: AppState) -> bool:
+        snapshot = state.snapshot
+        if snapshot is None or not (snapshot.generation is not None or snapshot.prompts):
+            return False
+        phase = state.dashboard.current_phase if state.dashboard is not None else "generation"
+        self._show("Generation", phase, self._format_generation(state), "")
+        return True
+
+    def _render_overview(self, state: AppState) -> bool:
+        if state.dashboard is None:
+            return False
+        from film_pipeline.tui.view_models.builders_reader import build_overview_reader
+
+        blocking = (
+            len(state.snapshot.validation.blocking_issues)
+            if state.snapshot and state.snapshot.validation
+            else 0
+        )
+        overview = build_overview_reader(state.dashboard, blocking_issues=blocking)
+        self._show(
+            overview.title, overview.subtitle, overview.body, compact_dict(overview.metadata)
+        )
+        return True
 
     def _show(self, title: str, subtitle: str, body: str, extras: str) -> None:
         self.query_one("#reader_title", Static).update(title)
@@ -136,12 +165,10 @@ class Reader(VerticalScroll):
         self.query_one("#reader_extras", Static).update(extras)
 
     @staticmethod
-    def _format_generation(state: object) -> str:
-        from film_pipeline.tui.app import AppState
-
-        if not isinstance(state, AppState) or state.snapshot is None:
-            return ""
+    def _format_generation(state: AppState) -> str:
         snapshot = state.snapshot
+        if snapshot is None:
+            return ""
         lines: list[str] = []
         if snapshot.generation is not None:
             gen = snapshot.generation

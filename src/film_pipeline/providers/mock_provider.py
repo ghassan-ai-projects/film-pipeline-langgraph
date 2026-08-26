@@ -24,7 +24,7 @@ _MINIMAL_PNG = (
 )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ScenarioStep:
     """One step in a mock provider scenario script."""
 
@@ -116,21 +116,39 @@ class MockVideoProvider(BaseProviderAdapter):
         out.mkdir(parents=True, exist_ok=True)
 
         step = self._current_step()
-
         if step and step.output == "corrupt":
-            video_path = out / f"{job.shot_id}.mp4"
-            video_path.write_bytes(b"CORRUPT_DATA")
-            self._step_index += 1
-            return str(video_path)
+            video_path = self._write_corrupt_video(out, job.shot_id)
+        else:
+            video_path = self._write_video_with_frames(out, job.shot_id, step)
+            job.metadata = self._write_asset_metadata(out, job)
 
-        video_path = out / f"{job.shot_id}.mp4"
+        self._step_index += 1
+        return str(video_path)
+
+    def _write_corrupt_video(self, output_dir: Path, shot_id: str) -> Path:
+        """Persist a deliberately corrupted video to simulate a damaged download."""
+        video_path = output_dir / f"{shot_id}.mp4"
+        video_path.write_bytes(b"CORRUPT_DATA")
+        return video_path
+
+    def _write_video_with_frames(
+        self,
+        output_dir: Path,
+        shot_id: str,
+        step: ScenarioStep | None,
+    ) -> Path:
+        """Persist the placeholder video plus last/mid frames unless the scenario fails them."""
+        video_path = output_dir / f"{shot_id}.mp4"
         video_path.write_bytes(_MINIMAL_MP4)
 
         if step is None or step.last_frame != "failed":
-            (out / f"{job.shot_id}_last.png").write_bytes(_MINIMAL_PNG)
+            (output_dir / f"{shot_id}_last.png").write_bytes(_MINIMAL_PNG)
         if step is None or step.mid_frame != "failed":
-            (out / f"{job.shot_id}_mid.png").write_bytes(_MINIMAL_PNG)
+            (output_dir / f"{shot_id}_mid.png").write_bytes(_MINIMAL_PNG)
+        return video_path
 
+    def _write_asset_metadata(self, output_dir: Path, job: ProviderJob) -> dict[str, Any]:
+        """Persist the companion JSON describing the generated asset."""
         metadata = {
             "shot_id": job.shot_id,
             "job_id": job.job_id,
@@ -142,11 +160,8 @@ class MockVideoProvider(BaseProviderAdapter):
             "file_size_bytes": len(_MINIMAL_MP4),
             "generated_at": datetime.now(UTC).isoformat(),
         }
-        (out / f"{job.shot_id}_metadata.json").write_text(json.dumps(metadata, indent=2))
-
-        job.metadata = metadata
-        self._step_index += 1
-        return str(video_path)
+        (output_dir / f"{job.shot_id}_metadata.json").write_text(json.dumps(metadata, indent=2))
+        return metadata
 
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)

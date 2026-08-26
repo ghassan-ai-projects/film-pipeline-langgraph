@@ -15,10 +15,12 @@ from film_pipeline.generation.compositor._layout import (
     _LABEL_COLOR,
     _MARGIN,
     _SHEET_SIZE,
-    _crop_center,
     _load_font,
-    _paste_placeholder,
     _write_sheet_manifest,
+)
+from film_pipeline.generation.compositor.extras import (
+    _paste_frame_or_placeholder,
+    _save_sheet,
 )
 
 # ── Public API ────────────────────────────────────────────────────────────
@@ -44,43 +46,23 @@ def build_character_identity_sheet(
     """
     canvas = Image.new("RGB", _SHEET_SIZE, _BG_COLOR)
     draw = ImageDraw.Draw(canvas)
-
-    # Try to load a font; fall back to default
     font = _load_font(14)
 
-    # Title
     title = f"CHARACTER IDENTITY SHEET — {subject_id.upper()} — {character_name}"
     draw.text((_MARGIN, 8), title, fill=_LABEL_COLOR, font=font)
-
-    # Divider line below title
     draw.line([(_MARGIN, 40), (_SHEET_SIZE[0] - _MARGIN, 40)], fill=_BORDER_COLOR, width=1)
 
-    # Paste each frame tile
     for role, (x, y, w, h) in _CHAR_TILES.items():
-        # Draw border
         draw.rectangle(
             [x - 1, y - 1, x + w + 1, y + h + 1], outline=_BORDER_COLOR, width=_BORDER_WIDTH
         )
-
-        frame_path = frames.get(role)
-        if frame_path and frame_path.exists():
-            try:
-                tile = Image.open(frame_path).convert("RGB")
-                tile = _crop_center(tile, w, h)
-                canvas.paste(tile, (x, y))
-            except Exception:
-                _paste_placeholder(canvas, x, y, w, h, role)
-        else:
-            _paste_placeholder(canvas, x, y, w, h, role)
-
-        # Label in margin area (below tile)
+        _paste_frame_or_placeholder(canvas, frames.get(role), x, y, w, h, role)
         label = _CHAR_LABELS.get(role, role.upper().replace("-", " "))
         label_y = y + h + 2
         if label_y + 14 < _SHEET_SIZE[1]:
             draw.text((x + 2, label_y), label, fill=_LABEL_COLOR, font=font)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(output_path, "PNG")
+    _save_sheet(canvas, output_path)
     _write_sheet_manifest(
         output_path,
         subject_id,
@@ -116,16 +98,6 @@ def replace_tile(
         raise ValueError(f"Unknown tile: {tile_name}")
 
     x, y, w, h = _CHAR_TILES[tile_name]
+    _paste_frame_or_placeholder(canvas, new_frame_path, x, y, w, h, tile_name)
 
-    if new_frame_path.exists():
-        try:
-            tile = Image.open(new_frame_path).convert("RGB")
-            tile = _crop_center(tile, w, h)
-            canvas.paste(tile, (x, y))
-        except Exception:
-            _paste_placeholder(canvas, x, y, w, h, tile_name)
-    else:
-        _paste_placeholder(canvas, x, y, w, h, tile_name)
-
-    canvas.save(target, "PNG")
-    return target
+    return _save_sheet(canvas, target)

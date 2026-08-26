@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import _active_project_id, _ok
+
+
+def _routing_summary(routing_decisions: list[dict[str, Any]]) -> str:
+    """Render routing decisions as ``agent [FALLBACK]: reason`` lines."""
+    summary_lines: list[str] = []
+    for rd in routing_decisions:
+        agent = rd.get("agent_id", "unknown")
+        reason = rd.get("routing_reason", "")
+        was_fallback = rd.get("fallback", False)
+        label = " [FALLBACK]" if was_fallback else ""
+        summary_lines.append(f"{agent}{label}: {reason}")
+    return "\n".join(summary_lines)
 
 
 async def get_audit_log(args: dict[str, object]) -> dict[str, object]:
@@ -47,17 +61,9 @@ async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
             message="No routing decisions recorded yet. Run a phase to populate routing history.",
         )
 
-    summary_lines: list[str] = []
-    for rd in routing_decisions:
-        agent = rd.get("agent_id", "unknown")
-        reason = rd.get("routing_reason", "")
-        was_fallback = rd.get("fallback", False)
-        label = " [FALLBACK]" if was_fallback else ""
-        summary_lines.append(f"{agent}{label}: {reason}")
-
     return _ok(
         decisions=routing_decisions,
-        summary="\n".join(summary_lines),
+        summary=_routing_summary(routing_decisions),
         message=f"{len(routing_decisions)} routing decision(s) recorded.",
     )
 

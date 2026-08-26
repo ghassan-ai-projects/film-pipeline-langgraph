@@ -12,6 +12,112 @@ from film_pipeline.schemas.registries.validator_registry import (
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
 
+_CONFLICT_KEYWORDS = frozenset({"conflict", "tension", "argue", "fight", "disagree", "struggle"})
+
+
+def _no_scenes_result() -> dict[str, Any]:
+    """Result payload for a script without scenes."""
+    return {
+        "scenes_count": 0,
+        "issues": [
+            {
+                "code": "missing_scene_intent",
+                "severity": "blocking",
+                "message": "Script contains no scenes.",
+            }
+        ],
+    }
+
+
+def _flag_scene_shortfall(
+    scenes: list[dict[str, Any]],
+    context: object,
+    issues: list[dict[str, str]],
+) -> None:
+    """Blocking: scene count below the Story Scope Contract minimum."""
+    ctx = context if isinstance(context, dict) else {}
+    target_scene_count = ctx.get("target_scene_count")
+    min_scene_count = ctx.get("min_scene_count")
+    if not (isinstance(min_scene_count, int) and len(scenes) < min_scene_count):
+        return
+    issues.append(
+        {
+            "code": "scene_count_under_min",
+            "severity": "blocking",
+            "message": (
+                f"Script has {len(scenes)} scenes, below the minimum "
+                f"{min_scene_count}. Target was {target_scene_count}."
+            ),
+        }
+    )
+
+
+def _classify_scenes(
+    scenes: list[dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    """Bucket scenes as intent-less, dialogue-dense, and action-heavy."""
+    scenes_without_intent: list[str] = []
+    dense_dialogue_scenes: list[str] = []
+    many_action_line_scenes: list[str] = []
+
+    for s in scenes:
+        sid = str(s.get("scene_id", "?"))
+        if not str(s.get("intent_ref", "")):
+            scenes_without_intent.append(sid)
+        if len(s.get("dialogue", [])) > 15:
+            dense_dialogue_scenes.append(sid)
+        if len(s.get("action_lines", [])) > 10:
+            many_action_line_scenes.append(sid)
+
+    return scenes_without_intent, dense_dialogue_scenes, many_action_line_scenes
+
+
+def _conflict_candidate_lines(scene: dict[str, Any]) -> list[str]:
+    """Lowercased dialogue lines and action lines of one scene."""
+    lines = [str(d.get("line", "")).lower() for d in scene.get("dialogue", [])]
+    lines.extend(str(al).lower() for al in scene.get("action_lines", []))
+    return lines
+
+
+def _scene_lacks_conflict(scene: dict[str, Any]) -> bool:
+    """True when neither dialogue nor action lines mention a conflict keyword."""
+    return not any(
+        kw in line for line in _conflict_candidate_lines(scene) for kw in _CONFLICT_KEYWORDS
+    )
+
+
+def _scenes_lacking_conflict(scenes: list[dict[str, Any]]) -> list[str]:
+    """Scene ids whose dialogue and action lines show no conflict indicators."""
+    return [str(s.get("scene_id", "?")) for s in scenes if _scene_lacks_conflict(s)]
+
+
+def _flag_density_warnings(
+    dense_dialogue_scenes: list[str],
+    many_action_line_scenes: list[str],
+    issues: list[dict[str, str]],
+) -> None:
+    """Warnings for dialogue-dense and overly long scenes."""
+    if dense_dialogue_scenes:
+        issues.append(
+            {
+                "code": "dialogue_dense",
+                "severity": "warning",
+                "message": (
+                    f"Scenes with >15 dialogue lines: {', '.join(dense_dialogue_scenes[:5])}"
+                ),
+            }
+        )
+    if many_action_line_scenes:
+        issues.append(
+            {
+                "code": "scene_too_long",
+                "severity": "warning",
+                "message": (
+                    f"Scenes with >10 action lines: {', '.join(many_action_line_scenes[:5])}"
+                ),
+            }
+        )
+
 
 class ScriptStructureValidator(BaseValidator):
     """Validates script scene structure: scene count, dramatic function coverage,
@@ -65,111 +171,39 @@ class ScriptStructureValidator(BaseValidator):
         issues: list[dict[str, str]] = []
 
         if not scenes:
-            issues.append(
-                {
-                    "code": "missing_scene_intent",
-                    "severity": "blocking",
-                    "message": "Script contains no scenes.",
-                }
-            )
-            return {"scenes_count": 0, "issues": issues}
+            return _no_scenes_result()
 
         # Scene-count compliance against the Story Scope Contract.
-        ctx = context if isinstance(context, dict) else {}
-        target_scene_count = ctx.get("target_scene_count")
-        min_scene_count = ctx.get("min_scene_count")
-        if isinstance(min_scene_count, int) and len(scenes) < min_scene_count:
-            issues.append(
-                {
-                    "code": "scene_count_under_min",
-                    "severity": "blocking",
-                    "message": (
-                        f"Script has {len(scenes)} scenes, below the minimum "
-                        f"{min_scene_count}. Target was {target_scene_count}."
-                    ),
-                }
-            )
+        _flag_scene_shortfall(scenes, context, issues)
 
-        scenes_without_intent: list[str] = []
-        scenes_without_conflict: list[str] = []
-        scenes_with_dense_dialogue: list[str] = []
-        scenes_with_many_action_lines: list[str] = []
-
-        for s in scenes:
-            sid = str(s.get("scene_id", "?"))
-            intent = str(s.get("intent_ref", ""))
-            dialogue = s.get("dialogue", [])
-            action_lines = s.get("action_lines", [])
-
-            if not intent:
-                scenes_without_intent.append(sid)
-            if not any(
-                d.get("conflict") or s.get("conflict") for d in ([s, *dialogue])
-            ):  # pragma: no cover
-                pass  # conflict is on SceneIntent, not ScriptScene
-            dialogue_count = len(dialogue)
-            if dialogue_count > 15:
-                scenes_with_dense_dialogue.append(sid)
-            if len(action_lines) > 10:
-                scenes_with_many_action_lines.append(sid)
+        without_intent, dense_dialogue, oversized = _classify_scenes(scenes)
 
         # Blocking: scenes without intent refs
-        if scenes_without_intent:
+        if without_intent:
             issues.append(
                 {
                     "code": "missing_scene_intent",
                     "severity": "blocking",
-                    "message": f"Scenes missing intent_ref: {', '.join(scenes_without_intent[:5])}",
+                    "message": f"Scenes missing intent_ref: {', '.join(without_intent[:5])}",
                 }
             )
 
         # Blocking: scenes without conflict (check dialogue for conflict indicators)
-        conflict_keywords = {"conflict", "tension", "argue", "fight", "disagree", "struggle"}
-        scenes_without_conflict = [
-            str(s.get("scene_id", "?"))
-            for s in scenes
-            if not any(
-                kw in str(d.get("line", "")).lower()
-                for d in s.get("dialogue", [])
-                for kw in conflict_keywords
-            )
-            and not any(
-                kw in str(al).lower()
-                for al in s.get("action_lines", [])
-                for kw in conflict_keywords
-            )
-        ]
-        if len(scenes_without_conflict) > len(scenes) * 0.5:
+        lacking_conflict = _scenes_lacking_conflict(scenes)
+        if len(lacking_conflict) > len(scenes) * 0.5:
             issues.append(
                 {
                     "code": "no_conflict",
                     "severity": "blocking",
                     "message": (
-                        f"Over half of scenes ({len(scenes_without_conflict)}/{len(scenes)}) "
+                        f"Over half of scenes ({len(lacking_conflict)}/{len(scenes)}) "
                         "lack clear conflict indicators."
                     ),
                 }
             )
 
         # Warnings
-        if scenes_with_dense_dialogue:
-            dense_list = ", ".join(scenes_with_dense_dialogue[:5])
-            issues.append(
-                {
-                    "code": "dialogue_dense",
-                    "severity": "warning",
-                    "message": f"Scenes with >15 dialogue lines: {dense_list}",
-                }
-            )
-        if scenes_with_many_action_lines:
-            long_list = ", ".join(scenes_with_many_action_lines[:5])
-            issues.append(
-                {
-                    "code": "scene_too_long",
-                    "severity": "warning",
-                    "message": f"Scenes with >10 action lines: {long_list}",
-                }
-            )
+        _flag_density_warnings(dense_dialogue, oversized, issues)
 
         return {"scenes_count": len(scenes), "issues": issues}
 

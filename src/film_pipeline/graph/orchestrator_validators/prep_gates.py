@@ -7,6 +7,7 @@ from typing import Any
 from film_pipeline.graph.orchestrator_validators._shared import (
     _blocking,
     _blocking_with_id,
+    _extract_rows,
     _row_attr,
 )
 from film_pipeline.schemas.execution_brief import ExecutionBrief
@@ -67,35 +68,11 @@ def validate_script_scene_preservation(
 # ── Gate A: Shot bible structural check ───────────────────────────────────
 
 
-def validate_shot_structure(
-    _state: dict[str, Any],
+def _movement_count_issues(
     brief: ExecutionBrief,
-    shot_matrix: Any,
+    rows: list[Any],
 ) -> list[dict[str, Any]]:
-    """Gate A: Check shot count per movement and runtime totals.
-
-    Returns a list of blocking issues (empty list = pass).
-    """
-    issues: list[dict[str, Any]] = []
-
-    # Unpack shot matrix rows
-    rows: list[Any] = []
-    if hasattr(shot_matrix, "rows"):
-        rows = shot_matrix.rows
-    elif isinstance(shot_matrix, dict):
-        raw = shot_matrix.get("rows", [])
-        rows = raw if isinstance(raw, list) else []
-
-    if not rows:
-        issues.append(
-            _blocking(
-                "shot_matrix_empty",
-                "Shot matrix has zero rows. Cannot validate structure.",
-            )
-        )
-        return issues
-
-    # --- Check shot count per movement ---
+    """Check shot count per movement against the execution brief."""
     # Group rows by act_id (maps to movement_id)
     act_counts: dict[str, int] = {}
     for row in rows:
@@ -104,6 +81,7 @@ def validate_shot_structure(
             continue
         act_counts[act_id] = act_counts.get(act_id, 0) + 1
 
+    issues: list[dict[str, Any]] = []
     for movement in brief.movements:
         actual = act_counts.get(movement.movement_id, 0)
         expected = movement.shot_count
@@ -115,8 +93,14 @@ def validate_shot_structure(
                     f"got {actual}. Shot matrix does not match the execution brief.",
                 )
             )
+    return issues
 
-    # --- Check runtime totals ---
+
+def _runtime_tolerance_issues(
+    brief: ExecutionBrief,
+    rows: list[Any],
+) -> list[dict[str, Any]]:
+    """Check total shot duration against the target runtime within 10%."""
     total_duration = 0
     for row in rows:
         dur = _row_attr(row, "duration_seconds", 0)
@@ -126,13 +110,36 @@ def validate_shot_structure(
     target = brief.target_runtime_seconds
     tolerance = target * 0.10  # 10% tolerance
     if abs(total_duration - target) > tolerance:
-        issues.append(
+        return [
             _blocking(
                 "runtime_mismatch",
                 f"Target runtime is {target}s, but shot durations sum to "
                 f"{total_duration}s (tolerance ±{tolerance:.0f}s). "
                 "Shot durations must match the execution brief within 10%.",
             )
-        )
+        ]
+    return []
 
+
+def validate_shot_structure(
+    _state: dict[str, Any],
+    brief: ExecutionBrief,
+    shot_matrix: Any,
+) -> list[dict[str, Any]]:
+    """Gate A: Check shot count per movement and runtime totals.
+
+    Returns a list of blocking issues (empty list = pass).
+    """
+    rows = _extract_rows(shot_matrix)
+    if not rows:
+        return [
+            _blocking(
+                "shot_matrix_empty",
+                "Shot matrix has zero rows. Cannot validate structure.",
+            )
+        ]
+
+    issues: list[dict[str, Any]] = []
+    issues.extend(_movement_count_issues(brief, rows))
+    issues.extend(_runtime_tolerance_issues(brief, rows))
     return issues

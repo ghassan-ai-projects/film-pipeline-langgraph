@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from textual.widgets import DataTable
 
 from film_pipeline.app.services.errors import ServiceError
 from film_pipeline.app.services.models import ArtifactDetail
 from film_pipeline.tui.view_models.builders_reader import build_artifact_reader
+
+if TYPE_CHECKING:
+    from film_pipeline.tui.view_models.models import TargetSelection
 
 
 class ArtifactList(DataTable[str]):
@@ -92,7 +95,7 @@ class ArtifactList(DataTable[str]):
         self.app._propagate_state()
 
 
-def _target_for_artifact(detail: ArtifactDetail) -> Any:
+def _target_for_artifact(detail: ArtifactDetail) -> TargetSelection:
     from film_pipeline.tui.view_models.models import TargetSelection
 
     return TargetSelection(

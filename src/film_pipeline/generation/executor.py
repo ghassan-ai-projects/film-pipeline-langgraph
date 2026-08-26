@@ -6,7 +6,9 @@ jobs to completion, downloading outputs into the project's asset tree, and
 recording every delivered file in the project asset manifest.
 
 Both the operator service (TUI) and MCP tools drive generation through this
-executor so the two surfaces stay behaviorally identical.
+executor so the two surfaces stay behaviorally identical. Prompt resolution
+lives in ``executor_prompts`` and asset delivery in ``executor_delivery``;
+this module keeps batch orchestration and ledger state transitions.
 """
 
 from __future__ import annotations
@@ -17,23 +19,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.manifest import (
-    AssetEntry,
-    AssetManifest,
-    read_manifest,
-    write_manifest,
-)
-from film_pipeline.artifacts.paths import generated_asset_dir
 from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.generation.executor_delivery import deliver_completed_job
+from film_pipeline.generation.executor_prompts import (
+    load_latest_artifact,
+    resolve_shot_prompt,
+)
 from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
 from film_pipeline.schemas._base import FilmPhase, GenerationMode, GenerationStatus
-
-_TERMINAL_STATUSES = {
-    GenerationStatus.COMPLETED,
-    GenerationStatus.FAILED,
-    GenerationStatus.CANCELLED,
-    GenerationStatus.TIMED_OUT,
-}
+from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
 @dataclass
@@ -72,7 +67,7 @@ class GenerationExecutor:
             ("shot_matrix", ("rows",)),
             ("shot_bible", ("shots", "scenes")),
         ):
-            data = self._load_latest(project_id, FilmPhase.SHOT_BIBLE, artifact_id)
+            data = load_latest_artifact(self._store, project_id, FilmPhase.SHOT_BIBLE, artifact_id)
             if not isinstance(data, dict):
                 continue
             for key in keys:
@@ -134,135 +129,165 @@ class GenerationExecutor:
         """Submit SUBMITTED rows to their provider adapters (-> RUNNING)."""
         rows = self._ledger.list_rows(project_id, status=GenerationStatus.SUBMITTED)
         result = GenerationStepResult()
-        shot_rows = {str(row.get("shot_id", "")): row for row in self.load_shot_rows(project_id)}
+        shot_rows = self._shot_rows_by_id(project_id)
         for row in rows:
             result.processed += 1
             if row.provider_job_id:
                 result.running += 1
                 continue
-            adapter = self._providers.get(row.provider)
-            if adapter is None:
-                self._fail_row(
-                    project_id,
-                    row.generation_id,
-                    code="unknown_provider",
-                    reason=f"Provider '{row.provider}' is not registered.",
-                )
-                result.failed += 1
-                result.details.append(
-                    {"shot_id": row.shot_id, "error": f"provider '{row.provider}' not registered"}
-                )
-                continue
-            shot_row = shot_rows.get(row.shot_id, {})
-            prompt = self.resolve_prompt(project_id, row.shot_id, shot_row, row.prompt_ref)
-            duration = float(shot_row.get("duration_seconds", 5) or 5)
-            try:
-                payload = adapter.build_payload(
-                    prompt=prompt,
-                    references=row.reference_refs or None,
-                    duration=duration,
-                )
-                job = adapter.submit(payload, row.shot_id)
-            except Exception as exc:
-                self._fail_row(
-                    project_id,
-                    row.generation_id,
-                    code="submit_failed",
-                    reason=str(exc)[:200],
-                )
-                result.failed += 1
-                result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
-                continue
-            self._ledger.update_row(
+            self._dispatch_row(project_id, row, shot_rows.get(row.shot_id, {}), result)
+        return result
+
+    def _dispatch_row(
+        self,
+        project_id: str,
+        row: GenerationLedgerRow,
+        shot_row: dict[str, Any],
+        result: GenerationStepResult,
+    ) -> None:
+        """Submit one SUBMITTED row to its provider adapter (-> RUNNING or FAILED)."""
+        adapter = self._providers.get(row.provider)
+        if adapter is None:
+            self._fail_row(
                 project_id,
                 row.generation_id,
-                provider_job_id=job.job_id,
-                status=GenerationStatus.RUNNING,
-                submitted_at=datetime.now(UTC),
-                next_action="poll",
+                code="unknown_provider",
+                reason=f"Provider '{row.provider}' is not registered.",
             )
-            result.running += 1
-            result.details.append({"shot_id": row.shot_id, "provider_job_id": job.job_id})
-        return result
+            result.failed += 1
+            result.details.append(
+                {"shot_id": row.shot_id, "error": f"provider '{row.provider}' not registered"}
+            )
+            return
+        prompt = resolve_shot_prompt(self._store, project_id, row.shot_id, shot_row, row.prompt_ref)
+        duration = float(shot_row.get("duration_seconds", 5) or 5)
+        try:
+            payload = adapter.build_payload(
+                prompt=prompt,
+                references=row.reference_refs or None,
+                duration=duration,
+            )
+            job = adapter.submit(payload, row.shot_id)
+        except Exception as exc:
+            self._fail_row(
+                project_id,
+                row.generation_id,
+                code="submit_failed",
+                reason=str(exc)[:200],
+            )
+            result.failed += 1
+            result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
+            return
+        self._ledger.update_row(
+            project_id,
+            row.generation_id,
+            provider_job_id=job.job_id,
+            status=GenerationStatus.RUNNING,
+            submitted_at=datetime.now(UTC),
+            next_action="poll",
+        )
+        result.running += 1
+        result.details.append({"shot_id": row.shot_id, "provider_job_id": job.job_id})
 
     def poll_once(self, project_id: str) -> GenerationStepResult:
         """Poll RUNNING rows once; download and record completed outputs."""
-        from film_pipeline.providers.base import ProviderJob
-
         rows = self._ledger.list_rows(project_id, status=GenerationStatus.RUNNING)
         result = GenerationStepResult()
         for row in rows:
             result.processed += 1
-            adapter = self._providers.get(row.provider)
-            if adapter is None or not row.provider_job_id:
-                self._fail_row(
-                    project_id,
-                    row.generation_id,
-                    code="unknown_provider",
-                    reason=f"Provider '{row.provider}' is not registered.",
-                )
-                result.failed += 1
-                continue
-            job = ProviderJob(
-                job_id=row.provider_job_id,
-                shot_id=row.shot_id,
-                provider_id=row.provider,
-                model=row.model,
-                status="submitted",
-                polls=row.poll_count,
-            )
-            try:
-                job = adapter.poll(job)
-            except Exception as exc:
-                self._fail_row(
-                    project_id, row.generation_id, code="poll_failed", reason=str(exc)[:200]
-                )
-                result.failed += 1
-                result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
-                continue
-            if job.status == "completed":
-                try:
-                    output_paths = self._deliver(project_id, row, adapter, job)
-                except Exception as exc:
-                    self._fail_row(
-                        project_id,
-                        row.generation_id,
-                        code="download_failed",
-                        reason=str(exc)[:200],
-                    )
-                    result.failed += 1
-                    result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
-                    continue
-                self._ledger.update_row(
-                    project_id,
-                    row.generation_id,
-                    status=GenerationStatus.COMPLETED,
-                    poll_count=row.poll_count + 1,
-                    last_polled_at=datetime.now(UTC),
-                    output_refs=output_paths,
-                    next_action="validate",
-                )
-                result.completed += 1
-                result.details.append(
-                    {"shot_id": row.shot_id, "output": output_paths[0] if output_paths else ""}
-                )
-            elif job.status == "failed":
-                self._fail_row(
-                    project_id,
-                    row.generation_id,
-                    code=str(job.metadata.get("error", "generation_failed")),
-                    reason="Provider reported the job as failed.",
-                )
-                result.failed += 1
-            else:
-                self._ledger.update_row(
-                    project_id,
-                    row.generation_id,
-                    poll_count=row.poll_count + 1,
-                    last_polled_at=datetime.now(UTC),
-                )
-                result.running += 1
+            self._poll_row(project_id, row, result)
         return result
+
+    def _poll_row(
+        self, project_id: str, row: GenerationLedgerRow, result: GenerationStepResult
+    ) -> None:
+        """Poll one RUNNING row and route by the provider job outcome."""
+        adapter = self._providers.get(row.provider)
+        if adapter is None or not row.provider_job_id:
+            self._fail_row(
+                project_id,
+                row.generation_id,
+                code="unknown_provider",
+                reason=f"Provider '{row.provider}' is not registered.",
+            )
+            result.failed += 1
+            return
+        job = ProviderJob(
+            job_id=row.provider_job_id,
+            shot_id=row.shot_id,
+            provider_id=row.provider,
+            model=row.model,
+            status="submitted",
+            polls=row.poll_count,
+        )
+        try:
+            job = adapter.poll(job)
+        except Exception as exc:
+            self._fail_row(project_id, row.generation_id, code="poll_failed", reason=str(exc)[:200])
+            result.failed += 1
+            result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
+            return
+        if job.status == "completed":
+            self._complete_row(project_id, row, adapter, job, result)
+        elif job.status == "failed":
+            error_code = (job.metadata or {}).get("error", "generation_failed")
+            self._fail_row(
+                project_id,
+                row.generation_id,
+                code=str(error_code),
+                reason="Provider reported the job as failed.",
+            )
+            result.failed += 1
+        else:
+            self._ledger.update_row(
+                project_id,
+                row.generation_id,
+                poll_count=row.poll_count + 1,
+                last_polled_at=datetime.now(UTC),
+            )
+            result.running += 1
+
+    def _complete_row(
+        self,
+        project_id: str,
+        row: GenerationLedgerRow,
+        adapter: BaseProviderAdapter,
+        job: ProviderJob,
+        result: GenerationStepResult,
+    ) -> None:
+        """Deliver a completed job's outputs and mark its ledger row COMPLETED."""
+        try:
+            output_paths = deliver_completed_job(
+                root=self._root(),
+                adapter=adapter,
+                job=job,
+                project_id=project_id,
+                shot_id=row.shot_id,
+                shot_row=self._shot_rows_by_id(project_id).get(row.shot_id, {}),
+            )
+        except Exception as exc:
+            self._fail_row(
+                project_id,
+                row.generation_id,
+                code="download_failed",
+                reason=str(exc)[:200],
+            )
+            result.failed += 1
+            result.details.append({"shot_id": row.shot_id, "error": str(exc)[:200]})
+            return
+        self._ledger.update_row(
+            project_id,
+            row.generation_id,
+            status=GenerationStatus.COMPLETED,
+            poll_count=row.poll_count + 1,
+            last_polled_at=datetime.now(UTC),
+            output_refs=output_paths,
+            next_action="validate",
+        )
+        result.completed += 1
+        result.details.append(
+            {"shot_id": row.shot_id, "output": output_paths[0] if output_paths else ""}
+        )
 
     def has_ledger(self, project_id: str) -> bool:
         """True when a generation ledger artifact exists for the project.
@@ -346,100 +371,13 @@ class GenerationExecutor:
         ``prompt_ref`` names one, then a structured prompt from the shot
         matrix row, then a plain fallback so submission never blocks.
         """
-        rendered = self._rendered_prompt(project_id, shot_id, prompt_ref)
-        if rendered:
-            return rendered
-        if shot_row:
-            structured = self._structured_prompt(project_id, shot_row)
-            if structured:
-                return structured
-        return f"Cinematic shot {shot_id} for project {project_id}."
-
-    def _rendered_prompt(self, project_id: str, shot_id: str, prompt_ref: str) -> str:
-        if not prompt_ref:
-            return ""
-        artifact_id = prompt_ref.split(":")[1] if ":" in prompt_ref else prompt_ref
-        for phase in (FilmPhase.GEN_PLANNING, FilmPhase.SHOT_BIBLE):
-            data = self._load_latest(project_id, phase, artifact_id)
-            if not isinstance(data, dict):
-                continue
-            for entry in data.get("entries", []) or []:
-                if isinstance(entry, dict) and str(entry.get("shot_id", "")) == shot_id:
-                    return str(entry.get("rendered_prompt", "") or "")
-        return ""
-
-    def _structured_prompt(self, project_id: str, shot_row: dict[str, Any]) -> str:
-        from film_pipeline.generation.prompt_builder import build_structured_prompt
-
-        characters = shot_row.get("characters") or []
-        environment = str(shot_row.get("environment", "") or "")
-        subject_type = "environment" if not characters else "character"
-        entry: dict[str, Any] = {
-            "subject_type": subject_type,
-            "subject_id": environment if not characters else str(characters[0]),
-            "frame_role": str(shot_row.get("camera_profile", "") or ""),
-            "prompt_text": str(shot_row.get("story_function", "") or ""),
-            "lighting": str(shot_row.get("lighting_state", "") or ""),
-            "notes": str(shot_row.get("environment_state", "") or ""),
-        }
-        character_bible = (
-            self._load_latest(project_id, FilmPhase.VISUAL_DEV, "character_bible")
-            if characters
-            else None
-        )
-        constitution = self._load_latest(project_id, FilmPhase.CONSTITUTION, "film_constitution")
-        return build_structured_prompt(
-            entry,
-            character_bible=character_bible if isinstance(character_bible, dict) else None,
-            constitution=constitution if isinstance(constitution, dict) else None,
-        )
+        return resolve_shot_prompt(self._store, project_id, shot_id, shot_row, prompt_ref)
 
     # ── internals ─────────────────────────────────────────────────────────
 
-    def _deliver(
-        self,
-        project_id: str,
-        row: Any,
-        adapter: Any,
-        job: Any,
-    ) -> list[str]:
-        """Download a completed job into the project asset tree + manifest."""
-        shot_rows = {str(r.get("shot_id", "")): r for r in self.load_shot_rows(project_id)}
-        scene_id = str(shot_rows.get(row.shot_id, {}).get("scene_id", "") or "unassigned")
-        output_dir = generated_asset_dir(project_id, scene_id, row.shot_id, root=self._root())
-        output_dir.mkdir(parents=True, exist_ok=True)
-        primary = adapter.download(job, str(output_dir))
-        produced = sorted(
-            path
-            for path in output_dir.iterdir()
-            if path.is_file() and not path.name.endswith("_metadata.json")
-        )
-        take = self._next_take(project_id, row.shot_id)
-        manifest = read_manifest(project_id, root=self._root()) or AssetManifest(
-            project_id=project_id
-        )
-        for path in produced:
-            kind = _asset_kind(path)
-            manifest.add(
-                AssetEntry(
-                    asset_id=f"{row.shot_id}:{kind}:take{take}",
-                    path=str(path),
-                    kind=kind,
-                    scene_id="" if scene_id == "unassigned" else scene_id,
-                    shot_id=row.shot_id,
-                    take=take,
-                    active=True,
-                )
-            )
-        write_manifest(manifest, root=self._root())
-        return [primary, *[str(path) for path in produced if str(path) != primary]]
-
-    def _next_take(self, project_id: str, shot_id: str) -> int:
-        manifest = read_manifest(project_id, root=self._root())
-        if manifest is None:
-            return 1
-        takes = [entry.take for entry in manifest.entries if entry.shot_id == shot_id]
-        return max(takes, default=0) + 1
+    def _shot_rows_by_id(self, project_id: str) -> dict[str, dict[str, Any]]:
+        """Index current shot-matrix rows by shot id for O(1) lookup."""
+        return {str(row.get("shot_id", "")): row for row in self.load_shot_rows(project_id)}
 
     def _fail_row(self, project_id: str, generation_id: str, *, code: str, reason: str) -> None:
         self._ledger.update_row(
@@ -451,32 +389,6 @@ class GenerationExecutor:
             next_action="wait_human",
         )
 
-    def _load_latest(
-        self, project_id: str, phase: FilmPhase, artifact_id: str
-    ) -> dict[str, Any] | None:
-        latest = self._store.next_version(project_id, phase.value, artifact_id) - 1
-        if latest < 1:
-            return None
-        try:
-            return self._store.load(project_id, phase, artifact_id, latest)
-        except (FileNotFoundError, ValueError):
-            return None
-
     def _root(self) -> Path:
         root = getattr(self._store, "_root", None)
         return root if isinstance(root, Path) else Path("projects")
-
-
-def _asset_kind(path: Path) -> str:
-    name = path.name.lower()
-    if name.endswith("_last.png"):
-        return "last_frame"
-    if name.endswith("_mid.png"):
-        return "mid_frame"
-    if path.suffix.lower() in {".mp4", ".mov", ".webm"}:
-        return "generated_clip"
-    if path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
-        return "reference_sheet"
-    if path.suffix.lower() in {".wav", ".mp3"}:
-        return "audio_stem"
-    return "generated_clip"

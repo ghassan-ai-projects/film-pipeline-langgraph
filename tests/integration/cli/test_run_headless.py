@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.cli.driver import run_headless
+from film_pipeline.cli.driver import HeadlessRunSpec, run_headless
 
 
 @pytest.fixture
@@ -47,16 +47,18 @@ class TestRunHeadless:
     ) -> None:
         state = asyncio.run(
             run_headless(
-                file_path=idea_file,
-                project_id="cli-mock-test",
-                title="The Bot and the Brush",
-                slug="cli-mock-test",
-                runtime_mode="mock",
-                runtime_root=tmp_path / "runtime",
-                profile_stack=["quality.draft", "film-type.narrative"],
-                target_phase="shot_bible",
-                target_runtime_seconds=20,
-                target_scene_count=2,
+                HeadlessRunSpec(
+                    file_path=idea_file,
+                    project_id="cli-mock-test",
+                    title="The Bot and the Brush",
+                    slug="cli-mock-test",
+                    runtime_mode="mock",
+                    runtime_root=tmp_path / "runtime",
+                    profile_stack=["quality.draft", "film-type.narrative"],
+                    target_phase="shot_bible",
+                    target_runtime_seconds=20,
+                    target_scene_count=2,
+                )
             )
         )
 

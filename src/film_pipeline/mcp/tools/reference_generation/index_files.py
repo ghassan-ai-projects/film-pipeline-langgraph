@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ..helpers import _latest_artifact_version, _services
+
+if TYPE_CHECKING:
+    from film_pipeline.schemas.reference import ReferenceIndexEntry
 
 _logger = logging.getLogger(__name__)
 
@@ -96,7 +99,7 @@ def _save_reference_index_artifact(
 
 def _reference_entries_from_grouped(
     artifact: dict[str, object],
-) -> list[Any]:
+) -> list[ReferenceIndexEntry]:
     """Build typed ``ReferenceIndexEntry`` objects from grouped raw entries."""
     from film_pipeline.schemas.reference import ReferenceIndexEntry
 

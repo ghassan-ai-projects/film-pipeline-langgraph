@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Final
 
 from film_pipeline.schemas._base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
@@ -12,7 +12,141 @@ from film_pipeline.schemas.registries.validator_registry import (
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
 
-MAX_PROMPT_LENGTH = 8000  # characters
+MAX_PROMPT_LENGTH: Final[int] = 8000  # characters
+
+_AMBIGUOUS_PHRASES: Final[frozenset[str]] = frozenset(
+    {"maybe", "if possible", "optional", "preferably", "sort of"}
+)
+
+
+def _empty_prompt_readiness_result() -> dict[str, Any]:
+    """Result payload for a package that declares no prompts."""
+    return {
+        "total_entries": 0,
+        "malformed_count": 0,
+        "missing_refs_count": 0,
+        "too_long_count": 0,
+        "ambiguous_count": 0,
+        "missing_examples_count": 0,
+        "issues": [],
+    }
+
+
+def _flag_malformed_rctco(
+    prompt_id: str,
+    rctco: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> int:
+    """Blocking: required RCTCO role or core-task fields are absent."""
+    role = str(rctco.get("r", ""))
+    core_task = str(rctco.get("c1", ""))
+    if role and core_task:
+        return 0
+    issues.append(
+        {
+            "code": "malformed_rctco",
+            "severity": "blocking",
+            "message": (
+                f"Prompt '{prompt_id}' is missing required RCTCO fields "
+                f"(r={'present' if role else 'missing'}, "
+                f"c1={'present' if core_task else 'missing'})."
+            ),
+        }
+    )
+    return 1
+
+
+def _flag_missing_artifact_refs(
+    prompt_id: str,
+    artifact_refs: list[str],
+    issues: list[dict[str, str]],
+) -> int:
+    """Blocking: the prompt references no upstream artifacts."""
+    if artifact_refs:
+        return 0
+    issues.append(
+        {
+            "code": "missing_refs",
+            "severity": "blocking",
+            "message": f"Prompt '{prompt_id}' has no artifact_refs.",
+        }
+    )
+    return 1
+
+
+def _flag_overlong_prompt(
+    prompt_id: str,
+    rendered: str,
+    issues: list[dict[str, str]],
+) -> int:
+    """Blocking: the rendered prompt exceeds the character limit."""
+    if len(rendered) <= MAX_PROMPT_LENGTH:
+        return 0
+    issues.append(
+        {
+            "code": "prompt_too_long",
+            "severity": "blocking",
+            "message": (
+                f"Prompt '{prompt_id}' is {len(rendered)} chars (> {MAX_PROMPT_LENGTH} limit)."
+            ),
+        }
+    )
+    return 1
+
+
+def _flag_ambiguous_constraints(
+    prompt_id: str,
+    constraints: list[str],
+    issues: list[dict[str, str]],
+) -> int:
+    """Warning: constraints use hedging language."""
+    if not any(phrase in str(c).lower() for c in constraints for phrase in _AMBIGUOUS_PHRASES):
+        return 0
+    issues.append(
+        {
+            "code": "ambiguous_constraints",
+            "severity": "warning",
+            "message": (f"Prompt '{prompt_id}' has constraints with ambiguous language."),
+        }
+    )
+    return 1
+
+
+def _flag_missing_examples(
+    prompt_id: str,
+    context_in: dict[str, str],
+    issues: list[dict[str, str]],
+) -> int:
+    """Warning: no example references appear in the context block."""
+    if any(k for k in context_in if "example" in k.lower()):
+        return 0
+    issues.append(
+        {
+            "code": "missing_examples",
+            "severity": "warning",
+            "message": f"Prompt '{prompt_id}' has no example references in context.",
+        }
+    )
+    return 1
+
+
+def _flag_missing_output_schema(
+    prompt_id: str,
+    rctco: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> int:
+    """Blocking: no output schema reference is given."""
+    o_schema = str(rctco.get("o_schema_ref", ""))
+    if o_schema:
+        return 0
+    issues.append(
+        {
+            "code": "malformed_rctco",
+            "severity": "blocking",
+            "message": f"Prompt '{prompt_id}' has no output schema reference.",
+        }
+    )
+    return 1
 
 
 class PromptReadinessValidator(BaseValidator):
@@ -43,15 +177,7 @@ class PromptReadinessValidator(BaseValidator):
         _ = context
         entries: list[dict[str, Any]] = artifact.get("entries", [])
         if not entries:
-            return {
-                "total_entries": 0,
-                "malformed_count": 0,
-                "missing_refs_count": 0,
-                "too_long_count": 0,
-                "ambiguous_count": 0,
-                "missing_examples_count": 0,
-                "issues": [],
-            }
+            return _empty_prompt_readiness_result()
 
         issues: list[dict[str, str]] = []
         malformed = 0
@@ -63,89 +189,16 @@ class PromptReadinessValidator(BaseValidator):
         for entry in entries:
             prompt_id = str(entry.get("prompt_id", "?"))
             rctco: dict[str, Any] = entry.get("rctco", {})
-
-            # Blocking: malformed RCTCO (missing required fields)
-            role = str(rctco.get("r", ""))
-            core_task = str(rctco.get("c1", ""))
-            if not role or not core_task:
-                malformed += 1
-                issues.append(
-                    {
-                        "code": "malformed_rctco",
-                        "severity": "blocking",
-                        "message": (
-                            f"Prompt '{prompt_id}' is missing required RCTCO fields "
-                            f"(r={'present' if role else 'missing'}, "
-                            f"c1={'present' if core_task else 'missing'})."
-                        ),
-                    }
-                )
-
-            # Blocking: missing artifact refs
+            malformed += _flag_malformed_rctco(prompt_id, rctco, issues)
             artifact_refs: list[str] = entry.get("artifact_refs", [])
-            if not artifact_refs:
-                missing_refs += 1
-                issues.append(
-                    {
-                        "code": "missing_refs",
-                        "severity": "blocking",
-                        "message": f"Prompt '{prompt_id}' has no artifact_refs.",
-                    }
-                )
-
-            # Blocking: prompt too long
+            missing_refs += _flag_missing_artifact_refs(prompt_id, artifact_refs, issues)
             rendered: str = str(entry.get("rendered_prompt", ""))
-            if len(rendered) > MAX_PROMPT_LENGTH:
-                too_long += 1
-                issues.append(
-                    {
-                        "code": "prompt_too_long",
-                        "severity": "blocking",
-                        "message": (
-                            f"Prompt '{prompt_id}' is {len(rendered)} chars "
-                            f"(> {MAX_PROMPT_LENGTH} limit)."
-                        ),
-                    }
-                )
-
-            # Warning: ambiguous constraints
+            too_long += _flag_overlong_prompt(prompt_id, rendered, issues)
             constraints: list[str] = rctco.get("c2", [])
-            ambiguous_phrases = {"maybe", "if possible", "optional", "preferably", "sort of"}
-            if any(phrase in str(c).lower() for c in constraints for phrase in ambiguous_phrases):
-                ambiguous += 1
-                issues.append(
-                    {
-                        "code": "ambiguous_constraints",
-                        "severity": "warning",
-                        "message": (
-                            f"Prompt '{prompt_id}' has constraints with ambiguous language."
-                        ),
-                    }
-                )
-
-            # Warning: missing examples in context
+            ambiguous += _flag_ambiguous_constraints(prompt_id, constraints, issues)
             context_in: dict[str, str] = rctco.get("t", {})
-            if not any(k for k in context_in if "example" in k.lower()):
-                missing_examples += 1
-                issues.append(
-                    {
-                        "code": "missing_examples",
-                        "severity": "warning",
-                        "message": f"Prompt '{prompt_id}' has no example references in context.",
-                    }
-                )
-
-            # Blocking: missing output schema
-            o_schema = str(rctco.get("o_schema_ref", ""))
-            if not o_schema:
-                issues.append(
-                    {
-                        "code": "malformed_rctco",
-                        "severity": "blocking",
-                        "message": f"Prompt '{prompt_id}' has no output schema reference.",
-                    }
-                )
-                malformed += 1
+            missing_examples += _flag_missing_examples(prompt_id, context_in, issues)
+            malformed += _flag_missing_output_schema(prompt_id, rctco, issues)
 
         return {
             "total_entries": len(entries),

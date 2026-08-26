@@ -7,8 +7,11 @@ translate actions into concrete graph routing.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any
 
+from film_pipeline.graph.orchestrator_state import is_stalled
 from film_pipeline.graph.router import compute_actions
 
 
@@ -22,6 +25,35 @@ def _is_auto_mode(state: dict[str, Any]) -> bool:
     return False
 
 
+# Actions that route through the consistency check to the human gate
+_HUMAN_GATE_ACTIONS = (
+    "wait_for_human",
+    "present_review_package",
+    "escalate_to_human",
+    "continue_unrelated_work",
+)
+
+# Actions that route to automatic repair
+_REPAIR_ACTIONS = ("handle_blockers",)
+
+# Approved-phase → next phase node, keyed by current_phase.
+_NEXT_PHASE_AFTER_APPROVAL: Mapping[str, str] = MappingProxyType(
+    {
+        "intake": "constitution",
+        "constitution": "development",
+        "development": "script",
+        "script": "visual_dev",
+        "visual_dev": "shot_bible",
+        "shot_bible": "gen_planning",
+        "gen_planning": "generation",
+        "generation": "qc",
+        "qc": "post",
+        "post": "delivery",
+        "delivery": "end",
+    }
+)
+
+
 def after_phase(state: dict[str, Any]) -> str:
     """Route after a phase node completes.
 
@@ -32,26 +64,16 @@ def after_phase(state: dict[str, Any]) -> str:
     result = compute_actions(state)
     action = result.next_action
 
-    # Actions that route through the consistency check to the human gate
-    if action in (
-        "wait_for_human",
-        "present_review_package",
-        "escalate_to_human",
-        "continue_unrelated_work",
-    ):
+    if action in _HUMAN_GATE_ACTIONS:
         return "consistency_check"
-
-    # Actions that route to automatic repair
-    if action in ("handle_blockers",):
+    if action in _REPAIR_ACTIONS:
         return "repair"
 
     # Actions that route to a phase node — strip the prefix so the returned
     # value is the phase key used by the conditional-edge destination map.
+    # Includes the defensive "advance_to_end", which maps to the terminal node.
     if action.startswith("advance_to_"):
-        target = action[len("advance_to_") :]
-        if target == "end":
-            return "end"
-        return target
+        return action[len("advance_to_") :]
 
     # Final phase completion
     if action == "wrap":
@@ -65,6 +87,26 @@ def after_phase(state: dict[str, Any]) -> str:
     return "consistency_check"
 
 
+def _record_stall(state: dict[str, Any], phase: str) -> None:
+    """Flag the gate as requiring a human and record a deduplicated blocker."""
+    state["human_approval_required"] = True
+    state["_stalled_phase"] = phase
+    issue_id = f"stalled:{phase}"
+    issues = state.setdefault("issues", [])
+    if not any(isinstance(issue, dict) and issue.get("issue_id") == issue_id for issue in issues):
+        issues.append(
+            {
+                "issue_id": issue_id,
+                "severity": "blocking",
+                "code": "ORCHESTRATOR_STALLED",
+                "message": (
+                    f"Phase '{phase}' has stalled after repeated review or repair attempts. "
+                    "Human intervention is required."
+                ),
+            }
+        )
+
+
 def after_approval(state: dict[str, Any]) -> str:
     """Route after the human approval gate.
 
@@ -74,44 +116,12 @@ def after_approval(state: dict[str, Any]) -> str:
     """
     if state.get("approved"):
         phase = str(state.get("current_phase", "intake"))
-        next_map: dict[str, str] = {
-            "intake": "constitution",
-            "constitution": "development",
-            "development": "script",
-            "script": "visual_dev",
-            "visual_dev": "shot_bible",
-            "shot_bible": "gen_planning",
-            "gen_planning": "generation",
-            "generation": "qc",
-            "qc": "post",
-            "post": "delivery",
-            "delivery": "end",
-        }
-        return next_map.get(phase, "end")
+        return _NEXT_PHASE_AFTER_APPROVAL.get(phase, "end")
 
     # Prevent infinite repair loop when stalled
-    from film_pipeline.graph.orchestrator_state import is_stalled
-
     phase = str(state.get("current_phase", ""))
     if is_stalled(state, phase):
-        state["human_approval_required"] = True
-        state["_stalled_phase"] = phase
-        issue_id = f"stalled:{phase}"
-        issues = state.setdefault("issues", [])
-        if not any(
-            isinstance(issue, dict) and issue.get("issue_id") == issue_id for issue in issues
-        ):
-            issues.append(
-                {
-                    "issue_id": issue_id,
-                    "severity": "blocking",
-                    "code": "ORCHESTRATOR_STALLED",
-                    "message": (
-                        f"Phase '{phase}' has stalled after repeated review or repair attempts. "
-                        "Human intervention is required."
-                    ),
-                }
-            )
+        _record_stall(state, phase)
         # Headless mode has no human to intervene — end the run with the blocker
         # recorded instead of looping the approval gate forever.
         if _is_auto_mode(state):

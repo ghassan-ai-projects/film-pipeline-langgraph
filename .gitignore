@@ -250,3 +250,6 @@ __marimo__/
 # Test artifacts (temp dirs used in tests)
 projects/
 .DS_Store
+
+# Refactor fleet state (orchestrator machinery, not product)
+.fleet/

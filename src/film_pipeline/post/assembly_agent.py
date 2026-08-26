@@ -6,6 +6,19 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+# Placeholder duration assigned to every clip until real media probing exists.
+_SECONDS_PER_CLIP = 5.0
+
+
+def _match_clip(shot_id: str, clip_paths: list[str]) -> str | None:
+    """Return the first clip whose path contains the shot id, if any."""
+    return next((c for c in clip_paths if shot_id in c), None)
+
+
+def _consecutive_cuts(clips: list[str]) -> list[dict[str, str]]:
+    """Build a hard-cut transition between each pair of consecutive clips."""
+    return [{"from": clips[i], "to": clips[i + 1], "type": "cut"} for i in range(len(clips) - 1)]
+
 
 @dataclass
 class AssemblyPlan:
@@ -50,18 +63,15 @@ class AssemblyAgent:
                 continue
             seen.add(shot_id)
 
-            clip = next((c for c in clip_paths if shot_id in c), None)
+            clip = _match_clip(shot_id, clip_paths)
             if clip:
                 plan.clips.append(clip)
                 plan.clip_count += 1
-                plan.total_duration_seconds += 5.0
+                plan.total_duration_seconds += _SECONDS_PER_CLIP
             else:
                 plan.missing_assets.append(shot_id)
 
-        for i in range(len(plan.clips) - 1):
-            plan.transition_points.append(
-                {"from": plan.clips[i], "to": plan.clips[i + 1], "type": "cut"}
-            )
+        plan.transition_points = _consecutive_cuts(plan.clips)
 
         if plan.missing_assets:
             plan.notes.append(
@@ -93,8 +103,8 @@ class AssemblyAgent:
                 {
                     "shot_id": path.split("/")[-1].rsplit(".", 1)[0],
                     "source_asset_ref": path,
-                    "in_seconds": i * 5.0,
-                    "out_seconds": (i + 1) * 5.0,
+                    "in_seconds": i * _SECONDS_PER_CLIP,
+                    "out_seconds": (i + 1) * _SECONDS_PER_CLIP,
                 }
                 for i, path in enumerate(plan.clips)
             ],

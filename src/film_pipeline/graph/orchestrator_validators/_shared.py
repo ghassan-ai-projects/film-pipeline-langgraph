@@ -24,12 +24,7 @@ def _row_attr(row: Any, key: str, default: Any = None) -> Any:
 
 
 def _blocking_with_id(issue_id: str, code: str, message: str) -> dict[str, Any]:
-    return {
-        "issue_id": issue_id,
-        "severity": IssueSeverity.BLOCKING.value,
-        "code": code,
-        "message": message,
-    }
+    return {"issue_id": issue_id, **_blocking(code, message)}
 
 
 def _extract_rows(value: Any) -> list[Any]:

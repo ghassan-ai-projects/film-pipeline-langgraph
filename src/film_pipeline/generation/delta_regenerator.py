@@ -6,11 +6,54 @@ instead of the entire batch. Saves 30-40% cost. Max 3 iterations.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from film_pipeline.generation.compositor import replace_tile
 from film_pipeline.generation.sheet_reviewer import SheetReviewResult, review_composite_sheet
+
+RegenerateTileFn = Callable[[dict[str, Any], str], Path | None]
+
+
+def _swap_regenerated_tile(
+    entry: dict[str, Any],
+    tile_name: str,
+    feedback: str,
+    sheet_path: Path,
+    regenerate_fn: RegenerateTileFn,
+    all_failing: list[str],
+) -> None:
+    """Regenerate one tile and splice it into the composite sheet."""
+    try:
+        new_path = regenerate_fn(entry, feedback)
+        if new_path and new_path.exists():
+            replace_tile(sheet_path, tile_name, new_path)
+            if tile_name not in all_failing:
+                all_failing.append(tile_name)
+    except Exception:
+        # A failed tile regen leaves the tile untouched; the next review round
+        # re-reports it and the caller keeps the best-scoring sheet seen so far.
+        pass
+
+
+def _regenerate_all_failing(
+    sheet_review: SheetReviewResult,
+    entries: list[dict[str, Any]],
+    sheet_path: Path,
+    regenerate_fn: Any,
+    all_failing: list[str],
+) -> None:
+    """Regenerate every failing tile of the current review round."""
+    for tile_name in sheet_review.failing_tiles:
+        entry = _find_entry_by_role(entries, tile_name)
+        if entry is None:
+            continue
+        asset_path = str(entry.get("asset_path", ""))
+        if not asset_path:
+            continue
+        feedback = sheet_review.actionable_feedback or f"Fix {tile_name}"
+        _swap_regenerated_tile(entry, tile_name, feedback, sheet_path, regenerate_fn, all_failing)
 
 
 def regenerate_failing_tiles(
@@ -18,7 +61,7 @@ def regenerate_failing_tiles(
     entries: list[dict[str, Any]],
     sheet_path: Path,
     *,
-    regenerate_fn: Any,
+    regenerate_fn: RegenerateTileFn,
     max_iterations: int = 3,
     model: str = "",
 ) -> tuple[float, int, list[str]]:
@@ -28,8 +71,9 @@ def regenerate_failing_tiles(
         sheet_review: Composite validation result with failing_tiles.
         entries: Reference index entries (to find source frames by role).
         sheet_path: Path to the composite sheet to fix.
-        regenerate_fn: Callable(entry, prompt_feedback) -> Path that regenerates
-                       a single frame and returns the new file path.
+        regenerate_fn: Callable(entry, prompt_feedback) -> Path | None that
+                       regenerates a single frame and returns the new file path
+                       (or None when regeneration failed).
         max_iterations: Max delta iterations (default 3).
         model: Model ID for sheet review (required, resolved via ModelRouter).
 
@@ -45,27 +89,12 @@ def regenerate_failing_tiles(
             break
 
         # Regenerate each failing tile
-        for tile_name in sheet_review.failing_tiles:
-            entry = _find_entry_by_role(entries, tile_name)
-            if entry is None:
-                continue
-            asset_path = str(entry.get("asset_path", ""))
-            if not asset_path:
-                continue
-            feedback = sheet_review.actionable_feedback or f"Fix {tile_name}"
-            try:
-                new_path = regenerate_fn(entry, feedback)
-                if new_path and new_path.exists():
-                    replace_tile(sheet_path, tile_name, new_path)
-                    if tile_name not in all_failing:
-                        all_failing.append(tile_name)
-            except Exception:
-                continue
+        _regenerate_all_failing(sheet_review, entries, sheet_path, regenerate_fn, all_failing)
 
         # Re-validate the sheet
-        sheet_type = sheet_review.sheet_type
-        subject_id = sheet_review.sheet_id
-        sheet_review = review_composite_sheet(sheet_path, sheet_type, subject_id, model=model)
+        sheet_review = review_composite_sheet(
+            sheet_path, sheet_review.sheet_type, sheet_review.sheet_id, model=model
+        )
 
         if sheet_review.total > best_score:
             best_score = sheet_review.total

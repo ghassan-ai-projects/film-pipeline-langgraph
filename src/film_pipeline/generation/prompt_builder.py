@@ -121,13 +121,9 @@ def _build_character_prompt(
         blocks.append(char_desc)
 
     # FRAME_ROLE
-    frame_role = str(entry.get("frame_role", "")).strip().lower()
-    if frame_role:
-        role_text = _CHARACTER_FRAME_ROLE_TEXT.get(frame_role)
-        if role_text:
-            blocks.append(role_text)
-        else:
-            blocks.append(frame_role.replace("-", " ").title() + ".")
+    role_text = _frame_role_text(entry, _CHARACTER_FRAME_ROLE_TEXT)
+    if role_text:
+        blocks.append(role_text)
 
     # EXPRESSION
     expression = str(entry.get("expression", "")).strip().lower()
@@ -170,13 +166,9 @@ def _build_environment_prompt(
         blocks.append(env_base)
 
     # ANGLE
-    frame_role = str(entry.get("frame_role", "")).strip().lower()
-    if frame_role:
-        angle_text = _ENVIRONMENT_FRAME_ROLE_TEXT.get(frame_role)
-        if angle_text:
-            blocks.append(angle_text)
-        else:
-            blocks.append(frame_role.replace("-", " ").title() + ".")
+    angle_text = _frame_role_text(entry, _ENVIRONMENT_FRAME_ROLE_TEXT)
+    if angle_text:
+        blocks.append(angle_text)
 
     # LIGHTING
     lighting = _resolve_lighting(entry, constitution)
@@ -343,6 +335,14 @@ def _resolve_id_reinforce(identity_state: dict[str, Any] | None) -> str:
         "Same person as in all other frames. Consistent facial features. "
         "Same age, same bone structure."
     )
+
+
+def _frame_role_text(entry: dict[str, Any], role_texts: dict[str, str]) -> str:
+    """Frame-role block: mapped phrasing when known, title-cased role otherwise."""
+    frame_role = str(entry.get("frame_role", "")).strip().lower()
+    if not frame_role:
+        return ""
+    return role_texts.get(frame_role) or (frame_role.replace("-", " ").title() + ".")
 
 
 def _expression_text(expression: str) -> str:
