@@ -47,8 +47,21 @@ PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film
 RUNTIME_ROOT = PERSIST_ROOT / "runtime"
 
 
+def configured_runtime_root() -> Path:
+    """Return the runtime root selected by the environment or default config."""
+    raw_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
+    return Path(raw_root) if raw_root else RUNTIME_ROOT
+
+
 def use_persistent_runtime() -> bool:
-    return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE"))
+    """Return whether durable runtime state is enabled.
+
+    The explicit no-persist switch wins over inherited process environment so
+    a stdio/test invocation cannot accidentally open SQLite or file stores.
+    """
+    return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE")) and not bool(
+        os.getenv("FILM_PIPELINE_NO_PERSIST")
+    )
 
 
 def is_same_or_child(child: Path, parent: Path) -> bool:

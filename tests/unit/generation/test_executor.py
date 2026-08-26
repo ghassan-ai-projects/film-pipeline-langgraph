@@ -136,6 +136,15 @@ class TestGenerationExecutor:
         assert result.details[0]["shot_id"] == "S001"
         assert executor.shot_ids("proj") == ["S001", "S002"]
 
+    def test_plan_records_catalog_estimated_costs(self, store: ArtifactStore) -> None:
+        _save_shot_matrix(store, "proj")
+        executor = GenerationExecutor(store, providers={})
+
+        executor.plan("proj", provider="seedance-openrouter", model="seedance-2.0")
+
+        rows = executor.status_rows("proj")
+        assert [row["cost_usd"] for row in rows] == pytest.approx([0.9, 0.54])
+
     def test_plan_idempotent(self, store: ArtifactStore) -> None:
         _save_shot_matrix(store, "proj")
         executor = GenerationExecutor(store, providers={})

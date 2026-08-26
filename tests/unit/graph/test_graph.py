@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -19,6 +20,7 @@ def test_default_checkpointer_returns_memory_saver_without_env() -> None:
 
 def test_default_checkpointer_returns_sqlite_when_persist_enabled(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from film_pipeline.graph import graph as graph_module
 
@@ -26,11 +28,11 @@ def test_default_checkpointer_returns_sqlite_when_persist_enabled(
     try:
         graph_module._CHECKPOINT_DIR = tmp_path
         graph_module._CHECKPOINT_DB = tmp_path / "cp.sqlite"
-        os.environ["FILM_PIPELINE_PERSIST_STATE"] = "1"
+        monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
+        monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
         saver = _default_checkpointer()
         assert isinstance(saver, SqliteSaver)
     finally:
-        os.environ.pop("FILM_PIPELINE_PERSIST_STATE", None)
         graph_module._CHECKPOINT_DIR = original_dir
         graph_module._CHECKPOINT_DB = original_dir / "checkpoints.sqlite"
 

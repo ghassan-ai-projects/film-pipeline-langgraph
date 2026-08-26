@@ -7,6 +7,7 @@ generation phase. No provider calls happen here.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -64,6 +65,7 @@ class GenerationLedgerManager:
         prompt_ref: str = "",
         reference_refs: list[str] | None = None,
         mode: GenerationMode = GenerationMode.TEST,
+        estimated_costs: Mapping[str, float] | None = None,
     ) -> GenerationLedger:
         """Add a row per shot to the ledger with status PREPARED.
 
@@ -89,6 +91,7 @@ class GenerationLedgerManager:
                 reference_refs=reference_refs or [],
                 status=GenerationStatus.PREPARED,
                 next_action="submit",
+                estimated_cost_usd=max(0.0, float((estimated_costs or {}).get(sid, 0.0))),
             )
             ledger.rows.append(row)
 

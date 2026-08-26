@@ -164,6 +164,7 @@ def _human_approval_result(
             {
                 "action": "approve_phase",
                 "reason": f"{blocking_count} blocking issue(s) must be resolved first.",
+                "origin": "state_issue",
             }
         ]
     return result
@@ -259,7 +260,11 @@ def _blocking_issues_result(issues: list[dict[str, Any]]) -> RouterResult | None
         eligible=["repair", "escalate_to_human"],
         next_action="handle_blockers",
         blocked=[
-            {"action": "advance_phase", "reason": f"blocking issue: {b.get('code', '')}"}
+            {
+                "action": "advance_phase",
+                "reason": f"blocking issue: {b.get('code', '')}",
+                "origin": "state_issue",
+            }
             for b in blocking
         ],
     )

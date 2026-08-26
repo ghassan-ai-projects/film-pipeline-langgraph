@@ -42,7 +42,7 @@ definition. Concretely, the program is done when **all** of the following hold:
 | Phase | Scope (roadmap items) | Status |
 |---|---|---|
 | 01 | State-safety guardrails: D1 channel registry + parity test (+DF-F2), D6 resume integrity (+O-F4), B-F4 mock fixtures relocation | **done** — committed; 3/3 reviews PASS (all scores ≥4); ci-check green (2004 passed, cov 92.49%) |
-| 02 | Truth defaults: Flx-F10 imagen pricing delegation, Flx-F9 config-contract test, O-F6 truthful `get_blockers`, O-F10 logging bootstrap | planned |
+| 02 | Truth defaults: Flx-F10 imagen pricing delegation, Flx-F9 config-contract test, O-F6 truthful `get_blockers`, O-F10 logging bootstrap | implemented, ci-check green (2023 passed, cov 92.55%) — 3-lens review in progress |
 | 03 | Law & docs truth: B-F8 boundary law amendment + CI edge scan (warn mode), C-6 docs truth pass | planned |
 | 04 | Generation lifecycle behind `GenerationExecutor` [D2] | planned |
 | 05 | Typed event catalog + single audit implementation [D4] | planned |

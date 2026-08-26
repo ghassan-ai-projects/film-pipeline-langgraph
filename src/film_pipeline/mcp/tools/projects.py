@@ -103,8 +103,16 @@ def _populate_project_state(
     server_mode: str,
 ) -> None:
     """Persist runtime mode and resolved profile stack onto the project state."""
+    effective_stack = dict(cast(dict[str, str], profile_stack))
+    raw_config = resolved_config.get("raw", {})
+    if isinstance(raw_config, dict):
+        quality = str(raw_config.get("quality_profile", "")).strip()
+        if quality:
+            effective_stack["quality_profile"] = (
+                quality if quality.startswith("quality.") else f"quality.{quality}"
+            )
     state["runtime_mode"] = runtime_mode
-    state["profile_stack"] = profile_stack
+    state["profile_stack"] = effective_stack
     state["server_mode"] = server_mode
     state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
     state["resolved_config_sources"] = resolved_config["sources"]
@@ -267,6 +275,8 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     if state is None:
         return _error("No active project.")
     project_id = str(state["project_id"])
+    from film_pipeline.graph.router import get_blockers_for_state
+
     artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])
 
@@ -280,6 +290,6 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
         artifacts=artifact_summary,
         issue_count=len(state.get("issues", [])),
         routing_decisions_count=len(routing),
-        has_blockers=any(i.get("severity") == "blocking" for i in state.get("issues", [])),
+        has_blockers=bool(get_blockers_for_state(state)),
         generation_policy=str(state.get("generation_policy", "generate")),
     )

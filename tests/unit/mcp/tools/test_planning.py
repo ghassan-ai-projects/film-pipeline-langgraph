@@ -94,21 +94,27 @@ def test_generate_plan_requires_shot_matrix(
     assert "MasterFilmMatrix not found" in cast(str, result["error"])
 
 
-def test_generate_plan_raises_on_raw_dict_matrix(
+def test_generate_plan_validates_raw_persisted_matrix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``generate_plan`` reads the persisted MasterFilmMatrix as a raw dict
-    via ``ArtifactStore.load`` (which always returns ``dict[str, Any]``) and
-    then accesses ``matrix.rows`` as if it were a model instance. This is a
-    pre-existing bug in the original (pre-split) tool implementation, carried
-    over verbatim by this refactor. This test pins the current behavior;
-    it is not asserting desired behavior.
-    """
+    """The real artifact store returns a dict that must be validated at the boundary."""
     rt = _build_runtime_with_shot_bible(tmp_path, "plan-success-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    with pytest.raises(AttributeError):
-        asyncio.run(generate_plan({}))
+    result = asyncio.run(generate_plan({}))
+
+    assert result["ok"] is True
+    assert cast(int, result["shot_count"]) > 0
+    assert rt.services is not None
+    from film_pipeline.schemas._base import FilmPhase
+
+    stored = rt.services.artifact_store.load(
+        "plan-success-1", FilmPhase("gen_planning"), "generation_plan", 1
+    )
+    assert stored["shots"][0]["provider_id"] == "mock-video-provider"
+    assert stored["shots"][0]["model_id"] == "mock-fast"
+    assert stored["shots"][0]["estimated_cost"] == 0.0
+    assert stored["provider_utilization"] == {"mock-video-provider": result["shot_count"]}
 
 
 def test_initialize_budget_save_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -144,6 +150,14 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("plan-success-2", "Plan Success")
     rt.set_active("plan-success-2")
+    active = rt.get_active()
+    assert active is not None
+    active["resolved_config"] = {
+        "providers": {
+            "default": "mock-video-provider",
+            "video": [{"provider_id": "mock-video-provider", "models": ["mock-fast"]}],
+        }
+    }
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
     from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
@@ -178,7 +192,69 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert result["ok"] is True
     assert "generation_plan_ref" in result
     assert result["shot_count"] == 1
-    assert result["total_estimated_cost"] == 0.1
+    # Fallback plan follows the active project's configured zero-cost provider.
+    from film_pipeline.providers.pricing import rate_for
+
+    provider_id, model_id = rt.default_video_provider()
+    expected = round(5 * rate_for(provider_id, model_id), 2)
+    assert result["total_estimated_cost"] == pytest.approx(expected)
+
+
+def test_generate_plan_uses_configured_seedance_rate_and_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-seedance-1")
+    active = rt.get_active()
+    assert active is not None
+    active["resolved_config"] = {
+        "providers": {
+            "default": "seedance-openrouter",
+            "video": [
+                {
+                    "provider_id": "seedance-openrouter",
+                    "models": ["bytedance/seedance-2.0"],
+                }
+            ],
+        }
+    }
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(generate_plan({}))
+
+    assert result["ok"] is True
+    assert cast(float, result["total_estimated_cost"]) > 0.0
+    assert rt.services is not None
+    from film_pipeline.schemas._base import FilmPhase
+
+    stored = rt.services.artifact_store.load(
+        "plan-seedance-1", FilmPhase("gen_planning"), "generation_plan", 1
+    )
+    shots = cast(list[dict[str, Any]], stored["shots"])
+    assert shots
+    assert {shot["provider_id"] for shot in shots} == {"seedance-openrouter"}
+    assert {shot["model_id"] for shot in shots} == {"bytedance/seedance-2.0"}
+    assert all(float(shot["estimated_cost"]) > 0.0 for shot in shots)
+    assert stored["provider_utilization"] == {"seedance-openrouter": len(shots)}
+
+
+def test_generate_plan_rejects_unknown_configured_provider(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-unknown-provider")
+    active = rt.get_active()
+    assert active is not None
+    active["resolved_config"] = {
+        "providers": {
+            "default": "unknown-provider",
+            "video": [{"provider_id": "unknown-provider", "models": ["free-looking-model"]}],
+        }
+    }
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(generate_plan({}))
+
+    assert result["ok"] is False
+    assert "unknown provider" in cast(str, result["error"])
 
 
 def test_generate_plan_save_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

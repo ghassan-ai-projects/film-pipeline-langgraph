@@ -91,8 +91,8 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
         "generation_requests": [
             {
                 "shot_id": "shot_0001",
-                "provider": "seedance",
-                "model": "2.0",
+                "provider": "seedance-openrouter",
+                "model": "seedance-2.0",
                 "mode": "test",
                 "prompt_ref": "",
             }
@@ -117,6 +117,11 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
     # No dispatch-readiness blocking issues.
     issues = updates.get("issues", [])
     assert not any(i.get("code") == "undispatchable_requests" for i in issues)
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    ledger = GenerationLedgerManager(services.artifact_store).load(project_id)
+    assert ledger.rows[0].estimated_cost_usd == 1.44
 
 
 def test_generation_node_falls_back_without_services(tmp_path: Path) -> None:

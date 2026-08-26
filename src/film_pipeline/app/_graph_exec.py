@@ -32,7 +32,7 @@ def ensure_graph(rt: StudioRuntime) -> Any:
     if rt.graph is None:
         from film_pipeline.graph.graph import build_graph
 
-        rt.graph = build_graph()
+        rt.graph = build_graph(runtime_root=rt.runtime_root)
     return rt.graph
 
 
