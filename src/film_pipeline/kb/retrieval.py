@@ -1,4 +1,4 @@
-"""Layered KB retrieval — deterministic, tagged, and semantic lookups."""
+"""Layered KB retrieval — deterministic, tagged, and example lookups."""
 
 from __future__ import annotations
 
@@ -70,6 +70,22 @@ class KBRetrieval:
             authority=KbAuthority.CASE_STUDY,
         )
 
+    def _canonical_items(
+        self,
+        *,
+        phase: str,
+        agent_id: str,
+        required_policy_ids: list[str] | None,
+    ) -> list[KBItemMetadata]:
+        """Required deterministic policies plus tagged canonical ones, deduplicated."""
+        items = self.deterministic(required_policy_ids or [])
+        tagged = self.by_tags(
+            phase=phase,
+            agent_id=agent_id,
+            authority=KbAuthority.CANONICAL,
+        )
+        return items + [item for item in tagged if item not in items]
+
     def for_task(
         self,
         *,
@@ -81,38 +97,20 @@ class KBRetrieval:
 
         Returns a dict keyed by authority level for packet assembly.
         """
-        result: dict[str, list[KBItemMetadata]] = {
-            "canonical": [],
-            "playbooks": [],
-            "case_studies": [],
+        return {
+            "canonical": self._canonical_items(
+                phase=phase,
+                agent_id=agent_id,
+                required_policy_ids=required_policy_ids,
+            ),
+            "playbooks": self.by_tags(
+                phase=phase,
+                agent_id=agent_id,
+                authority=KbAuthority.ACTIVE_PLAYBOOK,
+            ),
+            "case_studies": self.by_tags(
+                phase=phase,
+                agent_id=agent_id,
+                authority=KbAuthority.CASE_STUDY,
+            ),
         }
-
-        # Layer 1: Deterministic — always include required canonical rules
-        if required_policy_ids:
-            result["canonical"] = self.deterministic(required_policy_ids)
-
-        # Layer 2: Tagged — canonical policies for this phase+agent
-        canonical = self.by_tags(
-            phase=phase,
-            agent_id=agent_id,
-            authority=KbAuthority.CANONICAL,
-        )
-        for item in canonical:
-            if item not in result["canonical"]:
-                result["canonical"].append(item)
-
-        # Layer 3: Tagged — active playbooks for this phase+agent
-        result["playbooks"] = self.by_tags(
-            phase=phase,
-            agent_id=agent_id,
-            authority=KbAuthority.ACTIVE_PLAYBOOK,
-        )
-
-        # Layer 4: Case studies (risks and lessons)
-        result["case_studies"] = self.by_tags(
-            phase=phase,
-            agent_id=agent_id,
-            authority=KbAuthority.CASE_STUDY,
-        )
-
-        return result
