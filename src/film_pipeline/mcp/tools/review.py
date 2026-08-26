@@ -10,6 +10,7 @@ from .helpers import _active_project_id, _error, _ok, _services
 
 if TYPE_CHECKING:
     from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.approval import ReviewPackage
 
 
 def _collect_phase_artifacts(
@@ -36,7 +37,7 @@ def _build_review_package(
     artifact_list: list[dict[str, object]],
     router_result: Any,
     blocking_issues: list[dict[str, Any]],
-) -> Any | None:
+) -> ReviewPackage | None:
     """Build the structured review package; None when generation fails."""
     from film_pipeline.review.generator import ReviewPackageGenerator
 
@@ -57,6 +58,11 @@ def _build_review_package(
     except Exception:
         return None
     return pkg
+
+
+def _blocking_issues(state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the open issues whose severity is blocking."""
+    return [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
@@ -94,7 +100,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     ostate.ensure_orchestrator_state(state)
 
     router_result = compute_actions(state)
-    blocking_issues = [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
+    blocking_issues = _blocking_issues(state)
 
     pkg = _build_review_package(state, fp, phase, artifact_list, router_result, blocking_issues)
     if pkg is None:
