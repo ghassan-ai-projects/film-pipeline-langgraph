@@ -1,8 +1,97 @@
-"""Canned agent responses for mock runtime execution."""
+"""Canned agent responses for mock runtime execution.
+
+The demo film must be internally consistent: the structure-extractor brief,
+the shot-design matrix, and the provider plan are three views of one film.
+``_demo_movements`` is the authority — the matrix rows and plan groups are
+generated from it so Gate A (shot counts per movement), the runtime tolerance
+check, and planning completeness all pass on the mock happy path.
+"""
 
 from __future__ import annotations
 
 from typing import Any
+
+_SEEDANCE_RATE_USD_PER_SECOND = 0.18
+
+# The demo film's single source of truth: per-movement shot durations.
+# Constraints baked into these numbers:
+#   - total runtime 104s == 16 shots x 6.5s (standard pacing), so
+#     ``brief_runtime_inconsistent`` passes;
+#   - row durations sum to 104s, so Gate A's runtime tolerance passes;
+#   - counts match ``structure-extractor-agent``'s canned brief movements.
+_DEMO_MOVEMENT_DURATIONS: tuple[tuple[str, tuple[int, ...]], ...] = (
+    ("act_1", (6, 6, 7, 6, 7)),
+    ("act_2", (6, 7, 6, 7, 6)),
+    ("act_3", (6, 6, 7, 7, 7, 7)),
+)
+
+_DEMO_RUNTIME_SECONDS = 104
+
+_STORY_FUNCTIONS: tuple[str, ...] = (
+    "inciting image",
+    "conflict_introduction",
+    "escalation",
+    "turning_point",
+    "revelation",
+)
+
+_CAMERA_PROFILES: tuple[str, ...] = (
+    "wide_establishing",
+    "medium_two_shot",
+    "close_on_eyes",
+)
+
+
+def _demo_shot_rows() -> list[dict[str, Any]]:
+    """Build matrix rows matching the demo execution brief exactly."""
+    rows: list[dict[str, Any]] = []
+    order = 0
+    for movement_id, durations in _DEMO_MOVEMENT_DURATIONS:
+        previous_shot = ""
+        for index, seconds in enumerate(durations, start=1):
+            order += 1
+            shot_id = f"shot_{order:04d}"
+            row: dict[str, Any] = {
+                "shot_id": shot_id,
+                "act_id": movement_id,
+                "sequence_id": f"seq_{order:03d}",
+                # Both script scenes stay covered across the film.
+                "scene_id": "sc_001" if index % 2 == 1 else "sc_002",
+                "scene_intent_ref": f"s_{(order - 1) % 2 + 1:03d}",
+                "duration_seconds": seconds,
+                "story_function": _STORY_FUNCTIONS[(order - 1) % len(_STORY_FUNCTIONS)],
+                "characters": ["mara"] if index % 2 == 1 else ["mara", "elias"],
+                "environment": "wasteland" if index % 2 == 1 else "outpost_exterior",
+                "camera_profile": _CAMERA_PROFILES[(order - 1) % len(_CAMERA_PROFILES)],
+                "prompt_ref": "",
+                "generation_order": order - 1,
+                "chaining": {},
+            }
+            if previous_shot:
+                row["chaining"] = {"input_frame_ref": f"{previous_shot}_last_frame"}
+            rows.append(row)
+            previous_shot = shot_id
+    return rows
+
+
+def _demo_shot_groups() -> list[dict[str, Any]]:
+    """Build a provider-plan entry for every demo matrix row."""
+    groups: list[dict[str, Any]] = []
+    order = 0
+    for _movement_id, durations in _DEMO_MOVEMENT_DURATIONS:
+        for seconds in durations:
+            groups.append(
+                {
+                    "shot_id": f"shot_{order + 1:04d}",
+                    "provider": "seedance",
+                    "model": "2.0",
+                    "mode": "test",
+                    "priority": order,
+                    "estimated_cost_usd": round(seconds * _SEEDANCE_RATE_USD_PER_SECOND, 2),
+                }
+            )
+            order += 1
+    return groups
 
 
 def default_mock_responses() -> dict[str, dict[str, Any]]:
@@ -181,24 +270,26 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
         "structure-extractor-agent": {
             "execution_brief": {
                 "project_id": "demo",
-                "target_runtime_seconds": 240,
+                # 16 shots x 6.5s standard pacing = 104s; matches the canned
+                # matrix rows exactly (see _DEMO_MOVEMENT_DURATIONS).
+                "target_runtime_seconds": _DEMO_RUNTIME_SECONDS,
                 "movements": [
                     {
                         "movement_id": "act_1",
                         "shot_count": 5,
-                        "duration_range_seconds": [8, 10],
+                        "duration_range_seconds": [6, 7],
                         "description": "Setup",
                     },
                     {
                         "movement_id": "act_2",
                         "shot_count": 5,
-                        "duration_range_seconds": [8, 10],
+                        "duration_range_seconds": [6, 7],
                         "description": "Confrontation",
                     },
                     {
                         "movement_id": "act_3",
-                        "shot_count": 4,
-                        "duration_range_seconds": [8, 10],
+                        "shot_count": 6,
+                        "duration_range_seconds": [6, 7],
                         "description": "Resolution",
                     },
                 ],
@@ -249,38 +340,7 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
         "shot-design-agent": {
             "shot_matrix": {
                 "project_id": "demo",
-                "rows": [
-                    {
-                        "shot_id": "shot_0001",
-                        "act_id": "act1",
-                        "sequence_id": "seq_001",
-                        "scene_id": "sc_001",
-                        "scene_intent_ref": "s_001",
-                        "duration_seconds": 8,
-                        "story_function": "inciting image",
-                        "characters": ["mara"],
-                        "environment": "wasteland",
-                        "camera_profile": "wide_establishing",
-                        "prompt_ref": "",
-                        "generation_order": 0,
-                        "chaining": {},
-                    },
-                    {
-                        "shot_id": "shot_0002",
-                        "act_id": "act1",
-                        "sequence_id": "seq_002",
-                        "scene_id": "sc_002",
-                        "scene_intent_ref": "s_002",
-                        "duration_seconds": 12,
-                        "story_function": "conflict_introduction",
-                        "characters": ["mara", "elias"],
-                        "environment": "outpost_exterior",
-                        "camera_profile": "medium_two_shot",
-                        "prompt_ref": "",
-                        "generation_order": 1,
-                        "chaining": {"input_frame_ref": "shot_0001_last_frame"},
-                    },
-                ],
+                "rows": _demo_shot_rows(),
                 "coverage_groups": [
                     {
                         "coverage_group_id": "cg_001",
@@ -300,28 +360,11 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                     "project_id": "demo",
                     "batch_id": "batch-001",
                     "provider": "seedance",
-                    "estimated_cost_usd": 3.60,
-                    "clip_count": 2,
-                    "notes": "2 test clips at $0.18/s, avg 10s each.",
+                    "estimated_cost_usd": 18.72,
+                    "clip_count": 16,
+                    "notes": "16 demo clips at $0.18/s (Seedance), 104s total runtime.",
                 },
-                "shot_groups": [
-                    {
-                        "shot_id": "shot_0001",
-                        "provider": "seedance",
-                        "model": "2.0",
-                        "mode": "test",
-                        "priority": 0,
-                        "estimated_cost_usd": 1.44,
-                    },
-                    {
-                        "shot_id": "shot_0002",
-                        "provider": "seedance",
-                        "model": "2.0",
-                        "mode": "test",
-                        "priority": 1,
-                        "estimated_cost_usd": 2.16,
-                    },
-                ],
+                "shot_groups": _demo_shot_groups(),
             }
         },
         "clip-validator": {

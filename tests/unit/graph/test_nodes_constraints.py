@@ -6,6 +6,7 @@ from typing import Any
 
 from pytest import MonkeyPatch
 
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.graph.nodes import _run_agent, intake_node
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import FilmPhase
@@ -14,7 +15,9 @@ from film_pipeline.schemas._base import FilmPhase
 def test_intake_node_extracts_constraints_and_persists_artifact(
     tmp_path: Any,
 ) -> None:
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     state: dict[str, Any] = {
         "project_id": "p1",
         "idea": (
@@ -45,7 +48,9 @@ def test_intake_node_extracts_constraints_and_persists_artifact(
 def test_intake_node_constraints_seed_scene_count_for_scope_contract(
     tmp_path: Any,
 ) -> None:
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     state: dict[str, Any] = {
         "project_id": "p1",
         "idea": "A short film with exactly 5 scenes.",
@@ -62,7 +67,9 @@ def test_run_agent_includes_constraints_in_context_vars(
     tmp_path: Any,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     captured: dict[str, Any] = {}
 
     original_run_from_template = services.prompt_runner.run_from_template
@@ -120,7 +127,9 @@ def test_run_agent_constraints_default_empty_when_absent(
     tmp_path: Any,
     monkeypatch: MonkeyPatch,
 ) -> None:
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     captured: dict[str, Any] = {}
 
     def fake_run_from_template(

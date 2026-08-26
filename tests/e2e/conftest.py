@@ -127,7 +127,7 @@ def graph_services(
     tmp_path: Path,
 ) -> GraphServices:
     """GraphServices wired with mock model and in-memory registries."""
-    from film_pipeline.testing.fixtures import default_mock_responses
+    from film_pipeline.app.mock_responses import default_mock_responses
 
     runner = PromptRunner(mock_responses=default_mock_responses())
     return GraphServices(

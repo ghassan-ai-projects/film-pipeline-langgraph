@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import generation_node
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
@@ -15,7 +16,9 @@ from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 
 
 def _services(tmp_path: Path) -> GraphServices:
-    return GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    return GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
 
 
 def _save_matrix(store: ArtifactStore, project_id: str) -> str:

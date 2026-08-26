@@ -11,8 +11,9 @@ central decision-maker. This module gives it the state it needs to reason.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 # --- Stable state keys -------------------------------------------------------
 # These keys live inside the graph state dict.  They are namespaced with a
@@ -61,6 +62,107 @@ _BUDGET_SNAPSHOT = f"{_ORCH_NS}__budget_snapshot"
 # Populated by StructureExtractorAgent after script phase. Used by Gate A/B/C
 # validators to enforce shot-count, runtime, and field invariants.
 _EXECUTION_BRIEF = f"{_ORCH_NS}__execution_brief"
+
+
+# --- Channel registry --------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class OrchChannelSpec:
+    """Declarative contract for one state key crossing the node boundary.
+
+    ``propagation`` selects the copy policy applied by
+    ``graph.nodes._agent_handoff._propagate_side_effects``:
+
+    - ``full``        — copied whenever present on the node's working copy.
+    - ``full_truthy`` — copied only when present and truthy.
+    - ``append_only`` — reducer channel; only entries appended after the
+      node's input snapshot are contributed.
+    - ``explicit``    — never auto-propagated; writers return the key in
+      their own update dicts (or a dedicated promotion path owns it).
+
+    Adding a state key here is mandatory: the channel-registry parity tests
+    fail when an orchestrator constant or graph-schema key lacks a row.
+    """
+
+    key: str
+    propagation: Literal["full", "full_truthy", "append_only", "explicit"]
+    note: str = ""
+
+
+ORCH_CHANNELS: tuple[OrchChannelSpec, ...] = (
+    OrchChannelSpec(
+        _CANDIDATE_REFS,
+        "full_truthy",
+        "published artifact refs; promoted by approve_phase_node",
+    ),
+    OrchChannelSpec(
+        _APPROVED_REFS,
+        "explicit",
+        "approve_phase_node returns promoted refs in its own update dict",
+    ),
+    OrchChannelSpec(
+        _ACTIVE_REVIEW_CYCLES,
+        "explicit",
+        "review-cycle writers return cycles in updates",
+    ),
+    OrchChannelSpec(
+        _PENDING_REVISIONS,
+        "explicit",
+        "revision writers return pending revisions in updates",
+    ),
+    OrchChannelSpec(
+        _ROUTING_DECISIONS,
+        "explicit",
+        "shadow namespace; deletion scheduled with D13/P1 wire-or-delete",
+    ),
+    OrchChannelSpec(
+        _CONVERGENCE,
+        "explicit",
+        "review-loop nodes return convergence snapshots in updates",
+    ),
+    OrchChannelSpec(
+        _FAILURE_DECISIONS,
+        "explicit",
+        "dormant writer; wiring decided in D13/P1 (failure-handling agent)",
+    ),
+    OrchChannelSpec(
+        _PROVIDER_HEALTH_SNAPSHOT,
+        "explicit",
+        "dormant writer; wiring decided in D13/P1 (provider health)",
+    ),
+    OrchChannelSpec(
+        _BUDGET_SNAPSHOT,
+        "explicit",
+        "dormant writer; wiring decided in D13/P1 (budget recording)",
+    ),
+    OrchChannelSpec(
+        _EXECUTION_BRIEF,
+        "full",
+        "structural brief from shot_bible extraction; DF-F2 fix — must reach "
+        "live state so validators stop pinning artifact version 1",
+    ),
+    OrchChannelSpec(
+        "_routing_decisions",
+        "full",
+        "handoff records recorded by _record_handoff during agent runs",
+    ),
+    OrchChannelSpec(
+        "_repair_feedback",
+        "full",
+        "copied on present (even when cleared to '') so consumed feedback "
+        "clearing survives the boundary",
+    ),
+    OrchChannelSpec(
+        "_validation_reports",
+        "full",
+        "validator reports accumulated within the node run",
+    ),
+    OrchChannelSpec("issues", "append_only", "append-only issues reducer channel"),
+    OrchChannelSpec(
+        "validation_report_refs", "append_only", "append-only report-ref reducer channel"
+    ),
+)
 
 
 # --- Candidate vs approved refs ----------------------------------------------

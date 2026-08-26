@@ -443,7 +443,9 @@ def get_runtime() -> StudioRuntime:
 def _build_services_for_mode(server_mode: str) -> GraphServices:
     if server_mode == "real":
         return GraphServices.for_real_runtime()
-    return GraphServices.for_mock_runtime()
+    from film_pipeline.app.mock_responses import default_mock_responses
+
+    return GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
 
 
 def _normalize_server_mode(server_mode: str) -> str:
