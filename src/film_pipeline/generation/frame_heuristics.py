@@ -66,7 +66,9 @@ def _check_has_content(
         try:
             # Re-open after verify() since verify() consumes the file object
             img = Image.open(image_path).convert("RGB")
-            pixels = list(img.getdata())
+            # get_flattened_data replaces getdata (deprecated since Pillow 12,
+            # removal in 14); both return row-major per-pixel tuples for RGB.
+            pixels = list(img.get_flattened_data())
             # Sample first 1000 pixels — solid color means all identical
             sample = pixels[:1000]
             if len(set(sample)) <= 1:
