@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from ..helpers import _latest_artifact_version
+from ..helpers import _latest_artifact_version, _services
 
 
 def _dialogue_line(dialogue: object) -> str | None:
@@ -95,6 +95,15 @@ def _constitution_tone(constitution: Any) -> str:
 def _constitution_camera_philosophy(constitution: Any) -> str:
     """Camera-philosophy text from the FilmConstitution mapping, if shaped as one."""
     return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
+
+
+def _chat_json_or_mock(rt: Any, prompt: str, mock_payload: dict[str, Any]) -> dict[str, Any]:
+    """Chat reply parsed as a mapping; mock_payload when no model adapter is configured."""
+    runner = _services(rt).prompt_runner
+    if runner.model_adapter is None:
+        return mock_payload
+    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
+    return raw if isinstance(raw, dict) else {}
 
 
 def _save_visual_dev_candidate(

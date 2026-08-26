@@ -8,17 +8,14 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
+    _chat_json_or_mock,
     _constitution_theme,
+    _constitution_visual_language,
     _load_artifact_if_present,
     _load_script_text,
     _register_active_artifact_ref,
     _save_visual_dev_candidate,
 )
-
-
-def _constitution_visual_language(constitution: Any) -> str:
-    """Visual-language text from the FilmConstitution mapping, if shaped as one."""
-    return str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
 
 
 def _environment_prompt_mission(environment_name: str, environment_id: str) -> str:
@@ -111,28 +108,33 @@ def _environment_prompt(
     )
 
 
+def _environment_mock_payload(
+    environment_id: str, environment_name: str, project_id: str
+) -> dict[str, Any]:
+    """Minimal valid EnvironmentBible response for mock mode."""
+    return {
+        "environment_id": environment_id,
+        "project_id": project_id,
+        "name": environment_name,
+        "locked_prompt_block": f"A {environment_name} — generated in mock mode.",
+        "invariants": [],
+        "zones": [],
+        "viewpoints": [],
+        "lighting_states": [],
+        "color_palette": ["#1a1a2e", "#e94560"],
+        "fingerprint": {"text": f"The {environment_name} — mock mode."},
+        "reference_assets": [],
+        "must_not_change": ["locked_prompt_block"],
+    }
+
+
 def _request_environment_bible_output(
     rt: Any, prompt: str, environment_id: str, environment_name: str, project_id: str
 ) -> dict[str, Any]:
     """Obtain EnvironmentBible JSON from the model adapter or mock fallback."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return {
-            "environment_id": environment_id,
-            "project_id": project_id,
-            "name": environment_name,
-            "locked_prompt_block": f"A {environment_name} — generated in mock mode.",
-            "invariants": [],
-            "zones": [],
-            "viewpoints": [],
-            "lighting_states": [],
-            "color_palette": ["#1a1a2e", "#e94560"],
-            "fingerprint": {"text": f"The {environment_name} — mock mode."},
-            "reference_assets": [],
-            "must_not_change": ["locked_prompt_block"],
-        }
-    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
-    return raw if isinstance(raw, dict) else {}
+    return _chat_json_or_mock(
+        rt, prompt, _environment_mock_payload(environment_id, environment_name, project_id)
+    )
 
 
 def _execute_environment_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
