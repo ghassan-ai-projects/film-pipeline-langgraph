@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import _error, _ok, _stub
@@ -37,8 +39,8 @@ async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
     agent = AssemblyAgent()
     plan = agent.build_plan(
         project_id=active["project_id"],
-        shot_ids=args.get("shot_ids", []),  # type: ignore[arg-type]
-        clip_paths=args.get("clip_paths", []),  # type: ignore[arg-type]
+        shot_ids=cast(list[str], args.get("shot_ids", [])),
+        clip_paths=cast(list[str], args.get("clip_paths", [])),
     )
     issues = agent.validate_plan(plan)
     return _ok(plan_id=plan.plan_id, clip_count=plan.clip_count, issues=issues)
