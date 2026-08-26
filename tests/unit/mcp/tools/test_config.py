@@ -66,6 +66,28 @@ def test_get_runtime_mode_no_active_project_uses_server_mode() -> None:
     assert result["project_runtime_mode"] == ""
 
 
+def test_quality_environment_override_updates_effective_profile_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FILM_PIPELINE_QUALITY", "draft")
+
+    result = asyncio.run(
+        create_film_project(
+            {
+                "project_id": "quality-env-override",
+                "quality_profile": "quality.studio",
+            }
+        )
+    )
+
+    assert result["ok"] is True
+    state = cast(dict[str, object], result["state"])
+    stack = cast(dict[str, str], state["profile_stack"])
+    config = cast(dict[str, object], state["resolved_config"])
+    assert stack["quality_profile"] == "quality.draft"
+    assert config["quality_profile"] == "draft"
+
+
 def _create_active_project(project_id: str) -> None:
     asyncio.run(create_film_project({"project_id": project_id, "title": "T", "slug": project_id}))
     asyncio.run(set_active_project({"project_ref": project_id}))

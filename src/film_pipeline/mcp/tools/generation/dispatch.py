@@ -47,6 +47,7 @@ def _submit_one_row(
     mgr: GenerationLedgerManager,
     project_id: str,
     row: GenerationLedgerRow,
+    duration_seconds: float,
 ) -> tuple[bool, dict[str, str]]:
     """Submit one SUBMITTED ledger row to its provider.
 
@@ -75,7 +76,7 @@ def _submit_one_row(
         payload = adapter.build_payload(
             prompt=row.prompt_ref,
             references=row.reference_refs or None,
-            duration=5.0,
+            duration=duration_seconds,
         )
         job = adapter.submit(payload, row.shot_id)
     except Exception as exc:
@@ -124,6 +125,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     if _is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
 
+    from film_pipeline.generation.executor import GenerationExecutor
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas._base import GenerationStatus
 
@@ -134,8 +136,15 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
     successes: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
+    shot_rows = {
+        str(shot.get("shot_id", "")): shot
+        for shot in GenerationExecutor(
+            _services(rt).artifact_store, rt.provider_adapters
+        ).load_shot_rows(project_id)
+    }
     for row in submitted_rows:
-        succeeded, entry = _submit_one_row(rt, mgr, project_id, row)
+        duration = float(shot_rows.get(row.shot_id, {}).get("duration_seconds", 5) or 5)
+        succeeded, entry = _submit_one_row(rt, mgr, project_id, row, duration)
         (successes if succeeded else failures).append(entry)
 
     return _ok(

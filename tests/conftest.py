@@ -23,6 +23,7 @@ def _isolated_runtime_root(
     reset so tests that exercise MCP tools share no in-memory state.
     """
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(tmp_path / "runtime-root"))
+    monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
     from film_pipeline.app.runtime import reset_runtime
 
     reset_runtime()

@@ -31,6 +31,7 @@ from film_pipeline.providers.base import (
     ProviderJob,
     ProviderJobStatus,
 )
+from film_pipeline.providers.pricing import estimate_cost_for_duration
 from film_pipeline.schemas._base import FilmPhase, GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import GenerationLedgerRow
 
@@ -107,6 +108,15 @@ class GenerationExecutor:
             raise ValueError(
                 "No shots to plan. The shot matrix has no rows — approve shot_bible first."
             )
+        shot_rows = self._shot_rows_by_id(project_id)
+        estimated_costs = {
+            sid: estimate_cost_for_duration(
+                provider,
+                model,
+                float(shot_rows.get(sid, {}).get("duration_seconds", 5) or 5),
+            )
+            for sid in targets
+        }
         ledger = self._ledger.plan_batch(
             project_id=project_id,
             shot_ids=targets,
@@ -114,6 +124,7 @@ class GenerationExecutor:
             model=model,
             prompt_ref=prompt_ref,
             mode=mode,
+            estimated_costs=estimated_costs,
         )
         planned = [row for row in ledger.rows if row.shot_id in set(targets)]
         result = GenerationStepResult(processed=len(planned))

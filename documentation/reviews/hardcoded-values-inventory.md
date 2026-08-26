@@ -11,7 +11,7 @@ The recurring pattern: **profiles advertise creative intent, but the code reads 
 LLM guess (or a hardcoded constant) instead.** The profile values are merged into
 `resolved_config` and then never read.
 
-> **Re-verified 2026-08-26** against `src/` on branch `clean-code-followups`
+> **Re-verified 2026-08-26** against `src/` on branch `arch-improvement-review`
 > (post 240-file sweep + phase-2 fixes). Original findings are kept below for
 > history; each section carries a dated re-check note and corrected file/line
 > citations. Headline changes: runtime is now user input and gone from profiles;
@@ -56,6 +56,13 @@ Verified by grepping every field across `src/`:
   extractor derives a visual style from the idea text (`constraints/extractor.py:149,244`) —
   from user prose, not the profile.
 - `writing_style` → **unchanged**: conflict check only (`config/validator.py:42-43`).
+
+**2026-08-26 Phase 02 config-contract follow-up:** the path-aware contract test also records
+currently unread profile metadata and override targets rather than treating unrelated string
+literals as readers: `profile.version`, the base `phases` list, `models.default`,
+`limits.max_scenes`, `studio.skip_visual_dev`,
+`generation.search_api`, and `review.strategy`. These remain deliberate deferrals until the
+owning roadmap phase wires them or removes the declarations.
 
 **Implication:** choosing `film-type.visual_poetry` vs `film-type.narrative` changes
 almost nothing in the actual generation. The look/pacing/structure come from
@@ -183,9 +190,10 @@ longer require a code edit. Caveats: base profiles still come from the in-code
 the agent→profile mapping moved to `graph/nodes/_context.py:27`; retry
 temperature 0.1 is now at `agents/runner.py:254,275`; `model_adapter.py` defaults
 are unchanged. Quality-profile `models:` lists are read only as a real-mode
-allowlist (`mcp/tools/helpers.py:142-146`); `FILM_PIPELINE_MODEL_OVERRIDE`
-writes `models.creative_writer.primary` (`config/runtime_overrides.py:16`) but
-nothing reads that path back into the router.
+allowlist (`mcp/tools/helpers.py:142-146`); `FILM_PIPELINE_MODEL_OVERRIDE` writes
+`model_profiles.creative_writer.primary` (`config/runtime_overrides.py:16-18`), which
+`_model_overrides_for` passes to `ModelRouter.resolve_model_params`; the prior
+`models.creative_writer.primary` claim is superseded by the Phase 02 fix.
 
 ## F. Provider pricing — hardcoded rates
 
@@ -208,10 +216,10 @@ prose at `:4`), Veo delegates (`adapters/veo_fast.py:65-67`), and the planner no
 longer carries a hand-written price list — it renders
 `pricing_prompt_block()` into prompt context
 (`graph/nodes/_agent_prompt_context.py:51-53`), eliminating the $0.50-vs-$0.10
-disagreement. Residual gap: `adapters/imagen4_gemini.py:158-165` still returns
-literal tiered rates (`$0.10` ultra / `$0.02` fast / `$0.05` default) while the
-central table lists Imagen at a flat `$0.02` — the ultra/default tiers are not in
-the single source.
+disagreement. The Phase 02 fix extends the central table with Imagen's tier map
+(`ultra` $0.10, `fast` $0.02, standard $0.05), delegates the adapter to
+`rate_for(provider, model)`, and makes the generated prompt state image and video
+cost units separately. Actual-spend recording remains a separate O-F9 gap.
 
 ## G. Generation / image constants
 

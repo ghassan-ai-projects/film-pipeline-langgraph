@@ -52,8 +52,8 @@ delivery:
   include_subtitles: true
   include_audio_stems: false
 
-validation:
-  thresholds:
-    pass: 85
-    review: 75
-    block: 60
+# NOTE (Flx-F9 config contract): the former `validation.thresholds` block was
+# removed — no code path feeds resolved-config thresholds into the validators
+# (see documentation/reviews/hardcoded-values-inventory.md §C re-check). The
+# per-entry ValidatorThresholds literals in validation/thresholds.py are the
+# authority; wiring profile-configured thresholds is deferred to roadmap C-6.

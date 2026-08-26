@@ -47,12 +47,14 @@ _CHECKPOINT_DIR: Path = _checkpoint_dir()
 _CHECKPOINT_DB: Path = _CHECKPOINT_DIR / "checkpoints.sqlite"
 
 
-def _default_checkpointer() -> BaseCheckpointSaver[Any]:
-    """Return a persistent SQLite checkpointer in production, MemorySaver otherwise."""
-    if not os.getenv("FILM_PIPELINE_PERSIST_STATE"):
+def _default_checkpointer(runtime_root: Path | None = None) -> BaseCheckpointSaver[Any]:
+    """Return SQLite only when persistence is explicitly enabled."""
+    if os.getenv("FILM_PIPELINE_NO_PERSIST") or not os.getenv("FILM_PIPELINE_PERSIST_STATE"):
         return MemorySaver()
-    _CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(_CHECKPOINT_DB), check_same_thread=False)
+    checkpoint_dir = runtime_root / "checkpoints" if runtime_root is not None else _CHECKPOINT_DIR
+    checkpoint_db = checkpoint_dir / "checkpoints.sqlite"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(checkpoint_db), check_same_thread=False)
     return SqliteSaver(conn=conn)
 
 
@@ -165,7 +167,11 @@ def _wire_gate_edges(builder: StateGraph) -> None:
     builder.add_edge("end", END)
 
 
-def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> CompiledStateGraph:
+def build_graph(
+    checkpointer: BaseCheckpointSaver[Any] | None = None,
+    *,
+    runtime_root: Path | None = None,
+) -> CompiledStateGraph:
     """Construct the supervisor graph with all phases and approval gates."""
     builder = StateGraph(StudioGraphState)
 
@@ -177,7 +183,9 @@ def build_graph(checkpointer: BaseCheckpointSaver[Any] | None = None) -> Compile
 
     _wire_gate_edges(builder)
 
-    return builder.compile(checkpointer=checkpointer or _default_checkpointer())
+    return builder.compile(
+        checkpointer=checkpointer or _default_checkpointer(runtime_root=runtime_root)
+    )
 
 
 def _passthrough(state: dict[str, Any]) -> dict[str, Any]:

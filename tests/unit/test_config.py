@@ -45,7 +45,10 @@ def test_load_experimental_type() -> None:
 def test_load_quality_festival() -> None:
     loader = ProfileLoader(profiles_dir=Path("profiles"))
     src = loader.load("quality.festival")
-    assert src.raw["validation"]["thresholds"]["pass"] == 90
+    # validation.thresholds was deleted as dead config [Flx-F9]; the overlay
+    # must still load and keep its distinctive routing override.
+    assert "validation" not in src.raw
+    assert src.raw["model_profiles"]["creative_writer"]["max_tokens"] == 16384
 
 
 def test_load_provider_free() -> None:
@@ -153,7 +156,8 @@ def test_apply_runtime_overrides_coerces_nested_values() -> None:
     assert overridden["limits"]["max_scenes"] == 12
     assert overridden["studio"]["skip_visual_dev"] is True
     assert overridden["context"]["max_chars_per_artifact"] == 8000
-    assert overridden["models"]["creative_writer"]["primary"] == "custom/model"
+    # Lands where _model_overrides_for() → resolve_model_params() reads it.
+    assert overridden["model_profiles"]["creative_writer"]["primary"] == "custom/model"
 
 
 def test_apply_runtime_overrides_ignores_unmapped_variables() -> None:
@@ -270,6 +274,8 @@ def test_resolver_applies_runtime_overrides_last(monkeypatch: pytest.MonkeyPatch
 
     assert result.raw["quality_profile"] == "draft"
     assert result.raw["studio"]["require_human_approval"] is False
+    assert result.raw["review"]["strategy"] == "single"
+    assert result.raw["generation"]["resolution"] == "480p"
 
 
 def test_resolver_detects_festival_free_conflict() -> None:

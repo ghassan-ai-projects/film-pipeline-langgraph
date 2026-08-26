@@ -92,11 +92,12 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
 
     # Build a review package using the ReviewPackageGenerator
     from film_pipeline.graph import orchestrator_state as ostate
-    from film_pipeline.graph.router import compute_actions
+    from film_pipeline.graph.router import compute_actions, public_blocked_actions
 
-    ostate.ensure_orchestrator_state(state)
+    routing_state = dict(state)
+    ostate.ensure_orchestrator_state(routing_state)
 
-    router_result = compute_actions(state)
+    router_result = compute_actions(routing_state)
     blocking_issues = _blocking_issues(state)
 
     pkg = _build_review_package(state, fp, phase, artifact_list, router_result, blocking_issues)
@@ -107,7 +108,12 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     return _ok(
         review_package=pkg.model_dump(mode="json"),
         phase=phase,
-        router=router_result.__dict__,
+        router={
+            "eligible": list(router_result.eligible),
+            "blocked": public_blocked_actions(router_result),
+            "next_action": router_result.next_action,
+            "human_gate": router_result.human_gate,
+        },
     )
 
 

@@ -3,11 +3,6 @@ review:
   strategy: multi_model_panel
   min_reviewers: 3
   escalation_on_disagreement: true
-validation:
-  thresholds:
-    pass: 90
-    review: 80
-    block: 70
 generation:
   default_mode: production
   resolution: 1080p

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
 from .helpers import _error, _latest_artifact_version, _ok, _services
 
@@ -92,37 +93,97 @@ def _register_active_artifact_ref(
 
 
 def _load_master_matrix(store: Any, project_id: str) -> Any:
-    """Load the MasterFilmMatrix artifact, or None when it does not exist."""
+    """Load and validate the MasterFilmMatrix artifact, if it exists."""
     try:
         from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.matrix import MasterFilmMatrix
 
-        return store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", 1)
-    except (FileNotFoundError, ValueError):
+        raw = store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", 1)
+        if isinstance(raw, MasterFilmMatrix):
+            return raw
+        return MasterFilmMatrix.model_validate(raw)
+    except FileNotFoundError:
         return None
+    except ValueError as exc:
+        raise ValueError(f"Persisted MasterFilmMatrix is invalid: {exc}") from exc
 
 
-def _build_generation_plan(project_id: str, matrix: Any) -> tuple[Any, float]:
+def _fallback_video_route(rt: Any, state: dict[str, Any]) -> tuple[str, str]:
+    """Resolve the fallback plan's video provider and model from live state."""
+    resolved_config = state.get("resolved_config", {})
+    providers = resolved_config.get("providers", {}) if isinstance(resolved_config, dict) else {}
+    if isinstance(providers, dict):
+        configured = provider_specs_from_raw(providers)
+        default_id = str(providers.get("default", "")).strip()
+        video_specs = [spec for spec in configured if spec.get("provider_type") == "video"]
+        selected = next(
+            (spec for spec in video_specs if str(spec.get("provider_id")) == default_id),
+            video_specs[0] if video_specs else None,
+        )
+        if selected is not None:
+            provider_id = str(selected["provider_id"])
+            models = selected.get("models", [])
+            if isinstance(models, list) and models:
+                return provider_id, str(models[0])
+            runtime_provider, runtime_model = rt.default_video_provider()
+            if provider_id == runtime_provider:
+                return provider_id, runtime_model
+            adapter = rt.get_provider(provider_id)
+            entry_models = getattr(getattr(adapter, "entry", None), "models", [])
+            if isinstance(entry_models, list) and entry_models:
+                return provider_id, str(entry_models[0])
+            return provider_id, ""
+    return cast(tuple[str, str], rt.default_video_provider())
+
+
+def _build_generation_plan(
+    project_id: str,
+    matrix: Any,
+    *,
+    runtime: Any,
+    state: dict[str, Any],
+) -> tuple[Any, float]:
     """Derive the GenerationPlan and its estimated cost from the shot matrix."""
+    from film_pipeline.providers.pricing import (
+        PROVIDER_PRICING,
+        estimate_cost_for_duration,
+        tier_for,
+    )
     from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
 
+    provider_id, model_id = _fallback_video_route(runtime, state)
+    if provider_id not in PROVIDER_PRICING:
+        raise ValueError(f"Cannot estimate generation cost for unknown provider '{provider_id}'.")
+    if not model_id:
+        raise ValueError(f"Cannot create generation plan for '{provider_id}' without a model.")
     shots = [
         ShotPlan(
             shot_id=row.shot_id,
             priority=3,
             risk=str(getattr(row, "risk_level", "medium")),
-            tier="fast",
+            tier=tier_for(provider_id, model_id),
+            provider_id=provider_id,
+            model_id=model_id,
+            estimated_cost=round(
+                estimate_cost_for_duration(
+                    provider_id,
+                    model_id,
+                    float(getattr(row, "duration_seconds", 5)),
+                ),
+                4,
+            ),
             estimated_duration=float(getattr(row, "duration_seconds", 5)),
             generation_order=i,
         )
         for i, row in enumerate(matrix.rows)
     ]
 
-    total_cost = sum(s.estimated_duration * 0.02 for s in shots)
+    total_cost = round(sum(s.estimated_cost for s in shots), 2)
     plan = GenerationPlan(
         project_id=project_id,
         shots=shots,
         total_estimated_cost=total_cost,
-        provider_utilization={"gemini-imagen-4": len(shots)},
+        provider_utilization={provider_id: len(shots)},
     )
     return plan, total_cost
 
@@ -153,11 +214,22 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
-    matrix = _load_master_matrix(store, project_id)
+    try:
+        matrix = _load_master_matrix(store, project_id)
+    except ValueError as exc:
+        return _error(str(exc))
     if matrix is None:
         return _error("MasterFilmMatrix not found. Run generate_shot_bible first.")
 
-    plan, total_cost = _build_generation_plan(project_id, matrix)
+    try:
+        plan, total_cost = _build_generation_plan(
+            project_id,
+            matrix,
+            runtime=rt,
+            state=active,
+        )
+    except ValueError as exc:
+        return _error(str(exc))
 
     try:
         ref = _persist_plan(rt, active, project_id, plan)
