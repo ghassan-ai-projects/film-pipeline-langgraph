@@ -24,8 +24,9 @@ class MockModelAdapter:
 
     def call(self, key: str) -> dict[str, Any]:
         """Return the canned response for the given agent/validator key."""
-        if key in self.responses:
-            return dict(self.responses[key])
+        registered = self._registered_response(key)
+        if registered is not None:
+            return registered
         # Default placeholder
         return {
             "status": "ok",
@@ -40,11 +41,18 @@ class MockModelAdapter:
 
     def validator_response(self, validator_id: str) -> dict[str, Any]:
         """Return a canned validation response with score and status."""
-        if validator_id in self.responses:
-            return dict(self.responses[validator_id])
+        registered = self._registered_response(validator_id)
+        if registered is not None:
+            return registered
         return {
             "score": 90,
             "status": "pass",
             "issues": [],
             "mock_model": True,
         }
+
+    def _registered_response(self, key: str) -> dict[str, Any] | None:
+        """Return a defensive copy of the canned response, or None when unregistered."""
+        if key in self.responses:
+            return dict(self.responses[key])
+        return None
