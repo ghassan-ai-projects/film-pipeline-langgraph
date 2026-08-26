@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.executor import GenerationExecutor, GenerationStepResult
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -245,7 +245,7 @@ class TestGenerationExecutor:
                 )
 
             def poll(self, job: ProviderJob) -> ProviderJob:
-                job.status = "failed"
+                job.status = ProviderJobStatus.FAILED
                 job.metadata = {"error": "mock_failure"}
                 return job
 
