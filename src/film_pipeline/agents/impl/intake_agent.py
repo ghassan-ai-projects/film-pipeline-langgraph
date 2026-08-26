@@ -74,11 +74,8 @@ def _coerce_runtime_seconds(data: dict[str, Any]) -> int:
     if minutes is not None and minutes >= 1:
         return minutes * 60
 
-    # A literal 1 second is almost always an artifact of weak prompting in intake.
-    one_second = _parse_positive_int(data.get("target_runtime_seconds"))
-    if one_second == 1:
-        return 300
-
+    # A literal 1 second is almost always an artifact of weak prompting in intake,
+    # so anything that fails the checks above falls back to a 5-minute default.
     return 300
 
 
