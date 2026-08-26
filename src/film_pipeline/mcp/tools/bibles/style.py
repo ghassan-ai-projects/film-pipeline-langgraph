@@ -8,8 +8,9 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
+    _constitution_tone,
+    _constitution_visual_language,
     _load_artifact_if_present,
-    _load_versioned_artifact,
     _register_active_artifact_ref,
     _save_visual_dev_candidate,
 )
@@ -17,14 +18,10 @@ from ._shared import (
 
 def _style_palette_hint(store: Any, project_id: str) -> str:
     """Best-effort palette hint from an existing EnvironmentBible."""
-    palette_hint = ""
-    try:
-        env_bible = _load_versioned_artifact(store, project_id, "visual_dev", "environment_bible")
-        if isinstance(env_bible, dict):
-            palette_hint = ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
-    except (FileNotFoundError, ValueError):
-        pass
-    return palette_hint
+    env_bible = _load_artifact_if_present(store, project_id, "visual_dev", "environment_bible")
+    if not isinstance(env_bible, dict):
+        return ""
+    return ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
 
 
 def _style_prompt(visual_language: str, tone: str, palette_hint: str) -> str:
@@ -77,6 +74,24 @@ def _execute_style_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] |
     return result
 
 
+def _deliver_style_bible(
+    rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
+) -> dict[str, object]:
+    """Persist the bible, publish its ref on the active project, and respond."""
+    from film_pipeline.schemas._base import ArtifactType
+
+    ref = _save_visual_dev_candidate(
+        store,
+        project_id,
+        "style_bible",
+        ArtifactType.STYLE_BIBLE,
+        "mcp.generate_style_bible",
+        bible,
+    )
+    _register_active_artifact_ref(rt, active, project_id, "style_bible_ref", ref)
+    return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
+
+
 async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     """Generate a StyleBible from FilmConstitution + EnvironmentBible palettes."""
     rt = tools_pkg.get_runtime()
@@ -90,32 +105,17 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     if constitution is None:
         return _error("FilmConstitution not found.")
 
-    visual_language = (
-        str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
+    prompt = _style_prompt(
+        _constitution_visual_language(constitution),
+        _constitution_tone(constitution),
+        _style_palette_hint(store, project_id),
     )
-    tone = str(constitution.get("tone", "")) if isinstance(constitution, dict) else ""
-    palette_hint = _style_palette_hint(store, project_id)
-    prompt = _style_prompt(visual_language, tone, palette_hint)
 
     try:
-        from film_pipeline.schemas._base import ArtifactType
-
         model_output = _request_style_bible_output(rt, prompt, project_id)
         result = _execute_style_bible_agent(model_output)
         if result is None:
             return _error("StyleBible agent produced invalid output.")
-        bible = result["style_bible"]
-
-        ref = _save_visual_dev_candidate(
-            store,
-            project_id,
-            "style_bible",
-            ArtifactType.STYLE_BIBLE,
-            "mcp.generate_style_bible",
-            bible,
-        )
-        _register_active_artifact_ref(rt, active, project_id, "style_bible_ref", ref)
-
-        return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
+        return _deliver_style_bible(rt, active, store, project_id, result["style_bible"])
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")
