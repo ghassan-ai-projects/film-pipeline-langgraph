@@ -14,6 +14,11 @@ from ._shared import (
 )
 
 
+def _constitution_camera_philosophy(constitution: Any) -> str:
+    """Camera-philosophy text from the FilmConstitution mapping, if shaped as one."""
+    return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
+
+
 def _request_camera_bible_output(
     rt: Any, project_id: str, camera_philosophy: str
 ) -> dict[str, Any]:
@@ -70,6 +75,24 @@ def _execute_camera_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] 
     return result
 
 
+def _deliver_camera_bible(
+    rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
+) -> dict[str, object]:
+    """Persist the bible, publish its ref on the active project, and respond."""
+    from film_pipeline.schemas._base import ArtifactType
+
+    ref = _save_visual_dev_candidate(
+        store,
+        project_id,
+        "camera_language_bible",
+        ArtifactType.CAMERA_LANGUAGE_BIBLE,
+        "mcp.generate_camera_bible",
+        bible,
+    )
+    _register_active_artifact_ref(rt, active, project_id, "camera_bible_ref", ref)
+    return _ok(camera_bible_ref=ref, profiles=len(bible.profiles))
+
+
 async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
     """Generate a CameraLanguageBible from FilmConstitution."""
     rt = tools_pkg.get_runtime()
@@ -82,27 +105,14 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
     constitution = _load_artifact_if_present(store, project_id, "constitution", "film_constitution")
     if constitution is None:
         return _error("FilmConstitution not found.")
-    camera_philosophy = (
-        str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
-    )
 
     try:
-        from film_pipeline.schemas._base import ArtifactType
-
-        model_output = _request_camera_bible_output(rt, project_id, camera_philosophy)
+        model_output = _request_camera_bible_output(
+            rt, project_id, _constitution_camera_philosophy(constitution)
+        )
         result = _execute_camera_bible_agent(model_output)
         if result is None:
             return _error("CameraBible agent produced invalid output.")
-        bible = result["camera_bible"]
-        ref = _save_visual_dev_candidate(
-            store,
-            project_id,
-            "camera_language_bible",
-            ArtifactType.CAMERA_LANGUAGE_BIBLE,
-            "mcp.generate_camera_bible",
-            bible,
-        )
-        _register_active_artifact_ref(rt, active, project_id, "camera_bible_ref", ref)
-        return _ok(camera_bible_ref=ref, profiles=len(bible.profiles))
+        return _deliver_camera_bible(rt, active, store, project_id, result["camera_bible"])
     except Exception as exc:
         return _error(f"CameraBible generation failed: {exc}")
