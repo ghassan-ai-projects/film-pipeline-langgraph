@@ -92,6 +92,11 @@ def _constitution_tone(constitution: Any) -> str:
     return str(constitution.get("tone", "")) if isinstance(constitution, dict) else ""
 
 
+def _constitution_camera_philosophy(constitution: Any) -> str:
+    """Camera-philosophy text from the FilmConstitution mapping, if shaped as one."""
+    return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
+
+
 def _save_visual_dev_candidate(
     store: Any,
     project_id: str,
