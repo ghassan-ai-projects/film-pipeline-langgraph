@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -71,5 +72,5 @@ class KBManifest:
     def __contains__(self, item_id: str) -> bool:
         return item_id in self.items
 
-    def __iter__(self):  # type: ignore[no-untyped-def]
+    def __iter__(self) -> Iterator[KBItemMetadata]:
         return iter(self.items.values())

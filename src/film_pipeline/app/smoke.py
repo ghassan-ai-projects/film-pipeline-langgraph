@@ -5,6 +5,8 @@ Run with: `python -m film_pipeline.app.smoke`
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 
 def check_graph_compiles() -> tuple[bool, str]:
     """Verify the LangGraph graph compiles."""
@@ -73,7 +75,7 @@ def check_config_loads() -> tuple[bool, str]:
         return False, str(e)
 
 
-ALL_CHECKS = [
+ALL_CHECKS: list[tuple[str, Callable[[], tuple[bool, str]]]] = [
     ("graph_compiles", check_graph_compiles),
     ("agent_registry", check_agent_registry),
     ("validator_registry", check_validator_registry),

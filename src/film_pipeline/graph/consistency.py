@@ -8,47 +8,40 @@ from __future__ import annotations
 from typing import Any
 
 
-def check_staleness(
-    artifact_ref: str,
-    state: dict[str, Any],
+def _load_artifact_metadata(
     store: Any,
-) -> list[dict[str, Any]]:
-    """Check if an artifact's upstream dependencies have newer versions.
+    project_id: str,
+    artifact_id: str,
+    version_text: str,
+) -> Any:
+    """Locate the artifact metadata by trying each phase in order.
 
-    Returns a list of staleness warnings. Empty list = all deps are current.
+    A missing file or unparseable version number moves on to the next
+    phase; ``None`` means no stored metadata matched.
     """
-    warnings: list[dict[str, Any]] = []
-
-    parts = artifact_ref.split(":")
-    if len(parts) < 3:
-        return warnings
-    artifact_id = parts[1]
-
-    # Try each possible phase to locate the metadata
     from film_pipeline.schemas._base import FilmPhase
 
-    metadata = None
     for fp in FilmPhase:
         try:
-            metadata = store.load_metadata(
-                str(state.get("project_id", "")),
+            return store.load_metadata(
+                project_id,
                 fp.value,
                 artifact_id,
-                int(parts[2].lstrip("v")),
+                int(version_text.lstrip("v")),
             )
-            break
         except (FileNotFoundError, ValueError):
             continue
+    return None
 
-    if metadata is None:
-        return warnings
 
-    built_from = getattr(metadata, "built_from", {}) or {}
-
-    from film_pipeline.graph.orchestrator_state import get_approved_refs
-
-    approved = get_approved_refs(state)
-
+def _staleness_warnings(
+    artifact_id: str,
+    artifact_ref: str,
+    built_from: dict[str, Any],
+    approved: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Compare each dependency's built-from ref against the approved ref."""
+    warnings: list[dict[str, Any]] = []
     for dep_id, dep_version_ref in built_from.items():
         current_ref = approved.get(dep_id)
         if current_ref and current_ref != dep_version_ref:
@@ -66,8 +59,31 @@ def check_staleness(
                     ),
                 }
             )
-
     return warnings
+
+
+def check_staleness(
+    artifact_ref: str,
+    state: dict[str, Any],
+    store: Any,
+) -> list[dict[str, Any]]:
+    """Check if an artifact's upstream dependencies have newer versions.
+
+    Returns a list of staleness warnings. Empty list = all deps are current.
+    """
+    parts = artifact_ref.split(":")
+    if len(parts) < 3:
+        return []
+
+    metadata = _load_artifact_metadata(store, str(state.get("project_id", "")), parts[1], parts[2])
+    if metadata is None:
+        return []
+
+    built_from = getattr(metadata, "built_from", {}) or {}
+
+    from film_pipeline.graph.orchestrator_state import get_approved_refs
+
+    return _staleness_warnings(parts[1], artifact_ref, built_from, get_approved_refs(state))
 
 
 def check_phase_consistency(

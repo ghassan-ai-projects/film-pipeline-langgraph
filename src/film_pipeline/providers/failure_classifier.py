@@ -18,77 +18,126 @@ class ClassifiedFailure:
     is_transient: bool  # True if retrying may help
 
 
+@dataclass(frozen=True)
+class _FailureRule:
+    """One ordered classification rule for provider error messages."""
+
+    patterns: tuple[str, ...]
+    status: ProviderStatus
+    reason_prefix: str
+    resume_requirements: tuple[str, ...]
+    is_transient: bool
+
+
+_FAILURE_RULES: tuple[_FailureRule, ...] = (
+    # ── quota ────────────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "quota exceeded",
+            "rate limit",
+            "too many requests",
+            "429",
+            "quota_exhausted",
+        ),
+        status=ProviderStatus.BLOCKED_QUOTA,
+        reason_prefix="Quota exhausted",
+        resume_requirements=("Wait for quota refresh or upgrade plan.",),
+        is_transient=True,
+    ),
+    # ── credit ───────────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "insufficient funds",
+            "credit exceeded",
+            "billing issue",
+            "payment required",
+            "402",
+        ),
+        status=ProviderStatus.BLOCKED_CREDIT,
+        reason_prefix="Credit exhausted",
+        resume_requirements=("Add credits or update billing.",),
+        is_transient=False,
+    ),
+    # ── auth ─────────────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "unauthorized",
+            "invalid api key",
+            "authentication failed",
+            "forbidden",
+            "403",
+            "401",
+            "auth_error",
+        ),
+        status=ProviderStatus.BLOCKED_AUTH,
+        reason_prefix="Authentication failure",
+        resume_requirements=("Check API key or credentials.",),
+        is_transient=False,
+    ),
+    # ── timeout ──────────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "timeout",
+            "timed out",
+            "connection reset",
+            "read timeout",
+            "connect timeout",
+        ),
+        status=ProviderStatus.DEGRADED,
+        reason_prefix="Timeout",
+        resume_requirements=("Retry with backoff or check network.",),
+        is_transient=True,
+    ),
+    # ── moderation ───────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "content policy",
+            "safety filter",
+            "moderation",
+            "blocked by policy",
+            "inappropriate content",
+            "content_filter",
+        ),
+        status=ProviderStatus.DEGRADED,
+        reason_prefix="Moderation block",
+        resume_requirements=("Review prompt content and retry.",),
+        is_transient=False,
+    ),
+    # ── network ──────────────────────────────────────────────────
+    _FailureRule(
+        patterns=(
+            "connection refused",
+            "name resolution",
+            "dns",
+            "network unreachable",
+            "host unreachable",
+            "no route to host",
+            "socket error",
+        ),
+        status=ProviderStatus.DEGRADED,
+        reason_prefix="Network failure",
+        resume_requirements=("Check connectivity and retry.",),
+        is_transient=True,
+    ),
+)
+
+
+def _rule_failure(rule: _FailureRule, error_message: str) -> ClassifiedFailure:
+    """Materialize a classified failure for a matched rule."""
+    return ClassifiedFailure(
+        status=rule.status,
+        reason=f"{rule.reason_prefix}: {error_message[:120]}",
+        resume_requirements=list(rule.resume_requirements),
+        is_transient=rule.is_transient,
+    )
+
+
 class FailureClassifier:
     """Classify provider errors into health states and recovery actions.
 
     Maps exception messages and error codes to ``ProviderStatus`` categories.
     Used by the MCP tools and graph nodes to update provider health on failure.
     """
-
-    # ── quota ────────────────────────────────────────────────────────
-
-    _QUOTA_PATTERNS = (
-        "quota exceeded",
-        "rate limit",
-        "too many requests",
-        "429",
-        "quota_exhausted",
-    )
-
-    # ── credit ───────────────────────────────────────────────────────
-
-    _CREDIT_PATTERNS = (
-        "insufficient funds",
-        "credit exceeded",
-        "billing issue",
-        "payment required",
-        "402",
-    )
-
-    # ── auth ─────────────────────────────────────────────────────────
-
-    _AUTH_PATTERNS = (
-        "unauthorized",
-        "invalid api key",
-        "authentication failed",
-        "forbidden",
-        "403",
-        "401",
-        "auth_error",
-    )
-
-    # ── timeout ──────────────────────────────────────────────────────
-
-    _TIMEOUT_PATTERNS = (
-        "timeout",
-        "timed out",
-        "connection reset",
-        "read timeout",
-        "connect timeout",
-    )
-
-    # ── moderation ───────────────────────────────────────────────────
-
-    _MODERATION_PATTERNS = (
-        "content policy",
-        "safety filter",
-        "moderation",
-        "blocked by policy",
-        "inappropriate content",
-        "content_filter",
-    )
-
-    # ── network ──────────────────────────────────────────────────────
-
-    _NETWORK_PATTERNS = (
-        "connection refused",
-        "name resolution",
-        "dns",
-        "network unreachable",
-        "host unreachable",
-        "no route to host",
-        "socket error",
-    )
 
     @classmethod
     def classify(cls, error_message: str) -> ClassifiedFailure:
@@ -97,60 +146,9 @@ class FailureClassifier:
         Returns a ``ClassifiedFailure`` with status, reason, and recovery info.
         """
         msg_lower = error_message.lower()
-
-        # Check quota
-        if any(p in msg_lower for p in cls._QUOTA_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.BLOCKED_QUOTA,
-                reason=f"Quota exhausted: {error_message[:120]}",
-                resume_requirements=["Wait for quota refresh or upgrade plan."],
-                is_transient=True,
-            )
-
-        # Check credit
-        if any(p in msg_lower for p in cls._CREDIT_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.BLOCKED_CREDIT,
-                reason=f"Credit exhausted: {error_message[:120]}",
-                resume_requirements=["Add credits or update billing."],
-                is_transient=False,
-            )
-
-        # Check auth
-        if any(p in msg_lower for p in cls._AUTH_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.BLOCKED_AUTH,
-                reason=f"Authentication failure: {error_message[:120]}",
-                resume_requirements=["Check API key or credentials."],
-                is_transient=False,
-            )
-
-        # Check timeout
-        if any(p in msg_lower for p in cls._TIMEOUT_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.DEGRADED,
-                reason=f"Timeout: {error_message[:120]}",
-                resume_requirements=["Retry with backoff or check network."],
-                is_transient=True,
-            )
-
-        # Check moderation
-        if any(p in msg_lower for p in cls._MODERATION_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.DEGRADED,
-                reason=f"Moderation block: {error_message[:120]}",
-                resume_requirements=["Review prompt content and retry."],
-                is_transient=False,
-            )
-
-        # Check network
-        if any(p in msg_lower for p in cls._NETWORK_PATTERNS):
-            return ClassifiedFailure(
-                status=ProviderStatus.DEGRADED,
-                reason=f"Network failure: {error_message[:120]}",
-                resume_requirements=["Check connectivity and retry."],
-                is_transient=True,
-            )
+        for rule in _FAILURE_RULES:
+            if any(pattern in msg_lower for pattern in rule.patterns):
+                return _rule_failure(rule, error_message)
 
         # Ambiguous
         return ClassifiedFailure(

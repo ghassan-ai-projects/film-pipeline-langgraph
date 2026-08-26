@@ -6,7 +6,90 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _latest_artifact_version, _ok, _services
+from ..helpers import _error, _ok, _services
+from ._shared import (
+    _constitution_tone,
+    _constitution_visual_language,
+    _load_artifact_if_present,
+    _register_active_artifact_ref,
+    _save_visual_dev_candidate,
+)
+
+
+def _style_palette_hint(store: Any, project_id: str) -> str:
+    """Best-effort palette hint from an existing EnvironmentBible."""
+    env_bible = _load_artifact_if_present(store, project_id, "visual_dev", "environment_bible")
+    if not isinstance(env_bible, dict):
+        return ""
+    return ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
+
+
+def _style_prompt(visual_language: str, tone: str, palette_hint: str) -> str:
+    """Assemble the StyleBible prompt."""
+    return (
+        f"Create a StyleBible. Visual language: {visual_language}. "
+        f"Tone: {tone}. Palette hints: {palette_hint}. "
+        "Return JSON with 'color_palette' (4-8 hex codes), "
+        "'texture', 'grain', 'visual_mood', 'reference_stills', "
+        "and 'must_not_change'."
+    )
+
+
+def _request_style_bible_output(rt: Any, prompt: str, project_id: str) -> dict[str, Any]:
+    """Obtain StyleBible JSON from the model adapter or mock fallback."""
+    runner = _services(rt).prompt_runner
+    if runner.model_adapter is None:
+        return {
+            "project_id": project_id,
+            "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
+            "texture": "gritty, painterly",
+            "grain": "subtle 16mm grain",
+            "visual_mood": "melancholic, high-contrast",
+            "reference_stills": [],
+            "must_not_change": ["color_palette"],
+        }
+    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
+    return raw if isinstance(raw, dict) else {}
+
+
+def _execute_style_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
+    """Run StyleBibleAgent over the model output; None signals invalid output."""
+    from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
+    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.handoff import AgentRegistration
+
+    agent = StyleBibleAgent(
+        AgentRegistration(
+            agent_id="style-bible-agent",
+            family=AgentFamily.DEVELOPMENT,
+            role=AgentRole.CREATOR,
+            capabilities=["style_definition"],
+            input_artifacts=["film_constitution", "environment_bible"],
+            output_artifacts=["style_bible"],
+        )
+    )
+    result = agent.execute(model_output)
+    if not agent.validate(result):
+        return None
+    return result
+
+
+def _deliver_style_bible(
+    rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
+) -> dict[str, object]:
+    """Persist the bible, publish its ref on the active project, and respond."""
+    from film_pipeline.schemas._base import ArtifactType
+
+    ref = _save_visual_dev_candidate(
+        store,
+        project_id,
+        "style_bible",
+        ArtifactType.STYLE_BIBLE,
+        "mcp.generate_style_bible",
+        bible,
+    )
+    _register_active_artifact_ref(rt, active, project_id, "style_bible_ref", ref)
+    return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
 
 
 async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
@@ -18,92 +101,21 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
-    try:
-        from film_pipeline.schemas._base import FilmPhase
-
-        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
-    except (FileNotFoundError, ValueError):
+    constitution = _load_artifact_if_present(store, project_id, "constitution", "film_constitution")
+    if constitution is None:
         return _error("FilmConstitution not found.")
 
-    visual_language = (
-        str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
+    prompt = _style_prompt(
+        _constitution_visual_language(constitution),
+        _constitution_tone(constitution),
+        _style_palette_hint(store, project_id),
     )
-    tone = str(constitution.get("tone", "")) if isinstance(constitution, dict) else ""
-    palette_hint = ""
-    try:
-        env_bible = store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
-        if isinstance(env_bible, dict):
-            palette_hint = ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
-    except (FileNotFoundError, ValueError):
-        pass
 
     try:
-        from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
-        from film_pipeline.schemas._base import AgentFamily, AgentRole, ArtifactStatus, ArtifactType
-        from film_pipeline.schemas.handoff import AgentRegistration
-
-        agent = StyleBibleAgent(
-            AgentRegistration(
-                agent_id="style-bible-agent",
-                family=AgentFamily.DEVELOPMENT,
-                role=AgentRole.CREATOR,
-                capabilities=["style_definition"],
-                input_artifacts=["film_constitution", "environment_bible"],
-                output_artifacts=["style_bible"],
-            )
-        )
-        runner = _services(rt).prompt_runner
-        model_output: dict[str, Any]
-        if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(
-                f"Create a StyleBible. Visual language: {visual_language}. "
-                f"Tone: {tone}. Palette hints: {palette_hint}. "
-                "Return JSON with 'color_palette' (4-8 hex codes), "
-                "'texture', 'grain', 'visual_mood', 'reference_stills', "
-                "and 'must_not_change'.",
-                model=runner.model_router.resolve("creative_writer"),
-            )
-            model_output = raw if isinstance(raw, dict) else {}
-        else:
-            model_output = {
-                "project_id": project_id,
-                "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
-                "texture": "gritty, painterly",
-                "grain": "subtle 16mm grain",
-                "visual_mood": "melancholic, high-contrast",
-                "reference_stills": [],
-                "must_not_change": ["color_palette"],
-            }
-
-        result = agent.execute(model_output)
-        if not agent.validate(result):
+        model_output = _request_style_bible_output(rt, prompt, project_id)
+        result = _execute_style_bible_agent(model_output)
+        if result is None:
             return _error("StyleBible agent produced invalid output.")
-        bible = result["style_bible"]
-
-        from datetime import UTC, datetime
-
-        from film_pipeline.schemas.artifact import ArtifactMetadata
-
-        next_version = (
-            _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "style_bible") + 1
-        )
-        meta = ArtifactMetadata(
-            artifact_id="style_bible",
-            artifact_type=ArtifactType.STYLE_BIBLE,
-            project_id=project_id,
-            phase=FilmPhase("visual_dev"),
-            version=next_version,
-            status=ArtifactStatus.CANDIDATE,
-            parents=[],
-            created_by="mcp.generate_style_bible",
-            created_at=datetime.now(UTC),
-        )
-        ref = store.save(bible, meta)
-        active["style_bible_ref"] = ref
-        active.setdefault("artifact_refs", []).append(ref)
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
-
-        return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
+        return _deliver_style_bible(rt, active, store, project_id, result["style_bible"])
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")

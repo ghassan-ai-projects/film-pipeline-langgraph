@@ -89,21 +89,34 @@ def artifact_scenes(body: dict[str, Any]) -> list[dict[str, Any]]:
 def scene_outline(scene: dict[str, Any]) -> list[str]:
     """Key facts about a scene, used as the reader outline."""
     outline = [str(scene.get("scene_id", "scene"))]
-    for key in (
-        "scene_heading",
-        "dramatic_function",
-        "story_function",
-        "emotional_shift",
-        "conflict",
-        "outcome",
-        "environment",
-        "camera_profile",
-        "movement",
-        "camera_movement",
-    ):
-        if scene.get(key):
-            outline.append(f"{key}: {scene[key]}")
+    _append_keyed_facts(
+        outline,
+        scene,
+        (
+            "scene_heading",
+            "dramatic_function",
+            "story_function",
+            "emotional_shift",
+            "conflict",
+            "outcome",
+            "environment",
+            "camera_profile",
+            "movement",
+            "camera_movement",
+        ),
+    )
     return outline
+
+
+def _append_keyed_facts(
+    lines: list[str],
+    scene: dict[str, Any],
+    keys: tuple[str, ...],
+) -> None:
+    """Append a ``key: value`` line for every key with a truthy value."""
+    for key in keys:
+        if scene.get(key):
+            lines.append(f"{key}: {scene[key]}")
 
 
 def render_scene(scene: dict[str, Any]) -> str:
@@ -112,26 +125,28 @@ def render_scene(scene: dict[str, Any]) -> str:
     heading = str(scene.get("scene_heading", scene.get("scene_id", "Scene")))
     if heading:
         lines.append(heading)
-    for key in (
-        "dramatic_function",
-        "story_function",
-        "conflict",
-        "emotional_shift",
-        "outcome",
-        "environment",
-        "environment_zone",
-        "environment_state",
-        "lighting_state",
-        "viewpoint",
-        "camera_profile",
-        "camera_movement",
-        "movement",
-        "coverage_role",
-        "story_moment",
-        "continuity_event",
-    ):
-        if scene.get(key):
-            lines.append(f"{key}: {scene[key]}")
+    _append_keyed_facts(
+        lines,
+        scene,
+        (
+            "dramatic_function",
+            "story_function",
+            "conflict",
+            "emotional_shift",
+            "outcome",
+            "environment",
+            "environment_zone",
+            "environment_state",
+            "lighting_state",
+            "viewpoint",
+            "camera_profile",
+            "camera_movement",
+            "movement",
+            "coverage_role",
+            "story_moment",
+            "continuity_event",
+        ),
+    )
     for action in scene.get("action_lines", []):
         lines.append(str(action))
     for dialogue in scene.get("dialogue", []):
@@ -171,12 +186,7 @@ def comments_for_target(
     artifact_id: str,
 ) -> list[OperatorComment]:
     """Operator comments attached to a scene/artifact target."""
-    return [
-        comment
-        for comment in comments
-        if comment.target_id in {target_id, artifact_id}
-        or (comment.target_type == "artifact" and comment.target_id == artifact_id)
-    ]
+    return [comment for comment in comments if comment.target_id in {target_id, artifact_id}]
 
 
 def validation_for_target(

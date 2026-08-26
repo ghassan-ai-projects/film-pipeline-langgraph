@@ -26,18 +26,15 @@ def add_operator_comment(
     project_id: str | None = None,
 ) -> OperatorComment:
     """Persist a target-scoped operator comment."""
-    if not request.body.strip():
-        raise BackendOperationError("comment body is required.")
-    if not request.target_type.strip():
-        raise BackendOperationError("comment target_type is required.")
-    if not request.target_id.strip():
-        raise BackendOperationError("comment target_id is required.")
+    body = _required_text(request.body, "comment body")
+    target_type = _required_text(request.target_type, "comment target_type")
+    target_id = _required_text(request.target_id, "comment target_id")
     state = svc._state_for_project(project_id)
     raw = svc.runtime.add_operator_comment(
         str(state["project_id"]),
-        target_type=request.target_type.strip(),
-        target_id=request.target_id.strip(),
-        body=request.body.strip(),
+        target_type=target_type,
+        target_id=target_id,
+        body=body,
         phase=request.phase.strip(),
         source=request.source.strip() or "tui",
     )
@@ -179,6 +176,14 @@ def get_audit_feed(
             )
         )
     return feed
+
+
+def _required_text(value: str, field_label: str) -> str:
+    """Return the stripped value, failing when the field is blank."""
+    text = value.strip()
+    if not text:
+        raise BackendOperationError(f"{field_label} is required.")
+    return text
 
 
 def _comment_from_raw(raw: Mapping[str, Any]) -> OperatorComment:

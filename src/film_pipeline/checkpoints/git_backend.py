@@ -17,23 +17,22 @@ class GitBackend:
 
     repo_path: Path
 
-    def _run(self, *args: str) -> str:
-        result = subprocess.run(
+    def _spawn_git(self, *args: str) -> subprocess.CompletedProcess[str]:
+        """Run git in the repo and return the raw result, unchecked."""
+        return subprocess.run(
             ["git", "-C", str(self.repo_path), *args],
             capture_output=True,
             text=True,
         )
+
+    def _run(self, *args: str) -> str:
+        result = self._spawn_git(*args)
         if result.returncode != 0:
             raise RuntimeError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
         return result.stdout.strip()
 
     def _run_ok(self, *args: str) -> bool:
-        result = subprocess.run(
-            ["git", "-C", str(self.repo_path), *args],
-            capture_output=True,
-            text=True,
-        )
-        return result.returncode == 0
+        return self._spawn_git(*args).returncode == 0
 
     def commit(self, message: str, files: list[str] | None = None) -> str:
         """Stage and commit. Returns the commit hash."""

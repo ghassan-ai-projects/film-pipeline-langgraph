@@ -21,6 +21,80 @@ REQUIRED_DELIVERY_FILES = {
     "cost_report.json",
 }
 
+_REQUIRED_MANIFEST_REFS: tuple[tuple[str, str], ...] = (
+    ("validation_report_ref", "validation report"),
+    ("cost_report_ref", "cost report"),
+    ("credits_ref", "credits"),
+)
+
+
+def _empty_delivery_result() -> dict[str, Any]:
+    """Result payload for a package that lists no files."""
+    return {
+        "total_files": 0,
+        "missing_required": sorted(REQUIRED_DELIVERY_FILES),
+        "missing_subtitles": True,
+        "missing_stills": True,
+        "issues": [
+            {
+                "code": "empty_package",
+                "severity": "blocking",
+                "message": "Delivery package has no files.",
+            }
+        ],
+    }
+
+
+def _present_basenames(files: list[dict[str, str]]) -> set[str]:
+    """Basename of every file path listed in the manifest."""
+    present_paths = {str(f.get("path", "")) for f in files}
+    return {p.split("/")[-1] for p in present_paths}
+
+
+def _flag_missing_required_files(
+    missing_required: set[str],
+    issues: list[dict[str, str]],
+) -> None:
+    """Flag each missing required delivery file by name."""
+    for mf in sorted(missing_required):
+        issues.append(
+            {
+                "code": "missing_required_asset",
+                "severity": "blocking",
+                "message": f"Missing required delivery file: {mf}",
+            }
+        )
+
+
+def _has_subtitles(manifest: dict[str, Any], basenames: set[str]) -> bool:
+    """True when the manifest declares subtitles or an SRT file is present."""
+    subtitles: list[str] = manifest.get("subtitles", [])
+    return bool(subtitles) or any("srt" in p.lower() for p in basenames)
+
+
+def _has_stills(manifest: dict[str, Any], basenames: set[str]) -> bool:
+    """True when the manifest declares stills or an image file is present."""
+    stills: list[str] = manifest.get("stills", [])
+    return bool(stills) or any(
+        ext in p.lower() for p in basenames for ext in (".png", ".jpg", ".jpeg")
+    )
+
+
+def _flag_missing_manifest_refs(
+    manifest: dict[str, Any],
+    issues: list[dict[str, str]],
+) -> None:
+    """Flag required manifest reference fields left empty."""
+    for key, label in _REQUIRED_MANIFEST_REFS:
+        if not str(manifest.get(key, "")):
+            issues.append(
+                {
+                    "code": "missing_required_asset",
+                    "severity": "blocking",
+                    "message": f"No {label} reference in delivery manifest.",
+                }
+            )
+
 
 class DeliveryCompletenessValidator(BaseValidator):
     """Validates that a delivery package contains all required assets.
@@ -54,40 +128,15 @@ class DeliveryCompletenessValidator(BaseValidator):
         files: list[dict[str, str]] = manifest.get("files", [])
 
         if not files:
-            return {
-                "total_files": 0,
-                "missing_required": sorted(REQUIRED_DELIVERY_FILES),
-                "missing_subtitles": True,
-                "missing_stills": True,
-                "issues": [
-                    {
-                        "code": "empty_package",
-                        "severity": "blocking",
-                        "message": "Delivery package has no files.",
-                    }
-                ],
-            }
+            return _empty_delivery_result()
 
-        present_paths = {str(f.get("path", "")) for f in files}
-        present_basenames = {p.split("/")[-1] for p in present_paths}
+        basenames = _present_basenames(files)
+        missing_required = REQUIRED_DELIVERY_FILES - basenames
 
-        missing_required = REQUIRED_DELIVERY_FILES - present_basenames
         issues: list[dict[str, str]] = []
+        _flag_missing_required_files(missing_required, issues)
 
-        # Blocking: missing required assets
-        if missing_required:
-            for mf in sorted(missing_required):
-                issues.append(
-                    {
-                        "code": "missing_required_asset",
-                        "severity": "blocking",
-                        "message": f"Missing required delivery file: {mf}",
-                    }
-                )
-
-        # Warning: missing subtitles (SRT)
-        subtitles: list[str] = manifest.get("subtitles", [])
-        has_subtitles = bool(subtitles) or any("srt" in p.lower() for p in present_basenames)
+        has_subtitles = _has_subtitles(manifest, basenames)
         if not has_subtitles:
             issues.append(
                 {
@@ -97,11 +146,7 @@ class DeliveryCompletenessValidator(BaseValidator):
                 }
             )
 
-        # Warning: missing stills
-        stills: list[str] = manifest.get("stills", [])
-        has_stills = bool(stills) or any(
-            ext in p.lower() for p in present_basenames for ext in (".png", ".jpg", ".jpeg")
-        )
+        has_stills = _has_stills(manifest, basenames)
         if not has_stills:
             issues.append(
                 {
@@ -111,36 +156,7 @@ class DeliveryCompletenessValidator(BaseValidator):
                 }
             )
 
-        # Check validation report and cost report
-        val_ref = str(manifest.get("validation_report_ref", ""))
-        if not val_ref:
-            issues.append(
-                {
-                    "code": "missing_required_asset",
-                    "severity": "blocking",
-                    "message": "No validation report reference in delivery manifest.",
-                }
-            )
-
-        cost_ref = str(manifest.get("cost_report_ref", ""))
-        if not cost_ref:
-            issues.append(
-                {
-                    "code": "missing_required_asset",
-                    "severity": "blocking",
-                    "message": "No cost report reference in delivery manifest.",
-                }
-            )
-
-        credits_ref = str(manifest.get("credits_ref", ""))
-        if not credits_ref:
-            issues.append(
-                {
-                    "code": "missing_required_asset",
-                    "severity": "blocking",
-                    "message": "No credits reference in delivery manifest.",
-                }
-            )
+        _flag_missing_manifest_refs(manifest, issues)
 
         return {
             "total_files": len(files),

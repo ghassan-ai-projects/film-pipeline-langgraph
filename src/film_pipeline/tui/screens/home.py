@@ -120,16 +120,21 @@ class ProjectGalleryScreen(Screen[None]):
             self._projects = list(state.snapshot.projects)
         self._refresh_view()
 
+    def _visible_projects(self) -> list[ProjectListItem]:
+        """Projects matching the current filter, in display order."""
+        if not self._filter:
+            return list(self._projects)
+        needle = self._filter.lower()
+        return [
+            project
+            for project in self._projects
+            if needle in project.project_id.lower() or needle in project.title.lower()
+        ]
+
     def _refresh_view(self) -> None:
         table = self.query_one("#project_table", DataTable)
         table.clear(columns=True)
-        visible = [
-            p
-            for p in self._projects
-            if not self._filter
-            or self._filter.lower() in p.project_id.lower()
-            or self._filter.lower() in p.title.lower()
-        ]
+        visible = self._visible_projects()
         empty = self.query_one("#empty_state", Static)
         if not visible:
             empty.styles.display = "block"
@@ -174,15 +179,7 @@ class ProjectGalleryScreen(Screen[None]):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.data_table.id != "project_table":
             return
-        if not self._projects:
-            return
-        visible = [
-            p
-            for p in self._projects
-            if not self._filter
-            or self._filter.lower() in p.project_id.lower()
-            or self._filter.lower() in p.title.lower()
-        ]
+        visible = self._visible_projects()
         if event.cursor_row < 0 or event.cursor_row >= len(visible):
             return
         project = visible[event.cursor_row]

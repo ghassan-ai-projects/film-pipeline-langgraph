@@ -13,41 +13,56 @@ def validate_environment() -> list[str]:
 
     Returns a list of actionable error messages. Empty list = ready.
     """
-    issues: list[str] = []
-
-    # Check profile directory
-    profiles_dir = Path("profiles")
-    if not profiles_dir.is_dir():
-        issues.append("profiles/ directory not found. Create it with at least one profile YAML.")
-
-    # Check KB manifest
-    kb_manifest = kb_manifest_path()
-    if not kb_manifest.exists():
-        issues.append(
-            "film-knowledge-base/index/kb-manifest.yaml not found. "
-            "The KB manifest is required for context packets."
-        )
-
-    # Check writable artifacts directory
-    artifacts_dir = Path("artifacts")
-    if artifacts_dir.exists() and not artifacts_dir.is_dir():
-        issues.append("artifacts exists but is not a directory.")
-    if artifacts_dir.exists():
-        try:
-            test = artifacts_dir / ".write_test"
-            test.touch()
-            test.unlink()
-        except OSError:
-            issues.append("Cannot write to artifacts/ directory.")
-
-    if os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower() == "real" and not os.getenv(
-        "OPENROUTER_API_KEY"
-    ):
-        issues.append("OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real.")
-
-    return issues
+    return [
+        *_missing_profiles_dir_issues(),
+        *_missing_kb_manifest_issues(),
+        *_unusable_artifacts_dir_issues(),
+        *_missing_real_mode_credentials_issues(),
+    ]
 
 
 def bootstrap_ok() -> bool:
     """Return True if the environment passes bootstrap checks."""
     return len(validate_environment()) == 0
+
+
+def _missing_profiles_dir_issues() -> list[str]:
+    """Report absence of the profiles directory."""
+    if Path("profiles").is_dir():
+        return []
+    return ["profiles/ directory not found. Create it with at least one profile YAML."]
+
+
+def _missing_kb_manifest_issues() -> list[str]:
+    """Report absence of the KB manifest."""
+    if kb_manifest_path().exists():
+        return []
+    return [
+        "film-knowledge-base/index/kb-manifest.yaml not found. "
+        "The KB manifest is required for context packets."
+    ]
+
+
+def _unusable_artifacts_dir_issues() -> list[str]:
+    """Report an artifacts path that exists but cannot hold written artifacts."""
+    artifacts_dir = Path("artifacts")
+    if not artifacts_dir.exists():
+        return []
+    issues: list[str] = []
+    if not artifacts_dir.is_dir():
+        issues.append("artifacts exists but is not a directory.")
+    try:
+        probe = artifacts_dir / ".write_test"
+        probe.touch()
+        probe.unlink()
+    except OSError:
+        issues.append("Cannot write to artifacts/ directory.")
+    return issues
+
+
+def _missing_real_mode_credentials_issues() -> list[str]:
+    """Report a real-mode configuration without an OpenRouter API key."""
+    mcp_mode = os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower()
+    if mcp_mode != "real" or os.getenv("OPENROUTER_API_KEY"):
+        return []
+    return ["OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real."]

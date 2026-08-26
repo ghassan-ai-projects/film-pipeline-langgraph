@@ -49,6 +49,17 @@ def validation_issue_rows(
     return rows
 
 
+def _artifact_identity(artifact: ArtifactDetail) -> dict[str, object]:
+    """Fields identifying the artifact a reader view describes, plus its state."""
+    return {
+        "artifact_id": artifact.artifact_id,
+        "artifact_type": artifact.artifact_type,
+        "phase": artifact.phase,
+        "version": artifact.version,
+        "status": artifact.status,
+    }
+
+
 def build_artifact_reader(
     artifact: ArtifactDetail,
     *,
@@ -65,26 +76,13 @@ def build_artifact_reader(
         subtitle = f"scene {scene_id} from {artifact.artifact_id}:v{artifact.version}"
         outline = scene_outline(scene)
         readable_body = render_scene(scene)
-        metadata = {
-            "scene_id": scene_id,
-            "artifact_id": artifact.artifact_id,
-            "artifact_type": artifact.artifact_type,
-            "phase": artifact.phase,
-            "version": artifact.version,
-            "status": artifact.status,
-        }
+        metadata = {"scene_id": scene_id, **_artifact_identity(artifact)}
     else:
         title = f"{artifact.artifact_id}:v{artifact.version}"
         subtitle = f"{artifact.artifact_type} | {artifact.phase} | {artifact.status}"
         outline = artifact_outline(body)
         readable_body = render_artifact_body(body)
-        metadata = {
-            "artifact_id": artifact.artifact_id,
-            "artifact_type": artifact.artifact_type,
-            "phase": artifact.phase,
-            "version": artifact.version,
-            "status": artifact.status,
-        }
+        metadata = _artifact_identity(artifact)
         for key in ("created_by", "reviewed_by", "validation_refs", "approval_ref", "built_from"):
             if key in body:
                 metadata[key] = body[key]

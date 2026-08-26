@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from film_pipeline.post.assembly_agent import AssemblyPlan
 from film_pipeline.post.delivery_packaging_agent import DeliveryPackage
-from film_pipeline.post.transition_agent import TransitionPlan
+from film_pipeline.post.transition_agent import TRANSITION_TYPES, TransitionPlan
 
 
 @dataclass
@@ -31,7 +31,7 @@ class PostValidator:
         if plan.total_count != expected:
             issues.append(f"Expected {expected} transitions, got {plan.total_count}.")
         for t in plan.transitions:
-            if t["type"] not in ("cut", "dissolve", "crossfade", "fade_in", "fade_out"):
+            if t["type"] not in TRANSITION_TYPES:
                 issues.append(f"Unknown transition type: {t['type']}")
         return issues
 

@@ -48,12 +48,17 @@ class SceneBrowser(DataTable[str]):
             self._rows = sorted(self._scenes.values(), key=lambda s: str(s.get("scene_id", "")))
         self._refresh_view()
 
+    @staticmethod
+    def _artifact_kind(artifact: dict[str, object]) -> str:
+        """Scene-bearing type an artifact row claims, falling back to its id."""
+        return str(artifact.get("artifact_type", artifact.get("artifact_id", "")))
+
     def _collect_scenes(self, state: AppState) -> dict[str, dict[str, object]]:
         scenes: dict[str, dict[str, object]] = {}
         artifacts = list(state.snapshot.artifacts) if state.snapshot else []
 
         def merge_rank(artifact: dict[str, object]) -> int:
-            kind = str(artifact.get("artifact_type", artifact.get("artifact_id", "")))
+            kind = self._artifact_kind(artifact)
             if kind in self._SCENE_ARTIFACT_TYPES:
                 return self._SCENE_ARTIFACT_TYPES.index(kind)
             return -1
@@ -79,7 +84,7 @@ class SceneBrowser(DataTable[str]):
         Artifact list rows are summaries without bodies, so the browser pulls
         the full artifact for the few types that contain scenes.
         """
-        kind = str(artifact.get("artifact_type", artifact.get("artifact_id", "")))
+        kind = self._artifact_kind(artifact)
         if kind not in self._SCENE_ARTIFACT_TYPES:
             return None
         if state.dashboard is None:

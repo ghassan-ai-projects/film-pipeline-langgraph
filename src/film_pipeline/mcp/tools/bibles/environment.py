@@ -6,63 +6,48 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _latest_artifact_version, _ok, _services
-from ._shared import _extract_script_text
+from ..helpers import _error, _ok, _services
+from ._shared import (
+    _constitution_theme,
+    _load_artifact_if_present,
+    _load_script_text,
+    _register_active_artifact_ref,
+    _save_visual_dev_candidate,
+)
 
 
-async def generate_environment_bible(args: dict[str, object]) -> dict[str, object]:
-    """Generate an EnvironmentBible from Script + FilmConstitution.
+def _constitution_visual_language(constitution: Any) -> str:
+    """Visual-language text from the FilmConstitution mapping, if shaped as one."""
+    return str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
 
-    Produces a locked environment description (locked_prompt_block, fingerprint,
-    zones, viewpoints, lighting states, color palette) used by
-    generate_reference_images for structured prompt construction.
-    """
-    rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
 
-    project_id = str(active["project_id"])
-    environment_id = str(args.get("environment_id", "")).strip()
-    if not environment_id:
-        return _error("environment_id is required.")
-    environment_name = str(args.get("environment_name", environment_id)).strip()
-
-    store = _services(rt).artifact_store
-
-    try:
-        from film_pipeline.schemas._base import FilmPhase
-
-        script_data = store.load(project_id, FilmPhase("script"), "script", 1)
-        script_text = _extract_script_text(script_data)
-    except (FileNotFoundError, ValueError):
-        return _error("Script artifact not found. Run script phase first.")
-
-    try:
-        constitution = store.load(project_id, FilmPhase("constitution"), "film_constitution", 1)
-    except (FileNotFoundError, ValueError):
-        return _error("FilmConstitution not found. Run constitution phase first.")
-
-    constitution_text = (
-        str(constitution.get("visual_language", "")) if isinstance(constitution, dict) else ""
-    )
-    theme_text = str(constitution.get("theme", "")) if isinstance(constitution, dict) else ""
-
-    prompt = f"""# Role
+def _environment_prompt_mission(environment_name: str, environment_id: str) -> str:
+    """Role and core-task section of the EnvironmentBible prompt."""
+    return f"""# Role
 You are an environment design specialist. Given a script and film constitution,
 produce a detailed EnvironmentBible for a single location.
 
 # Core Task
 Create an EnvironmentBible for environment '{environment_name}' (id: {environment_id}).
 
-# Context
+"""
+
+
+def _environment_prompt_sources(theme_text: str, constitution_text: str, script_text: str) -> str:
+    """Theme, visual language, and script context section of the prompt."""
+    return f"""# Context
 Film Theme: {theme_text}
 Visual Language: {constitution_text}
 
 Script:
 {script_text[:8000]}
 
-# Constraints
+"""
+
+
+def _environment_prompt_constraints() -> str:
+    """Quality-bar constraints section of the prompt."""
+    return """# Constraints
 - locked_prompt_block must be a one-paragraph description of the environment
   injected verbatim into every prompt. Specific and durable.
 - fingerprint.text must be a compressed invariant block (2-3 sentences) that
@@ -74,7 +59,14 @@ Script:
   environment's color identity.
 - must_not_change: 3-5 invariants the agents must never alter.
 
-# Output Format
+"""
+
+
+def _environment_prompt_json_contract(
+    environment_id: str, environment_name: str, project_id: str
+) -> str:
+    """Output-format section of the prompt with the JSON skeleton."""
+    return f"""# Output Format
 Return ONLY valid JSON:
 {{
   "environment_id": "{environment_id}",
@@ -101,85 +93,144 @@ Return ONLY valid JSON:
   "must_not_change": ["invariant 1", "invariant 2"]
 }}"""
 
+
+def _environment_prompt(
+    environment_id: str,
+    environment_name: str,
+    project_id: str,
+    theme_text: str,
+    constitution_text: str,
+    script_text: str,
+) -> str:
+    """Assemble the full EnvironmentBible prompt for one location."""
+    return (
+        _environment_prompt_mission(environment_name, environment_id)
+        + _environment_prompt_sources(theme_text, constitution_text, script_text)
+        + _environment_prompt_constraints()
+        + _environment_prompt_json_contract(environment_id, environment_name, project_id)
+    )
+
+
+def _request_environment_bible_output(
+    rt: Any, prompt: str, environment_id: str, environment_name: str, project_id: str
+) -> dict[str, Any]:
+    """Obtain EnvironmentBible JSON from the model adapter or mock fallback."""
+    runner = _services(rt).prompt_runner
+    if runner.model_adapter is None:
+        return {
+            "environment_id": environment_id,
+            "project_id": project_id,
+            "name": environment_name,
+            "locked_prompt_block": f"A {environment_name} — generated in mock mode.",
+            "invariants": [],
+            "zones": [],
+            "viewpoints": [],
+            "lighting_states": [],
+            "color_palette": ["#1a1a2e", "#e94560"],
+            "fingerprint": {"text": f"The {environment_name} — mock mode."},
+            "reference_assets": [],
+            "must_not_change": ["locked_prompt_block"],
+        }
+    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
+    return raw if isinstance(raw, dict) else {}
+
+
+def _execute_environment_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
+    """Run EnvironmentBibleAgent over the model output; None signals invalid output."""
+    from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
+    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.handoff import AgentRegistration
+
+    agent = EnvironmentBibleAgent(
+        AgentRegistration(
+            agent_id="environment-bible-agent",
+            family=AgentFamily.DEVELOPMENT,
+            role=AgentRole.CREATOR,
+            capabilities=["environment_design"],
+            input_artifacts=["script", "film_constitution"],
+            output_artifacts=["environment_bible"],
+        )
+    )
+    result = agent.execute(model_output)
+    if not agent.validate(result):
+        return None
+    return result
+
+
+def _deliver_environment_bible(
+    rt: Any,
+    active: dict[str, Any],
+    store: Any,
+    project_id: str,
+    environment_id: str,
+    bible: Any,
+) -> dict[str, object]:
+    """Persist the bible, publish its ref on the active project, and respond."""
+    from film_pipeline.schemas._base import ArtifactType
+
+    ref = _save_visual_dev_candidate(
+        store,
+        project_id,
+        "environment_bible",
+        ArtifactType.ENVIRONMENT_BIBLE,
+        "mcp.generate_environment_bible",
+        bible,
+    )
+    _register_active_artifact_ref(rt, active, project_id, "environment_bible_ref", ref)
+    return _ok(
+        environment_bible_ref=ref,
+        environment_id=environment_id,
+        locked_prompt_block=bible.locked_prompt_block,
+        palette=bible.color_palette,
+    )
+
+
+async def generate_environment_bible(args: dict[str, object]) -> dict[str, object]:
+    """Generate an EnvironmentBible from Script + FilmConstitution.
+
+    Produces a locked environment description (locked_prompt_block, fingerprint,
+    zones, viewpoints, lighting states, color palette) used by
+    generate_reference_images for structured prompt construction.
+    """
+    rt = tools_pkg.get_runtime()
+    active = rt.get_active()
+    if not active:
+        return _error("No active project.")
+
+    project_id = str(active["project_id"])
+    environment_id = str(args.get("environment_id", "")).strip()
+    if not environment_id:
+        return _error("environment_id is required.")
+    environment_name = str(args.get("environment_name", environment_id)).strip()
+
+    store = _services(rt).artifact_store
+
+    script_text = _load_script_text(store, project_id)
+    if script_text is None:
+        return _error("Script artifact not found. Run script phase first.")
+
+    constitution = _load_artifact_if_present(store, project_id, "constitution", "film_constitution")
+    if constitution is None:
+        return _error("FilmConstitution not found. Run constitution phase first.")
+
+    prompt = _environment_prompt(
+        environment_id,
+        environment_name,
+        project_id,
+        _constitution_theme(constitution),
+        _constitution_visual_language(constitution),
+        script_text,
+    )
+
     try:
-        from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
-        from film_pipeline.schemas._base import AgentFamily, AgentRole
-        from film_pipeline.schemas.handoff import AgentRegistration
-
-        agent = EnvironmentBibleAgent(
-            AgentRegistration(
-                agent_id="environment-bible-agent",
-                family=AgentFamily.DEVELOPMENT,
-                role=AgentRole.CREATOR,
-                capabilities=["environment_design"],
-                input_artifacts=["script", "film_constitution"],
-                output_artifacts=["environment_bible"],
-            )
+        model_output = _request_environment_bible_output(
+            rt, prompt, environment_id, environment_name, project_id
         )
-
-        runner = _services(rt).prompt_runner
-        model_output: dict[str, Any]
-        if runner.model_adapter is not None:
-            raw = runner.model_adapter.chat(
-                prompt, model=runner.model_router.resolve("creative_writer")
-            )
-            model_output = raw if isinstance(raw, dict) else {}
-        else:
-            model_output = {
-                "environment_id": environment_id,
-                "project_id": project_id,
-                "name": environment_name,
-                "locked_prompt_block": f"A {environment_name} — generated in mock mode.",
-                "invariants": [],
-                "zones": [],
-                "viewpoints": [],
-                "lighting_states": [],
-                "color_palette": ["#1a1a2e", "#e94560"],
-                "fingerprint": {"text": f"The {environment_name} — mock mode."},
-                "reference_assets": [],
-                "must_not_change": ["locked_prompt_block"],
-            }
-
-        result = agent.execute(model_output)
-        if not agent.validate(result):
+        result = _execute_environment_bible_agent(model_output)
+        if result is None:
             return _error("EnvironmentBible agent produced invalid output.")
-
-        bible = result["environment_bible"]
-
-        from datetime import UTC, datetime
-
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
-        from film_pipeline.schemas.artifact import ArtifactMetadata
-
-        next_version = (
-            _latest_artifact_version(
-                store, project_id, FilmPhase("visual_dev"), "environment_bible"
-            )
-            + 1
-        )
-        meta = ArtifactMetadata(
-            artifact_id="environment_bible",
-            artifact_type=ArtifactType.ENVIRONMENT_BIBLE,
-            project_id=project_id,
-            phase=FilmPhase("visual_dev"),
-            version=next_version,
-            status=ArtifactStatus.CANDIDATE,
-            parents=[],
-            created_by="mcp.generate_environment_bible",
-            created_at=datetime.now(UTC),
-        )
-        ref = store.save(bible, meta)
-
-        active["environment_bible_ref"] = ref
-        active.setdefault("artifact_refs", []).append(ref)
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
-
-        return _ok(
-            environment_bible_ref=ref,
-            environment_id=environment_id,
-            locked_prompt_block=bible.locked_prompt_block,
-            palette=bible.color_palette,
+        return _deliver_environment_bible(
+            rt, active, store, project_id, environment_id, result["environment_bible"]
         )
 
     except Exception as exc:

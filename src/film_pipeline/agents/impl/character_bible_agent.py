@@ -39,65 +39,22 @@ class CharacterBibleAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
+        """Parse model output into a CharacterBible artifact."""
         data = _normalize_model_output(model_output)
-
-        identity_data = data.get("visual_identity", data.get("identity", {}))
-        if not isinstance(identity_data, dict):
-            identity_data = {}
-
-        voice_data = data.get("voice_rules", data.get("voice", {}))
-        if not isinstance(voice_data, dict):
-            voice_data = {}
-
-        wardrobe_data = data.get("wardrobe_rules", data.get("wardrobe", {}))
-        if not isinstance(wardrobe_data, dict):
-            wardrobe_data = {}
-
-        arc_data = data.get("emotional_arc", {})
-        if not isinstance(arc_data, dict):
-            arc_data = {}
-
-        relationships_data = data.get("relationship_map", data.get("relationships", []))
-        if not isinstance(relationships_data, list):
-            relationships_data = []
-
+        character_id = str(data.get("character_id", ""))
+        identity_data = _section_dict(data, "visual_identity", "identity")
+        voice_data = _section_dict(data, "voice_rules", "voice")
+        wardrobe_data = _section_dict(data, "wardrobe_rules", "wardrobe")
+        arc_data = _as_dict(data.get("emotional_arc", {}))
+        relationships = _as_list(data.get("relationship_map", data.get("relationships", [])))
         bible = CharacterBible(
-            character_id=str(data.get("character_id", "")),
+            character_id=character_id,
             project_id=str(data.get("project_id", "")),
-            visual_identity=CharacterIdentity(
-                character_id=str(data.get("character_id", "")),
-                name=str(identity_data.get("name", "")),
-                role=str(identity_data.get("role", "")),
-                age=str(identity_data.get("age", "")),
-                physical_description=str(identity_data.get("physical_description", "")),
-                identity_block=str(identity_data.get("identity_block", "")),
-            ),
-            voice_rules=VoiceRules(
-                cadence=str(voice_data.get("cadence", "")),
-                vocabulary=[str(v) for v in voice_data.get("vocabulary", [])],
-                forbidden_phrasings=[str(p) for p in voice_data.get("forbidden_phrasings", [])],
-                signature_moves=[str(m) for m in voice_data.get("signature_moves", [])],
-            ),
-            wardrobe_rules=WardrobeRules(
-                baseline=str(wardrobe_data.get("baseline", "")),
-                act_variants={
-                    str(k): str(v) for k, v in wardrobe_data.get("act_variants", {}).items()
-                },
-            ),
-            emotional_arc=EmotionalArc(
-                start_state=str(arc_data.get("start_state", "")),
-                midpoint_state=str(arc_data.get("midpoint_state", "")),
-                end_state=str(arc_data.get("end_state", "")),
-                key_turning_points=[str(t) for t in arc_data.get("key_turning_points", [])],
-            ),
-            relationship_map=[
-                RelationshipMap(
-                    other_character_id=str(r.get("other_character_id", "")),
-                    relation=str(r.get("relation", "")),
-                    evolution=str(r.get("evolution", "")),
-                )
-                for r in relationships_data
-            ],
+            visual_identity=_build_visual_identity(character_id, identity_data),
+            voice_rules=_build_voice_rules(voice_data),
+            wardrobe_rules=_build_wardrobe_rules(wardrobe_data),
+            emotional_arc=_build_emotional_arc(arc_data),
+            relationship_map=[_build_relationship(r) for r in relationships],
             reference_assets=[str(a) for a in data.get("reference_assets", [])],
             must_not_change=[str(m) for m in data.get("must_not_change", [])],
         )
@@ -108,6 +65,73 @@ class CharacterBibleAgent(BaseAgent):
         if not isinstance(bible, CharacterBible):
             return False
         return bool(bible.character_id and bible.visual_identity.identity_block)
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    """Coerce an optional or mistyped section to an empty dict."""
+    return value if isinstance(value, dict) else {}
+
+
+def _as_list(value: Any) -> list[Any]:
+    """Coerce an optional or mistyped section to an empty list."""
+    if not isinstance(value, list):
+        return []
+    return value
+
+
+def _section_dict(data: dict[str, Any], primary_key: str, fallback_key: str) -> dict[str, Any]:
+    """Read a dict section honoring the legacy two-key fallback order."""
+    raw = data.get(primary_key, data.get(fallback_key, {}))
+    return _as_dict(raw)
+
+
+def _build_visual_identity(character_id: str, identity_data: dict[str, Any]) -> CharacterIdentity:
+    """Build the CharacterIdentity sub-model from raw identity fields."""
+    return CharacterIdentity(
+        character_id=character_id,
+        name=str(identity_data.get("name", "")),
+        role=str(identity_data.get("role", "")),
+        age=str(identity_data.get("age", "")),
+        physical_description=str(identity_data.get("physical_description", "")),
+        identity_block=str(identity_data.get("identity_block", "")),
+    )
+
+
+def _build_voice_rules(voice_data: dict[str, Any]) -> VoiceRules:
+    """Build the VoiceRules sub-model from raw voice fields."""
+    return VoiceRules(
+        cadence=str(voice_data.get("cadence", "")),
+        vocabulary=[str(v) for v in voice_data.get("vocabulary", [])],
+        forbidden_phrasings=[str(p) for p in voice_data.get("forbidden_phrasings", [])],
+        signature_moves=[str(m) for m in voice_data.get("signature_moves", [])],
+    )
+
+
+def _build_wardrobe_rules(wardrobe_data: dict[str, Any]) -> WardrobeRules:
+    """Build the WardrobeRules sub-model from raw wardrobe fields."""
+    return WardrobeRules(
+        baseline=str(wardrobe_data.get("baseline", "")),
+        act_variants={str(k): str(v) for k, v in wardrobe_data.get("act_variants", {}).items()},
+    )
+
+
+def _build_emotional_arc(arc_data: dict[str, Any]) -> EmotionalArc:
+    """Build the EmotionalArc sub-model from raw arc fields."""
+    return EmotionalArc(
+        start_state=str(arc_data.get("start_state", "")),
+        midpoint_state=str(arc_data.get("midpoint_state", "")),
+        end_state=str(arc_data.get("end_state", "")),
+        key_turning_points=[str(t) for t in arc_data.get("key_turning_points", [])],
+    )
+
+
+def _build_relationship(entry: dict[str, Any]) -> RelationshipMap:
+    """Build one RelationshipMap entry from a raw mapping."""
+    return RelationshipMap(
+        other_character_id=str(entry.get("other_character_id", "")),
+        relation=str(entry.get("relation", "")),
+        evolution=str(entry.get("evolution", "")),
+    )
 
 
 def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:

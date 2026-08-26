@@ -1,33 +1,24 @@
-"""Approval gate, revision, and repair nodes — the human-in-the-loop control plane."""
+"""Approval gate and revision nodes — the human-in-the-loop control plane."""
 
 from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any, cast
 
-from film_pipeline.graph.nodes._agent import (
-    _run_agent,
-    _save_artifact,
+from film_pipeline.graph.nodes._agent import _run_agent
+from film_pipeline.graph.nodes._repair_loop import (
+    _PHASE_NODES,
+    repair_phase_node,
 )
 from film_pipeline.graph.nodes._shared import (
     _apply_external_state,
     _get_services,
     _require_human_approval,
 )
-from film_pipeline.graph.nodes.generation import generation_node
-from film_pipeline.graph.nodes.prep import (
-    constitution_node,
-    development_node,
-    intake_node,
-    script_node,
-)
-from film_pipeline.graph.nodes.qc import qc_node
-from film_pipeline.graph.nodes.visual import (
-    gen_planning_node,
-    shot_bible_node,
-    visual_dev_node,
-)
-from film_pipeline.graph.nodes.wrapup import delivery_node, post_node
+
+# The bounded repair loop lives in ``_repair_loop``; these re-exports keep the
+# historical ``graph.nodes.approval`` import paths working.
+__all__ = ["_PHASE_NODES", "repair_phase_node"]
 
 
 def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
@@ -58,6 +49,147 @@ def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
     return result
 
 
+def _count_blocking_issues(state: dict[str, Any]) -> int:
+    """Count blocking-severity entries in state's issues (pure read)."""
+    issues = state.get("issues", []) or []
+    return sum(1 for i in issues if i.get("severity") == "blocking")
+
+
+def _orchestrator_working_state(state: dict[str, Any]) -> dict[str, Any]:
+    """Deep-copied ``_orchestrator__*`` slice of state with defaults ensured."""
+    from film_pipeline.graph.orchestrator_state import ensure_orchestrator_state
+
+    working = {
+        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
+    }
+    ensure_orchestrator_state(working)
+    return working
+
+
+def _apply_headless_decision(state: dict[str, Any], stalled: bool) -> dict[str, Any] | None:
+    """Apply an autonomous orchestrator decision; ``None`` falls through to the fallback."""
+    if stalled:
+        return None
+    orch_decision = _run_orchestrator_agent(state)
+    if orch_decision is None:
+        return None
+    action = orch_decision.get("action", "escalate")
+    if action == "approve":
+        return approve_phase_node(state)
+    if action == "revise":
+        state["_repair_feedback"] = orch_decision.get("feedback", "")
+        preserve = orch_decision.get("preserve", [])
+        if preserve:
+            state["_repair_feedback"] += "\n\nPreserve: " + "; ".join(str(p) for p in preserve)
+        return request_revision_node(state)
+    # escalate: fall through to clean/buggy fallback below
+    return None
+
+
+def _advisory_recommendation(state: dict[str, Any], stalled: bool) -> dict[str, Any] | None:
+    """Run the orchestrator agent for an advisory recommendation; the human decides."""
+    if stalled:
+        return None
+    orch_decision = _run_orchestrator_agent(state)
+    if orch_decision is None:
+        return None
+    return {
+        "action": orch_decision.get("action", "escalate"),
+        "feedback": orch_decision.get("feedback", ""),
+        "preserve": orch_decision.get("preserve", []),
+    }
+
+
+def _build_gate_payload(
+    state: dict[str, Any],
+    phase: str,
+    stalled: bool,
+    recommendation: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the interrupt payload shown to the human reviewer (pre-interrupt only)."""
+    gate = str(state.get("human_approval_phase", ""))
+    blocking_count = _count_blocking_issues(state)
+
+    allowed_actions: list[str] = []
+    if blocking_count == 0:
+        allowed_actions.append("approve_phase")
+    if stalled:
+        allowed_actions.append("escalate")
+    else:
+        allowed_actions.append("request_revision")
+
+    return {
+        "project_id": state.get("project_id", ""),
+        "phase": phase,
+        "gate": gate,
+        "artifact_refs": state.get("artifact_refs", []),
+        "blocking_issue_count": blocking_count,
+        "stalled": stalled,
+        "allowed_actions": allowed_actions,
+        "recommendation": recommendation,
+    }
+
+
+def _normalize_decision(decision: Any) -> tuple[str, str, dict[str, Any]]:
+    """Normalize a resume value into ``(action, note, external_state)``.
+
+    ``external_state`` carries mutations sent via ``Command(resume=...)``;
+    empty when the resume value does not bear a dict-shaped ``_external_state``.
+    """
+    if isinstance(decision, dict):
+        external_state = decision.get("_external_state")
+        return (
+            str(decision.get("action", "")),
+            str(decision.get("note", "")),
+            external_state if isinstance(external_state, dict) else {},
+        )
+    if isinstance(decision, str):
+        return decision, "", {}
+    return "await", "", {}
+
+
+def _merge_external_fixes(
+    state: dict[str, Any],
+    state_updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge externally resolved issues into state before the approval guard runs.
+
+    Ordering matters: stale blockers (already fixed outside the graph) would
+    otherwise wedge the gate.
+    """
+    if not state_updates.get("issues"):
+        return state
+    from film_pipeline.graph.state_schema import merge_issues
+
+    return {
+        **state,
+        "issues": merge_issues(
+            cast("list[dict[str, object]]", state.get("issues", [])),
+            cast("list[dict[str, object]]", state_updates["issues"]),
+        ),
+    }
+
+
+def _route_decision(
+    state: dict[str, Any],
+    action: str,
+    note: str,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    """Dispatch a normalized gate decision; unrecognized actions yield bare updates."""
+    if action in ("approve", "approve_phase"):
+        result = approve_phase_node(state)
+        result.update(updates)
+        return result
+    if action in ("revise", "request_revision"):
+        if note:
+            state["_revision_note"] = note
+        result = request_revision_node(state)
+        result.update(updates)
+        return result
+    return updates
+
+
 def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     """Pause the graph for human review. Resumes via Command(resume=decision).
 
@@ -86,105 +218,25 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # ── Headless / auto-approve mode ───────────────────────────────────
     if not require_human:
-        if not stalled:
-            orch_decision = _run_orchestrator_agent(state)
-            if orch_decision is not None:
-                action = orch_decision.get("action", "escalate")
-                if action == "approve":
-                    return approve_phase_node(state)
-                if action == "revise":
-                    state["_repair_feedback"] = orch_decision.get("feedback", "")
-                    preserve = orch_decision.get("preserve", [])
-                    if preserve:
-                        state["_repair_feedback"] += "\n\nPreserve: " + "; ".join(
-                            str(p) for p in preserve
-                        )
-                    return request_revision_node(state)
-                # escalate: fall through to clean/buggy fallback below
-
-        issues: list[dict[str, Any]] = state.get("issues", [])
-        blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
-        if blocking_count == 0:
-            return approve_phase_node(state)
-        return {"approved": False, "human_approval_required": False}
+        return _apply_headless_decision(state, stalled) or (
+            approve_phase_node(state)
+            if _count_blocking_issues(state) == 0
+            else {"approved": False, "human_approval_required": False}
+        )
 
     # ── Human gate (default) ───────────────────────────────────────────
     # The orchestrator may prepare a recommendation, but the human decides.
-    recommendation: dict[str, Any] | None = None
-    if not stalled:
-        orch_decision = _run_orchestrator_agent(state)
-        if orch_decision is not None:
-            recommendation = {
-                "action": orch_decision.get("action", "escalate"),
-                "feedback": orch_decision.get("feedback", ""),
-                "preserve": orch_decision.get("preserve", []),
-            }
+    recommendation = _advisory_recommendation(state, stalled)
 
     from langgraph.types import interrupt
 
-    gate = str(state.get("human_approval_phase", ""))
-    issues = state.get("issues", [])
-    blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
-
-    allowed_actions: list[str] = []
-    if blocking_count == 0:
-        allowed_actions.append("approve_phase")
-    if stalled:
-        allowed_actions.append("escalate")
-    else:
-        allowed_actions.append("request_revision")
-
-    payload: dict[str, Any] = {
-        "project_id": state.get("project_id", ""),
-        "phase": phase,
-        "gate": gate,
-        "artifact_refs": state.get("artifact_refs", []),
-        "blocking_issue_count": blocking_count,
-        "stalled": stalled,
-        "allowed_actions": allowed_actions,
-        "recommendation": recommendation,
-    }
+    payload = _build_gate_payload(state, phase, stalled, recommendation)
 
     decision = interrupt(payload)
-    state_updates: dict[str, Any] = {}
-
-    # Normalize the decision
-    if isinstance(decision, dict):
-        action = str(decision.get("action", ""))
-        note = str(decision.get("note", ""))
-        external_state = decision.get("_external_state")
-        if isinstance(external_state, dict):
-            state_updates = _apply_external_state(state, external_state)
-    elif isinstance(decision, str):
-        action = decision
-        note = ""
-    else:
-        action = "await"
-
-    if state_updates.get("issues"):
-        # Apply externally resolved issues before the approval guard runs so
-        # stale blockers (already fixed outside the graph) cannot wedge it.
-        from film_pipeline.graph.state_schema import merge_issues
-
-        state = {
-            **state,
-            "issues": merge_issues(
-                cast("list[dict[str, object]]", state.get("issues", [])),
-                cast("list[dict[str, object]]", state_updates["issues"]),
-            ),
-        }
-
-    if action in ("approve", "approve_phase"):
-        result = approve_phase_node(state)
-        result.update(state_updates)
-        return result
-    if action in ("revise", "request_revision"):
-        if note:
-            state["_revision_note"] = note
-        result = request_revision_node(state)
-        result.update(state_updates)
-        return result
-    return state_updates
+    action, note, external_state = _normalize_decision(decision)
+    state_updates = _apply_external_state(state, external_state) if external_state else {}
+    state = _merge_external_fixes(state, state_updates)
+    return _route_decision(state, action, note, state_updates)
 
 
 def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -195,22 +247,16 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     only the keys this node actually changes are returned.
     """
     # ── Guard: reject approval when structural issues exist ──────────
-    issues: list[dict[str, Any]] = state.get("issues", []) or []
-    blocking = [i for i in issues if i.get("severity") == "blocking"]
-    if blocking:
+    if _count_blocking_issues(state):
         return {"approved": False, "_approval_blocked_by_issues": True}
 
     # Promote all candidate refs to approved
     from film_pipeline.graph.orchestrator_state import (
-        ensure_orchestrator_state,
         get_candidate_refs,
         set_approved_ref,
     )
 
-    working = {
-        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
-    }
-    ensure_orchestrator_state(working)
+    working = _orchestrator_working_state(state)
     for family, ref in get_candidate_refs(state).items():
         set_approved_ref(working, family, ref)
 
@@ -226,15 +272,9 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     """Route the current phase to revision. Returns a partial state update."""
     revision_note = str(state.get("_revision_note", ""))
     # Record durable revision request via orchestrator state helpers
-    from film_pipeline.graph.orchestrator_state import (
-        add_revision_request,
-        ensure_orchestrator_state,
-    )
+    from film_pipeline.graph.orchestrator_state import add_revision_request
 
-    working = {
-        key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
-    }
-    ensure_orchestrator_state(working)
+    working = _orchestrator_working_state(state)
     artifact_refs = list(state.get("artifact_refs", []) or [])
     add_revision_request(working, artifact_refs, note="Human requested revision.")
 
@@ -252,143 +292,3 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
         ],
         "_orchestrator__pending_revisions": working.get("_orchestrator__pending_revisions", []),
     }
-
-
-# ── Phase node registry (for repair routing) ────────────────────────────
-
-_PHASE_NODES: dict[str, Any] = {
-    "intake": intake_node,
-    "constitution": constitution_node,
-    "development": development_node,
-    "script": script_node,
-    "visual_dev": visual_dev_node,
-    "shot_bible": shot_bible_node,
-    "gen_planning": gen_planning_node,
-    "generation": generation_node,
-    "qc": qc_node,
-    "post": post_node,
-    "delivery": delivery_node,
-}
-
-
-def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
-    """Generic repair: re-run the current phase's agent to fix issues.
-
-    Checks convergence tracking — after 3 repair rounds without resolution,
-    marks the phase as stalled and returns to human.
-
-    Builds structured ``RepairFeedback`` (saved as artifact) so agents
-    know exactly which rows to fix/preserve instead of guessing from text.
-    """
-    from film_pipeline.graph.orchestrator_state import (
-        increment_convergence_round,
-        is_stalled,
-        mark_stalled,
-    )
-    from film_pipeline.schemas.repair import (
-        GlobalRepairIssue,
-        RepairFeedback,
-        RowRepairInstruction,
-    )
-
-    phase = str(state.get("current_phase", ""))
-    phase_fn = _PHASE_NODES.get(phase)
-    if phase_fn is None:
-        return {
-            "issues": [
-                {
-                    "severity": "warning",
-                    "code": "no_repair_handler",
-                    "message": f"No repair handler for phase '{phase}'.",
-                }
-            ]
-        }
-
-    # Track repair attempts (on the shared state so phase_fn sees the round,
-    # and returned explicitly so the update survives the node boundary).
-    round_num = increment_convergence_round(state, phase)
-    convergence_update = deepcopy(state.get("_orchestrator__convergence", {}))
-
-    if is_stalled(state, phase, max_rounds=3):
-        mark_stalled(state, phase, f"Repair failed after {round_num} rounds.")
-        return {
-            "_orchestrator__convergence": deepcopy(state.get("_orchestrator__convergence", {})),
-            "_stalled_phase": phase,
-        }
-
-    # ── Build structured repair feedback ──────────────────────────────
-    issues: list[dict[str, Any]] = state.get("issues", [])
-    blocking = [i for i in issues if i.get("severity") == "blocking"]
-    all_findings = blocking + [i for i in issues if i.get("severity") == "warning"]
-
-    # Separate row-level from global issues
-    row_issues: dict[str, list[dict[str, str]]] = {}
-    global_issues: list[GlobalRepairIssue] = []
-    passed_ids: list[str] = []
-
-    for finding in all_findings:
-        shot_id = str(finding.get("shot_id", finding.get("affected_shot", "")))
-        if shot_id:
-            row_issues.setdefault(shot_id, []).append(
-                {
-                    "code": str(finding.get("code", "?")),
-                    "field": str(finding.get("field", finding.get("affected_field", ""))),
-                    "message": str(finding.get("message", "")),
-                    "recommended_action": str(
-                        finding.get("suggestion", finding.get("recommended_action", ""))
-                    ),
-                }
-            )
-        else:
-            global_issues.append(
-                GlobalRepairIssue(
-                    code=str(finding.get("code", "?")),
-                    message=str(finding.get("message", "")),
-                    recommended_action=str(finding.get("suggestion", "")),
-                )
-            )
-
-    # Build row instructions
-    failed_rows: list[Any] = []
-    for sid, issue_list in row_issues.items():
-        failed_rows.append(
-            RowRepairInstruction(
-                shot_id=sid,
-                issues=issue_list,
-                preserve_other_fields=True,
-            )
-        )
-
-    # Determine passed rows from patch history
-    previous_artifact = str(state.get("shot_matrix_ref", ""))
-    feedback = RepairFeedback(
-        repair_id=f"repair:{phase}:r{round_num}",
-        phase=phase,
-        round=round_num,
-        project_id=str(state.get("project_id", "")),
-        failed_rows=failed_rows,
-        passed_row_ids=passed_ids,
-        global_issues=global_issues,
-        previous_artifact_ref=previous_artifact,
-        convergence_round=round_num,
-    )
-
-    # Persist as artifact so the agent can load structured data
-    feedback_ref = _save_artifact(
-        state,
-        feedback,
-        f"repair_feedback_{phase}",
-        phase,
-        artifact_type="script",
-    )
-    if feedback_ref:
-        state["repair_feedback_ref"] = feedback_ref
-
-    # Also inject the rendered context for direct use (backward compat)
-    state["_repair_feedback"] = feedback.to_agent_context()
-
-    # Re-run the phase node — gates will re-validate. Carry the convergence
-    # counter into the returned update so repair rounds are durable.
-    result = cast(dict[str, Any], phase_fn(state))
-    result.setdefault("_orchestrator__convergence", convergence_update)
-    return result

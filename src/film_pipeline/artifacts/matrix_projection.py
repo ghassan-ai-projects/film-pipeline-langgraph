@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.matrix_patch import MatrixPatch
+
+
+class _MatrixStore(Protocol):
+    """The one store capability matrix projection needs: load an artifact body."""
+
+    def load(
+        self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
+    ) -> dict[str, Any]: ...
 
 
 def materialize_matrix(
-    store: Any,
+    store: _MatrixStore,
     project_id: str,
     base_ref: str,
     patch_refs: list[str],
@@ -34,29 +46,29 @@ def materialize_matrix(
     return matrix
 
 
-def _load_base_matrix(store: Any, project_id: str, matrix_ref: str) -> dict[str, Any]:
-    """Load the base matrix artifact."""
-    parts = matrix_ref.split(":")
-    artifact_id = parts[1] if len(parts) > 1 else matrix_ref
+def _parse_artifact_ref(artifact_ref: str) -> tuple[str, int]:
+    """Split an ``artifact:<id>:v<N>`` ref into its artifact id and numeric version."""
+    parts = artifact_ref.split(":")
+    artifact_id = parts[1] if len(parts) > 1 else artifact_ref
     version_str = parts[2] if len(parts) > 2 else "1"
-    version = int(version_str.lstrip("v"))
+    return artifact_id, int(version_str.lstrip("v"))
 
+
+def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> dict[str, Any]:
+    """Load the base matrix artifact."""
     from film_pipeline.schemas._base import FilmPhase
 
+    artifact_id, version = _parse_artifact_ref(matrix_ref)
     result: dict[str, Any] = store.load(project_id, FilmPhase.SHOT_BIBLE, artifact_id, version)
     return result
 
 
-def _load_patch(store: Any, project_id: str, patch_ref: str) -> Any:
-    """Load a matrix patch artifact."""
+def _load_patch(store: _MatrixStore, project_id: str, patch_ref: str) -> MatrixPatch:
+    """Load a matrix patch artifact from the first phase that stores it."""
+    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.matrix_patch import MatrixPatch
 
-    parts = patch_ref.split(":")
-    artifact_id = parts[1] if len(parts) > 1 else patch_ref
-    version_str = parts[2] if len(parts) > 2 else "1"
-    version = int(version_str.lstrip("v"))
-
-    from film_pipeline.schemas._base import FilmPhase
+    artifact_id, version = _parse_artifact_ref(patch_ref)
 
     for phase in (
         FilmPhase.GEN_PLANNING,

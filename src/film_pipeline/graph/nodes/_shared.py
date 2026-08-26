@@ -159,6 +159,11 @@ def _phase_gate_updates(state: dict[str, Any], *, phase: str, gate: str) -> dict
     }
 
 
+def _generation_request_key(request: dict[str, Any]) -> str:
+    """Deduplication key identifying a generation request across MCP and graph state."""
+    return str(request.get("generation_request_id", request.get("generation_id", "")))
+
+
 def _apply_external_state(
     state: dict[str, Any],
     external_state: dict[str, Any],
@@ -174,16 +179,11 @@ def _apply_external_state(
     incoming_requests = external_state.get("generation_requests")
     if incoming_requests:
         existing = state.get("generation_requests", []) or []
-        existing_ids = {
-            str(r.get("generation_request_id", r.get("generation_id", "")))
-            for r in existing
-            if isinstance(r, dict)
-        }
+        existing_ids = {_generation_request_key(r) for r in existing if isinstance(r, dict)}
         new_requests = [
             r
             for r in incoming_requests
-            if isinstance(r, dict)
-            and str(r.get("generation_request_id", r.get("generation_id", ""))) not in existing_ids
+            if isinstance(r, dict) and _generation_request_key(r) not in existing_ids
         ]
         if new_requests:
             updates["generation_requests"] = new_requests

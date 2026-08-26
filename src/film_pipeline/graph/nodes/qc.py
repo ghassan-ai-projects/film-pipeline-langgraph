@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from film_pipeline.graph.nodes._agent import (
     _propagate_side_effects,
@@ -20,24 +21,62 @@ from film_pipeline.graph.nodes._shared import (
     _phase_gate_updates,
 )
 
+if TYPE_CHECKING:
+    from film_pipeline.schemas._base import FilmPhase
+
+_ValidatorRunner = Callable[
+    [dict[str, Any], list[dict[str, Any]], dict[str, Any], Any],
+    None,
+]
+
+# Ref-valued state keys qc_node copies into its update once validators set them.
+_QC_REF_KEYS: tuple[str, ...] = ("consensus_report_ref", "qc_patch_ref")
+
 
 def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     new_state = deepcopy(state)
-    original = state
     gate_updates = _phase_gate_updates(new_state, phase="qc", gate="qc")
     new_state.update(gate_updates)
 
-    # Run validators against upstream artifacts FIRST
     _run_validators(new_state)
+    _emit_matrix_patch_from_findings(new_state)
+    _synthesize_consensus_report(new_state)
 
-    # ── Emit matrix patch from validator findings ────────────────────────
-    pending_updates = new_state.pop("_pending_row_updates", [])
-    shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
+    updates = _collect_updates(gate_updates, new_state, state, _QC_REF_KEYS)
+    _propagate_side_effects(new_state, updates, state)
+    return updates
+
+
+def _collect_updates(
+    gate_updates: dict[str, Any],
+    new_state: dict[str, Any],
+    original: dict[str, Any],
+    ref_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Compute the partial update from a before/after diff of the node state."""
+    updates: dict[str, Any] = dict(gate_updates)
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ref_keys:
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
+
+
+def _emit_matrix_patch_from_findings(state: dict[str, Any]) -> None:
+    """Persist a matrix patch from the per-row findings validators collected."""
+    pending_updates = state.pop("_pending_row_updates", [])
+    shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
     if pending_updates and shot_matrix_ref:
         from film_pipeline.schemas.matrix_patch import MatrixPatch
 
         patch = MatrixPatch(
-            patch_id=f"qc_{new_state.get('project_id', '')}",
+            patch_id=f"qc_{state.get('project_id', '')}",
             matrix_ref=shot_matrix_ref,
             phase="qc",
             reason="QC validators produced per-row findings — updating status and validation refs.",
@@ -45,19 +84,21 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
             created_by_agent="clip-validator",
         )
         patch_ref = _save_artifact(
-            new_state,
+            state,
             patch,
             "matrix_patch_qc",
             "qc",
             artifact_type="consensus_report",
         )
         if patch_ref:
-            new_state["qc_patch_ref"] = patch_ref
-            new_state.setdefault("artifact_refs", []).append(patch_ref)
+            state["qc_patch_ref"] = patch_ref
+            state.setdefault("artifact_refs", []).append(patch_ref)
 
-    # Then synthesize their findings into a unified QC report
+
+def _synthesize_consensus_report(state: dict[str, Any]) -> None:
+    """Synthesize validator reports into a unified QC consensus artifact."""
     result = _run_agent(
-        new_state,
+        state,
         agent_id="clip-validator",
         phase="qc",
         task=(
@@ -68,25 +109,10 @@ def qc_node(state: dict[str, Any]) -> dict[str, Any]:
     )
     report = result.get("consensus_report")
     if report is not None:
-        ref = _save_artifact(new_state, report, "consensus_report", "qc")
+        ref = _save_artifact(state, report, "consensus_report", "qc")
         if ref:
-            new_state["consensus_report_ref"] = ref
-            new_state.setdefault("artifact_refs", []).append(ref)
-
-    # Compute partial update from before/after diff
-    updates: dict[str, Any] = dict(gate_updates)
-    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
-    if new_refs:
-        updates["artifact_refs"] = new_refs
-    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
-    if new_issues:
-        updates["issues"] = new_issues
-    for key in ("consensus_report_ref", "qc_patch_ref"):
-        val = new_state.get(key)
-        if val:
-            updates[key] = val
-    _propagate_side_effects(new_state, updates, state)
-    return updates
+            state["consensus_report_ref"] = ref
+            state.setdefault("artifact_refs", []).append(ref)
 
 
 def _run_validators(state: dict[str, Any]) -> None:
@@ -105,11 +131,8 @@ def _run_validators(state: dict[str, Any]) -> None:
 
     from film_pipeline.schemas._base import FilmPhase
 
-    store = services.artifact_store
     phase = str(state.get("current_phase", ""))
-    project_id = str(state.get("project_id", ""))
 
-    # Determine which phases to scan for artifacts.
     if phase == "qc":
         load_phases: list[FilmPhase] = [
             FilmPhase("intake"),
@@ -123,10 +146,25 @@ def _run_validators(state: dict[str, Any]) -> None:
     else:
         load_phases = [FilmPhase(phase)]
 
-    # Collect artifacts by trying each upstream phase.
+    artifacts = _collect_artifacts(state, services, load_phases)
+
+    issues: list[dict[str, Any]] = list(state.get("issues", []))
+    _execute_phase_validators(state, artifacts, issues, services)
+    state["issues"] = issues
+
+    _build_consensus_if_needed(state, phase)
+
+
+def _collect_artifacts(
+    state: dict[str, Any],
+    services: Any,
+    load_phases: list[FilmPhase],
+) -> dict[str, Any]:
+    """Load artifacts referenced by ``state["artifact_refs"]`` from ``load_phases``."""
+    store = services.artifact_store
+    project_id = str(state.get("project_id", ""))
     artifact_data: dict[str, Any] = {}
-    artifact_refs = state.get("artifact_refs", [])
-    for ref_str in artifact_refs:
+    for ref_str in state.get("artifact_refs", []):
         ref_str = str(ref_str)
         if ":" not in ref_str:
             continue
@@ -140,33 +178,7 @@ def _run_validators(state: dict[str, Any]) -> None:
                 break
             except (FileNotFoundError, ValueError):
                 continue
-
-    issues: list[dict[str, Any]] = list(state.get("issues", []))
-
-    # --- Phase-specific validator dispatch ---
-
-    if phase in ("script", "qc") and artifact_data:
-        _run_script_validators(artifact_data, issues, state, services)
-
-    if phase in ("visual_dev", "qc") and artifact_data:
-        _run_reference_validators(artifact_data, issues, state, services)
-
-    if phase in ("gen_planning", "qc") and artifact_data:
-        _run_prompt_validators(artifact_data, issues, state, services)
-
-    if phase in ("shot_bible", "qc") and artifact_data:
-        _run_continuity_validators(artifact_data, issues, state, services)
-
-    if phase in ("post", "assembly", "qc") and artifact_data:
-        _run_assembly_validators(artifact_data, issues, state, services)
-
-    if phase == "delivery" and artifact_data:
-        _run_delivery_validators(artifact_data, issues, state, services)
-
-    state["issues"] = issues
-
-    # --- Build consensus report when multiple validators ran ----------
-    _build_consensus_if_needed(state, phase)
+    return artifact_data
 
 
 def _build_consensus_if_needed(state: dict[str, Any], phase: str) -> None:
@@ -208,6 +220,61 @@ def _pick_artifact(
     return None
 
 
+def _as_shots_view(artifact: dict[str, Any]) -> dict[str, Any]:
+    """Adapt a shot-matrix artifact to the shots view the continuity validator reads.
+
+    The shot matrix stores per-shot rows under "rows"; the continuity
+    validator reads "shots".
+    """
+    if "shots" not in artifact and isinstance(artifact.get("rows"), list):
+        return {**artifact, "shots": artifact["rows"]}
+    return artifact
+
+
+def _instantiate_validator(
+    vcls: type[Any],
+    services: Any,
+    *,
+    with_templates: bool = False,
+) -> Any:
+    """Instantiate a validator wired to the model adapter and router."""
+    instance = vcls()
+    kwargs: dict[str, Any] = {
+        "adapter": getattr(services.prompt_runner, "model_adapter", None),
+        "router": getattr(services.prompt_runner, "model_router", None),
+    }
+    if with_templates:
+        kwargs["template_registry"] = _get_template_registry()
+    instance.set_services(**kwargs)
+    return instance
+
+
+def _validate_artifact(
+    vcls: type[Any],
+    artifact: dict[str, Any],
+    issues: list[dict[str, Any]],
+    state: dict[str, Any],
+    services: Any,
+    *,
+    with_templates: bool = False,
+    pass_state_as_context: bool = False,
+) -> None:
+    """Record one validator's findings on an artifact; a failing validator is skipped.
+
+    A validator that cannot instantiate or run must not abort the whole QC
+    pass, so its exception is swallowed here (matching every call site).
+    """
+    try:
+        instance = _instantiate_validator(vcls, services, with_templates=with_templates)
+        if pass_state_as_context:
+            report = instance.run(artifact, context=state)
+        else:
+            report = instance.run(artifact)
+    except Exception:
+        return
+    _append_validator_report(report, issues, state)
+
+
 def _run_script_validators(
     artifact_data: dict[str, Any],
     issues: list[dict[str, Any]],
@@ -222,17 +289,15 @@ def _run_script_validators(
     if artifact is None:
         return
     for vcls in (ScriptStructureValidator, DialogueVoiceValidator):
-        try:
-            instance = vcls()
-            instance.set_services(
-                adapter=getattr(services.prompt_runner, "model_adapter", None),
-                router=getattr(services.prompt_runner, "model_router", None),
-                template_registry=_get_template_registry(),
-            )
-            report = instance.run(artifact, context=state)
-        except Exception:
-            continue
-        _append_validator_report(report, issues, state)
+        _validate_artifact(
+            vcls,
+            artifact,
+            issues,
+            state,
+            services,
+            with_templates=True,
+            pass_state_as_context=True,
+        )
 
 
 def _run_reference_validators(
@@ -245,18 +310,8 @@ def _run_reference_validators(
     from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
     artifact = _pick_artifact(artifact_data, "reference_index")
-    if artifact is None:
-        return
-    try:
-        instance = ReferenceUsabilityValidator()
-        instance.set_services(
-            adapter=getattr(services.prompt_runner, "model_adapter", None),
-            router=getattr(services.prompt_runner, "model_router", None),
-        )
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(ReferenceUsabilityValidator, artifact, issues, state, services)
 
 
 def _run_prompt_validators(
@@ -269,18 +324,8 @@ def _run_prompt_validators(
     from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     artifact = _pick_artifact(artifact_data, "prompt_registry", "execution_brief")
-    if artifact is None:
-        return
-    try:
-        instance = PromptReadinessValidator()
-        instance.set_services(
-            adapter=getattr(services.prompt_runner, "model_adapter", None),
-            router=getattr(services.prompt_runner, "model_router", None),
-        )
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(PromptReadinessValidator, artifact, issues, state, services)
 
 
 def _run_continuity_validators(
@@ -293,22 +338,14 @@ def _run_continuity_validators(
     from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     artifact = _pick_artifact(artifact_data, "shot_matrix", "shot_bible")
-    if artifact is None:
-        return
-    if "shots" not in artifact and isinstance(artifact.get("rows"), list):
-        # The shot matrix stores per-shot rows under "rows"; the continuity
-        # validator reads "shots".
-        artifact = {**artifact, "shots": artifact["rows"]}
-    try:
-        instance = SceneContinuityValidator()
-        instance.set_services(
-            adapter=getattr(services.prompt_runner, "model_adapter", None),
-            router=getattr(services.prompt_runner, "model_router", None),
+    if artifact is not None:
+        _validate_artifact(
+            SceneContinuityValidator,
+            _as_shots_view(artifact),
+            issues,
+            state,
+            services,
         )
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
 
 
 def _run_assembly_validators(
@@ -321,18 +358,8 @@ def _run_assembly_validators(
     from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     artifact = _pick_artifact(artifact_data, "assembly_manifest", "review_cut", "final_cut")
-    if artifact is None:
-        return
-    try:
-        instance = AssemblyValidator()
-        instance.set_services(
-            adapter=getattr(services.prompt_runner, "model_adapter", None),
-            router=getattr(services.prompt_runner, "model_router", None),
-        )
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    if artifact is not None:
+        _validate_artifact(AssemblyValidator, artifact, issues, state, services)
 
 
 def _run_delivery_validators(
@@ -347,18 +374,33 @@ def _run_delivery_validators(
     )
 
     artifact = _pick_artifact(artifact_data, "delivery_manifest", "delivery_package")
-    if artifact is None:
+    if artifact is not None:
+        _validate_artifact(DeliveryCompletenessValidator, artifact, issues, state, services)
+
+
+_VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
+    ({"script", "qc"}, _run_script_validators),
+    ({"visual_dev", "qc"}, _run_reference_validators),
+    ({"gen_planning", "qc"}, _run_prompt_validators),
+    ({"shot_bible", "qc"}, _run_continuity_validators),
+    ({"post", "assembly", "qc"}, _run_assembly_validators),
+    ({"delivery"}, _run_delivery_validators),
+)
+
+
+def _execute_phase_validators(
+    state: dict[str, Any],
+    artifacts: dict[str, Any],
+    issues: list[dict[str, Any]],
+    services: Any,
+) -> None:
+    """Run each validator runner whose phase membership contains the current phase."""
+    if not artifacts:
         return
-    try:
-        instance = DeliveryCompletenessValidator()
-        instance.set_services(
-            adapter=getattr(services.prompt_runner, "model_adapter", None),
-            router=getattr(services.prompt_runner, "model_router", None),
-        )
-        report = instance.run(artifact)
-    except Exception:
-        return
-    _append_validator_report(report, issues, state)
+    phase = str(state.get("current_phase", ""))
+    for phases, runner in _VALIDATOR_RUNNERS:
+        if phase in phases:
+            runner(artifacts, issues, state, services)
 
 
 def _append_validator_report(
@@ -370,29 +412,30 @@ def _append_validator_report(
     reports = state.setdefault("_validation_reports", [])
     reports.append(report.model_dump())
 
-    for bi in report.blocking_issues:
-        issues.append(
-            {
-                "issue_id": f"val:{report.validator_id}:{bi.code}",
-                "severity": "blocking",
-                "code": bi.code,
-                "message": bi.message,
-                "validator_id": report.validator_id,
-            }
-        )
+    severities = (
+        ("blocking", report.blocking_issues),
+        ("warning", report.warnings),
+    )
+    for severity, findings in severities:
+        for finding in findings:
+            issues.append(_issue_entry(report, finding, severity))
 
-    for w in report.warnings:
-        issues.append(
-            {
-                "issue_id": f"val:{report.validator_id}:{w.code}",
-                "severity": "warning",
-                "code": w.code,
-                "message": w.message,
-                "validator_id": report.validator_id,
-            }
-        )
+    _track_matrix_row_updates(state, report)
 
-    # ── Track per-row findings for matrix patch emission ──────────────
+
+def _issue_entry(report: Any, finding: Any, severity: str) -> dict[str, Any]:
+    """Build one issue dict from a single validator finding."""
+    return {
+        "issue_id": f"val:{report.validator_id}:{finding.code}",
+        "severity": severity,
+        "code": finding.code,
+        "message": finding.message,
+        "validator_id": report.validator_id,
+    }
+
+
+def _track_matrix_row_updates(state: dict[str, Any], report: Any) -> None:
+    """Record per-row findings so qc_node can emit a matrix patch."""
     from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
 
     pending: list[Any] = state.setdefault("_pending_row_updates", [])

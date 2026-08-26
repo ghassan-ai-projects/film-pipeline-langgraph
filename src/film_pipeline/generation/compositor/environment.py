@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from film_pipeline.generation.compositor._layout import (
     _BG_COLOR,
@@ -14,6 +14,7 @@ from film_pipeline.generation.compositor._layout import (
     _MARGIN,
     _crop_center,
     _load_font,
+    _PaletteTile,
     _paste_placeholder,
     _render_color_palette,
     _write_sheet_manifest,
@@ -46,6 +47,48 @@ _ENV_LABELS: dict[str, str] = {
 }
 
 
+def _draw_board_header(
+    draw: ImageDraw.ImageDraw,
+    subject_id: str,
+    environment_name: str,
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> None:
+    title = f"ENVIRONMENT BOARD — {subject_id.upper()} — {environment_name}"
+    draw.text((_MARGIN, 8), title, fill=_LABEL_COLOR, font=font)
+    draw.line([(_MARGIN, 42), (_ENV_SHEET_SIZE[0] - _MARGIN, 42)], fill=_BORDER_COLOR, width=1)
+
+
+def _paste_environment_frame(
+    canvas: Image.Image,
+    frame_path: Path | None,
+    role: str,
+    rect: tuple[int, int, int, int],
+) -> None:
+    x, y, w, h = rect
+    if frame_path and frame_path.exists():
+        try:
+            tile = Image.open(frame_path).convert("RGB")
+            tile = _crop_center(tile, w, h)
+            canvas.paste(tile, (x, y))
+        except Exception:
+            _paste_placeholder(canvas, x, y, w, h, role)
+    else:
+        _paste_placeholder(canvas, x, y, w, h, role)
+
+
+def _draw_env_label(
+    draw: ImageDraw.ImageDraw,
+    role: str,
+    rect: tuple[int, int, int, int],
+    font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+) -> None:
+    x, y, _w, h = rect
+    label = _ENV_LABELS.get(role, role.upper().replace("-", " "))
+    label_y = y + h + 2
+    if label_y + 16 < _ENV_SHEET_SIZE[1]:
+        draw.text((x + 2, label_y), label, fill=_LABEL_COLOR, font=font)
+
+
 def build_environment_board(
     subject_id: str,
     environment_name: str,
@@ -68,11 +111,10 @@ def build_environment_board(
     draw = ImageDraw.Draw(canvas)
     font = _load_font(16)
 
-    title = f"ENVIRONMENT BOARD — {subject_id.upper()} — {environment_name}"
-    draw.text((_MARGIN, 8), title, fill=_LABEL_COLOR, font=font)
-    draw.line([(_MARGIN, 42), (_ENV_SHEET_SIZE[0] - _MARGIN, 42)], fill=_BORDER_COLOR, width=1)
+    _draw_board_header(draw, subject_id, environment_name, font)
 
-    for role, (x, y, w, h) in _ENV_TILES.items():
+    for role, rect in _ENV_TILES.items():
+        x, y, w, h = rect
         draw.rectangle(
             [x - 1, y - 1, x + w + 1, y + h + 1],
             outline=_BORDER_COLOR,
@@ -80,23 +122,12 @@ def build_environment_board(
         )
 
         if role == "color-palette":
-            _render_color_palette(canvas, x, y, w, h, palette_colors, draw, font)
+            tile_spec = _PaletteTile(x=x, y=y, w=w, h=h, colors=palette_colors)
+            _render_color_palette(canvas, tile_spec, draw, font)
         else:
-            frame_path = frames.get(role)
-            if frame_path and frame_path.exists():
-                try:
-                    tile = Image.open(frame_path).convert("RGB")
-                    tile = _crop_center(tile, w, h)
-                    canvas.paste(tile, (x, y))
-                except Exception:
-                    _paste_placeholder(canvas, x, y, w, h, role)
-            else:
-                _paste_placeholder(canvas, x, y, w, h, role)
+            _paste_environment_frame(canvas, frames.get(role), role, rect)
 
-        label = _ENV_LABELS.get(role, role.upper().replace("-", " "))
-        label_y = y + h + 2
-        if label_y + 16 < _ENV_SHEET_SIZE[1]:
-            draw.text((x + 2, label_y), label, fill=_LABEL_COLOR, font=font)
+        _draw_env_label(draw, role, rect, font)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path, "PNG")

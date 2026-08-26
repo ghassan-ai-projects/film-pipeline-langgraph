@@ -5,19 +5,55 @@ so tests can mock the network without any test-only dependency.
 
 Model selection is ALWAYS explicit: no hardcoded defaults. Callers must resolve
 the model through the routing layer before invoking this adapter.
+
+Transport concerns live in ``_http_transport`` and model-text JSON recovery in
+``_json_extraction``; this module stays with request shaping, key resolution,
+and provider payload/response mapping.
 """
 
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
-from collections.abc import Callable
-from inspect import Parameter, signature
+import logging
+from dataclasses import dataclass
 from typing import Any
 
+# Historical import paths kept stable for callers and tests (explicit alias
+# form so mypy strict's no_implicit_reexport passes them through).
+from film_pipeline.agents._http_transport import (
+    _accepts_timeout_kw as _accepts_timeout_kw,
+)
+from film_pipeline.agents._http_transport import (
+    _open_with_timeout as _open_with_timeout,
+)
+from film_pipeline.agents._http_transport import post_json
+from film_pipeline.agents._json_extraction import extract_json_object
 from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
-from film_pipeline.providers.credentials import lookup, redact
+from film_pipeline.providers.credentials import lookup
+
+
+@dataclass(frozen=True)
+class _GeminiRequest:
+    """Parameters for a single Gemini generateContent call."""
+
+    prompt: str
+    model: str
+    images_b64: list[str]
+    mime_type: str
+    max_tokens: int
+    temperature: float
+
+
+@dataclass(frozen=True)
+class _ChatRequest:
+    """Request-shaping parameters for an OpenRouter chat-completion call."""
+
+    messages: list[dict[str, str]]
+    model: str
+    max_tokens: int = 4096
+    temperature: float = 0.7
+    top_p: float = 0.95
+    frequency_penalty: float = 0.0
 
 
 class ModelAdapter:
@@ -52,50 +88,24 @@ class ModelAdapter:
             raise RuntimeError("GOOGLE_API_KEY is not set. Set it in the environment or .env file.")
         return key
 
-    def _request(
-        self,
-        messages: list[dict[str, str]],
-        model: str,
-        max_tokens: int = 4096,
-        temperature: float = 0.7,
-        top_p: float = 0.95,
-        frequency_penalty: float = 0.0,
-    ) -> dict[str, Any]:
+    def _request(self, request: _ChatRequest) -> dict[str, Any]:
         """Post a chat-completion request to OpenRouter and return parsed JSON.
 
-        ``model`` is REQUIRED — no hardcoded default. The caller must resolve
-        the model through config/routing before invoking.
+        ``request.model`` is REQUIRED — no hardcoded default. The caller must
+        resolve the model through config/routing before invoking.
         """
-        url = f"{OPENROUTER_API}/chat/completions"
-        body: dict[str, Any] = {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": top_p,
-            "frequency_penalty": frequency_penalty,
-        }
-        data = json.dumps(body).encode()
-        req = urllib.request.Request(
-            url,
-            data=data,
+        return post_json(
+            f"{OPENROUTER_API}/chat/completions",
+            _openrouter_payload(request),
+            http_opener=self._http_opener,
+            timeout_seconds=self.request_timeout_seconds,
             headers={
                 "Authorization": f"Bearer {self._api_key()}",
                 "Content-Type": "application/json",
             },
-            method="POST",
+            error_prefix="OpenRouter chat completions failed",
+            redact_body=True,
         )
-        opener: Any = self._http_opener or urllib.request.build_opener()
-        try:
-            with _open_with_timeout(opener.open, req, self.request_timeout_seconds) as resp:
-                raw: Any = json.loads(resp.read())
-                return dict(raw)
-        except (urllib.error.HTTPError, OSError) as e:
-            detail = str(e)
-            if isinstance(e, urllib.error.HTTPError):
-                body_text = e.read().decode(errors="replace")
-                detail = f"HTTP {e.code}: {redact(body_text)[:200]}"
-            raise RuntimeError(f"OpenRouter chat completions failed: {detail}") from e
 
     def chat(
         self,
@@ -118,12 +128,14 @@ class ModelAdapter:
         messages.append({"role": "user", "content": prompt})
 
         response = self._request(
-            messages=messages,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            frequency_penalty=frequency_penalty,
+            _ChatRequest(
+                messages=messages,
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                frequency_penalty=frequency_penalty,
+            )
         )
         choices: list[dict[str, Any]] = response.get("choices", [])
         if not choices:
@@ -163,76 +175,40 @@ class ModelAdapter:
 
         if model.startswith("google/"):
             return self._call_gemini_api(
-                prompt=prompt,
-                model=model,
-                images_b64=images_b64,
-                mime_type=mime_type,
-                max_tokens=max_tokens,
-                temperature=temperature,
+                _GeminiRequest(
+                    prompt=prompt,
+                    model=model,
+                    images_b64=images_b64,
+                    mime_type=mime_type,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
             )
 
-        import logging
-
-        logging.warning(
-            "chat_multimodal: dropping %d images for non-Google model '%s'",
-            len(images_b64),
-            model,
-        )
+        _warn_dropped_images(len(images_b64), model)
         return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
 
-    def _call_gemini_api(
-        self,
-        prompt: str,
-        model: str,
-        images_b64: list[str],
-        mime_type: str,
-        max_tokens: int,
-        temperature: float,
-    ) -> str:
+    def _call_gemini_api(self, request: _GeminiRequest) -> str:
         """Call Gemini's generateContent API with text + inline images."""
+        response = post_json(
+            self._gemini_url(request.model),
+            json.dumps(_build_gemini_payload(request)).encode("utf-8"),
+            http_opener=self._http_opener,
+            timeout_seconds=self.request_timeout_seconds,
+            headers={"Content-Type": "application/json"},
+            error_prefix="Gemini generateContent failed",
+            redact_body=False,
+        )
+        return _first_candidate_text(response)
+
+    def _gemini_url(self, model: str) -> str:
+        """Build the generateContent endpoint URL after resolving the API key."""
         key = self._gemini_api_key()
         gemini_model = model.removeprefix("google/")
-        url = (
+        return (
             "https://generativelanguage.googleapis.com/v1beta/models/"
             f"{gemini_model}:generateContent?key={key}"
         )
-
-        parts: list[dict[str, Any]] = [{"text": prompt}]
-        for img in images_b64:
-            parts.append({"inline_data": {"mime_type": mime_type, "data": img}})
-
-        body = {
-            "contents": [{"parts": parts}],
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": max_tokens,
-            },
-        }
-
-        data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=data, headers={"Content-Type": "application/json"}, method="POST"
-        )
-
-        opener: Any = self._http_opener or urllib.request.build_opener()
-        try:
-            with _open_with_timeout(opener.open, req, self.request_timeout_seconds) as resp:
-                raw: Any = json.loads(resp.read().decode("utf-8"))
-                response: dict[str, Any] = dict(raw)
-        except (urllib.error.HTTPError, OSError) as e:
-            detail = str(e)
-            if isinstance(e, urllib.error.HTTPError):
-                body_text = e.read().decode(errors="replace")
-                detail = f"HTTP {e.code}: {body_text[:200]}"
-            raise RuntimeError(f"Gemini generateContent failed: {detail}") from e
-
-        candidates: list[dict[str, Any]] = response.get("candidates", [])
-        if not candidates:
-            raise RuntimeError("Gemini returned no candidates.")
-        parts_out: list[dict[str, Any]] = candidates[0].get("content", {}).get("parts", [])
-        if not parts_out:
-            raise RuntimeError("Gemini returned no content parts.")
-        return str(parts_out[0].get("text", ""))
 
     def chat_json(
         self,
@@ -262,79 +238,54 @@ class ModelAdapter:
             frequency_penalty=frequency_penalty,
         ).strip()
 
-        # Strategy 1: Direct JSON parse
-        try:
-            return dict(json.loads(text))
-        except json.JSONDecodeError:
-            pass
-
-        # Strategy 2: extract from markdown fences (most common with Gemini)
-        for fence_start in ("```json", "```JSON", "```"):
-            if fence_start not in text:
-                continue
-            # Find the LAST opening fence and FIRST closing fence after it
-            # (Gemini sometimes has multiple code blocks)
-            last_open = text.rfind(fence_start)
-            block = text[last_open + len(fence_start) :]
-            close_idx = block.find("```")
-            if close_idx != -1:
-                block = block[:close_idx]
-            candidate = block.strip()
-            if not candidate:
-                continue
-            # Handle Gemini injecting trailing content right after closing ````
-            try:
-                result: Any = json.loads(candidate)
-                return dict(result)
-            except json.JSONDecodeError:
-                pass
-
-        # Strategy 3: Find the outermost brace pair anywhere in text
-        brace_start = text.find("{")
-        brace_end = text.rfind("}")
-        if brace_start != -1 and brace_end != -1 and brace_end > brace_start:
-            candidate = text[brace_start : brace_end + 1]
-            try:
-                result = json.loads(candidate)
-                return dict(result)
-            except json.JSONDecodeError:
-                pass
-
-        # Strategy 4: Find outermost bracket pair (for array responses)
-        bracket_start = text.find("[")
-        bracket_end = text.rfind("]")
-        if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
-            candidate = text[bracket_start : bracket_end + 1]
-            try:
-                result = json.loads(candidate)
-                return dict(result)
-            except (json.JSONDecodeError, TypeError):
-                pass
-
-        raise ValueError(
-            f"Model response is not valid JSON after 4 extraction strategies. "
-            f"Response length: {len(text)} chars. "
-            f"Preview: {text[:300]}"
-        )
+        extracted = extract_json_object(text)
+        if extracted is None:
+            raise ValueError(
+                f"Model response is not valid JSON after 4 extraction strategies. "
+                f"Response length: {len(text)} chars. "
+                f"Preview: {text[:300]}"
+            )
+        return extracted
 
 
-def _open_with_timeout(
-    open_fn: Callable[..., Any],
-    req: urllib.request.Request,
-    timeout_seconds: float | None,
-) -> Any:
-    """Call opener.open with a timeout when the injected opener supports it."""
-    if timeout_seconds is None or not _accepts_timeout_kw(open_fn):
-        return open_fn(req)
-    return open_fn(req, timeout=timeout_seconds)
+def _openrouter_payload(request: _ChatRequest) -> bytes:
+    body: dict[str, Any] = {
+        "model": request.model,
+        "messages": request.messages,
+        "max_tokens": request.max_tokens,
+        "temperature": request.temperature,
+        "top_p": request.top_p,
+        "frequency_penalty": request.frequency_penalty,
+    }
+    return json.dumps(body).encode()
 
 
-def _accepts_timeout_kw(open_fn: Callable[..., Any]) -> bool:
-    """Return whether a callable can accept a ``timeout=`` keyword."""
-    try:
-        params = signature(open_fn).parameters
-    except (TypeError, ValueError):
-        return True
-    return any(param.kind == Parameter.VAR_KEYWORD for param in params.values()) or any(
-        name == "timeout" for name in params
+def _build_gemini_payload(request: _GeminiRequest) -> dict[str, Any]:
+    parts: list[dict[str, Any]] = [{"text": request.prompt}]
+    for img in request.images_b64:
+        parts.append({"inline_data": {"mime_type": request.mime_type, "data": img}})
+    return {
+        "contents": [{"parts": parts}],
+        "generationConfig": {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+        },
+    }
+
+
+def _first_candidate_text(response: dict[str, Any]) -> str:
+    candidates: list[dict[str, Any]] = response.get("candidates", [])
+    if not candidates:
+        raise RuntimeError("Gemini returned no candidates.")
+    parts_out: list[dict[str, Any]] = candidates[0].get("content", {}).get("parts", [])
+    if not parts_out:
+        raise RuntimeError("Gemini returned no content parts.")
+    return str(parts_out[0].get("text", ""))
+
+
+def _warn_dropped_images(count: int, model: str) -> None:
+    logging.warning(
+        "chat_multimodal: dropping %d images for non-Google model '%s'",
+        count,
+        model,
     )

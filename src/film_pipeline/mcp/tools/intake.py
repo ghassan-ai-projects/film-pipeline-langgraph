@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import _active_project_id, _coerce_runtime_arg, _error, _ok, _services
+
+
+def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None:
+    """Copy user-supplied generation hints (runtime, scene count, constraints) onto the state."""
+    user_runtime = _coerce_runtime_arg(args)
+    if user_runtime > 0:
+        active["target_runtime_seconds"] = user_runtime
+    user_scene_count = args.get("target_scene_count")
+    if isinstance(user_scene_count, int) and user_scene_count > 0:
+        active["target_scene_count"] = user_scene_count
+    user_constraints = args.get("constraints")
+    if isinstance(user_constraints, dict):
+        active["constraints_hints"] = user_constraints
 
 
 async def submit_idea(args: dict[str, object]) -> dict[str, object]:
@@ -17,15 +32,7 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
         return _error("idea is required")
     # Inject the idea and run the graph through intake_node
     active["idea"] = idea
-    user_runtime = _coerce_runtime_arg(args)
-    if user_runtime > 0:
-        active["target_runtime_seconds"] = user_runtime
-    user_scene_count = args.get("target_scene_count")
-    if isinstance(user_scene_count, int) and user_scene_count > 0:
-        active["target_scene_count"] = user_scene_count
-    user_constraints = args.get("constraints")
-    if isinstance(user_constraints, dict):
-        active["constraints_hints"] = user_constraints
+    _apply_intake_hints(active, args)
     state = rt.run_graph(active)
     # Update stored state
     rt.projects[active["project_id"]] = state
