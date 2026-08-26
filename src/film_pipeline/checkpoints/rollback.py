@@ -12,6 +12,7 @@ from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.schemas.checkpoint import (
     CheckpointMetadata,
     InvalidationReport,
+    RollbackOutcome,
     RollbackRecord,
 )
 
@@ -86,7 +87,7 @@ class RollbackManager:
             invalidation_report_ref=f"invalidation:{checkpoint_id}",
             performed_by=performed_by,
             created_at=datetime.now(UTC),
-            outcome="success",
+            outcome=RollbackOutcome.SUCCESS,
         )
         self.records.append(record)
         return record

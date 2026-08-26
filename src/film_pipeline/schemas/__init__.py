@@ -62,6 +62,7 @@ from film_pipeline.schemas.checkpoint import (
     BranchMetadata,
     CheckpointMetadata,
     InvalidationReport,
+    RollbackOutcome,
     RollbackRecord,
 )
 from film_pipeline.schemas.continuity import (
@@ -242,6 +243,7 @@ __all__ = [
     "ReviewStrategy",
     "ReviewerScore",
     "RevisionRequest",
+    "RollbackOutcome",
     "RollbackRecord",
     "RoutingDecision",
     "SceneIntent",
