@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl._model_output import as_dict, as_list, normalize_model_output
 from film_pipeline.schemas.environment import (
     EnvironmentBible,
     EnvironmentFingerprint,
@@ -40,12 +40,12 @@ class EnvironmentBibleAgent(BaseAgent):
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         """Parse model output into an EnvironmentBible artifact."""
-        data = _normalize_model_output(model_output)
-        zones = _as_list(data.get("zones", []))
-        viewpoints = _as_list(data.get("viewpoints", []))
-        lighting_states = _as_list(data.get("lighting_states", []))
-        palette = _as_list(data.get("color_palette", []))
-        fingerprint_data = _as_dict(data.get("fingerprint", {}))
+        data = normalize_model_output(model_output, artifact_key="environment_bible")
+        zones = as_list(data.get("zones", []))
+        viewpoints = as_list(data.get("viewpoints", []))
+        lighting_states = as_list(data.get("lighting_states", []))
+        palette = as_list(data.get("color_palette", []))
+        fingerprint_data = as_dict(data.get("fingerprint", {}))
         bible = EnvironmentBible(
             environment_id=str(data.get("environment_id", "")),
             project_id=str(data.get("project_id", "")),
@@ -67,18 +67,6 @@ class EnvironmentBibleAgent(BaseAgent):
         if not isinstance(bible, EnvironmentBible):
             return False
         return bool(bible.environment_id and bible.locked_prompt_block and bible.fingerprint.text)
-
-
-def _as_dict(value: Any) -> dict[str, Any]:
-    """Coerce an optional or mistyped section to an empty dict."""
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    """Coerce an optional or mistyped section to an empty list."""
-    if not isinstance(value, list):
-        return []
-    return value
 
 
 def _build_zone(entry: dict[str, Any]) -> EnvironmentZone:
@@ -109,19 +97,3 @@ def _build_lighting_state(entry: dict[str, Any]) -> LightingState:
         color_temperature=str(entry.get("color_temperature", "")),
         primary_source=str(entry.get("primary_source", "")),
     )
-
-
-def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
-    """Handle both raw JSON strings and already-parsed dicts."""
-    if isinstance(model_output, str):
-        try:
-            model_output = json.loads(model_output)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-    if not isinstance(model_output, dict):
-        return {}
-    for key in ("environment_bible", "data", "output"):
-        candidate = model_output.get(key)
-        if isinstance(candidate, dict):
-            return candidate
-    return model_output
