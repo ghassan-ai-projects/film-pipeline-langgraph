@@ -7,6 +7,7 @@ from typing import Any
 from film_pipeline.graph.orchestrator_validators._shared import (
     _blocking,
     _blocking_with_id,
+    _extract_rows,
     _row_attr,
 )
 from film_pipeline.schemas.execution_brief import ExecutionBrief
@@ -65,17 +66,6 @@ def validate_script_scene_preservation(
 
 
 # ── Gate A: Shot bible structural check ───────────────────────────────────
-
-
-def _shot_matrix_rows(shot_matrix: Any) -> list[Any]:
-    """Unpack shot rows from a matrix object or a plain dict."""
-    if hasattr(shot_matrix, "rows"):
-        rows: list[Any] = shot_matrix.rows
-        return rows
-    if isinstance(shot_matrix, dict):
-        raw = shot_matrix.get("rows", [])
-        return raw if isinstance(raw, list) else []
-    return []
 
 
 def _movement_count_issues(
@@ -140,7 +130,7 @@ def validate_shot_structure(
 
     Returns a list of blocking issues (empty list = pass).
     """
-    rows = _shot_matrix_rows(shot_matrix)
+    rows = _extract_rows(shot_matrix)
     if not rows:
         return [
             _blocking(
