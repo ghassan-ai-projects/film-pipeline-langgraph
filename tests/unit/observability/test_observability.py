@@ -49,6 +49,12 @@ class TestAudit:
         trail.record(AuditEventType.PROVIDER_ACTION, "p1", "a", "x", cost_usd=0.30)
         assert trail.total_cost_usd() == 0.80
 
+    def test_routing_event_kind(self) -> None:
+        trail = AuditTrail()
+        event = trail.record(AuditEventType.ROUTING, "p1", "orchestrator", "select_agent")
+        assert AuditEventType.ROUTING.value == "routing_decision"
+        assert event.event_id.startswith("audit:routing_decision:")
+
 
 class TestMetrics:
     def test_record(self) -> None:
