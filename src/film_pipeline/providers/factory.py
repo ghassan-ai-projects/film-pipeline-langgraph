@@ -5,6 +5,7 @@ from __future__ import annotations
 from film_pipeline.providers.adapters.imagen4_gemini import Imagen4GeminiProvider
 from film_pipeline.providers.adapters.seedance_openrouter import SeedanceOpenRouterProvider
 from film_pipeline.providers.adapters.veo_fast import VeoFastProvider
+from film_pipeline.providers.base import BaseProviderAdapter
 from film_pipeline.providers.mock_image_provider import MockImageProvider
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas.registries.provider_registry import (
@@ -19,7 +20,7 @@ def build_provider_adapter(
     *,
     provider_type: str = "video",
     models: list[str] | None = None,
-) -> object:
+) -> BaseProviderAdapter:
     """Build a provider adapter with sensible defaults for the known providers."""
     model_list = list(models or _default_models(provider_id))
     entry = ProviderRegistryEntry(
