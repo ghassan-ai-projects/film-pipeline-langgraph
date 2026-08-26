@@ -31,20 +31,7 @@ class CameraBibleAgent(BaseAgent):
 
         bible = CameraLanguageBible(
             project_id=str(data.get("project_id", "")),
-            profiles=[
-                CameraProfile(
-                    profile_id=str(p.get("profile_id", "")),
-                    use_case=str(p.get("use_case", "")),
-                    lens=str(p.get("lens", "")),
-                    framing=str(p.get("framing", "")),
-                    movement=str(p.get("movement", "")),
-                    depth_of_field=str(p.get("depth_of_field", "")),
-                    composition_rules=[str(r) for r in p.get("composition_rules", [])],
-                    transition_rules=[str(t) for t in p.get("transition_rules", [])],
-                    emotional_meaning=str(p.get("emotional_meaning", "")),
-                )
-                for p in profiles_data
-            ],
+            profiles=[_build_camera_profile(p) for p in profiles_data],
             default_profile_id=str(data.get("default_profile_id", "")),
         )
         return {"camera_bible": bible}
@@ -54,6 +41,21 @@ class CameraBibleAgent(BaseAgent):
         if not isinstance(bible, CameraLanguageBible):
             return False
         return len(bible.profiles) > 0
+
+
+def _build_camera_profile(profile_data: dict[str, Any]) -> CameraProfile:
+    """Build one CameraProfile from raw profile fields."""
+    return CameraProfile(
+        profile_id=str(profile_data.get("profile_id", "")),
+        use_case=str(profile_data.get("use_case", "")),
+        lens=str(profile_data.get("lens", "")),
+        framing=str(profile_data.get("framing", "")),
+        movement=str(profile_data.get("movement", "")),
+        depth_of_field=str(profile_data.get("depth_of_field", "")),
+        composition_rules=[str(r) for r in profile_data.get("composition_rules", [])],
+        transition_rules=[str(t) for t in profile_data.get("transition_rules", [])],
+        emotional_meaning=str(profile_data.get("emotional_meaning", "")),
+    )
 
 
 def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
