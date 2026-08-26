@@ -24,7 +24,10 @@ class TransitionPlan(SchemaBase):
 
     from_shot_id: str
     to_shot_id: str
-    transition_type: str = Field(description="'cut' | 'dissolve' | 'fade' | 'wipe'.")
+    # Canonical values from TRANSITION_TYPES in schemas/_base.py.
+    transition_type: str = Field(
+        description="'cut' | 'dissolve' | 'fade_in' | 'fade_out' | 'crossfade'."
+    )
     duration_seconds: float = Field(default=0.0, ge=0)
 
 

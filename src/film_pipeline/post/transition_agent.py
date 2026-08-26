@@ -5,8 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-# Closed vocabulary of transitions the post pipeline can execute.
-TRANSITION_TYPES: tuple[str, ...] = ("cut", "dissolve", "fade_in", "fade_out", "crossfade")
+from film_pipeline.schemas._base import TRANSITION_TYPES as TRANSITION_TYPES
+
+# Closed vocabulary of transitions the post pipeline can execute. The single
+# source lives in schemas/_base.py; re-exported here so existing imports of
+# film_pipeline.post.transition_agent.TRANSITION_TYPES keep resolving.
 
 
 @dataclass
