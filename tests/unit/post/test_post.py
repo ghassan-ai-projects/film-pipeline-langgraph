@@ -83,6 +83,13 @@ class TestTransitions:
         )
         assert plan.transitions[0]["type"] == "dissolve"
 
+    def test_transition_types_matches_canonical_home(self) -> None:
+        """post re-exports exactly the canonical vocabulary from schemas/_base."""
+        from film_pipeline.post.transition_agent import TRANSITION_TYPES
+        from film_pipeline.schemas._base import TRANSITION_TYPES as CANONICAL_TRANSITION_TYPES
+
+        assert TRANSITION_TYPES == CANONICAL_TRANSITION_TYPES
+
 
 class TestAudioDesign:
     def test_plan_audio(self) -> None:

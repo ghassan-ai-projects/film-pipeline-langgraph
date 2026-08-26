@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from film_pipeline.schemas._base import (
+    IssueSeverity,
     ValidationModality,
     ValidationScope,
     ValidationStatus,
@@ -23,12 +24,16 @@ def _make_report(
     if blocking_codes:
         for code in blocking_codes:
             blocking.append(
-                ValidationIssue(code=code, message=f"Issue: {code}", severity="blocking")
+                ValidationIssue(
+                    code=code, message=f"Issue: {code}", severity=IssueSeverity.BLOCKING
+                )
             )
     if warning_codes:
         for code in warning_codes:
             warnings.append(
-                ValidationIssue(code=code, message=f"Warning: {code}", severity="warning")
+                ValidationIssue(
+                    code=code, message=f"Warning: {code}", severity=IssueSeverity.WARNING
+                )
             )
     return ValidationReport(
         validation_id=f"val:{validator_id}:1",

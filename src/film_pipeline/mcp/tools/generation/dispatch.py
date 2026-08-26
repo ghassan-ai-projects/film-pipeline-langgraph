@@ -171,15 +171,20 @@ def _poll_row_status(
 
 
 def _generation_status(provider_status: str) -> GenerationStatus:
-    """Map a provider status string to its ledger generation status."""
+    """Map a provider job status to its ledger generation status."""
+    from film_pipeline.providers.base import ProviderJobStatus
     from film_pipeline.schemas._base import GenerationStatus
 
+    try:
+        job_status = ProviderJobStatus(provider_status)
+    except ValueError:
+        return GenerationStatus.RUNNING
     return {
-        "completed": GenerationStatus.COMPLETED,
-        "failed": GenerationStatus.FAILED,
-        "submitted": GenerationStatus.SUBMITTED,
-        "processing": GenerationStatus.RUNNING,
-    }.get(provider_status, GenerationStatus.RUNNING)
+        ProviderJobStatus.COMPLETED: GenerationStatus.COMPLETED,
+        ProviderJobStatus.FAILED: GenerationStatus.FAILED,
+        ProviderJobStatus.SUBMITTED: GenerationStatus.SUBMITTED,
+        ProviderJobStatus.PROCESSING: GenerationStatus.RUNNING,
+    }.get(job_status, GenerationStatus.RUNNING)
 
 
 async def resume_generation_polling(args: dict[str, object]) -> dict[str, object]:
@@ -195,7 +200,7 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
     from datetime import UTC, datetime
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import ProviderJob
+    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -213,7 +218,7 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
         shot_id=row.shot_id,
         provider_id=row.provider,
         model=row.model,
-        status="submitted",
+        status=ProviderJobStatus.SUBMITTED,
         polls=row.poll_count,
     )
     polled = _poll_row_status(mgr, project_id, generation_id, adapter, job)
@@ -267,14 +272,14 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
     if adapter is None:
         return _error(f"Provider '{row.provider}' not registered.")
 
-    from film_pipeline.providers.base import ProviderJob
+    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     job = ProviderJob(
         job_id=row.provider_job_id,
         shot_id=row.shot_id,
         provider_id=row.provider,
         model=row.model,
-        status="submitted",
+        status=ProviderJobStatus.SUBMITTED,
     )
     cancelled = adapter.cancel(job)
     if cancelled:

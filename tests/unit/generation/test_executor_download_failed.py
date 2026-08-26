@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.executor import GenerationExecutor
 from film_pipeline.generation.ledger import GenerationLedgerManager
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.schemas._base import (
     ArtifactStatus,
     ArtifactType,
@@ -77,7 +77,7 @@ class DownloadErrorAdapter(BaseProviderAdapter):
         )
 
     def poll(self, job: ProviderJob) -> ProviderJob:
-        job.status = "completed"
+        job.status = ProviderJobStatus.COMPLETED
         return job
 
     def download(self, job: ProviderJob, output_dir: str) -> str:
