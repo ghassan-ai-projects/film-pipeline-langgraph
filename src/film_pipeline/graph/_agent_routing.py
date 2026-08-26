@@ -147,6 +147,7 @@ def route_agent(
     *,
     registry: Any | None = None,
     preferred_capability: str | None = None,
+    preferred_agent_id: str | None = None,
 ) -> AgentRouteResult:
     """Select an agent based on task type, phase state, and capabilities.
 
@@ -155,6 +156,12 @@ def route_agent(
 
     When ``preferred_capability`` is provided, it overrides task-type-based
     selection.
+
+    On the create path, ``preferred_agent_id`` (the call site's explicit
+    agent) is honored when the registry knows it — several phases run more
+    than one creator (e.g. shot_bible runs structure extraction *and* shot
+    design), so the phase default alone cannot express every create task.
+    Review and repair paths keep dynamic selection and ignore it.
 
     When ``registry`` is provided, the selection is validated against
     registered agents. When None, returns a best-effort result using
@@ -169,6 +176,11 @@ def route_agent(
             return _repair_route(registry, phase)
         if task_type == "review" or preferred_capability in _REVIEW_CAPABILITIES:
             return _review_route(state, registry, phase)
+        if preferred_agent_id is not None and registry.lookup_by_id(preferred_agent_id) is not None:
+            return AgentRouteResult(
+                agent_id=preferred_agent_id,
+                routing_reason=f"create path for phase '{phase}' — explicit call-site agent",
+            )
         if preferred_capability:
             routed = _capability_route(registry, phase, preferred_capability)
             if routed is not None:

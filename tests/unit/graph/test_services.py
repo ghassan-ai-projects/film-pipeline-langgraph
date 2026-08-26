@@ -9,6 +9,7 @@ from typing import Any
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import _run_agent, _save_artifact, script_node
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
@@ -60,7 +61,9 @@ def test_save_artifact_records_kb_context_ref(tmp_path: Path) -> None:
 
 
 def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) -> None:
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     state: dict[str, object] = {
         "project_id": "p1",
         "idea": "A test film.",

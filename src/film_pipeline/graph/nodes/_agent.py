@@ -73,11 +73,13 @@ def _resolve_routing(
     services: GraphServices,
     phase: str,
     task_type: str,
+    agent_id: str,
 ) -> _Routing:
     """Select the agent for this task type and resolve its contract/implementation.
 
-    Uses dynamic routing for ``review``/``repair`` tasks; create paths fall
-    back to the caller-supplied agent via the router's default.
+    Uses dynamic routing for ``review``/``repair`` tasks; create paths honor
+    the caller-supplied ``agent_id`` when it is registered (several phases run
+    more than one creator), falling back to the phase default otherwise.
     """
     from film_pipeline.graph.router import route_agent
 
@@ -86,6 +88,7 @@ def _resolve_routing(
         phase=phase,
         task_type=task_type,
         registry=services.agent_registry,
+        preferred_agent_id=agent_id if task_type == "create" else None,
     )
     resolved_agent_id = route_result.agent_id
 
@@ -204,7 +207,7 @@ def _run_agent(
     if services is None:
         return {"status": "no_services", "agent": agent_id}
 
-    routing = _resolve_routing(state, services, phase, task_type)
+    routing = _resolve_routing(state, services, phase, task_type, agent_id)
     if routing.contract is None:
         return {"status": "agent_not_found", "agent": routing.agent_id}
 

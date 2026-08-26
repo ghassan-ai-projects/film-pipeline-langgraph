@@ -7,7 +7,6 @@ against live state, and the manual phase-advance fallback.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 from collections.abc import Callable
@@ -122,13 +121,24 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
     candidate_refs = get_candidate_refs(state)
     artifact_versions = dict(candidate_refs)
 
-    with contextlib.suppress(Exception):
+    try:
         rt.create_checkpoint(
             project_id=project_id,
             phase=phase,
             reason="auto: graph step completed",
             artifact_versions=artifact_versions,
             graph_state_ref=graph_state_ref,
+        )
+    except Exception as exc:
+        # A failed auto-checkpoint must not crash the run, but it must be
+        # visible: log with traceback and record an audit event.
+        _logger.warning("Auto-checkpoint failed for %s at %s", project_id, phase, exc_info=True)
+        rt._record_audit(
+            "system",
+            "auto_checkpoint_failed",
+            project_id=project_id,
+            phase=phase,
+            error=str(exc)[:200],
         )
 
 
@@ -155,7 +165,14 @@ def _resume_after_approval(
     active: dict[str, Any],
     current_phase: str,
 ) -> Any:
-    """Resume the graph at the approval gate; fall back to manual advance."""
+    """Resume the graph at the approval gate; fall back to manual advance.
+
+    The fallback fires *only* when no checkpoint exists for the project's
+    thread (legitimate for projects advanced before any graph checkpoint),
+    detected via an empty ``get_state`` snapshot — never on generic failures.
+    A failing resume is logged, audited as ``resume_failed``, and re-raised:
+    errors must not silently bypass the human gate.
+    """
     from langgraph.types import Command
 
     graph = ensure_graph(rt)
@@ -169,18 +186,55 @@ def _resume_after_approval(
 
     token = _gn._SERVICES_CTX.set(rt.services)
     try:
-        state = graph.invoke(
-            Command(resume=_build_resume_payload("approve", active)),
-            config,
-        )
+        try:
+            snapshot = graph.get_state(config)
+        except Exception as exc:
+            _logger.exception(
+                "Graph state probe failed for %s at phase %s",
+                active.get("project_id", ""),
+                current_phase,
+            )
+            rt._record_audit(
+                "system",
+                "resume_failed",
+                project_id=str(active.get("project_id", "")),
+                phase=current_phase,
+                error=type(exc).__name__,
+            )
+            raise
+        if not snapshot.values and not snapshot.next:
+            return advance_to_next_phase(rt, dict(active))
+        try:
+            state = graph.invoke(
+                Command(resume=_build_resume_payload("approve", active)),
+                config,
+            )
+        except Exception as exc:
+            _logger.exception(
+                "Graph resume failed for %s at phase %s",
+                active.get("project_id", ""),
+                current_phase,
+            )
+            rt._record_audit(
+                "system",
+                "resume_failed",
+                project_id=str(active.get("project_id", "")),
+                phase=current_phase,
+                error=type(exc).__name__,
+            )
+            raise
         _preserve_external_generation_requests(state, active)
         _strip_stale_generation_request_blockers(state)
         if _approval_stalled(state, active, current_phase):
+            rt._record_audit(
+                "system",
+                "resume_stalled_manual_advance",
+                project_id=str(active.get("project_id", "")),
+                phase=current_phase,
+                next_phase=str(state.get("current_phase", "")),
+            )
             return advance_to_next_phase(rt, dict(active))
         return state
-    except Exception:
-        # No checkpoint exists — advance manually via phase nodes
-        return advance_to_next_phase(rt, dict(active))
     finally:
         _gn._SERVICES_CTX.reset(token)
 
