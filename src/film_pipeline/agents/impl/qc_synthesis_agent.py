@@ -9,6 +9,20 @@ from film_pipeline.schemas._base import ValidationStatus
 from film_pipeline.schemas.validation import ConsensusReport, ReviewerScore
 
 
+def _normalize_consensus_payload(model_output: dict[str, Any]) -> dict[str, Any]:
+    """Normalize the consensus payload into a consensus field dict.
+
+    The LLM may return the reviewers as a bare list (e.g.
+    ``{"consensus": [{"model_id": ...}]}``) instead of a dict with separate
+    ``reviewers``, ``shared_findings``, etc. keys; any non-list, non-dict
+    payload degrades to an empty report.
+    """
+    consensus = model_output.get("consensus", model_output)
+    if isinstance(consensus, list):
+        return {"reviewers": consensus}
+    return consensus if isinstance(consensus, dict) else {}
+
+
 class QCSynthesisAgent(BaseAgent):
     """Synthesizes multiple validator reports into a unified QC report.
 
@@ -31,39 +45,9 @@ class QCSynthesisAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
-        data = model_output.get("consensus", model_output)
+        data = _normalize_consensus_payload(model_output)
 
-        # Handle the case where the LLM returns the reviewers as a direct
-        # list (e.g. {"consensus": [{"model_id": ...}]}) instead of a dict
-        # with separate "reviewers", "shared_findings", etc. keys.
-        if isinstance(data, list):
-            reviewers_data = data
-            artifact_refs: list[str] = []
-            shared_findings: list[str] = []
-            disagreements: list[str] = []
-            review_id = "qc-001"
-            agreement_level = "medium"
-            consensus_status = ValidationStatus("pass")
-            orchestrator_recommendation = ""
-        elif isinstance(data, dict):
-            reviewers_data = data.get("reviewers", [])
-            artifact_refs = [str(a) for a in data.get("artifact_refs", [])]
-            shared_findings = [str(f) for f in data.get("shared_findings", [])]
-            disagreements = [str(d) for d in data.get("disagreements", [])]
-            review_id = str(data.get("review_id", "qc-001"))
-            agreement_level = str(data.get("agreement_level", "medium"))
-            consensus_status = ValidationStatus(str(data.get("consensus_status", "pass")))
-            orchestrator_recommendation = str(data.get("orchestrator_recommendation", ""))
-        else:
-            reviewers_data = []
-            artifact_refs = []
-            shared_findings = []
-            disagreements = []
-            review_id = "qc-001"
-            agreement_level = "medium"
-            consensus_status = ValidationStatus("pass")
-            orchestrator_recommendation = ""
-
+        reviewers_data = data.get("reviewers", [])
         reviewers = [
             ReviewerScore(
                 model_id=str(r.get("model_id", f"model_{i}")),
@@ -75,14 +59,14 @@ class QCSynthesisAgent(BaseAgent):
         ]
 
         report = ConsensusReport(
-            review_id=review_id,
-            artifact_refs=artifact_refs,
+            review_id=str(data.get("review_id", "qc-001")),
+            artifact_refs=[str(a) for a in data.get("artifact_refs", [])],
             reviewers=reviewers,
-            agreement_level=agreement_level,
-            consensus_status=consensus_status,
-            shared_findings=shared_findings,
-            disagreements=disagreements,
-            orchestrator_recommendation=orchestrator_recommendation,
+            agreement_level=str(data.get("agreement_level", "medium")),
+            consensus_status=ValidationStatus(str(data.get("consensus_status", "pass"))),
+            shared_findings=[str(f) for f in data.get("shared_findings", [])],
+            disagreements=[str(d) for d in data.get("disagreements", [])],
+            orchestrator_recommendation=str(data.get("orchestrator_recommendation", "")),
         )
         return {"consensus_report": report}
 
