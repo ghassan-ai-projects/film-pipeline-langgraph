@@ -13,7 +13,9 @@ ENV_OVERRIDE_MAP: Mapping[str, OverridePath] = {
     "FILM_PIPELINE_QUALITY": ("quality_profile",),
     "FILM_PIPELINE_MAX_SCENES": ("limits", "max_scenes"),
     "FILM_PIPELINE_SKIP_VISUAL_DEV": ("studio", "skip_visual_dev"),
-    "FILM_PIPELINE_MODEL_OVERRIDE": ("models", "creative_writer", "primary"),
+    # Lands in resolved_config["model_profiles"]["creative_writer"]["primary"],
+    # which _model_overrides_for() feeds to ModelRouter.resolve_model_params().
+    "FILM_PIPELINE_MODEL_OVERRIDE": ("model_profiles", "creative_writer", "primary"),
     "FILM_PIPELINE_MAX_CONTEXT_CHARS": ("context", "max_chars_per_artifact"),
     "FILM_PIPELINE_SEARCH_API": ("generation", "search_api"),
     "FILM_PIPELINE_APPROVAL_MODE": ("studio", "require_human_approval"),
@@ -36,7 +38,10 @@ def apply_runtime_overrides(
         raw_value = env.get(env_var)
         if raw_value is None:
             continue
-        _set_nested(resolved, path, _coerce_value(raw_value))
+        value = _coerce_value(raw_value)
+        if path == ("quality_profile",) and isinstance(value, str):
+            value = value.removeprefix("quality.")
+        _set_nested(resolved, path, value)
     return resolved
 
 

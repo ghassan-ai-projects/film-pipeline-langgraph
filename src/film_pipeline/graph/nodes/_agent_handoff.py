@@ -5,6 +5,11 @@ Owns the underscore-prefixed state keys (``_routing_decisions``,
 decisions between nodes without entering artifact storage, plus the
 orchestrator's ``_orchestrator__candidate_refs`` map that
 ``approve_phase_node`` promotes on approval.
+
+Which keys cross the node boundary — and how each is copied — is owned by
+``graph.orchestrator_state.ORCH_CHANNELS``. This module contributes no key
+names of its own; adding a channel means adding a registry row, which the
+channel-registry parity tests enforce.
 """
 
 from __future__ import annotations
@@ -15,32 +20,11 @@ if TYPE_CHECKING:
     from film_pipeline.graph.router import AgentRouteResult
 
 
-def _copy_decision_channels(source: dict[str, Any], dest: dict[str, Any]) -> None:
-    """Copy whole decision-channel keys (routing, repair feedback, reports)."""
-    for key in ("_routing_decisions", "_repair_feedback", "_validation_reports"):
-        if key in source:
-            dest[key] = source[key]
-
-
-def _copy_published_candidate_refs(source: dict[str, Any], dest: dict[str, Any]) -> None:
-    """Carry the candidate-ref map so approval can promote published artifacts.
-
-    ``_save_artifact`` records each ref into the node's working copy via
-    ``set_candidate_ref``. Without copying the map into the returned update,
-    it never reaches real graph state and ``approve_phase_node`` promotes
-    an empty snapshot.
-    """
-    from film_pipeline.graph.orchestrator_state import get_candidate_refs
-
-    refs = get_candidate_refs(source)
-    if refs:
-        dest["_orchestrator__candidate_refs"] = refs
-
-
-def _append_new_reducer_entries(
+def _propagate_append_only_entries(
     source: dict[str, Any],
     dest: dict[str, Any],
     original: dict[str, Any] | None,
+    key: str,
 ) -> None:
     """Propagate only entries appended after the node's input snapshot.
 
@@ -48,15 +32,14 @@ def _append_new_reducer_entries(
     slicing against ``original`` keeps the reducer from re-appending entries
     the node merely carried through.
     """
-    for key in ("issues", "validation_report_refs"):
-        if key not in source:
-            continue
-        entries = list(source.get(key, []) or [])
-        if original is not None:
-            prior = len(list(original.get(key, []) or []))
-            entries = entries[prior:]
-        if entries or original is None:
-            dest[key] = entries
+    if key not in source:
+        return
+    entries = list(source.get(key, []) or [])
+    if original is not None:
+        prior = len(list(original.get(key, []) or []))
+        entries = entries[prior:]
+    if entries or original is None:
+        dest[key] = entries
 
 
 def _propagate_side_effects(
@@ -64,19 +47,30 @@ def _propagate_side_effects(
     dest: dict[str, Any],
     original: dict[str, Any] | None = None,
 ) -> None:
-    """Copy known side-effect keys from ``source`` to ``dest``.
+    """Copy registered side-effect keys from ``source`` to ``dest``.
 
     ``_run_agent`` mutates ``source`` (the node's ``new_state``) via
     ``_record_handoff``, but nodes return only an ``updates`` dict.
-    This helper ensures routing decisions and other side effects
-    survive the node boundary.
+    This helper ensures side effects survive the node boundary exactly as
+    declared by ``ORCH_CHANNELS`` — one policy per key, no local key list.
 
     When ``original`` (the node's input state) is provided, append-only
     reducer channels contribute only newly appended entries.
     """
-    _copy_decision_channels(source, dest)
-    _copy_published_candidate_refs(source, dest)
-    _append_new_reducer_entries(source, dest, original)
+    from film_pipeline.graph.orchestrator_state import ORCH_CHANNELS
+
+    for spec in ORCH_CHANNELS:
+        if spec.propagation == "explicit":
+            continue
+        if spec.propagation == "append_only":
+            _propagate_append_only_entries(source, dest, original, spec.key)
+            continue
+        if spec.key not in source:
+            continue
+        value = source[spec.key]
+        if spec.propagation == "full_truthy" and not value:
+            continue
+        dest[spec.key] = value
 
 
 def _prepend_repair_feedback(task: str, state: dict[str, Any]) -> str:

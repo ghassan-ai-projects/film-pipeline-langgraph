@@ -12,6 +12,7 @@ from film_pipeline.mcp.tools import (
     get_current_phase,
     get_film_state,
     get_next_actions,
+    get_orchestrator_summary,
     set_active_project,
 )
 
@@ -70,6 +71,26 @@ def test_get_next_actions_success() -> None:
     result = asyncio.run(get_next_actions({}))
     assert result["ok"] is True
     assert "next_action" in result
+
+
+def test_read_only_action_views_do_not_mutate_state_or_expose_router_metadata() -> None:
+    _make_active_project("state-read-only")
+    rt = gr()
+    state = rt.get_active()
+    assert state is not None
+    state["current_phase"] = "script"
+    state["approved"] = True
+    state["issues"] = [{"code": "bad-script", "severity": "blocking", "message": "Fix it."}]
+    before = dict(state)
+
+    next_actions = asyncio.run(get_next_actions({}))
+    summary = asyncio.run(get_orchestrator_summary({}))
+
+    assert state == before
+    next_blocked = cast(list[dict[str, object]], next_actions["blocked"])
+    summary_blocked = cast(list[dict[str, object]], summary["blocked_actions"])
+    assert all("origin" not in blocker for blocker in next_blocked)
+    assert all("origin" not in blocker for blocker in summary_blocked)
 
 
 def test_get_blockers_requires_active_project() -> None:

@@ -13,10 +13,24 @@ from film_pipeline.schemas.execution_brief import ExecutionBrief
 
 
 def _load_brief_from_state(state: dict[str, Any]) -> ExecutionBrief | None:
-    """Try to load the ExecutionBrief from orchestrator state cache first."""
+    """Load the brief cached in orchestrator state, coerced to the model.
+
+    ``set_execution_brief`` persists ``model_dump(mode="json")``, so live
+    state holds a plain mapping once the brief crosses any node boundary.
+    """
     from film_pipeline.graph.orchestrator_state import get_execution_brief
 
-    return get_execution_brief(state)
+    data = get_execution_brief(state)
+    if data is None:
+        return None
+    if isinstance(data, ExecutionBrief):
+        return data
+    if isinstance(data, dict):
+        try:
+            return ExecutionBrief(**data)
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:

@@ -243,6 +243,13 @@ def main() -> int:
     if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
 
+    # Stdio transport owns stderr's cleanliness; persistent runs also retain a
+    # file log under the same runtime root used by StudioRuntime.
+    from film_pipeline.app._persistence import configured_runtime_root
+    from film_pipeline.app.logging_setup import configure_logging
+
+    configure_logging(configured_runtime_root())
+
     issues = validate_environment()
     if issues:
         _warn_bootstrap_issues(issues)

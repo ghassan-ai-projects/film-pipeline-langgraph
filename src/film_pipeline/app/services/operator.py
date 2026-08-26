@@ -36,7 +36,12 @@ from film_pipeline.app.services.models import (
 )
 from film_pipeline.config import profile_resolver as _profiles
 from film_pipeline.graph import orchestrator_state as ostate
-from film_pipeline.graph.router import compute_actions
+from film_pipeline.graph.router import (
+    RouterResult,
+    compute_actions,
+    get_blockers_for_state,
+    public_blocked_actions,
+)
 
 
 class OperatorService:
@@ -221,8 +226,9 @@ class OperatorService:
     def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
         """Return the current dashboard summary."""
         state = self._state_for_project(project_id)
-        ostate.ensure_orchestrator_state(state)
-        router_result = compute_actions(state)
+        routing_state = dict(state)
+        ostate.ensure_orchestrator_state(routing_state)
+        router_result = compute_actions(routing_state)
         latest_decision = ostate.get_latest_routing_decision(state)
         project_id_value = str(state["project_id"])
         checkpoint_count = len(self.runtime.list_checkpoints(project_id_value))
@@ -238,7 +244,7 @@ class OperatorService:
             route_reason=str(latest_decision.get("reason", "")) if latest_decision else "",
             idea=str(state.get("idea", "")),
             eligible_actions=list(router_result.eligible),
-            blocked_actions=list(router_result.blocked),
+            blocked_actions=public_blocked_actions(router_result),
             pending_revisions=list(ostate.get_pending_revisions(state)),
             candidate_refs=dict(ostate.get_candidate_refs(state)),
             approved_refs=dict(ostate.get_approved_refs(state)),
@@ -247,7 +253,7 @@ class OperatorService:
             issue_count=len(cast(list[Any], state.get("issues", []))),
             artifact_count=len(self.list_artifacts(project_id_value)),
             checkpoint_count=checkpoint_count,
-            has_blockers=self._has_blockers(state),
+            has_blockers=self._has_blockers(state, routing=router_result),
             stalled_phase=str(state.get("_stalled_phase", "")),
             profile_stack=dict(cast(Mapping[str, str], state.get("profile_stack", {}))),
             generation_policy=str(state.get("generation_policy", "generate")),
@@ -264,7 +270,7 @@ class OperatorService:
                 recommendation="Submit an idea to start intake.",
             )
 
-        router_result = compute_actions(state)
+        router_result = compute_actions(dict(state))
         artifacts = self.list_artifacts(str(state["project_id"]), phase=phase)
         blocking_issues = [
             str(issue.get("message", issue)) for issue in self._blocking_state_issues(state)
@@ -277,7 +283,7 @@ class OperatorService:
             candidate_artifacts=list(artifacts),
             open_issues=blocking_issues,
             available_actions=list(router_result.eligible),
-            blocked_actions=list(router_result.blocked),
+            blocked_actions=public_blocked_actions(router_result),
         )
 
     def get_validation_workspace(self, project_id: str | None = None) -> ValidationWorkspace:
@@ -434,10 +440,14 @@ class OperatorService:
             raise ProjectNotFoundError(f"Project '{project_id}' not found.")
         return project
 
-    def _has_blockers(self, state: dict[str, Any]) -> bool:
-        project_id = str(state.get("project_id", ""))
-        runtime_blockers = self.runtime.get_blockers(project_id) if project_id else []
-        return bool(runtime_blockers or self._blocking_state_issues(state))
+    def _has_blockers(self, state: dict[str, Any], routing: RouterResult | None = None) -> bool:
+        """True when live project state carries anything blocking.
+
+        The MCP ``get_blockers`` tool derives the same signal from
+        ``compute_actions`` plus blocking issues; this predicate stays a cheap
+        boolean over the state already in hand.
+        """
+        return bool(get_blockers_for_state(state, routing=routing))
 
     @staticmethod
     def _blocking_state_issues(state: dict[str, Any]) -> list[Mapping[str, Any]]:

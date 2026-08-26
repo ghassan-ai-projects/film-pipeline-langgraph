@@ -7,6 +7,7 @@ from dataclasses import replace
 from typing import Any
 from unittest.mock import patch
 
+import pytest
 from textual.binding import Binding
 from textual.coordinate import Coordinate
 from textual.widgets import Button, Collapsible, DataTable, Input, Select, Static, TextArea
@@ -1326,12 +1327,14 @@ def test_submit_revision_failure_surfaces_status() -> None:
     _run(_body())
 
 
-def test_main_entry_point() -> None:
+def test_main_entry_point(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.tui import app as app_module
 
+    monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
     with patch.object(FilmStudioApp, "run", lambda _self: None):
         assert app_module.main([]) == 0
         assert app_module.main(["--create"]) == 0
+    monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
 
 
 def test_home_form_result_ignores_invalid_request() -> None:

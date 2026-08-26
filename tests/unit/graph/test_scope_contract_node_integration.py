@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.graph import nodes
 from film_pipeline.graph.nodes import _attach_scope_contract, _development_scene_count
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
@@ -33,7 +34,7 @@ def _reset_services_contextvar() -> Any:
 
 
 def _mock_state(**extra: Any) -> dict[str, Any]:
-    svc = GraphServices.for_mock_runtime()
+    svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
     nodes._SERVICES_CTX.set(svc)
     state: dict[str, Any] = {
         "project_id": "probe",
@@ -76,12 +77,12 @@ def test_development_scene_count_no_services() -> None:
 
 
 def test_development_scene_count_no_ref() -> None:
-    svc = GraphServices.for_mock_runtime()
+    svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
     assert _development_scene_count({SERVICES_KEY: svc}) == 0
 
 
 def test_development_scene_count_bad_ref_returns_zero() -> None:
-    svc = GraphServices.for_mock_runtime()
+    svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
     state = {SERVICES_KEY: svc, "project_id": "probe", "scene_list_ref": "artifact:nope:v1"}
     assert _development_scene_count(state) == 0
 
