@@ -9,7 +9,11 @@ from uuid import uuid4
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.manager import CheckpointManager
-from film_pipeline.schemas.checkpoint import InvalidationReport, RollbackRecord
+from film_pipeline.schemas.checkpoint import (
+    CheckpointMetadata,
+    InvalidationReport,
+    RollbackRecord,
+)
 
 
 @dataclass
@@ -36,22 +40,48 @@ class RollbackManager:
         if checkpoint is None:
             raise ValueError(f"Checkpoint not found: {checkpoint_id}")
 
-        # Produce invalidation report
-        report = self.invalidation.report(
+        report = self._invalidation_report(checkpoint_id, checkpoint, artifact_types)
+        self._restore_checkpoint_files(checkpoint)
+        record = self._record_rollback(
+            checkpoint_id=checkpoint_id,
+            project_id=checkpoint.project_id,
+            performed_by=performed_by,
+        )
+        # Create a new commit for the rollback (does not rewrite history)
+        self.git.commit(
+            f"rollback: to {checkpoint_id} by {performed_by}",
+            files=None,
+        )
+        return record, report
+
+    def _invalidation_report(
+        self,
+        checkpoint_id: str,
+        checkpoint: CheckpointMetadata,
+        artifact_types: list[str] | None,
+    ) -> InvalidationReport:
+        """Report which artifacts rolling back to this checkpoint reverts or invalidates."""
+        return self.invalidation.report(
             rollback_target=checkpoint_id,
             artifact_types=artifact_types or list(checkpoint.artifact_versions.keys()),
             requires_regeneration=checkpoint.phase.value in ("generation", "qc", "post"),
         )
 
-        # Restore files from the checkpoint commit
+    def _restore_checkpoint_files(self, checkpoint: CheckpointMetadata) -> None:
+        """Restore every file tracked at the checkpoint commit."""
         if checkpoint.git_commit:
-            # Restore all files tracked at that commit
             self.git.restore_files(checkpoint.git_commit, ["."])
 
-        # Create audit rollback record
+    def _record_rollback(
+        self,
+        checkpoint_id: str,
+        project_id: str,
+        performed_by: str,
+    ) -> RollbackRecord:
+        """Append the success audit record for this rollback."""
         record = RollbackRecord(
             rollback_id=f"rollback:{checkpoint_id}:{uuid4().hex[:8]}",
-            project_id=checkpoint.project_id,
+            project_id=project_id,
             target_checkpoint_id=checkpoint_id,
             invalidation_report_ref=f"invalidation:{checkpoint_id}",
             performed_by=performed_by,
@@ -59,14 +89,7 @@ class RollbackManager:
             outcome="success",
         )
         self.records.append(record)
-
-        # Create a new commit for the rollback (does not rewrite history)
-        self.git.commit(
-            f"rollback: to {checkpoint_id} by {performed_by}",
-            files=None,
-        )
-
-        return record, report
+        return record
 
     def rollback_artifact(
         self,
