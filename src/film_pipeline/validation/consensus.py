@@ -25,7 +25,7 @@ class ConsensusBuilder:
         """Synthesize multiple reviewer reports into one consensus."""
         if not reports:
             return ConsensusReport(
-                review_id=f"consensus:{uuid4().hex[:8]}",
+                review_id=_new_review_id(),
                 artifact_refs=artifact_refs or [],
                 reviewers=[],
                 agreement_level="low",
@@ -35,31 +35,15 @@ class ConsensusBuilder:
                 orchestrator_recommendation="Cannot synthesize without reviewer reports.",
             )
 
-        reviewers = [
-            ReviewerScore(
-                model_id=r.validator_id,
-                validator_id=r.validator_id,
-                score=r.score,
-                status=r.status,
-            )
-            for r in reports
-        ]
+        reviewers = _reviewer_scores(reports)
 
         agreement_level = _calculate_agreement(reports)
         consensus_status = _consensus_status(reports)
         shared, disagreements = _compare_findings(reports)
-
-        if consensus_status == ValidationStatus.BLOCKED:
-            recommendation = "Revise before human approval."
-        elif consensus_status == ValidationStatus.PASS_WITH_NOTES:
-            recommendation = "Pass with noted warnings. Proceed with caution."
-        elif agreement_level == "low":
-            recommendation = "Reviewers disagree significantly. Escalate to human."
-        else:
-            recommendation = "Approve."
+        recommendation = _orchestrator_recommendation(consensus_status, agreement_level)
 
         return ConsensusReport(
-            review_id=f"consensus:{uuid4().hex[:8]}",
+            review_id=_new_review_id(),
             artifact_refs=artifact_refs or [],
             reviewers=reviewers,
             agreement_level=agreement_level,
@@ -68,6 +52,24 @@ class ConsensusBuilder:
             disagreements=disagreements,
             orchestrator_recommendation=recommendation,
         )
+
+
+def _new_review_id() -> str:
+    """Fresh identifier for one synthesized consensus report."""
+    return f"consensus:{uuid4().hex[:8]}"
+
+
+def _reviewer_scores(reports: list[ValidationReport]) -> list[ReviewerScore]:
+    """Project each reviewer report onto its consensus reviewer score."""
+    return [
+        ReviewerScore(
+            model_id=r.validator_id,
+            validator_id=r.validator_id,
+            score=r.score,
+            status=r.status,
+        )
+        for r in reports
+    ]
 
 
 def _calculate_agreement(reports: list[ValidationReport]) -> str:
@@ -92,7 +94,7 @@ def _consensus_status(reports: list[ValidationReport]) -> ValidationStatus:
         return ValidationStatus.PASS_WITH_NOTES
     if all(s == ValidationStatus.PASS for s in statuses):
         return ValidationStatus.PASS
-    return ValidationStatus.NEEDS_REVISION  # pragma: no cover — all statuses caught above
+    return ValidationStatus.NEEDS_REVISION  # pragma: no cover — ERROR-status reviews land here
 
 
 def _compare_findings(
@@ -119,3 +121,17 @@ def _compare_findings(
         shared.append(f"All reviewers note warnings: {', '.join(sorted(all_warnings))}")
 
     return shared, disagreements
+
+
+def _orchestrator_recommendation(
+    consensus_status: ValidationStatus,
+    agreement_level: str,
+) -> str:
+    """Human-facing next step implied by the consensus outcome."""
+    if consensus_status == ValidationStatus.BLOCKED:
+        return "Revise before human approval."
+    if consensus_status == ValidationStatus.PASS_WITH_NOTES:
+        return "Pass with noted warnings. Proceed with caution."
+    if agreement_level == "low":
+        return "Reviewers disagree significantly. Escalate to human."
+    return "Approve."
