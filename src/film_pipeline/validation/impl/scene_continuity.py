@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
+from film_pipeline.schemas._base import IssueSeverity, ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
     ValidatorThresholds,
@@ -287,7 +287,7 @@ class SceneContinuityValidator(BaseValidator):
             ValidationIssue(
                 code=str(i.get("code", "unknown")),
                 message=str(i.get("message", "")),
-                severity=str(i.get("severity", "info")),
+                severity=IssueSeverity(i.get("severity", "info")),
                 suggestion=str(i.get("suggestion", "")),
                 affected_entity=str(i.get("affected_entity", "")),
                 affected_field=str(i.get("affected_field", "")),

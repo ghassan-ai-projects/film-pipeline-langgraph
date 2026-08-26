@@ -435,7 +435,7 @@ def test_resume_generation_polling_status_mapping(rt: StudioRuntime, provider_st
     asyncio.run(_plan_and_approve(["S001"]))
     asyncio.run(start_generation_batch({}))
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import ProviderJob
+    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
     from film_pipeline.schemas._base import GenerationStatus
 
     assert rt.services is not None
@@ -452,7 +452,7 @@ def test_resume_generation_polling_status_mapping(rt: StudioRuntime, provider_st
             shot_id=job.shot_id,
             provider_id=job.provider_id,
             model=job.model,
-            status=provider_status,
+            status=ProviderJobStatus(provider_status),
             polls=job.polls + 1,
         )
 
