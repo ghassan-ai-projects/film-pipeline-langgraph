@@ -7,23 +7,24 @@ import film_pipeline.mcp.tools as tools_pkg
 from .helpers import _active_project_id, _error, _ok
 
 
-async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
+def _active_project_state(args: dict[str, object]) -> dict[str, object] | None:
+    """Return the active project's state, or ``None`` when none resolves."""
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+        return None
+    return rt.get_project(project_id)
+
+
+async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
     return _ok(current_phase=state.get("current_phase", ""))
 
 
 async def get_film_state(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
     # Return a sanitized copy (no internal keys)
@@ -36,11 +37,7 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
 
@@ -73,11 +70,7 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
 
 
 async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
     from film_pipeline.graph.router import compute_actions
@@ -91,12 +84,8 @@ async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_blockers(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    state = rt.get_project(project_id)
+    state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
-    blockers = rt.get_blockers(state["project_id"])
+    blockers = tools_pkg.get_runtime().get_blockers(str(state["project_id"]))
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)
