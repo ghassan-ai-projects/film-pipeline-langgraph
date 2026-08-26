@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from uuid import uuid4
 
+# Placeholder timeline until real media probing exists: scenes are spaced
+# evenly and dialogue/SFX get fixed slot lengths.
+_SCENE_SPACING_SECONDS = 30.0
+_DIALOGUE_SLOT_SECONDS = 25.0
+_SFX_SLOT_SECONDS = 5.0
+
 
 @dataclass
 class AudioTrack:
@@ -37,15 +43,14 @@ def _append_dialogue_tracks(plan: AudioPlan, scene_count: int, dialogue: dict[st
                 AudioTrack(
                     track_id=f"dialogue-{scene_id}",
                     kind="dialogue",
-                    start_seconds=i * 30.0,
-                    duration_seconds=25.0,
+                    start_seconds=i * _SCENE_SPACING_SECONDS,
+                    duration_seconds=_DIALOGUE_SLOT_SECONDS,
                     source=f"script/{scene_id}/audio",
                 )
             )
 
 
 def _append_music_track(plan: AudioPlan, total_duration: float) -> None:
-    # Music track (full film)
     plan.tracks.append(
         AudioTrack(
             track_id="music-main",
@@ -58,14 +63,13 @@ def _append_music_track(plan: AudioPlan, total_duration: float) -> None:
 
 
 def _append_sfx_tracks(plan: AudioPlan, scene_count: int) -> None:
-    # SFX tracks (per scene)
     for i in range(scene_count):
         plan.tracks.append(
             AudioTrack(
                 track_id=f"sfx-scene-{i + 1:03d}",
                 kind="sfx",
-                start_seconds=i * 30.0,
-                duration_seconds=5.0,
+                start_seconds=i * _SCENE_SPACING_SECONDS,
+                duration_seconds=_SFX_SLOT_SECONDS,
                 notes="Ambient + spot effects",
             )
         )
