@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl._model_output import as_dict, as_list, normalize_model_output
 from film_pipeline.schemas.character import (
     CharacterBible,
     CharacterIdentity,
@@ -40,13 +40,13 @@ class CharacterBibleAgent(BaseAgent):
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         """Parse model output into a CharacterBible artifact."""
-        data = _normalize_model_output(model_output)
+        data = normalize_model_output(model_output, artifact_key="character_bible")
         character_id = str(data.get("character_id", ""))
         identity_data = _section_dict(data, "visual_identity", "identity")
         voice_data = _section_dict(data, "voice_rules", "voice")
         wardrobe_data = _section_dict(data, "wardrobe_rules", "wardrobe")
-        arc_data = _as_dict(data.get("emotional_arc", {}))
-        relationships = _as_list(data.get("relationship_map", data.get("relationships", [])))
+        arc_data = as_dict(data.get("emotional_arc", {}))
+        relationships = as_list(data.get("relationship_map", data.get("relationships", [])))
         bible = CharacterBible(
             character_id=character_id,
             project_id=str(data.get("project_id", "")),
@@ -67,22 +67,10 @@ class CharacterBibleAgent(BaseAgent):
         return bool(bible.character_id and bible.visual_identity.identity_block)
 
 
-def _as_dict(value: Any) -> dict[str, Any]:
-    """Coerce an optional or mistyped section to an empty dict."""
-    return value if isinstance(value, dict) else {}
-
-
-def _as_list(value: Any) -> list[Any]:
-    """Coerce an optional or mistyped section to an empty list."""
-    if not isinstance(value, list):
-        return []
-    return value
-
-
 def _section_dict(data: dict[str, Any], primary_key: str, fallback_key: str) -> dict[str, Any]:
     """Read a dict section honoring the legacy two-key fallback order."""
     raw = data.get(primary_key, data.get(fallback_key, {}))
-    return _as_dict(raw)
+    return as_dict(raw)
 
 
 def _build_visual_identity(character_id: str, identity_data: dict[str, Any]) -> CharacterIdentity:
@@ -132,20 +120,3 @@ def _build_relationship(entry: dict[str, Any]) -> RelationshipMap:
         relation=str(entry.get("relation", "")),
         evolution=str(entry.get("evolution", "")),
     )
-
-
-def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
-    """Handle both raw JSON strings and already-parsed dicts."""
-    if isinstance(model_output, str):
-        try:
-            model_output = json.loads(model_output)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-    if not isinstance(model_output, dict):
-        return {}
-    # Try nested keys
-    for key in ("character_bible", "data", "output"):
-        candidate = model_output.get(key)
-        if isinstance(candidate, dict):
-            return candidate
-    return model_output

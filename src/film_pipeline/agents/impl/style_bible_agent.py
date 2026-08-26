@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl._model_output import normalize_model_output
 from film_pipeline.schemas.style import StyleBible
 
 
@@ -26,7 +26,7 @@ class StyleBibleAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
-        data = _normalize_model_output(model_output)
+        data = normalize_model_output(model_output, artifact_key="style_bible")
         bible = StyleBible(
             project_id=str(data.get("project_id", "")),
             color_palette=_coerce_str_list(data.get("color_palette")),
@@ -52,18 +52,3 @@ def _coerce_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value]
-
-
-def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
-    if isinstance(model_output, str):
-        try:
-            model_output = json.loads(model_output)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-    if not isinstance(model_output, dict):
-        return {}
-    for key in ("style_bible", "data", "output"):
-        candidate = model_output.get(key)
-        if isinstance(candidate, dict):
-            return candidate
-    return model_output

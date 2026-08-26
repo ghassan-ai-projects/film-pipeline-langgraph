@@ -62,7 +62,7 @@ class QCSynthesisAgent(BaseAgent):
             review_id=str(data.get("review_id", "qc-001")),
             artifact_refs=[str(a) for a in data.get("artifact_refs", [])],
             reviewers=reviewers,
-            agreement_level=str(data.get("agreement_level", "medium")),
+            agreement_level=data.get("agreement_level", "medium"),
             consensus_status=ValidationStatus(str(data.get("consensus_status", "pass"))),
             shared_findings=[str(f) for f in data.get("shared_findings", [])],
             disagreements=[str(d) for d in data.get("disagreements", [])],

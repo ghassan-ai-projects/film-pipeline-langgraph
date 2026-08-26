@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl._model_output import as_list, normalize_model_output
 from film_pipeline.schemas.camera import CameraLanguageBible, CameraProfile
 
 
@@ -24,11 +24,8 @@ class CameraBibleAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
-        data = _normalize_model_output(model_output)
-        profiles_data = data.get("profiles", [])
-        if not isinstance(profiles_data, list):
-            profiles_data = []
-
+        data = normalize_model_output(model_output, artifact_key="camera_bible")
+        profiles_data = as_list(data.get("profiles", []))
         bible = CameraLanguageBible(
             project_id=str(data.get("project_id", "")),
             profiles=[_build_camera_profile(p) for p in profiles_data],
@@ -56,18 +53,3 @@ def _build_camera_profile(profile_data: dict[str, Any]) -> CameraProfile:
         transition_rules=[str(t) for t in profile_data.get("transition_rules", [])],
         emotional_meaning=str(profile_data.get("emotional_meaning", "")),
     )
-
-
-def _normalize_model_output(model_output: dict[str, Any] | str) -> dict[str, Any]:
-    if isinstance(model_output, str):
-        try:
-            model_output = json.loads(model_output)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-    if not isinstance(model_output, dict):
-        return {}
-    for key in ("camera_bible", "data", "output"):
-        candidate = model_output.get(key)
-        if isinstance(candidate, dict):
-            return candidate
-    return model_output

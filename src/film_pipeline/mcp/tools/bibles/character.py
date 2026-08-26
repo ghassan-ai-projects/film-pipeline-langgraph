@@ -8,6 +8,7 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
+    _chat_json_or_mock,
     _constitution_theme,
     _load_artifact_if_present,
     _load_script_text,
@@ -152,11 +153,9 @@ def _request_character_bible_output(
     rt: Any, prompt: str, character_id: str, character_name: str, project_id: str
 ) -> dict[str, Any]:
     """Obtain CharacterBible JSON from the model adapter or mock fallback."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return _character_mock_payload(character_id, character_name, project_id)
-    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
-    return raw if isinstance(raw, dict) else {}
+    return _chat_json_or_mock(
+        rt, prompt, _character_mock_payload(character_id, character_name, project_id)
+    )
 
 
 def _execute_character_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:

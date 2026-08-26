@@ -16,7 +16,11 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.base import (
+    BaseProviderAdapter,
+    ProviderJob,
+    ProviderJobStatus,
+)
 from film_pipeline.providers.credentials import lookup, redact
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
@@ -112,7 +116,7 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
             provider_id=self.entry.provider_id,
             model=payload.get("model", "seedance"),
             payload=payload,
-            status="submitted",
+            status=ProviderJobStatus.SUBMITTED,
         )
         # Respect initial delay
         time.sleep(self.polling_config["initial_delay_seconds"])
@@ -121,7 +125,7 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
     def poll(self, job: ProviderJob) -> ProviderJob:
         # Simulate polling — in a real integration, OpenRouter has a status endpoint.
         # For now, assume immediate completion for testability.
-        job.status = "completed"
+        job.status = ProviderJobStatus.COMPLETED
         job.polls += 1
         return job
 
@@ -166,7 +170,7 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
     def cancel(self, job: ProviderJob) -> bool:
         try:
             self._request("DELETE", f"/generation/{job.job_id}", {})
-            job.status = "cancelled"
+            job.status = ProviderJobStatus.CANCELLED
             return True
         except RuntimeError:
             return False

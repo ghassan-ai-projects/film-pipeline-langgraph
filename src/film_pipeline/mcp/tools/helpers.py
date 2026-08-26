@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
+import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
 
 
@@ -48,6 +49,21 @@ def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
     if active is not None:
         return str(active["project_id"])
     return None
+
+
+def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
+    """Return the active project's state, or ``None`` when none resolves.
+
+    ``get_runtime`` must keep being resolved through the package attribute at
+    call time (never via a ``from`` import): tests monkeypatch
+    ``film_pipeline.mcp.tools.get_runtime`` by attribute, and only lazy
+    binding sees the patch.
+    """
+    rt = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return None
+    return rt.get_project(project_id)
 
 
 def _services(rt: object) -> Any:

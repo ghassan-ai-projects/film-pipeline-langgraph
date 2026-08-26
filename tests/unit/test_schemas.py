@@ -10,6 +10,9 @@ import json
 from datetime import UTC, datetime
 from typing import TypeVar
 
+import pytest
+from pydantic import ValidationError
+
 from film_pipeline.schemas import (
     ActMap,
     AgentHandoff,
@@ -81,6 +84,7 @@ from film_pipeline.schemas import (
     ResumeToken,
     ReviewerScore,
     RevisionRequest,
+    RollbackOutcome,
     RollbackRecord,
     RoutingDecision,
     SceneIntent,
@@ -114,6 +118,7 @@ from film_pipeline.schemas.registries import (
     ValidatorRegistryEntry,
     ValidatorThresholds,
 )
+from film_pipeline.schemas.validation import AgreementLevel
 
 # --- Helpers --------------------------------------------------------------
 
@@ -464,9 +469,55 @@ def test_validation_report_statuses() -> None:
         modalities=[ValidationModality.TEXT],
         score=85.0,
         status=ValidationStatus.PASS_WITH_NOTES,
-        warnings=[ValidationIssue(code="W1", message="dialogue dense", severity="warning")],
+        warnings=[
+            ValidationIssue(code="W1", message="dialogue dense", severity=IssueSeverity.WARNING)
+        ],
     )
     assert r.warnings[0].code == "W1"
+
+
+def test_validation_issue_severity_uses_shared_enum() -> None:
+    """Typed construction lands on the shared IssueSeverity vocabulary."""
+    issue = ValidationIssue(code="W1", message="dense", severity=IssueSeverity.WARNING)
+    assert issue.severity is IssueSeverity.WARNING
+    assert issue.severity.value == "warning"
+    revived = _round_trip(issue)
+    assert revived.severity == "warning"
+    assert json.loads(json.dumps(revived.model_dump(mode="json")))["severity"] == "warning"
+
+
+def test_validation_issue_coerces_wire_format_severity() -> None:
+    """Persisted JSON carrying a plain severity string validates and normalizes."""
+    issue = ValidationIssue.model_validate(
+        {"code": "W1", "message": "dense", "severity": "blocking"}
+    )
+    assert issue.severity is IssueSeverity.BLOCKING
+
+
+def test_validation_issue_rejects_unknown_severity() -> None:
+    with pytest.raises(ValidationError):
+        ValidationIssue.model_validate({"code": "X1", "message": "mystery", "severity": "critical"})
+
+
+@pytest.mark.parametrize("level", ["high", "medium", "low"])
+def test_consensus_agreement_level_vocabulary(level: AgreementLevel) -> None:
+    report = ConsensusReport(
+        review_id="r1",
+        agreement_level=level,
+        consensus_status=ValidationStatus.PASS,
+    )
+    assert report.agreement_level == level
+
+
+def test_consensus_report_rejects_unknown_agreement_level() -> None:
+    with pytest.raises(ValidationError):
+        ConsensusReport.model_validate(
+            {
+                "review_id": "r1",
+                "agreement_level": "very_high",
+                "consensus_status": "pass",
+            }
+        )
 
 
 def test_consensus_report() -> None:
@@ -646,6 +697,21 @@ def test_provider_health_blocked() -> None:
     assert s.status == ProviderStatus.BLOCKED_QUOTA
 
 
+@pytest.mark.parametrize("state", ["ok", "low", "exhausted"])
+def test_provider_health_quota_and_credit_states_accept_contract_values(state: str) -> None:
+    s = ProviderHealthState.model_validate(
+        {"provider_id": "seedance", "quota_state": state, "credit_state": state}
+    )
+    assert s.quota_state == state
+    assert s.credit_state == state
+
+
+@pytest.mark.parametrize("field", ["quota_state", "credit_state"])
+def test_provider_health_rejects_invalid_state_values(field: str) -> None:
+    with pytest.raises(ValidationError):
+        ProviderHealthState.model_validate({"provider_id": "seedance", field: "unknown"})
+
+
 # --- Failure decisions ---------------------------------------------------
 
 
@@ -745,9 +811,62 @@ def test_rollback_record() -> None:
         invalidation_report_ref="inv1",
         performed_by="human:owner",
         created_at=_ts(),
-        outcome="success",
+        outcome=RollbackOutcome.SUCCESS,
     )
     assert r.outcome == "success"
+
+
+def test_rollback_outcome_vocabulary() -> None:
+    assert RollbackOutcome.SUCCESS.value == "success"
+    assert RollbackOutcome.PARTIAL.value == "partial"
+    assert RollbackOutcome.FAILED.value == "failed"
+
+
+def test_rollback_record_outcome_uses_str_enum() -> None:
+    r = RollbackRecord(
+        rollback_id="rb2",
+        project_id="p",
+        target_checkpoint_id="cp1",
+        invalidation_report_ref="inv1",
+        performed_by="system",
+        created_at=_ts(),
+        outcome=RollbackOutcome.PARTIAL,
+    )
+    assert r.outcome is RollbackOutcome.PARTIAL
+    assert r.outcome.value == "partial"
+    revived = _round_trip(r)
+    assert revived.outcome == "partial"
+    assert json.loads(json.dumps(revived.model_dump(mode="json")))["outcome"] == "partial"
+
+
+def test_rollback_record_coerces_wire_format_outcome() -> None:
+    record = RollbackRecord.model_validate(
+        {
+            "rollback_id": "rb2b",
+            "project_id": "p",
+            "target_checkpoint_id": "cp1",
+            "invalidation_report_ref": "inv1",
+            "performed_by": "system",
+            "created_at": "2026-06-19T12:00:00Z",
+            "outcome": "failed",
+        }
+    )
+    assert record.outcome is RollbackOutcome.FAILED
+
+
+def test_rollback_record_rejects_unknown_outcome() -> None:
+    with pytest.raises(ValidationError):
+        RollbackRecord.model_validate(
+            {
+                "rollback_id": "rb3",
+                "project_id": "p",
+                "target_checkpoint_id": "cp1",
+                "invalidation_report_ref": "inv1",
+                "performed_by": "system",
+                "created_at": "2026-06-19T12:00:00Z",
+                "outcome": "skipped",
+            }
+        )
 
 
 def test_branch_metadata() -> None:

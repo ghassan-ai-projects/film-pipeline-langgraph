@@ -8,49 +8,55 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import _error, _ok, _services
 from ._shared import (
+    _chat_json_or_mock,
+    _constitution_camera_philosophy,
     _load_artifact_if_present,
     _register_active_artifact_ref,
     _save_visual_dev_candidate,
 )
 
 
-def _constitution_camera_philosophy(constitution: Any) -> str:
-    """Camera-philosophy text from the FilmConstitution mapping, if shaped as one."""
-    return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
+def _camera_bible_prompt(camera_philosophy: str) -> str:
+    """Assemble the CameraLanguageBible prompt."""
+    return (
+        f"Create a CameraLanguageBible for a film with camera philosophy: "
+        f"{camera_philosophy}. "
+        "Return JSON with 'profiles' array (profile_id, use_case, lens, "
+        "framing, movement, depth_of_field, composition_rules, "
+        "transition_rules, emotional_meaning) and 'default_profile_id'."
+    )
+
+
+def _camera_mock_payload(project_id: str) -> dict[str, Any]:
+    """Minimal valid CameraLanguageBible response for mock mode."""
+    return {
+        "project_id": project_id,
+        "profiles": [
+            {
+                "profile_id": "default",
+                "use_case": "General shots",
+                "lens": "35mm prime",
+                "framing": "Rule of thirds",
+                "movement": "Static or slow push-in",
+                "depth_of_field": "Shallow, f/2.0",
+                "composition_rules": ["Rule of thirds"],
+                "transition_rules": ["Cut on action"],
+                "emotional_meaning": "Observational, intimate",
+            }
+        ],
+        "default_profile_id": "default",
+    }
 
 
 def _request_camera_bible_output(
     rt: Any, project_id: str, camera_philosophy: str
 ) -> dict[str, Any]:
     """Obtain CameraLanguageBible JSON from the model adapter or mock fallback."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return {
-            "project_id": project_id,
-            "profiles": [
-                {
-                    "profile_id": "default",
-                    "use_case": "General shots",
-                    "lens": "35mm prime",
-                    "framing": "Rule of thirds",
-                    "movement": "Static or slow push-in",
-                    "depth_of_field": "Shallow, f/2.0",
-                    "composition_rules": ["Rule of thirds"],
-                    "transition_rules": ["Cut on action"],
-                    "emotional_meaning": "Observational, intimate",
-                }
-            ],
-            "default_profile_id": "default",
-        }
-    raw = runner.model_adapter.chat(
-        f"Create a CameraLanguageBible for a film with camera philosophy: "
-        f"{camera_philosophy}. "
-        "Return JSON with 'profiles' array (profile_id, use_case, lens, "
-        "framing, movement, depth_of_field, composition_rules, "
-        "transition_rules, emotional_meaning) and 'default_profile_id'.",
-        model=runner.model_router.resolve("creative_writer"),
+    return _chat_json_or_mock(
+        rt,
+        _camera_bible_prompt(camera_philosophy),
+        _camera_mock_payload(project_id),
     )
-    return raw if isinstance(raw, dict) else {}
 
 
 def _execute_camera_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
