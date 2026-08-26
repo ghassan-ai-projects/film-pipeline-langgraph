@@ -19,6 +19,37 @@ from film_pipeline.schemas.story_bible import (
 _logger = logging.getLogger(__name__)
 
 
+def _build_treatment(treatment_data: dict[str, Any]) -> Treatment:
+    """Coerce the raw treatment payload into a Treatment."""
+    act_map = None
+    if treatment_data.get("act_map"):
+        am = treatment_data["act_map"]
+        act_map = ActMap(
+            act1_setup=str(am.get("act1_setup", "")),
+            act2_confrontation=str(am.get("act2_confrontation", "")),
+            act3_resolution=str(am.get("act3_resolution", "")),
+        )
+    return Treatment(
+        text=str(treatment_data.get("text", "")),
+        themes=[str(t) for t in treatment_data.get("themes", [])],
+        act_map=act_map,
+    )
+
+
+def _build_scene_intents(scenes: Any) -> list[SceneIntent]:
+    """Coerce raw scene payloads into SceneIntents with fallback ids."""
+    return [
+        SceneIntent(
+            scene_id=str(s.get("scene_id", f"s_{i:03d}")),
+            dramatic_function=str(s.get("dramatic_function", "")),
+            emotional_shift=str(s.get("emotional_shift", "")),
+            conflict=str(s.get("conflict", "")),
+            outcome=str(s.get("outcome", "")),
+        )
+        for i, s in enumerate(scenes)
+    ]
+
+
 class DevelopmentAgent(BaseAgent):
     """Creates the film treatment and scene breakdown.
 
@@ -45,33 +76,9 @@ class DevelopmentAgent(BaseAgent):
         data = model_output.get("development", model_output)
 
         try:
-            treatment_data = data.get("treatment", {})
-            act_map = None
-            if treatment_data.get("act_map"):
-                am = treatment_data["act_map"]
-                act_map = ActMap(
-                    act1_setup=str(am.get("act1_setup", "")),
-                    act2_confrontation=str(am.get("act2_confrontation", "")),
-                    act3_resolution=str(am.get("act3_resolution", "")),
-                )
-            treatment = Treatment(
-                text=str(treatment_data.get("text", "")),
-                themes=[str(t) for t in treatment_data.get("themes", [])],
-                act_map=act_map,
-            )
-
+            treatment = _build_treatment(data.get("treatment", {}))
             scenes = data.get("scenes", data.get("scene_list", []))
-            scene_intents = [
-                SceneIntent(
-                    scene_id=str(s.get("scene_id", f"s_{i:03d}")),
-                    dramatic_function=str(s.get("dramatic_function", "")),
-                    emotional_shift=str(s.get("emotional_shift", "")),
-                    conflict=str(s.get("conflict", "")),
-                    outcome=str(s.get("outcome", "")),
-                )
-                for i, s in enumerate(scenes)
-            ]
-            scene_list = SceneList(scenes=scene_intents)
+            scene_list = SceneList(scenes=_build_scene_intents(scenes))
         except ValidationError as exc:
             _logger.error(
                 "DevelopmentAgent: Pydantic validation failed. Errors: %s | Model output: %s",

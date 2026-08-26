@@ -8,6 +8,33 @@ from film_pipeline.agents.base import BaseAgent
 from film_pipeline.schemas.budget import CostEstimate
 
 
+def _build_cost_estimate(estimate_data: dict[str, Any]) -> CostEstimate:
+    """Coerce the raw cost payload into a CostEstimate."""
+    return CostEstimate(
+        project_id=str(estimate_data.get("project_id", "")),
+        batch_id=str(estimate_data.get("batch_id", "batch-001")),
+        provider=str(estimate_data.get("provider", "seedance")),
+        estimated_cost_usd=float(estimate_data.get("estimated_cost_usd", 0.0)),
+        clip_count=int(estimate_data.get("clip_count", 0)),
+        notes=str(estimate_data.get("notes", "")),
+    )
+
+
+def _build_generation_requests(shot_groups: Any) -> list[dict[str, Any]]:
+    """Coerce raw shot groups into provider generation requests."""
+    return [
+        {
+            "shot_id": str(g.get("shot_id", f"shot_{i:04d}")),
+            "provider": str(g.get("provider", "seedance")),
+            "model": str(g.get("model", "2.0")),
+            "mode": str(g.get("mode", "test")),
+            "priority": int(g.get("priority", i)),
+            "estimated_cost_usd": float(g.get("estimated_cost_usd", 0.0)),
+        }
+        for i, g in enumerate(shot_groups)
+    ]
+
+
 class GenPlannerAgent(BaseAgent):
     """Plans the generation batch from the shot matrix.
 
@@ -36,28 +63,8 @@ class GenPlannerAgent(BaseAgent):
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         data = model_output.get("generation_plan", model_output)
 
-        estimate_data = data.get("cost_estimate", {})
-        cost_estimate = CostEstimate(
-            project_id=str(estimate_data.get("project_id", "")),
-            batch_id=str(estimate_data.get("batch_id", "batch-001")),
-            provider=str(estimate_data.get("provider", "seedance")),
-            estimated_cost_usd=float(estimate_data.get("estimated_cost_usd", 0.0)),
-            clip_count=int(estimate_data.get("clip_count", 0)),
-            notes=str(estimate_data.get("notes", "")),
-        )
-
-        shot_groups = data.get("shot_groups", [])
-        generation_requests = [
-            {
-                "shot_id": str(g.get("shot_id", f"shot_{i:04d}")),
-                "provider": str(g.get("provider", "seedance")),
-                "model": str(g.get("model", "2.0")),
-                "mode": str(g.get("mode", "test")),
-                "priority": int(g.get("priority", i)),
-                "estimated_cost_usd": float(g.get("estimated_cost_usd", 0.0)),
-            }
-            for i, g in enumerate(shot_groups)
-        ]
+        cost_estimate = _build_cost_estimate(data.get("cost_estimate", {}))
+        generation_requests = _build_generation_requests(data.get("shot_groups", []))
 
         return {
             "cost_estimate": cost_estimate,
