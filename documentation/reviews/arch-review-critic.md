@@ -222,3 +222,43 @@ Global sweep clean: no instance of the old wrong numbers ("32 files", package co
 factual defects outstanding).
 
 FINAL: PASS
+
+---
+
+## Round-4 — independent external re-verification (second reviewer)
+
+A second reviewer, not the author of rounds 1–3, re-derived the load-bearing facts **from scratch at
+HEAD** (`b20ac10`; `git diff e811d1d b20ac10 -- src/` is empty, so every `e811d1d` citation holds at
+HEAD) rather than trusting the round-1–3 arithmetic. This is the criterion-6 "independent pass"
+performed a second time, by different hands.
+
+**Re-derived and confirmed exact (≈20 checks, all green):** 19 packages / 307 py files / 41,478 LOC;
+AGENTS.md documents 12; `graph/services.py:72` testing-fixtures lazy import; `dispatch.py` `prompt=row.prompt_ref`
+(:76) + `duration=5.0` (:78) vs executor `resolve_shot_prompt` (:166) + row duration (:167); exactly
+**10** orchestrator channels in `orchestrator_state.py` (`f"{_ORCH_NS}__…"` construction); monkeypatch
+`get_runtime` = **68 lines across 11 test files** (63 the exact quoted pattern); observability
+`AuditTrail`/`MetricsCollector`/`BlockerReporter`/`AuditEventType` **0** consumers outside the package;
+`BudgetState.spent_usd` written only as `0.0` defaults, **never incremented**; all eight hotspot LOC
+(473/471/471/470/467/464/455/435); imagen tier literals ultra→0.10 / fast→0.02 / else 0.05;
+`add_blocker` **0** callers; `store.approve`/`.supersede` **0** production callers; `FailureClassifier`
+**0** callers outside its module; 14 `getLogger(__name__)` modules; `mock_responses.py` 392 LOC /
+`testing/` 663 LOC; `registry.py` 387 LOC / 52 `_register` calls / `description=f"MCP tool: {name}"` at
+:112; agent tables `AGENT_CLASS_BY_ID`=12, `MVP_AGENTS`=11, `_AGENT_PROFILE_MAP`=21 (the 9 named ghosts
+are absent from **both** registries; `visual-dev-agent` is the separate class-alias-without-contract
+case Flx-F2 already treats apart, so the finding's "≥9" is correct, not the round-1 "exactly 9"). The
+round-3 "global sweep clean" claim reproduces: every surviving instance of an old wrong number sits
+inside this critic file's own correction record, none live in any lens or the synthesis.
+
+**One gap found and fixed (reproducibility, not accuracy).** The **198** lazy-import figure is correct
+but was **not reproducible from the text**: a naive independent count (`from film_pipeline.x import …`
+only) yields **194**, and the docs stated only "(AST count)" — binding fix #6's method note was never
+actually added. The full 194↔198 delta is exactly four plain `import film_pipeline.x` statements a
+`from`-only scan omits: `app/_graph_exec.py:58,168,288` and `cli/driver.py:62`. Fixed by adding the
+counting convention + the four sites to boundaries F-7 and the ground-truth bullet. This closes the
+last hole in criterion 1's own promise ("an independent verifier must be able to spot-check").
+
+**Round-4 scores:** GROUNDED **5** · SPECIFIC **5** · COMPLETE ON AXES **5** · DECISION-READY ROADMAP
+**4** · HONEST UNCERTAINTY **5** · INDEPENDENT PASS **5**. Independence is now doubly satisfied — a
+second reviewer reproduced the numbers without relying on the first's math and reached the same verdict.
+
+FINAL: PASS (independently re-confirmed; one reproducibility note added, no factual defect found)
