@@ -67,11 +67,15 @@ class HeadlessDriver:
             raise HeadlessDriverError(f"runtime_mode must be 'mock' or 'real', got '{mode}'")
 
         artifacts_root = str(runtime_root / "artifacts")
-        services = (
-            GraphServices.for_real_runtime(artifacts_root=artifacts_root)
-            if mode == "real"
-            else GraphServices.for_mock_runtime(artifacts_root=artifacts_root)
-        )
+        if mode == "real":
+            services = GraphServices.for_real_runtime(artifacts_root=artifacts_root)
+        else:
+            from film_pipeline.app.mock_responses import default_mock_responses
+
+            services = GraphServices.for_mock_runtime(
+                artifacts_root=artifacts_root,
+                mock_responses=default_mock_responses(),
+            )
         rt = StudioRuntime(server_mode=mode, runtime_root=runtime_root, services=services)
         rt_mod._RUNTIME_MODE_OVERRIDE = mode
         rt_mod._RUNTIME = rt

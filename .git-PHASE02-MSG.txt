@@ -1,0 +1,40 @@
+feat(providers,mcp,config,app): Phase 02 truth defaults (Flx-F10+F9, O-F6+O-F10)
+
+Flx-F10 imagen pricing delegation: PROVIDER_PRICING entries gain an optional
+tier map ({ultra: 0.10, fast: 0.02}, standard 0.05); rate_for(provider_id,
+model=None) matches tier keys by lowercase substring (adapter semantics
+preserved) and the adapter delegates instead of carrying literals.
+pricing_prompt_block renders one line per tier plus "(standard)" so planner
+prompts advertise exactly what adapters bill for every tier.
+
+Companion fix from plan review: mcp/tools/planning.py _build_generation_plan
+billed duration x 0.02 — seconds times the per-IMAGE rate — while tagging
+every shot gemini-imagen-4/tier=fast regardless of provider. The no-LLM
+fallback planner now bills the catalog-default video provider via rate_for
+with per-shot estimated_cost and honest utilization.
+
+Flx-F9 config contract: FILM_PIPELINE_MODEL_OVERRIDE rewired to
+("model_profiles","creative_writer","primary") where _model_overrides_for ->
+resolve_model_params actually reads it (was an inert path nothing read);
+validation.thresholds blocks deleted from base + quality overlays (never
+wired to validators; per-entry literals authoritative). New CI-enforced
+tests/unit/config/test_config_contract.py walks every env path + profile
+leaf: read = AST string-literal scan over src or explicit READERS note;
+deliberately-dead paths need KNOWN_DEAD groups citing the hardcoded-values
+inventory; a guard keeps the originally-named failures exempted on purpose.
+
+O-F6 truthful get_blockers: MCP tool derives blockers from live state via
+compute_actions(state).blocked plus blocking issues — response shape stable;
+the never-functional block_entries/add_blocker/runtime.get_blockers trio is
+deleted (C7), operator._has_blockers keeps only its truthful half, and the
+wired blocker test seeds realistic blocking state instead of add_blocker.
+
+O-F10 logging bootstrap: app/logging_setup.configure_logging installs a
+WARNING-capped stderr handler (MCP stdio-safe) plus a rotating file handler
+(<root>/logs/film_pipeline.log, 5x1MB) when persistence is enabled; wired
+only at the console-script mains (mcp server, tui app, cli run); libraries
+never configure logging; idempotent by handler marker.
+
+ci-check green: 2023 passed / 8 skipped, coverage 92.55%, product gate PASS.
+Plan reviews 2/2 APPROVE (18 folded amendments a-r); implementation reviews
+pending at commit time — see phase-02-truth-defaults-plan.md verdict record.

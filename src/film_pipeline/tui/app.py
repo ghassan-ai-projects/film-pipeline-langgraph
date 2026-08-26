@@ -283,6 +283,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.real_mode:
         os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
     os.environ["FILM_PIPELINE_PERSIST_STATE"] = "1"
+
+    # TUI forces persistence on, so logging gets the same root the runtime
+    # will resolve (env override first, then the persistent default).
+    from film_pipeline.app._persistence import configured_runtime_root
+    from film_pipeline.app.logging_setup import configure_logging
+
+    configure_logging(configured_runtime_root())
+
     FilmStudioApp(start_create=args.create).run()
     return 0
 

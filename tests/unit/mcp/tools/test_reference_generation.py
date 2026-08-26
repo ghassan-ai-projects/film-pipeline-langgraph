@@ -21,6 +21,7 @@ from unittest import mock
 import pytest
 from pydantic import Field
 
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.mcp.tools.reference_generation import generate_reference_images
@@ -104,7 +105,9 @@ def _build_fake_provider(tmp_path: Path) -> mock.MagicMock:
 @pytest.fixture
 def rt(tmp_path: Path) -> Generator[StudioRuntime, None, None]:
     """Runtime with an active project and a fake image provider."""
-    services = GraphServices.for_mock_runtime(artifacts_root=str(tmp_path / "artifacts"))
+    services = GraphServices.for_mock_runtime(
+        artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
+    )
     runtime = StudioRuntime(runtime_root=tmp_path / "runtime")
     runtime.services = services
     runtime.create_project("ref-gen-test", "Ref Gen Test")

@@ -188,6 +188,25 @@ def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
     assert result["planned"] == 2
 
 
+def test_plan_generation_batch_records_catalog_estimated_cost(rt: StudioRuntime) -> None:
+    result = asyncio.run(
+        plan_generation_batch(
+            {
+                "shot_ids": ["S001"],
+                "provider": "seedance-openrouter",
+                "model": "seedance-2.0",
+            }
+        )
+    )
+
+    assert result["ok"] is True
+    assert rt.services is not None
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    rows = GenerationLedgerManager(rt.services.artifact_store).list_rows("gen-start-test")
+    assert rows[0].estimated_cost_usd == pytest.approx(0.9)
+
+
 def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
     import asyncio
 

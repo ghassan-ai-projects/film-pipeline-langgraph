@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -34,7 +35,31 @@ class ConfigResolver:
 
     def resolve(self, names: list[str]) -> ResolvedConfig:
         """Layer profiles in order and return a validated config."""
-        sources = self.loader.load_many(names)
+        sources = self.loader.load_many(_apply_quality_override(names))
         raw = apply_runtime_overrides(self.merger.merge(sources))
         conflicts = self.validator.validate(raw)
         return ResolvedConfig(raw=raw, sources=sources, conflicts=conflicts)
+
+
+def _apply_quality_override(names: list[str]) -> list[str]:
+    """Replace the selected quality layer when the environment requests one."""
+    raw_quality = os.getenv("FILM_PIPELINE_QUALITY", "").strip()
+    if not raw_quality:
+        return names
+    quality_name = raw_quality if raw_quality.startswith("quality.") else f"quality.{raw_quality}"
+    overridden = list(names)
+    for index, name in enumerate(overridden):
+        if name.startswith("quality."):
+            overridden[index] = quality_name
+            return overridden
+
+    insert_at = next(
+        (
+            index
+            for index, name in enumerate(overridden)
+            if name.startswith(("provider.", "review.", "auto_approve"))
+        ),
+        len(overridden),
+    )
+    overridden.insert(insert_at, quality_name)
+    return overridden

@@ -160,13 +160,12 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
         }
 
     def estimate_cost(self, duration: float, model: str | None = None) -> float:
+        """Bill the canonical tiered rate; per-image, so duration is ignored."""
         _ = duration
+        from film_pipeline.providers.pricing import rate_for
+
         model_id = model or self._model_id(fallback="")
-        if "ultra" in model_id:
-            return 0.10
-        if "fast" in model_id:
-            return 0.02
-        return 0.05
+        return rate_for(self.entry.provider_id, model_id)
 
 
 def _extract_image_bytes(response: dict[str, Any]) -> tuple[bytes, str]:

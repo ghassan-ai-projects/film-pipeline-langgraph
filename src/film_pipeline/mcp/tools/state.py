@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
-
 from .helpers import _active_project_state, _error, _ok
 
 
@@ -33,10 +31,11 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
         return _error("No active project.")
 
     from film_pipeline.graph import orchestrator_state as ostate
-    from film_pipeline.graph.router import compute_actions
+    from film_pipeline.graph.router import compute_actions, public_blocked_actions
 
-    ostate.ensure_orchestrator_state(state)
-    router_result = compute_actions(state)
+    routing_state = dict(state)
+    ostate.ensure_orchestrator_state(routing_state)
+    router_result = compute_actions(routing_state)
     latest_decision = ostate.get_latest_routing_decision(state)
     review_cycle = ostate.get_active_review_cycle(state, str(state.get("current_phase", "")))
 
@@ -49,7 +48,7 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
         next_action=router_result.next_action,
         route_reason=latest_decision.get("reason", "") if latest_decision else "",
         eligible_actions=router_result.eligible,
-        blocked_actions=router_result.blocked,
+        blocked_actions=public_blocked_actions(router_result),
         candidate_refs=ostate.get_candidate_refs(state),
         approved_refs=ostate.get_approved_refs(state),
         pending_revisions=ostate.get_pending_revisions(state),
@@ -64,19 +63,28 @@ async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
     state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
-    from film_pipeline.graph.router import compute_actions
+    from film_pipeline.graph.router import compute_actions, public_blocked_actions
 
-    actions = compute_actions(state)
+    actions = compute_actions(dict(state))
     return _ok(
         next_action=actions.next_action,
         eligible=actions.eligible,
-        blocked=actions.blocked,
+        blocked=public_blocked_actions(actions),
     )
 
 
 async def get_blockers(args: dict[str, object]) -> dict[str, object]:
+    """Report what currently blocks the project, derived from live state.
+
+    Mirrors ``get_next_actions``: the router computes blocked transitions from
+    real project state, and blocking issues join the same list so operators
+    see one truthful picture. Response shape is stable:
+    ``{blockers: [{action, reason}], has_blockers: bool}``.
+    """
     state = _active_project_state(args)
     if state is None:
         return _error("No active project.")
-    blockers = tools_pkg.get_runtime().get_blockers(str(state["project_id"]))
+    from film_pipeline.graph.router import get_blockers_for_state
+
+    blockers = get_blockers_for_state(state)
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)

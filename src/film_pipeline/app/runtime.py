@@ -19,6 +19,7 @@ from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
     RUNTIME_ROOT,
     STATE_FILENAME,
+    configured_runtime_root,
     project_git_backend,
     use_persistent_runtime,
 )
@@ -46,7 +47,6 @@ class StudioRuntime:
     services: GraphServices | None = None
     checkpoints: dict[str, CheckpointMetadata] = field(default_factory=dict)
     audit_events: list[dict[str, Any]] = field(default_factory=list)
-    block_entries: list[dict[str, str]] = field(default_factory=list)
     provider_adapters: dict[str, Any] = field(default_factory=dict)
     provider_health: dict[str, Any] = field(default_factory=dict)
     project_roots: dict[str, Path] = field(default_factory=dict)
@@ -55,19 +55,22 @@ class StudioRuntime:
 
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
-        if self.services is None:
-            self.services = _build_services_for_mode(self.server_mode)
+        explicit_runtime_root = self.runtime_root is not None or bool(
+            os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
+        )
         if self.runtime_root is None:
-            env_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-            if env_root:
-                self.runtime_root = Path(env_root)
+            if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
+                self.runtime_root = configured_runtime_root()
             elif use_persistent_runtime():
                 self.runtime_root = RUNTIME_ROOT
                 self.runtime_root.mkdir(parents=True, exist_ok=True)
             else:
-                store = self.services.artifact_store if self.services else None
-                root = getattr(store, "_root", None)
-                self.runtime_root = root if isinstance(root, Path) else Path("projects")
+                self.runtime_root = Path("projects")
+        if self.services is None:
+            artifacts_root = self.runtime_root / "artifacts" if explicit_runtime_root else None
+            self.services = _build_services_for_mode(
+                self.server_mode, artifacts_root=artifacts_root
+            )
         self.load_persisted_projects()
 
     # --- Persistence across restarts ---
@@ -359,23 +362,6 @@ class StudioRuntime:
         ]
         return list(comments)
 
-    # --- Blockers ---
-
-    def get_blockers(self, project_id: str) -> list[dict[str, str]]:
-        return [b for b in self.block_entries if b.get("project_id") == project_id]
-
-    def add_blocker(
-        self, project_id: str, phase: str, reason: str, severity: str = "blocking"
-    ) -> None:
-        self.block_entries.append(
-            {
-                "project_id": project_id,
-                "phase": phase,
-                "reason": reason,
-                "severity": severity,
-            }
-        )
-
     # --- Provider registry ---
 
     def register_provider(self, provider_id: str, adapter: Any) -> None:
@@ -440,10 +426,17 @@ def get_runtime() -> StudioRuntime:
     return _RUNTIME
 
 
-def _build_services_for_mode(server_mode: str) -> GraphServices:
+def _build_services_for_mode(
+    server_mode: str, *, artifacts_root: Path | None = None
+) -> GraphServices:
     if server_mode == "real":
-        return GraphServices.for_real_runtime()
-    return GraphServices.for_mock_runtime()
+        return GraphServices.for_real_runtime(artifacts_root=artifacts_root)
+    from film_pipeline.app.mock_responses import default_mock_responses
+
+    return GraphServices.for_mock_runtime(
+        artifacts_root=artifacts_root,
+        mock_responses=default_mock_responses(),
+    )
 
 
 def _normalize_server_mode(server_mode: str) -> str:

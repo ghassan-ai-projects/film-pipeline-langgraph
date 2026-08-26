@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -62,17 +63,22 @@ class GraphServices:
     kb_builder: KBContextPacketBuilder | None = None
 
     @classmethod
-    def for_mock_runtime(cls, artifacts_root: str | Path | None = None) -> GraphServices:
+    def for_mock_runtime(
+        cls,
+        artifacts_root: str | Path | None = None,
+        *,
+        mock_responses: Mapping[str, dict[str, Any]],
+    ) -> GraphServices:
         """Create services wired for mock-mode execution.
 
         Populates the agent registry with all MVP agents, sets up a
-        PromptRunner with canned mock responses for the core spine agents,
-        and wires a ModelRouter.
+        PromptRunner over the caller-supplied canned responses, and wires a
+        ModelRouter. The responses are injected — not imported — so the graph
+        package carries no fixture data; composition roots pass
+        ``app.mock_responses.default_mock_responses()``.
         """
-        from film_pipeline.testing.fixtures.mock_responses import default_mock_responses
-
         runner = PromptRunner(
-            mock_responses=default_mock_responses(),
+            mock_responses=dict(mock_responses),
             model_router=ModelRouter(),
         )
         return cls(

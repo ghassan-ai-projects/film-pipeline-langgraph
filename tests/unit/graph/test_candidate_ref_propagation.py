@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.graph import nodes
 from film_pipeline.graph.nodes import approve_phase_node
 from film_pipeline.graph.nodes._agent_handoff import _propagate_side_effects
@@ -31,7 +32,7 @@ def _reset_services_contextvar() -> Any:
 
 
 def _mock_state(**extra: Any) -> dict[str, Any]:
-    svc = GraphServices.for_mock_runtime()
+    svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
     nodes._SERVICES_CTX.set(svc)
     state: dict[str, Any] = {
         "project_id": "d009-regression",

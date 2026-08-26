@@ -693,14 +693,21 @@ def test_wired_get_blockers_with_issues() -> None:
     rt = gr()
     rt.create_project(project_id="test-bl2", title="Blocker Test 2", slug="bl-test2")
     rt.set_active("test-bl2")
-    rt.add_blocker("test-bl2", "script", "Script validation failed")
+    # Seed realistic blocking state: a blocking issue on the live project state
+    # (get_active returns the stored dict, so in-place mutation persists).
+    state = rt.get_active()
+    assert state is not None
+    state["issues"] = [
+        {"code": "script_below_floor", "severity": "blocking", "message": "Too few scenes."}
+    ]
 
     from film_pipeline.mcp.tools import get_blockers
 
     result = asyncio.run(get_blockers({}))
     assert result["ok"] is True
     assert result["has_blockers"] is True
-    assert len(cast(list[object], result["blockers"])) == 1
+    blockers = cast(list[dict[str, str]], result["blockers"])
+    assert any("script_below_floor" in b.get("reason", "") for b in blockers)
 
 
 def test_wired_create_and_list_checkpoints() -> None:

@@ -56,8 +56,11 @@ class MCPProcessTransport:
             self._ensure_started()
             stdin, stdout = self._live_pipes()
             self._request_id += 1
-            stdin.write(self._encode_request(self._request_id, method, params))
-            stdin.flush()
+            try:
+                stdin.write(self._encode_request(self._request_id, method, params))
+                stdin.flush()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                raise RuntimeError("MCP server closed stdin before request was sent") from exc
             return self._read_response(stdout, self._request_id)
 
     @staticmethod
