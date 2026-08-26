@@ -4,11 +4,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from film_pipeline.schemas.registries.provider_registry import (
     ProviderRegistryEntry,
 )
+
+
+class ProviderJobStatus(StrEnum):
+    """Lifecycle status of a provider job as reported by its adapter."""
+
+    SUBMITTED = "submitted"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
@@ -19,7 +30,7 @@ class ProviderJob:
     shot_id: str
     provider_id: str
     model: str
-    status: str = "submitted"  # submitted | processing | completed | failed
+    status: ProviderJobStatus = ProviderJobStatus.SUBMITTED
     polls: int = 0
     payload: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
