@@ -13,6 +13,7 @@ def test_cli_main_configures_logging_for_request_root(
 ) -> None:
     from film_pipeline.cli import run
 
+    monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
     idea = tmp_path / "idea.txt"
     idea.write_text("A robot learns to paint.", encoding="utf-8")
     configure = MagicMock()
