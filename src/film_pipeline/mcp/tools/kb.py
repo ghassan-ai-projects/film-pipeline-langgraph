@@ -2,27 +2,45 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import _active_project_id, _error, _ok
+
+if TYPE_CHECKING:
+    from film_pipeline.kb.manifest import KBManifest
+
+
+def _load_kb_manifest() -> KBManifest | None:
+    """Parse the knowledge-base manifest from its canonical path.
+
+    Imports are deferred to call time so tests can patch
+    ``film_pipeline.kb.paths.kb_manifest_path``. Returns ``None`` when no
+    manifest exists on disk yet.
+    """
+    from film_pipeline.kb.manifest import KBManifest
+    from film_pipeline.kb.paths import kb_manifest_path
+
+    manifest_path = kb_manifest_path()
+    if not manifest_path.exists():
+        return None
+    return KBManifest.from_yaml(manifest_path)
 
 
 async def kb_search(args: dict[str, object]) -> dict[str, object]:
     query = str(args.get("query", ""))
     phase = str(args.get("phase", ""))
     try:
-        from film_pipeline.kb.manifest import KBManifest
-        from film_pipeline.kb.paths import kb_manifest_path
         from film_pipeline.kb.retrieval import KBRetrieval
 
-        manifest_path = kb_manifest_path()
-        if not manifest_path.exists():
+        manifest = _load_kb_manifest()
+        if manifest is None:
             return _ok(
                 items=[],
                 total=0,
                 message="KB manifest not found.",
             )
-        manifest = KBManifest.from_yaml(manifest_path)
         retrieval = KBRetrieval(manifest)
         items = retrieval.by_tags(
             phase=phase if phase else None,
@@ -47,13 +65,9 @@ async def kb_search(args: dict[str, object]) -> dict[str, object]:
 async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
     item_id = str(args.get("item_id", ""))
     try:
-        from film_pipeline.kb.manifest import KBManifest
-        from film_pipeline.kb.paths import kb_manifest_path
-
-        manifest_path = kb_manifest_path()
-        if not manifest_path.exists():
+        manifest = _load_kb_manifest()
+        if manifest is None:
             return _error("KB manifest not found.")
-        manifest = KBManifest.from_yaml(manifest_path)
         item = manifest.get(item_id)
         if item is None:
             return _error(f"KB item not found: {item_id}")
@@ -81,13 +95,9 @@ async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
     from film_pipeline.kb.packets import KBContextPacketBuilder
 
     try:
-        from film_pipeline.kb.manifest import KBManifest
-        from film_pipeline.kb.paths import kb_manifest_path
-
-        manifest_path = kb_manifest_path()
-        if not manifest_path.exists():
+        manifest = _load_kb_manifest()
+        if manifest is None:
             return _ok(packet={"items": []}, message="KB manifest not found.")
-        manifest = KBManifest.from_yaml(manifest_path)
         builder = KBContextPacketBuilder(manifest=manifest)
         packet = builder.build(
             project_id=state["project_id"],
