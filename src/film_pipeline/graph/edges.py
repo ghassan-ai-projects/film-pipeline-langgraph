@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
+from film_pipeline.graph.orchestrator_state import is_stalled
 from film_pipeline.graph.router import compute_actions
 
 
@@ -70,11 +71,9 @@ def after_phase(state: dict[str, Any]) -> str:
 
     # Actions that route to a phase node — strip the prefix so the returned
     # value is the phase key used by the conditional-edge destination map.
+    # Includes the defensive "advance_to_end", which maps to the terminal node.
     if action.startswith("advance_to_"):
-        target = action[len("advance_to_") :]
-        if target == "end":
-            return "end"
-        return target
+        return action[len("advance_to_") :]
 
     # Final phase completion
     if action == "wrap":
@@ -120,8 +119,6 @@ def after_approval(state: dict[str, Any]) -> str:
         return _NEXT_PHASE_AFTER_APPROVAL.get(phase, "end")
 
     # Prevent infinite repair loop when stalled
-    from film_pipeline.graph.orchestrator_state import is_stalled
-
     phase = str(state.get("current_phase", ""))
     if is_stalled(state, phase):
         _record_stall(state, phase)
