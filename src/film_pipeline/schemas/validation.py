@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field
 
 from film_pipeline.schemas._base import (
+    IssueSeverity,
     SchemaBase,
     ValidationModality,
     ValidationScope,
     ValidationStatus,
 )
+
+AgreementLevel = Literal["high", "medium", "low"]
 
 
 class ValidationIssue(SchemaBase):
@@ -17,7 +22,7 @@ class ValidationIssue(SchemaBase):
 
     code: str
     message: str
-    severity: str = Field(description="'info' | 'warning' | 'blocking'.")
+    severity: IssueSeverity = Field(description="'info' | 'warning' | 'blocking'.")
     suggestion: str = ""
     affected_entity: str = ""
     affected_field: str = ""
@@ -55,7 +60,7 @@ class ConsensusReport(SchemaBase):
     review_id: str
     artifact_refs: list[str] = Field(default_factory=list)
     reviewers: list[ReviewerScore] = Field(default_factory=list)
-    agreement_level: str = Field(description="'high' | 'medium' | 'low'.")
+    agreement_level: AgreementLevel = Field(description="'high' | 'medium' | 'low'.")
     consensus_status: ValidationStatus
     shared_findings: list[str] = Field(default_factory=list)
     disagreements: list[str] = Field(default_factory=list)

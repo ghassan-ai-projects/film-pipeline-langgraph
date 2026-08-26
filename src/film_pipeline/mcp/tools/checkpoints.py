@@ -14,7 +14,7 @@ from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.rollback import RollbackManager
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
-from film_pipeline.schemas.checkpoint import CheckpointMetadata, RollbackRecord
+from film_pipeline.schemas.checkpoint import CheckpointMetadata, RollbackOutcome, RollbackRecord
 
 from .helpers import _active_project_id, _error, _ok, _services
 
@@ -71,7 +71,7 @@ def _save_rollback_artifacts(
         invalidation_report_ref=inv_ref,
         performed_by=performed_by,
         created_at=datetime.now(UTC),
-        outcome="success",
+        outcome=RollbackOutcome.SUCCESS,
     )
     rec_id = f"rollback_record_{uuid4().hex[:8]}"
     rec_ref = _persist_candidate(store, project_id, ArtifactType.ROLLBACK_RECORD, rec_id, record)

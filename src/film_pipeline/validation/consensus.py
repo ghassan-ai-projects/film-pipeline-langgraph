@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from film_pipeline.schemas._base import ValidationStatus
 from film_pipeline.schemas.validation import (
+    AgreementLevel,
     ConsensusReport,
     ReviewerScore,
     ValidationReport,
@@ -72,7 +73,7 @@ def _reviewer_scores(reports: list[ValidationReport]) -> list[ReviewerScore]:
     ]
 
 
-def _calculate_agreement(reports: list[ValidationReport]) -> str:
+def _calculate_agreement(reports: list[ValidationReport]) -> AgreementLevel:
     scores = [r.score for r in reports]
     if not scores:  # pragma: no cover — build() returns early for empty
         return "low"
