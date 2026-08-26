@@ -63,12 +63,10 @@ def load_manifest(path: Path = MANIFEST_PATH) -> ProductGateManifest:
     raw = yaml.safe_load(path.read_text())
     if not isinstance(raw, dict):
         raise ValueError("Product gate manifest must be a mapping.")
-    return ProductGateManifest(
-        allowed_stub_tools=frozenset(_read_list(raw, "allowed_stub_tools")),
-        critical_mcp_tools=tuple(_read_list(raw, "critical_mcp_tools")),
-        required_docs=tuple(_read_list(raw, "required_docs")),
-        required_e2e_tests=tuple(_read_list(raw, "required_e2e_tests")),
-        required_behavior_tests=tuple(_read_list(raw, "required_behavior_tests")),
+    return _manifest_from_mapping(
+        raw,
+        allowed_stub_key="allowed_stub_tools",
+        required_e2e_key="required_e2e_tests",
     )
 
 
@@ -78,12 +76,22 @@ def load_plan_manifest(path: Path = PLAN_MANIFEST_PATH) -> ProductGateManifest |
     raw = yaml.safe_load(path.read_text())
     if not isinstance(raw, dict):
         return None
+    return _manifest_from_mapping(
+        raw,
+        allowed_stub_key="allowed_stub_behaviors",
+        required_e2e_key="required_e2e_scenarios",
+    )
+
+
+def _manifest_from_mapping(
+    raw: dict[str, Any], allowed_stub_key: str, required_e2e_key: str
+) -> ProductGateManifest:
     return ProductGateManifest(
-        allowed_stub_tools=frozenset(_read_list(raw, "allowed_stub_behaviors")),
-        critical_mcp_tools=tuple(_read_list(raw, "critical_mcp_tools", [])),
-        required_docs=tuple(_read_list(raw, "required_docs", [])),
-        required_e2e_tests=tuple(_read_list(raw, "required_e2e_scenarios", [])),
-        required_behavior_tests=tuple(_read_list(raw, "required_behavior_tests", [])),
+        allowed_stub_tools=frozenset(_read_list(raw, allowed_stub_key)),
+        critical_mcp_tools=tuple(_read_list(raw, "critical_mcp_tools")),
+        required_docs=tuple(_read_list(raw, "required_docs")),
+        required_e2e_tests=tuple(_read_list(raw, required_e2e_key)),
+        required_behavior_tests=tuple(_read_list(raw, "required_behavior_tests")),
     )
 
 
@@ -137,7 +145,7 @@ def main() -> int:
     return 0 if report.ok else 1
 
 
-def _read_list(raw: dict[str, Any], key: str, default: object = None) -> list[str]:
+def _read_list(raw: dict[str, Any], key: str, default: list[str] | None = None) -> list[str]:
     value = raw.get(key, default or [])
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ValueError(f"Manifest key '{key}' must be a list of strings.")
