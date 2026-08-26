@@ -2,7 +2,9 @@
 
 Owns the underscore-prefixed state keys (``_routing_decisions``,
 ``_repair_feedback``, ``_validation_reports``) that carry routing and repair
-decisions between nodes without entering artifact storage.
+decisions between nodes without entering artifact storage, plus the
+orchestrator's ``_orchestrator__candidate_refs`` map that
+``approve_phase_node`` promotes on approval.
 """
 
 from __future__ import annotations
@@ -18,6 +20,21 @@ def _copy_decision_channels(source: dict[str, Any], dest: dict[str, Any]) -> Non
     for key in ("_routing_decisions", "_repair_feedback", "_validation_reports"):
         if key in source:
             dest[key] = source[key]
+
+
+def _copy_published_candidate_refs(source: dict[str, Any], dest: dict[str, Any]) -> None:
+    """Carry the candidate-ref map so approval can promote published artifacts.
+
+    ``_save_artifact`` records each ref into the node's working copy via
+    ``set_candidate_ref``. Without copying the map into the returned update,
+    it never reaches real graph state and ``approve_phase_node`` promotes
+    an empty snapshot.
+    """
+    from film_pipeline.graph.orchestrator_state import get_candidate_refs
+
+    refs = get_candidate_refs(source)
+    if refs:
+        dest["_orchestrator__candidate_refs"] = refs
 
 
 def _append_new_reducer_entries(
@@ -58,6 +75,7 @@ def _propagate_side_effects(
     reducer channels contribute only newly appended entries.
     """
     _copy_decision_channels(source, dest)
+    _copy_published_candidate_refs(source, dest)
     _append_new_reducer_entries(source, dest, original)
 
 
