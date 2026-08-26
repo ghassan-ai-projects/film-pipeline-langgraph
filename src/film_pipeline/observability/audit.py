@@ -17,7 +17,7 @@ class AuditEventType(StrEnum):
     PROVIDER_ACTION = "provider_action"
     VALIDATION = "validation"
     APPROVAL = "approval"
-    ROUTING = "routing_decisión"
+    ROUTING = "routing_decision"
     CHECKPOINT = "checkpoint"
     ROLLBACK = "rollback"
     ERROR = "error"
