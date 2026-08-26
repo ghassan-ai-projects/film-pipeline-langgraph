@@ -111,6 +111,9 @@ class TestResolveAuthority:
         assert len(kept) == 1
         assert kept[0].authority == KbAuthority.CANONICAL
         assert len(excluded) == 1
+        assert excluded[0].reason == (
+            "Superseded by kb.policy.test.v1 (higher authority: canonical > case_study)"
+        )
 
     def test_same_authority_newer_version_wins(self, detector: KBConflictDetector) -> None:
         v1 = KBItemMetadata(
@@ -132,6 +135,34 @@ class TestResolveAuthority:
         assert kept[0].id == "kb.policy.test.v2"
         assert len(excluded) == 1
         assert excluded[0].ref == "kb.policy.test.v1"
+        # Authority tied: the reason must credit the version, not claim a
+        # higher authority that does not exist.
+        assert excluded[0].reason == (
+            "Superseded by kb.policy.test.v2 (equal authority: newer version 2 > 1)"
+        )
+
+    def test_same_authority_and_version_reports_tie(self, detector: KBConflictDetector) -> None:
+        unsuffixed = KBItemMetadata(
+            id="kb.policy.test",
+            title="Unsuffixed",
+            authority=KbAuthority.CANONICAL,
+            summary="u",
+            version=1,
+        )
+        v1 = KBItemMetadata(
+            id="kb.policy.test.v1",
+            title="V1",
+            authority=KbAuthority.CANONICAL,
+            summary="v1",
+            version=1,
+        )
+        kept, excluded = detector.resolve_authority([unsuffixed, v1])
+        assert len(kept) == 1
+        assert kept[0].id == "kb.policy.test"
+        assert len(excluded) == 1
+        assert excluded[0].reason == (
+            "Superseded by kb.policy.test (same authority and version; kept first-listed item)"
+        )
 
     def test_single_item_passes_through(self, detector: KBConflictDetector) -> None:
         item = KBItemMetadata(

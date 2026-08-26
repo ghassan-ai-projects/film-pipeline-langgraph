@@ -98,26 +98,38 @@ class KBConflictDetector:
             else:
                 winner = max(
                     group,
-                    key=lambda i: (
-                        AUTHORITY_RANK.get(i.authority, 0),
-                        i.version,
-                    ),
+                    key=lambda i: (_authority_rank(i), i.version),
                 )
                 kept.append(winner)
-                for loser in group:
-                    if loser.id != winner.id:
-                        excluded.append(
-                            KBExcludedRef(
-                                ref=loser.id,
-                                reason=(
-                                    f"Superseded by {winner.id} "
-                                    f"(higher authority: {winner.authority.value}"
-                                    f" > {loser.authority.value})"
-                                ),
-                            )
-                        )
+                excluded.extend(
+                    KBExcludedRef(ref=loser.id, reason=_supersession_reason(winner, loser))
+                    for loser in group
+                    if loser.id != winner.id
+                )
 
         return kept, excluded
+
+
+def _authority_rank(item: KBItemMetadata) -> int:
+    """Rank an item on the authority hierarchy; unknown authorities rank lowest."""
+    return AUTHORITY_RANK.get(item.authority, 0)
+
+
+def _supersession_reason(winner: KBItemMetadata, loser: KBItemMetadata) -> str:
+    """Explain why ``winner`` displaced ``loser`` within one id-stem group."""
+    if _authority_rank(winner) > _authority_rank(loser):
+        return (
+            f"Superseded by {winner.id} "
+            f"(higher authority: {winner.authority.value}"
+            f" > {loser.authority.value})"
+        )
+    if winner.version > loser.version:
+        return (
+            f"Superseded by {winner.id} "
+            f"(equal authority: newer version {winner.version}"
+            f" > {loser.version})"
+        )
+    return f"Superseded by {winner.id} (same authority and version; kept first-listed item)"
 
 
 def _id_stem(item_id: str) -> str:
