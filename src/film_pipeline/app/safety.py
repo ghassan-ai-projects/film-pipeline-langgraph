@@ -111,7 +111,7 @@ def move_to_trash(
     timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
     name = f"{prefix}{timestamp}-{resolved.name}"
     destination = root / name
-    shutil.move(str(resolved), str(destination))
+    shutil.move(resolved, destination)
     return destination
 
 
