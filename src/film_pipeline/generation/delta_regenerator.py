@@ -6,11 +6,14 @@ instead of the entire batch. Saves 30-40% cost. Max 3 iterations.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from film_pipeline.generation.compositor import replace_tile
 from film_pipeline.generation.sheet_reviewer import SheetReviewResult, review_composite_sheet
+
+RegenerateTileFn = Callable[[dict[str, Any], str], Path | None]
 
 
 def _swap_regenerated_tile(
@@ -18,7 +21,7 @@ def _swap_regenerated_tile(
     tile_name: str,
     feedback: str,
     sheet_path: Path,
-    regenerate_fn: Any,
+    regenerate_fn: RegenerateTileFn,
     all_failing: list[str],
 ) -> None:
     """Regenerate one tile and splice it into the composite sheet."""
@@ -29,6 +32,8 @@ def _swap_regenerated_tile(
             if tile_name not in all_failing:
                 all_failing.append(tile_name)
     except Exception:
+        # A failed tile regen leaves the tile untouched; the next review round
+        # re-reports it and the caller keeps the best-scoring sheet seen so far.
         pass
 
 
@@ -56,7 +61,7 @@ def regenerate_failing_tiles(
     entries: list[dict[str, Any]],
     sheet_path: Path,
     *,
-    regenerate_fn: Any,
+    regenerate_fn: RegenerateTileFn,
     max_iterations: int = 3,
     model: str = "",
 ) -> tuple[float, int, list[str]]:
@@ -66,8 +71,9 @@ def regenerate_failing_tiles(
         sheet_review: Composite validation result with failing_tiles.
         entries: Reference index entries (to find source frames by role).
         sheet_path: Path to the composite sheet to fix.
-        regenerate_fn: Callable(entry, prompt_feedback) -> Path that regenerates
-                       a single frame and returns the new file path.
+        regenerate_fn: Callable(entry, prompt_feedback) -> Path | None that
+                       regenerates a single frame and returns the new file path
+                       (or None when regeneration failed).
         max_iterations: Max delta iterations (default 3).
         model: Model ID for sheet review (required, resolved via ModelRouter).
 
