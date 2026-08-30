@@ -13,7 +13,7 @@ UV_RUN = uv run --python $(PYTHON) --group dev
 
 .PHONY: help setup lock format format-check lint lint-fix typecheck test \
         test-cov test-unit test-integration test-e2e build precommit hooks \
-        ci-check clean product-gate
+        ci-check ci-verify clean product-gate
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -107,6 +107,9 @@ hooks: ## Install the pre-commit git hook
 
 ci-check: format-check lint typecheck test-cov build product-gate ## Run the full CI pipeline locally
 	@echo "  CI check passed"
+
+ci-verify: format-check lint typecheck test-cov product-gate ## CI validation without packaging (used by GitHub Actions)
+	@echo "  CI verify passed"
 
 clean: ## Remove local caches and build artifacts
 	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache .venv

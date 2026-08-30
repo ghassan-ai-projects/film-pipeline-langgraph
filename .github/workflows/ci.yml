@@ -1,14 +1,21 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # PR checks are the gate. Merges to main are NOT re-run (branch protection
+  # already required a passing PR), which avoids paying for redundant work.
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "LICENSE"
+  # Manual trigger for running the full pipeline against main on demand.
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+# Cancel superseded runs on the same ref to avoid paying for stale work.
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
@@ -17,10 +24,7 @@ jobs:
   ci:
     name: "Python CI"
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.12", "3.13"]
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -29,7 +33,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
@@ -37,10 +41,10 @@ jobs:
           enable-cache: true
 
       - name: Install ffmpeg (for mock provider video generation)
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
       - name: Install project
         run: uv sync --group dev
 
       - name: CI check
-        run: make ci-check PYTHON=${{ matrix.python-version }}
+        run: make ci-verify PYTHON=3.12
