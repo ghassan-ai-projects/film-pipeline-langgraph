@@ -81,14 +81,23 @@ def test_tui_new_full_mock_flow(tmp_path: Path) -> None:
                         app._run_command("approve")
                     elif generation is None or generation.running == 0:
                         app._run_command("generate")
-                    # Wait for the batch or approval to change state.
-                    for _ in range(60):
-                        await pilot.pause(delay=0.5)
+                    # Wait for the batch to finish (or the phase to advance) so
+                    # the next iteration can approve. Break as soon as the batch
+                    # completes instead of sleeping out a fixed budget — the
+                    # phase only leaves "generation" once approval runs on the
+                    # next outer pass, so waiting for that here just stalls.
+                    for _ in range(120):
+                        await pilot.pause(delay=0.05)
                         new_snapshot = app.state.snapshot
+                        if new_snapshot is None or new_snapshot.dashboard is None:
+                            continue
+                        if new_snapshot.dashboard.current_phase != "generation":
+                            break
+                        new_generation = new_snapshot.generation
                         if (
-                            new_snapshot
-                            and new_snapshot.dashboard
-                            and new_snapshot.dashboard.current_phase != "generation"
+                            new_generation is not None
+                            and new_generation.running == 0
+                            and new_generation.completed > 0
                         ):
                             break
                 elif dashboard.has_blockers or (
