@@ -85,10 +85,28 @@ def latest_discovered_phase(project_dir: Path) -> str:
     return ""
 
 
+# Backend factory used to initialize a project's checkpoint repository. Defaults
+# to real git; tests swap in a fast in-process double via ``set_git_backend_type``
+# to avoid spawning a ``git`` subprocess (and writing a ``.git`` tree) per project.
+_GIT_BACKEND_TYPE: type[GitBackend] = GitBackend
+
+
+def set_git_backend_type(backend_type: type[GitBackend]) -> None:
+    """Override the backend used by :func:`project_git_backend` (test seam)."""
+    global _GIT_BACKEND_TYPE
+    _GIT_BACKEND_TYPE = backend_type
+
+
+def reset_git_backend_type() -> None:
+    """Restore the real git backend."""
+    global _GIT_BACKEND_TYPE
+    _GIT_BACKEND_TYPE = GitBackend
+
+
 def project_git_backend(project_root: Path) -> GitBackend:
     """Initialize (or reuse) the checkpoint git repo for a project root."""
     already_initialized = (project_root / ".git").exists()
-    git = GitBackend.init_temp(project_root)
+    git = _GIT_BACKEND_TYPE.init_temp(project_root)
     gitignore = project_root / ".gitignore"
     if not gitignore.exists():
         gitignore.write_text(_PROJECT_GITIGNORE)
