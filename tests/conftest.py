@@ -25,8 +25,31 @@ def _isolated_runtime_root(
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(tmp_path / "runtime-root"))
     monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
     from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.testing.in_memory_git import reset_in_memory_git
 
+    # Each test starts with an empty in-memory checkpoint history (see the
+    # ``_fast_checkpoint_backend`` session fixture for why real git is bypassed).
+    reset_in_memory_git()
     reset_runtime()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _fast_checkpoint_backend() -> Iterator[None]:
+    """Back runtime checkpoints with an in-process git double for the whole suite.
+
+    Real git shells out ~9 subprocesses per project and writes a ``.git`` tree
+    that teardown must delete — pure overhead for the ~50 modules that create
+    projects without asserting git semantics. The genuine ``GitBackend``
+    contract tests construct ``GitBackend`` directly and are unaffected.
+    """
+    from film_pipeline.app._persistence import reset_git_backend_type, set_git_backend_type
+    from film_pipeline.testing.in_memory_git import InMemoryGitBackend
+
+    set_git_backend_type(InMemoryGitBackend)
+    try:
+        yield
+    finally:
+        reset_git_backend_type()
 
 
 @pytest.fixture(scope="session", autouse=True)
