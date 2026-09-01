@@ -158,6 +158,16 @@ OPENROUTER_API_KEY=...
 GOOGLE_API_KEY=...
 ```
 
+Chat agents default to z.ai's `glm-5.3-flash` (model prefix `zai/`); set
+`ZAI_API_KEY` to use it, keeping OpenRouter/Gemini models as fallbacks:
+
+```bash
+ZAI_API_KEY=...
+# Coding-plan keys ONLY work against the coding endpoint — with the default
+# endpoint they fail with error 1113 "Insufficient balance".
+ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4
+```
+
 Then launch in real mode:
 
 ```bash
@@ -227,3 +237,5 @@ Hard acceptance and product-completion docs live in [documentation/product-compl
 - Optional: provider keys via environment variables or a local `.env` file
 - `OPENROUTER_API_KEY` for real Seedance/OpenRouter calls
 - `GOOGLE_API_KEY` for Gemini Imagen 4 and Veo-family adapters
+- `ZAI_API_KEY` for z.ai chat models (`glm-5.3-flash`); `ZAI_BASE_URL` must
+  point coding-plan keys at `https://api.z.ai/api/coding/paas/v4`

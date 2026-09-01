@@ -8,6 +8,7 @@ Provider → env var mapping:
 - Seedance 2.0: ``OPENROUTER_API_KEY``
 - Veo 3.1 Fast: ``GOOGLE_API_KEY``
 - Imagen 4: ``GOOGLE_API_KEY``
+- z.ai (GLM chat models): ``ZAI_API_KEY``
 """
 
 from __future__ import annotations
@@ -29,6 +30,15 @@ def lookup(provider_id: str) -> str | None:
     env_var = _env_var_for(provider_id)
     if not env_var:
         return None
+    return env_or_dotenv(env_var)
+
+
+def env_or_dotenv(env_var: str) -> str | None:
+    """Resolve an environment variable, falling back to the local ``.env`` file.
+
+    The environment wins over ``.env``. Used for credentials and for
+    non-secret provider settings such as ``ZAI_BASE_URL``.
+    """
     env_value = os.environ.get(env_var)
     if env_value:
         return env_value
@@ -54,6 +64,7 @@ def _env_var_for(provider_id: str) -> str | None:
         "veo-3.1-fast": "GOOGLE_API_KEY",
         "gemini-imagen-4": "GOOGLE_API_KEY",
         "imagen-4": "GOOGLE_API_KEY",
+        "zai": "ZAI_API_KEY",
     }
     return mapping.get(provider_id)
 

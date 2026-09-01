@@ -11,12 +11,28 @@ class TestModelRouter:
     def test_select_creative_writer(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer")
-        assert model == "deepseek/deepseek-chat"
+        assert model == "zai/glm-5.3-flash"
 
     def test_select_strict_validator(self) -> None:
         router = ModelRouter()
         model = router.select("strict_validator")
-        assert model == "deepseek/deepseek-chat"
+        assert model == "zai/glm-5.3-flash"
+
+    def test_text_profiles_primary_on_zai(self) -> None:
+        """Text-only profiles default to z.ai; multimodal profiles stay on Gemini."""
+        router = ModelRouter()
+        text_profiles = (
+            "creative_writer",
+            "strict_validator",
+            "schema_enforcer",
+            "cheap_draft",
+            "operations_triage",
+            "text_validator",
+        )
+        for name in text_profiles:
+            assert router.select(name).startswith("zai/"), name
+        for name in ("visual_reasoner", "multimodal_reviewer"):
+            assert router.select(name).startswith("google/"), name
 
     def test_select_prefer_cheap(self) -> None:
         router = ModelRouter()
@@ -38,7 +54,7 @@ class TestModelRouter:
         ranked = router.cost_ranked("creative_writer")
         assert len(ranked) == 2
         assert "google/gemini-3-flash-preview" in ranked
-        assert "deepseek/deepseek-chat" in ranked
+        assert "zai/glm-5.3-flash" in ranked
 
     def test_cost_ranked_unknown_profile_returns_empty(self) -> None:
         router = ModelRouter()
@@ -73,14 +89,14 @@ class TestModelRouter:
     def test_resolve_or_raise_success(self) -> None:
         router = ModelRouter()
         model = router.resolve_or_raise("creative_writer")
-        assert model == "deepseek/deepseek-chat"
+        assert model == "zai/glm-5.3-flash"
 
     def test_resolve_model_params(self) -> None:
         router = ModelRouter()
         model_id, max_tokens, temperature, top_p, freq_pen = router.resolve_model_params(
             "strict_validator"
         )
-        assert model_id == "deepseek/deepseek-chat"
+        assert model_id == "zai/glm-5.3-flash"
         assert max_tokens == 4096
         assert temperature == 0.1
         assert top_p == 0.95
