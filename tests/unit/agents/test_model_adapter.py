@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 from email.message import Message
 from io import BytesIO
@@ -290,6 +291,142 @@ class TestModelAdapter:
 
         with pytest.raises(RuntimeError, match="Gemini generateContent failed: HTTP 500"):
             adapter.chat_multimodal("Describe", model="google/gemini", images_b64=["abc"])
+
+
+class TestZaiProvider:
+    """z.ai (GLM) dispatch — models prefixed ``zai/`` bypass OpenRouter."""
+
+    def test_zai_model_posts_to_zai_endpoint_with_stripped_model_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import film_pipeline.providers.credentials as creds
+
+        captured: list[Any] = []
+
+        def _capture(req: Any, *, timeout: float | None = None) -> Any:
+            captured.append(req)
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
+        # Isolate from the developer's local .env, which may set ZAI_BASE_URL.
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key-123")
+
+        assert adapter.chat("Hello", model="zai/glm-5.3-flash") == "ok"
+        assert len(captured) == 1
+        req = captured[0]
+        assert req.full_url == "https://api.z.ai/api/paas/v4/chat/completions"
+        assert req.get_header("Authorization") == "Bearer zai-key-123"
+        assert req.get_header("Content-type") == "application/json"
+        body = json.loads(req.data)
+        assert body["model"] == "glm-5.3-flash"  # prefix must NOT reach the wire
+        assert body["messages"] == [{"role": "user", "content": "Hello"}]
+
+    def test_zai_base_url_override_via_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: list[Any] = []
+
+        def _capture(req: Any) -> Any:
+            captured.append(req)
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
+        monkeypatch.setenv("ZAI_BASE_URL", "https://api.z.ai/api/coding/paas/v4")
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        adapter.chat("Hello", model="zai/glm-5.3-flash")
+        assert captured[0].full_url == "https://api.z.ai/api/coding/paas/v4/chat/completions"
+
+    def test_zai_base_url_falls_back_to_dotenv(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / ".env").write_text("ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4\n")
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr("film_pipeline.providers.credentials.Path.cwd", lambda: tmp_path)
+        adapter = ModelAdapter(http_opener=MagicMock(), zai_api_key="zai-key")
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
+
+    def test_zai_base_url_default_without_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import film_pipeline.providers.credentials as creds
+
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
+        adapter = ModelAdapter()
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/paas/v4"
+
+    def test_zai_missing_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import film_pipeline.agents.model_adapter as ma
+
+        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        adapter = ModelAdapter(zai_api_key=None)
+
+        with pytest.raises(RuntimeError, match="ZAI_API_KEY is not set"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_no_choices_raises_provider_aware_error(self) -> None:
+        opener = _make_opener({"choices": []})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="z\\.ai returned no choices"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_http_error_is_prefixed_and_redacted(self) -> None:
+        opener = MagicMock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            "https://example.test",
+            401,
+            "Unauthorized",
+            hdrs=Message(),
+            fp=BytesIO(b'{"error":"bad secret sk-test"}'),
+        )
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="z\\.ai chat completions failed: HTTP 401"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_reasoning_content_with_empty_content_fails_json_parse(self) -> None:
+        """Reasoning models can spend the whole budget on reasoning_content."""
+        opener = _make_opener(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "reasoning_content": "I thought about it at length.",
+                        }
+                    }
+                ]
+            }
+        )
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(ValueError, match="not valid JSON"):
+            adapter.chat_json("Give me JSON", model="zai/glm-5.3-flash")
+
+    def test_zai_null_content_is_treated_as_empty_string(self) -> None:
+        opener = _make_opener({"choices": [{"message": {"content": None}}]})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        assert adapter.chat("Hello", model="zai/glm-5.3-flash") == ""
+
+    def test_zai_multimodal_drops_images_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        opener = _make_opener({"choices": [{"message": {"content": "text only"}}]})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with caplog.at_level(logging.WARNING):
+            result = adapter.chat_multimodal(
+                "Describe", model="zai/glm-5.3-flash", images_b64=["abc"]
+            )
+
+        assert result == "text only"
+        assert "dropping 1 images" in caplog.text
+        assert "zai/glm-5.3-flash" in caplog.text
 
 
 def _make_gemini_opener(response_body: dict[str, Any]) -> MagicMock:

@@ -1,10 +1,14 @@
-"""Model adapter — calls an LLM via OpenRouter for agent execution.
+"""Model adapter — calls an LLM via OpenRouter or z.ai for agent execution.
 
 Same pattern as ``SeedanceOpenRouterProvider``: constructor-injected HTTP opener
 so tests can mock the network without any test-only dependency.
 
 Model selection is ALWAYS explicit: no hardcoded defaults. Callers must resolve
-the model through the routing layer before invoking this adapter.
+the model through the routing layer before invoking this adapter. Models are
+dispatched by id prefix: ``zai/`` goes to z.ai's OpenAI-compatible endpoint
+(``ZAI_API_KEY``), ``google/`` multimodal calls go to Gemini's generateContent
+API (``GOOGLE_API_KEY``), everything else goes to OpenRouter
+(``OPENROUTER_API_KEY``).
 
 Transport concerns live in ``_http_transport`` and model-text JSON recovery in
 ``_json_extraction``; this module stays with request shaping, key resolution,
@@ -15,7 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 # Historical import paths kept stable for callers and tests (explicit alias
@@ -29,7 +33,10 @@ from film_pipeline.agents._http_transport import (
 from film_pipeline.agents._http_transport import post_json
 from film_pipeline.agents._json_extraction import extract_json_object
 from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
-from film_pipeline.providers.credentials import lookup
+from film_pipeline.providers.credentials import env_or_dotenv, lookup
+
+ZAI_MODEL_PREFIX = "zai/"
+ZAI_API_BASE = "https://api.z.ai/api/paas/v4"
 
 
 @dataclass(frozen=True)
@@ -57,7 +64,7 @@ class _ChatRequest:
 
 
 class ModelAdapter:
-    """Call a chat model through OpenRouter.
+    """Call a chat model through OpenRouter or z.ai (prefix-routed).
 
     Testable: pass ``_http_opener`` to inject a mock HTTP handler.
     """
@@ -67,11 +74,13 @@ class ModelAdapter:
         http_opener: Any = None,
         api_key: str | None = None,
         gemini_api_key: str | None = None,
+        zai_api_key: str | None = None,
         request_timeout_seconds: float | None = 120.0,
     ) -> None:
         self._http_opener = http_opener
         self._configured_api_key = api_key
         self._configured_gemini_api_key = gemini_api_key
+        self._configured_zai_api_key = zai_api_key
         self.request_timeout_seconds = request_timeout_seconds
 
     def _api_key(self) -> str:
@@ -88,15 +97,37 @@ class ModelAdapter:
             raise RuntimeError("GOOGLE_API_KEY is not set. Set it in the environment or .env file.")
         return key
 
-    def _request(self, request: _ChatRequest) -> dict[str, Any]:
-        """Post a chat-completion request to OpenRouter and return parsed JSON.
+    def _zai_api_key(self) -> str:
+        key = self._configured_zai_api_key or lookup("zai")
+        if not key:
+            raise RuntimeError(
+                "ZAI_API_KEY is not set. Set it in the environment or in a local .env file."
+            )
+        return key
 
-        ``request.model`` is REQUIRED — no hardcoded default. The caller must
-        resolve the model through config/routing before invoking.
+    def _zai_base_url(self) -> str:
+        """Resolve the z.ai API base URL.
+
+        ``ZAI_BASE_URL`` (environment or local ``.env``) overrides the default.
+        Coding-plan keys only work against the coding endpoint:
+        ``https://api.z.ai/api/coding/paas/v4`` — against the standard endpoint
+        they fail with error 1113 (insufficient balance).
         """
+        return env_or_dotenv("ZAI_BASE_URL") or ZAI_API_BASE
+
+    def _request(self, request: _ChatRequest) -> dict[str, Any]:
+        """Post a chat-completion request to the model's provider endpoint.
+
+        Models prefixed ``zai/`` go to z.ai (OpenAI-compatible chat
+        completions); everything else goes to OpenRouter. ``request.model``
+        is REQUIRED — no hardcoded default. The caller must resolve the model
+        through config/routing before invoking.
+        """
+        if request.model.startswith(ZAI_MODEL_PREFIX):
+            return self._zai_request(request)
         return post_json(
             f"{OPENROUTER_API}/chat/completions",
-            _openrouter_payload(request),
+            _chat_completions_payload(request),
             http_opener=self._http_opener,
             timeout_seconds=self.request_timeout_seconds,
             headers={
@@ -104,6 +135,22 @@ class ModelAdapter:
                 "Content-Type": "application/json",
             },
             error_prefix="OpenRouter chat completions failed",
+            redact_body=True,
+        )
+
+    def _zai_request(self, request: _ChatRequest) -> dict[str, Any]:
+        """Post a chat-completion request to z.ai, stripping the ``zai/`` prefix."""
+        wire_request = replace(request, model=request.model.removeprefix(ZAI_MODEL_PREFIX))
+        return post_json(
+            f"{self._zai_base_url()}/chat/completions",
+            _chat_completions_payload(wire_request),
+            http_opener=self._http_opener,
+            timeout_seconds=self.request_timeout_seconds,
+            headers={
+                "Authorization": f"Bearer {self._zai_api_key()}",
+                "Content-Type": "application/json",
+            },
+            error_prefix="z.ai chat completions failed",
             redact_body=True,
         )
 
@@ -139,9 +186,12 @@ class ModelAdapter:
         )
         choices: list[dict[str, Any]] = response.get("choices", [])
         if not choices:
-            raise RuntimeError("OpenRouter returned no choices.")
+            provider = "z.ai" if model.startswith(ZAI_MODEL_PREFIX) else "OpenRouter"
+            raise RuntimeError(f"{provider} returned no choices.")
         msg: dict[str, Any] = choices[0].get("message", {})
-        return str(msg.get("content", ""))
+        # ``or ""`` guards content: null — some providers send it when the
+        # whole completion budget went to reasoning_content.
+        return str(msg.get("content") or "")
 
     def chat_multimodal(
         self,
@@ -248,7 +298,8 @@ class ModelAdapter:
         return extracted
 
 
-def _openrouter_payload(request: _ChatRequest) -> bytes:
+def _chat_completions_payload(request: _ChatRequest) -> bytes:
+    """Build the OpenAI-compatible chat body shared by OpenRouter and z.ai."""
     body: dict[str, Any] = {
         "model": request.model,
         "messages": request.messages,
