@@ -17,7 +17,11 @@ import os
 import re
 from pathlib import Path
 
-REDACTION_RE = re.compile(r"(sk-|key-|AIza)[a-zA-Z0-9_\-]{8,}")
+# z.ai keys use an ``id.secret`` shape rather than a provider-specific prefix.
+# Keep this deliberately conservative so ordinary dotted prose is not masked.
+REDACTION_RE = re.compile(
+    r"(?:sk-|key-|AIza)[a-zA-Z0-9_\-]{8,}|[a-fA-F0-9]{24,}\.[A-Za-z0-9_\-]{8,}"
+)
 ENV_FILE_NAME = ".env"
 
 
@@ -40,9 +44,12 @@ def env_or_dotenv(env_var: str) -> str | None:
     non-secret provider settings such as ``ZAI_BASE_URL``.
     """
     env_value = os.environ.get(env_var)
-    if env_value:
-        return env_value
-    return _read_dotenv(Path.cwd()).get(env_var)
+    if env_value and env_value.strip():
+        return env_value.strip()
+    dotenv_value = _read_dotenv(Path.cwd()).get(env_var)
+    if dotenv_value and dotenv_value.strip():
+        return dotenv_value.strip()
+    return None
 
 
 def is_configured(provider_id: str) -> bool:

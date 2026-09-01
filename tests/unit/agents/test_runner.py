@@ -310,6 +310,71 @@ class TestPromptRunner:
         # Third attempt uses fallback
         assert mock_adapter.chat_json.call_args_list[2].kwargs["model"] == "cheap-fallback"
 
+    def test_provider_runtime_errors_reach_fallback_model(self) -> None:
+        """Transport/auth failures must use the same fallback ladder as bad JSON."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = [
+            RuntimeError("z.ai unavailable"),
+            RuntimeError("z.ai still unavailable"),
+            {"recovered": "fallback"},
+        ]
+        router = ModelRouter(
+            profiles={
+                "creative_writer": {
+                    "primary": "zai/glm-5.3-flash",
+                    "fallback": "openrouter/fallback",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="provider-failure",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+
+        assert runner.call_model(prompt, model_profile="creative_writer") == {
+            "recovered": "fallback"
+        }
+        assert mock_adapter.chat_json.call_count == 3
+        assert mock_adapter.chat_json.call_args_list[2].kwargs["model"] == "openrouter/fallback"
+
+    def test_provider_runtime_errors_are_normalized_after_fallback(self) -> None:
+        """An unavailable primary and fallback return a stable failure envelope."""
+        from unittest.mock import MagicMock
+
+        mock_adapter = MagicMock()
+        mock_adapter.chat_json.side_effect = RuntimeError("provider unavailable")
+        router = ModelRouter(
+            profiles={
+                "operations_triage": {
+                    "primary": "zai/glm-5.3-flash",
+                    "fallback": "openrouter/fallback",
+                    "max_tokens": 1024,
+                    "temperature": 0.2,
+                }
+            }
+        )
+        runner = PromptRunner(model_adapter=mock_adapter, model_router=router)
+        prompt = RCTCOPrompt(
+            role="r",
+            core_task="provider-failure",
+            context="c",
+            constraints="x",
+            output_format="y",
+        )
+
+        result = runner.call_model(prompt, model_profile="operations_triage")
+        assert result["status"] == "model_failure"
+        assert result["fallback_model"] == "openrouter/fallback"
+        assert mock_adapter.chat_json.call_count == 3
+
     def test_token_limit_retry_compresses_context_before_retry(self) -> None:
         """Token-limit failures shrink context instead of replaying the same prompt."""
         from unittest.mock import MagicMock

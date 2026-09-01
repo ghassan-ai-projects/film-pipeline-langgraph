@@ -1,0 +1,109 @@
+{
+  "snapshot_id": "sha256:4a8ba5c12ed69efece07ac0750fcdeb267e6a55e05207134f45bb0c642fd9772",
+  "enola_version": "dev",
+  "extractor_version": "v257",
+  "generated_at": "2026-08-29T08:56:12Z",
+  "duration": "556.848792ms",
+  "repo_path": "/Users/ghassan/my-projects/film-pipeline-langgraph",
+  "git": {
+    "ref": "main",
+    "commit": "4f802b1f808b1341cccdf0d199985f5a8d7d50a6",
+    "dirty": true,
+    "remote": "github.com/ghassan-ai-projects/film-pipeline-langgraph"
+  },
+  "extractors": [
+    "python"
+  ],
+  "explainers": [
+    "cycles",
+    "layers",
+    "crossrepo",
+    "coverage",
+    "unused-routes",
+    "domain",
+    "query-loops",
+    "dead-methods",
+    "entry-points",
+    "messaging-coverage",
+    "god-class",
+    "hotspots",
+    "dependency-depth",
+    "exported-surface",
+    "complexity-outliers",
+    "intent",
+    "constraints",
+    "vendored-candidates"
+  ],
+  "renderers": [
+    "llm_context"
+  ],
+  "config_hash": "sha256:684c374664f98a9a80d3d46f8133bd94ba05fdc66f003d4d4aaece52fa2f1767",
+  "ignore_glob_hash": "sha256:60ea26f406b3bb389acbe24033cfb35c1704897e65ee73b06ec46765f2c5fabe",
+  "output_hashes": {
+    "facts.jsonl": "sha256:cce57f8adf644bc3c71aa3ec306e4334b3c538fdb18d6c185ab63f49368b1aaf",
+    "insights.json": "sha256:c79471a29d5d0b2bb3f1a9c5c2c49d414339c318069bbf278ed424a93408fa31",
+    "llm_context.md": "sha256:7ff8b232c93c7facf831442c64a18d3a3b03e875063be2a854b3bd66abcfb3c9"
+  },
+  "fact_count": 8189,
+  "insight_count": 80,
+  "quality": {
+    "files_seen": 720,
+    "files_parsed": 475,
+    "files_skipped": 0,
+    "dirs_skipped": 89,
+    "skipped_sample": [
+      ".claude/ (glob: .claude/**)",
+      ".film-pipeline-run/missing/.git/ (glob: **/.git/**)",
+      ".film-pipeline-run/movie1/.git/ (glob: **/.git/**)",
+      ".film-pipeline-run/movie2/.git/ (glob: **/.git/**)",
+      ".fleet/ (glob: .fleet/**)",
+      ".git/ (glob: .git/**)",
+      ".mypy_cache/ (glob: **/.mypy_cache/**)",
+      ".pytest_cache/ (glob: **/.pytest_cache/**)",
+      ".qwen/ (glob: .qwen/**)",
+      ".ruff_cache/ (glob: **/.ruff_cache/**)",
+      ".uv-cache/ (glob: .uv-cache/**)",
+      ".venv/ (glob: .venv/**)",
+      "dist/ (glob: dist/**)",
+      "film-knowledge-base/ (glob: film-knowledge-base/**)",
+      "profiles/ (glob: profiles/**)",
+      "projects/ (glob: projects/**)",
+      "scripts/ (glob: scripts/**)",
+      "src/film_pipeline/__pycache__/ (glob: **/__pycache__/**)",
+      "src/film_pipeline/agents/__pycache__/ (glob: **/__pycache__/**)",
+      "src/film_pipeline/agents/impl/__pycache__/ (glob: **/__pycache__/**)"
+    ],
+    "parse_errors": 0,
+    "heuristic_insights": 74,
+    "census": {
+      "files_walked": 720,
+      "parsed": 475,
+      "excluded_by_ignore": 0,
+      "excluded_by_kind": 221,
+      "excluded_kinds": {
+        "(no extension)": 2,
+        ".ds_store": 1,
+        ".editorconfig": 1,
+        ".env": 1,
+        ".example": 1,
+        ".gitignore": 4,
+        ".json": 108,
+        ".lock": 1,
+        ".log": 2,
+        ".md": 91,
+        ".python-version": 1,
+        ".txt": 2,
+        ".typed": 1,
+        ".yaml": 4,
+        ".yml": 1
+      },
+      "skipped_with_cause": 24,
+      "top_skip_causes": [
+        {
+          "cause": "claimed by python, no facts emitted",
+          "count": 24
+        }
+      ]
+    }
+  }
+}

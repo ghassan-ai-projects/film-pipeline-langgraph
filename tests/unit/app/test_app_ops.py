@@ -57,6 +57,53 @@ class TestBootstrap:
         issues = validate_environment()
         assert any("OPENROUTER_API_KEY" in issue for issue in issues)
 
+    def test_validate_environment_requires_zai_key_in_real_mode(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Real mode now demands ZAI_API_KEY — chat agents default to z.ai GLM."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("FILM_PIPELINE_MCP_MODE", "real")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-12345678")
+        monkeypatch.delenv("ZAI_API_KEY", raising=False)
+        monkeypatch.setattr("film_pipeline.providers.credentials._read_dotenv", lambda _root: {})
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        issues = validate_environment()
+        assert any("ZAI_API_KEY" in issue for issue in issues)
+
+    def test_validate_environment_real_mode_ok_with_all_keys(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("FILM_PIPELINE_MCP_MODE", "real")
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-12345678")
+        monkeypatch.setenv("ZAI_API_KEY", "zai-test-12345678")
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        (tmp_path / "artifacts").mkdir()
+        issues = validate_environment()
+        assert issues == []
+
+    def test_validate_environment_accepts_credentials_from_dotenv(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Bootstrap and adapters must agree when credentials live in .env."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("FILM_PIPELINE_MCP_MODE", "real")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("ZAI_API_KEY", raising=False)
+        (tmp_path / ".env").write_text(
+            "OPENROUTER_API_KEY=sk-dotenv-12345678\nZAI_API_KEY=zai-dotenv-12345678\n"
+        )
+        (tmp_path / "profiles").mkdir()
+        (tmp_path / "film-knowledge-base").mkdir()
+        (tmp_path / "film-knowledge-base" / "manifest.yaml").write_text("items: []")
+        (tmp_path / "artifacts").mkdir()
+
+        assert validate_environment() == []
+
     def test_validate_environment_rejects_artifacts_file(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

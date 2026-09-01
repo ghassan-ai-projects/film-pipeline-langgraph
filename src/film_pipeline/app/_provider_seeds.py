@@ -23,7 +23,7 @@ def seed_default_provider_health(rt: StudioRuntime) -> None:
     if rt.server_mode == "real":
         from film_pipeline.providers import credentials
 
-        for provider_id in ("seedance-openrouter", "veo-fast", "gemini-imagen-4"):
+        for provider_id in ("zai", "seedance-openrouter", "veo-fast", "gemini-imagen-4"):
             if credentials.is_configured(provider_id):
                 rt.set_provider_health(provider_id, "healthy")
             else:

@@ -21,6 +21,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from typing import Any
+from urllib.parse import urlsplit
 
 # Historical import paths kept stable for callers and tests (explicit alias
 # form so mypy strict's no_implicit_reexport passes them through).
@@ -37,6 +38,8 @@ from film_pipeline.providers.credentials import env_or_dotenv, lookup
 
 ZAI_MODEL_PREFIX = "zai/"
 ZAI_API_BASE = "https://api.z.ai/api/paas/v4"
+ZAI_CODING_API_BASE = "https://api.z.ai/api/coding/paas/v4"
+_ALLOWED_ZAI_BASE_URLS = frozenset({ZAI_API_BASE, ZAI_CODING_API_BASE})
 
 
 @dataclass(frozen=True)
@@ -53,9 +56,12 @@ class _GeminiRequest:
 
 @dataclass(frozen=True)
 class _ChatRequest:
-    """Request-shaping parameters for an OpenRouter chat-completion call."""
+    """Request-shaping parameters for an OpenAI-compatible chat completion.
 
-    messages: list[dict[str, str]]
+    Shared by the OpenRouter and z.ai transports — both accept this body.
+    """
+
+    messages: list[dict[str, Any]]
     model: str
     max_tokens: int = 4096
     temperature: float = 0.7
@@ -113,7 +119,13 @@ class ModelAdapter:
         ``https://api.z.ai/api/coding/paas/v4`` — against the standard endpoint
         they fail with error 1113 (insufficient balance).
         """
-        return env_or_dotenv("ZAI_BASE_URL") or ZAI_API_BASE
+        override = env_or_dotenv("ZAI_BASE_URL")
+        base_url = (override or ZAI_API_BASE).rstrip("/")
+        parsed = urlsplit(base_url)
+        if base_url not in _ALLOWED_ZAI_BASE_URLS or parsed.scheme != "https":
+            allowed = " or ".join(sorted(_ALLOWED_ZAI_BASE_URLS))
+            raise RuntimeError(f"ZAI_BASE_URL must be {allowed}.")
+        return base_url
 
     def _request(self, request: _ChatRequest) -> dict[str, Any]:
         """Post a chat-completion request to the model's provider endpoint.
@@ -143,7 +155,7 @@ class ModelAdapter:
         wire_request = replace(request, model=request.model.removeprefix(ZAI_MODEL_PREFIX))
         return post_json(
             f"{self._zai_base_url()}/chat/completions",
-            _chat_completions_payload(wire_request),
+            _chat_completions_payload(wire_request, include_frequency_penalty=False),
             http_opener=self._http_opener,
             timeout_seconds=self.request_timeout_seconds,
             headers={
@@ -169,7 +181,7 @@ class ModelAdapter:
 
         ``model`` is REQUIRED — no hardcoded default.
         """
-        messages: list[dict[str, str]] = []
+        messages: list[dict[str, Any]] = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
@@ -206,12 +218,14 @@ class ModelAdapter:
         """Send prompt + images to a multimodal model.
 
         When model starts with 'google/', uses Gemini's generateContent API
-        with inline image data. Otherwise falls back to text-only chat()
-        (images are dropped with a warning).
+        with inline image data. z.ai models use the OpenAI-compatible
+        ``image_url`` content block format. Other models fall back to
+        text-only chat() because their adapter contract is text-only.
 
         Args:
             prompt: The text prompt.
-            model: Full model ID (e.g. "google/gemini-3-flash-preview").
+            model: Full model ID (e.g. "google/gemini-3-flash-preview" or
+                "zai/glm-5v-turbo").
             images_b64: Base64-encoded images (no data URI prefix).
             mime_type: Image MIME type for Gemini API.
             max_tokens: Max output tokens.
@@ -234,6 +248,29 @@ class ModelAdapter:
                     temperature=temperature,
                 )
             )
+
+        if model.startswith(ZAI_MODEL_PREFIX):
+            content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+            content.extend(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime_type};base64,{image_b64}"},
+                }
+                for image_b64 in images_b64
+            )
+            response = self._request(
+                _ChatRequest(
+                    messages=[{"role": "user", "content": content}],
+                    model=model,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+            )
+            choices: list[dict[str, Any]] = response.get("choices", [])
+            if not choices:
+                raise RuntimeError("z.ai returned no choices.")
+            msg: dict[str, Any] = choices[0].get("message", {})
+            return str(msg.get("content") or "")
 
         _warn_dropped_images(len(images_b64), model)
         return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
@@ -298,16 +335,19 @@ class ModelAdapter:
         return extracted
 
 
-def _chat_completions_payload(request: _ChatRequest) -> bytes:
-    """Build the OpenAI-compatible chat body shared by OpenRouter and z.ai."""
+def _chat_completions_payload(
+    request: _ChatRequest, *, include_frequency_penalty: bool = True
+) -> bytes:
+    """Build an OpenAI-compatible chat body for OpenRouter or z.ai."""
     body: dict[str, Any] = {
         "model": request.model,
         "messages": request.messages,
         "max_tokens": request.max_tokens,
         "temperature": request.temperature,
         "top_p": request.top_p,
-        "frequency_penalty": request.frequency_penalty,
     }
+    if include_frequency_penalty:
+        body["frequency_penalty"] = request.frequency_penalty
     return json.dumps(body).encode()
 
 

@@ -59,6 +59,14 @@ class TestCredentials:
         ):
             assert env_or_dotenv("ZAI_BASE_URL") is None
 
+    def test_env_or_dotenv_ignores_blank_values(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("ZAI_API_KEY=\n")
+        with (
+            mock.patch.dict(os.environ, {"ZAI_API_KEY": "   "}, clear=True),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            assert env_or_dotenv("ZAI_API_KEY") is None
+
     def test_lookup_returns_key(self) -> None:
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-1234"}):
             assert lookup("seedance-openrouter") == "sk-test-1234"
@@ -112,6 +120,12 @@ class TestCredentials:
         text = "Using key-abcdefghijklmnop"
         assert "key-" not in redact(text)
         assert "[REDACTED]" in redact(text)
+
+    def test_redact_zai_id_secret_key(self) -> None:
+        key = "0123456789abcdef0123456789abcdef.secret-part-123456"
+        redacted = redact(f"Authorization: Bearer {key}")
+        assert key not in redacted
+        assert "[REDACTED]" in redacted
 
     def test_read_dotenv_ignores_comments_and_quotes(self, tmp_path: Path) -> None:
         (tmp_path / ".env").write_text(

@@ -11,11 +11,10 @@ from dataclasses import dataclass, field
 
 # Default profiles — overridable via constructor or config.
 # These use logical model names that providers map to real model ids.
-# Text-only profiles default to z.ai's glm-5.3-flash (prefix "zai/" routes to
-# the z.ai endpoint — see ModelAdapter); multimodal profiles keep Gemini
-# primary because the z.ai path is text-only (images are dropped with a
-# warning). Every fallback stays on OpenRouter/Gemini so the other providers
-# remain the safety net.
+# Text-oriented profiles default to z.ai's glm-5.3-flash (prefix "zai/" routes
+# to the z.ai endpoint — see ModelAdapter). Multimodal profiles keep Gemini
+# primary for its established vision path. Every fallback stays on
+# OpenRouter/Gemini so the other providers remain the safety net.
 _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
     "creative_writer": {
         "primary": "zai/glm-5.3-flash",

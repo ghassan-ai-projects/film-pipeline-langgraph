@@ -54,10 +54,12 @@ uv run twine upload dist/*
 ## CI Pipeline
 
 `.github/workflows/ci.yml` runs:
-- Python 3.12 + 3.13 matrix
+- Python 3.12
 - `uv sync --group dev --frozen`
-- `make ci-check` (format-check → lint → typecheck → pytest 90% → build → product-gate)
+- `make ci-verify` (format-check → lint → typecheck → pytest 90% → product-gate)
 - Pre-commit hooks on push (ruff format, lint, mypy) and pre-push (pytest + build)
+
+The local release gate remains `make ci-check`, which adds the package build.
 
 ## Release Notes
 

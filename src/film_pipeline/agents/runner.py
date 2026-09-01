@@ -244,7 +244,7 @@ class PromptRunner:
                     params.model_profile,
                     params.model_id,
                 )
-            elif isinstance(exc, ValueError):
+            elif isinstance(exc, (ValueError, RuntimeError)):
                 pass
             else:
                 raise
@@ -286,7 +286,7 @@ class PromptRunner:
                     params.model_profile,
                     params.model_id,
                 )
-            elif isinstance(exc, ValueError):
+            elif isinstance(exc, (ValueError, RuntimeError)):
                 pass
             else:
                 raise
@@ -333,7 +333,7 @@ class PromptRunner:
                 retry_prompt,
                 system_role=prompt.role,
             )
-        except ValueError:
+        except (ValueError, RuntimeError):
             _logger.error(
                 "PromptRunner.call_model all 3 attempts failed — "
                 "profile=%s, model=%s, fallback=%s.",
