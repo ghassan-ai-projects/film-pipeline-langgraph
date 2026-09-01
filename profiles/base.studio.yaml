@@ -36,6 +36,54 @@ budget:
   max_auto_approved_cost_usd: 1.0
   human_approval_above_usd: 5.0
 
+# Model policy — override individual profiles in a project/quality profile.
+# Provider adapters are selected by the model id prefix; adding an adapter does
+# not change these defaults. For example, use `zai/glm-5.3-flash` only by
+# explicitly setting that primary in a project profile.
+model_profiles:
+  creative_writer:
+    primary: deepseek/deepseek-chat
+    fallback: google/gemini-3-flash-preview
+    max_tokens: 8192
+    temperature: 0.7
+    top_p: 0.95
+    frequency_penalty: 0.3
+  strict_validator:
+    primary: deepseek/deepseek-chat
+    fallback: google/gemini-3-flash-preview
+    max_tokens: 4096
+    temperature: 0.1
+  visual_reasoner:
+    primary: google/gemini-3-flash-preview
+    fallback: deepseek/deepseek-chat
+    max_tokens: 4096
+    temperature: 0.3
+  schema_enforcer:
+    primary: deepseek/deepseek-chat
+    fallback: google/gemini-3-flash-preview
+    max_tokens: 4096
+    temperature: 0.0
+  cheap_draft:
+    primary: google/gemini-3-flash-preview
+    fallback: deepseek/deepseek-chat
+    max_tokens: 4096
+    temperature: 0.8
+  operations_triage:
+    primary: google/gemini-3-flash-preview
+    fallback: deepseek/deepseek-chat
+    max_tokens: 4096
+    temperature: 0.2
+  multimodal_reviewer:
+    primary: google/gemini-3-flash-preview
+    fallback: deepseek/deepseek-chat
+    max_tokens: 4096
+    temperature: 0.2
+  text_validator:
+    primary: deepseek/deepseek-chat
+    fallback: google/gemini-3-flash-preview
+    max_tokens: 4096
+    temperature: 0.1
+
 generation:
   default_mode: test
   duration_seconds: 1

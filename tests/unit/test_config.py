@@ -20,6 +20,7 @@ def test_load_base_studio_profile() -> None:
     src = loader.load("base.studio")
     assert src.raw["review"]["strategy"] == "multi_model_panel"
     assert len(src.raw["phases"]) == 11
+    assert src.raw["model_profiles"]["creative_writer"]["primary"] == ("deepseek/deepseek-chat")
 
 
 def test_load_narrative_type() -> None:

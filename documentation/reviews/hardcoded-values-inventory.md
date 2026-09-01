@@ -153,47 +153,38 @@ and `agents/impl/screenwriter_agent.py:109-111`.
 
 ---
 
-## E. Model routing — fully hardcoded (largest dead-config surface)
+## E. Model routing — config-backed with a compatibility fallback
 
-`ModelRouter` is **always constructed with no arguments** in every production path
-(`graph/services.py:49,72`, `mcp/tools/__init__.py:2481`), so it always uses the
-module-level constant `_DEFAULT_PROFILES` (`agents/model_routing/__init__.py:14`).
-The module docstring claims *"Model profiles are loaded from config"* — that is
-**not true** in any wired path.
+The project-facing model policy is declared in `profiles/base.studio.yaml` and
+merged with later quality/project profile layers. `_model_overrides_for` passes
+the selected `model_profiles.<profile>` values to `ModelRouter`, so changing a
+project model does not require a code edit. The router is still constructed
+without arguments in generic/direct-call paths, where `_FALLBACK_PROFILES`
+provides a last-resort policy for callers that have no resolved project config.
 
-Hardcoded in that dict (8 profiles):
-- **Model IDs** — `deepseek/deepseek-chat` (primary for creative/strict/schema) and
-  `google/gemini-3-flash-preview` (primary for visual/ops/draft). Changing the model
-  requires a code edit.
+The compatibility fallback mirrors the base profile’s:
+- **Model IDs** — `deepseek/deepseek-chat` (primary for creative/strict/schema/text)
+  and `google/gemini-3-flash-preview` (primary for visual/ops/draft).
 - **Temperatures** — `creative_writer 0.7`, `cheap_draft 0.8`, `visual_reasoner 0.3`,
   `operations_triage 0.2`, `strict_validator 0.1`, `schema_enforcer 0.0`, …
 - **Token limits** — `8192` (creative) / `4096` (all others).
 - `top_p 0.95`, `frequency_penalty 0.3`.
 
 Consequences:
-- The `models:` sections in `mock-demo.yaml`, `local-real-provider.yaml`, and the
-  `review_models:` / `quality.*` model configs are **DEAD** — never reach the router.
+- The `models:` sections in `mock-demo.yaml`, `local-real-provider.yaml`, and
+  `review_models:` remain **DEAD** — they never reach the chat router. The
+  `model_profiles:` blocks are the live routing override path.
 - The agent→profile mapping `_AGENT_PROFILE_MAP` (`graph/nodes.py:46`) is also a
   hardcoded dict.
 - Retry temperature `0.1` is hardcoded in `agents/runner.py:219,270`;
   `model_adapter.py` defaults to `temperature 0.7` / `0.2` and `max_tokens 4096`.
 
-**2026-08 re-check (verified against `src/`):** partially superseded by WS-G
-(config-driven routing). A real override channel now exists:
-`_model_overrides_for` reads `resolved_config["model_profiles"][<profile>]`
-(`graph/nodes/_context.py:405-418`) and every agent call threads it into
-`ModelRouter.resolve_model_params` (`graph/nodes/_agent.py:149-158`,
-`agents/runner.py:176`), so per-profile model / temperature / token changes no
-longer require a code edit. Caveats: base profiles still come from the in-code
-`_DEFAULT_PROFILES` and routers are still constructed with no arguments
-(`graph/services.py:76,94`, `mcp/tools/reference_generation/composites.py:226`);
-the agent→profile mapping moved to `graph/nodes/_context.py:27`; retry
-temperature 0.1 is now at `agents/runner.py:254,275`; `model_adapter.py` defaults
-are unchanged. Quality-profile `models:` lists are read only as a real-mode
-allowlist (`mcp/tools/helpers.py:142-146`); `FILM_PIPELINE_MODEL_OVERRIDE` writes
-`model_profiles.creative_writer.primary` (`config/runtime_overrides.py:16-18`), which
-`_model_overrides_for` passes to `ModelRouter.resolve_model_params`; the prior
-`models.creative_writer.primary` claim is superseded by the Phase 02 fix.
+**2026-09 re-check (verified against `src/`):** the config-backed override path
+and the base-profile defaults are live. Quality-profile `models:` lists remain
+only a real-mode allowlist (`mcp/tools/helpers.py:142-146`), while
+`FILM_PIPELINE_MODEL_OVERRIDE` writes `model_profiles.creative_writer.primary`
+(`config/runtime_overrides.py:16-18`). The z.ai adapter follows the same policy:
+it is selected only when a configured model id uses the `zai/` prefix.
 
 ## F. Provider pricing — hardcoded rates
 

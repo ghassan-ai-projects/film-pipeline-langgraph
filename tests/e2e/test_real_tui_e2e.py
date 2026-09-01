@@ -1,11 +1,11 @@
 """Manual real-mode TUI end-to-end test.
 
 **NOT in CI.** Gated behind ``RUN_REAL_TUI_E2E=1`` and requires
-``ZAI_API_KEY`` in the environment.
+``OPENROUTER_API_KEY`` in the environment.
 
 Usage::
 
-    RUN_REAL_TUI_E2E=1 ZAI_API_KEY=... \\
+    RUN_REAL_TUI_E2E=1 OPENROUTER_API_KEY=... \\
         pytest tests/e2e/test_real_tui_e2e.py -v -s
 
 Cost: ~2 short LLM calls (intake + constitution).
@@ -30,8 +30,8 @@ from film_pipeline.tui.gateways.inprocess import InProcessStudioGateway
 from film_pipeline.tui.screens.studio import StudioScreen
 
 pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_REAL_TUI_E2E") != "1" or not credentials.is_configured("zai"),
-    reason="RUN_REAL_TUI_E2E=1 and ZAI_API_KEY required",
+    os.getenv("RUN_REAL_TUI_E2E") != "1" or not credentials.is_configured("seedance-openrouter"),
+    reason="RUN_REAL_TUI_E2E=1 and OPENROUTER_API_KEY required",
 )
 
 

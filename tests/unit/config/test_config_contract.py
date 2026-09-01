@@ -142,6 +142,13 @@ KNOWN_DEAD_GROUPS: tuple[_KnownDeadGroup, ...] = (
 # container path, while dynamic profile names and keys are not guessed. Each
 # value names the production consumer that provides the evidence for the row.
 READERS: dict[tuple[str, ...], tuple[str, str]] = {
+    # The profile name and setting names are dynamic, so the scanner can only
+    # prove this container-level reader. _model_overrides_for passes each
+    # selected profile through to the router at runtime.
+    ("model_profiles",): (
+        "src/film_pipeline/graph/nodes/_context.py",
+        "_model_overrides_for",
+    ),
     ("model_profiles", "creative_writer", "primary"): (
         "src/film_pipeline/graph/nodes/_context.py",
         "_model_overrides_for",
@@ -243,7 +250,7 @@ def _path_is_read(path: tuple[str, ...], access_paths: frozenset[tuple[str, ...]
         for candidate in access_paths
     ):
         return True
-    return path in READERS
+    return any(path[: len(reader)] == reader for reader in READERS)
 
 
 def test_path_scanner_does_not_accept_unrelated_prefixes() -> None:
@@ -375,6 +382,7 @@ def test_annotated_reader_paths_are_exercised() -> None:
         "max_tokens": 456,
     }
     observed_paths: set[tuple[str, ...]] = {
+        ("model_profiles",),
         ("model_profiles", "creative_writer", "primary"),
         ("model_profiles", "creative_writer", "max_tokens"),
         ("model_profiles", "creative_writer", "temperature"),
