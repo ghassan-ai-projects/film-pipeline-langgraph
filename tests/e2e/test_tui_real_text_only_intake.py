@@ -1,6 +1,6 @@
 """Verify the redesigned TUI can run intake in real mode with text-only policy.
 
-This test makes one real LLM call (the default z.ai GLM model) and costs a small
+This test makes one real LLM call (DeepSeek via OpenRouter) and costs a small
 amount. It intentionally stops after intake to keep the run short and cheap;
 combined with the existing mock-mode full-flow test, this proves real-mode
 configuration is working and text-only generation policy is honored.
@@ -28,8 +28,8 @@ from film_pipeline.tui.screens.studio import StudioScreen
     reason="Set FILM_PIPELINE_RUN_REAL_PROVIDER=1 to run live paid provider tests",
 )
 @pytest.mark.skipif(
-    not credentials.is_configured("zai"),
-    reason="ZAI_API_KEY not configured",
+    not credentials.is_configured("seedance-openrouter"),
+    reason="OPENROUTER_API_KEY not configured",
 )
 @pytest.mark.real_provider
 def test_tui_real_mode_text_only_intake(tmp_path: Path) -> None:

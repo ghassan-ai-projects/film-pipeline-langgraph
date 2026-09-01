@@ -1,23 +1,23 @@
 """Model routing — profiles, router, fallback chain.
 
-Model profiles are loaded from config (with sensible defaults). The router
-resolves logical profile names to provider model ids. Callers must always
-resolve through the router — no hardcoded model strings in execution paths.
+Project model profiles are declared in ``profiles/base.studio.yaml`` and may be
+overridden by later profile layers. The router keeps a last-resort fallback
+for direct callers that do not have resolved project configuration. Callers
+must always resolve through the router — no hardcoded model strings in
+execution paths.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Default profiles — overridable via constructor or config.
-# These use logical model names that providers map to real model ids.
-# Text-oriented profiles default to z.ai's glm-5.3-flash (prefix "zai/" routes
-# to the z.ai endpoint — see ModelAdapter). Multimodal profiles keep Gemini
-# primary for its established vision path. Every fallback stays on
-# OpenRouter/Gemini so the other providers remain the safety net.
-_DEFAULT_PROFILES: dict[str, dict[str, object]] = {
+# Last-resort profiles for direct router users without resolved project config.
+# The project-facing source of truth is profiles/base.studio.yaml. Provider
+# adapters do not change this policy; a z.ai model is selected only when
+# configuration explicitly asks for a ``zai/<model>`` id.
+_FALLBACK_PROFILES: dict[str, dict[str, object]] = {
     "creative_writer": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "deepseek/deepseek-chat",
         "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 8192,
         "temperature": 0.7,
@@ -25,7 +25,7 @@ _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
         "frequency_penalty": 0.3,
     },
     "strict_validator": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "deepseek/deepseek-chat",
         "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 4096,
         "temperature": 0.1,
@@ -37,19 +37,19 @@ _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
         "temperature": 0.3,
     },
     "schema_enforcer": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "deepseek/deepseek-chat",
         "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 4096,
         "temperature": 0.0,
     },
     "cheap_draft": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "google/gemini-3-flash-preview",
         "fallback": "deepseek/deepseek-chat",
         "max_tokens": 4096,
         "temperature": 0.8,
     },
     "operations_triage": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "google/gemini-3-flash-preview",
         "fallback": "deepseek/deepseek-chat",
         "max_tokens": 4096,
         "temperature": 0.2,
@@ -61,7 +61,7 @@ _DEFAULT_PROFILES: dict[str, dict[str, object]] = {
         "temperature": 0.2,
     },
     "text_validator": {
-        "primary": "zai/glm-5.3-flash",
+        "primary": "deepseek/deepseek-chat",
         "fallback": "google/gemini-3-flash-preview",
         "max_tokens": 4096,
         "temperature": 0.1,
@@ -81,7 +81,7 @@ class ModelRouter:
     are used. Tests may inject custom profiles.
     """
 
-    profiles: dict[str, dict[str, object]] = field(default_factory=lambda: dict(_DEFAULT_PROFILES))
+    profiles: dict[str, dict[str, object]] = field(default_factory=lambda: dict(_FALLBACK_PROFILES))
 
     def select(self, profile_name: str, prefer_cheap: bool = False) -> str:
         """Select the best available model for a given profile."""
