@@ -63,8 +63,11 @@ automatically on startup.
 Real mode exercises the live LLM agents and provider registry. Set keys first:
 
 ```bash
-export OPENROUTER_API_KEY=...
 export GOOGLE_API_KEY=...
+export OPENROUTER_API_KEY=...
+# Optional: only when a configured model profile uses zai/<model>.
+export ZAI_API_KEY=...
+# Coding-plan keys only: ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4
 uv run film-pipeline-tui --real
 ```
 
@@ -73,7 +76,7 @@ swaps the video/image adapters to zero-cost mocks, so no clips or reference
 images are generated:
 
 ```bash
-FILM_PIPELINE_RUN_REAL_LLM=1 uv run --python 3.12 --group dev \
+RUN_REAL_TUI_E2E=1 uv run --python 3.12 --group dev \
   pytest tests/e2e/test_real_tui_e2e.py -q -s --no-cov
 ```
 

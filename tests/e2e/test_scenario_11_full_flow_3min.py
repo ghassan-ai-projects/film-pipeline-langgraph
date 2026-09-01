@@ -151,7 +151,7 @@ class TestFull3MinuteFlowMock:
 
 def _real_credentials_available() -> bool:
     return bool(
-        os.getenv("RUN_REAL_E2E")
+        os.getenv("RUN_REAL_E2E") == "1"
         and credentials.is_configured("seedance-openrouter")
         and credentials.is_configured("gemini-imagen-4")
     )

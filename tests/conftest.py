@@ -24,6 +24,12 @@ def _isolated_runtime_root(
     """
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(tmp_path / "runtime-root"))
     monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
+    # Production code writes FILM_PIPELINE_MCP_MODE directly (operator backend
+    # mode switch, TUI real-mode launch). Without this, a leaking test leaves
+    # the mode in the worker's os.environ and every later get_runtime() on the
+    # same xdist worker recreates the singleton in the leaked mode — tests then
+    # fail order-dependently ("No active project", mock/real mismatches).
+    monkeypatch.delenv("FILM_PIPELINE_MCP_MODE", raising=False)
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.testing.in_memory_git import reset_in_memory_git
 

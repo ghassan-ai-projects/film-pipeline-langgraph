@@ -27,6 +27,22 @@ from film_pipeline.mcp import (
 from film_pipeline.mcp.errors import MCPErrorCode, MCPResponse
 from film_pipeline.mcp.server import MCPServer
 
+
+def _pin_tools_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Freeze the runtime instance MCP tools observe for the rest of this test.
+
+    Tools resolve the runtime through ``film_pipeline.mcp.tools.get_runtime``
+    at call time, which re-reads the process-global singleton. If that
+    singleton is recreated mid-test (mode flapping via the ambient
+    environment), a tool would observe a fresh, empty runtime and fail
+    order-dependently under xdist. Call right after ``reset_runtime(...)``.
+    """
+    import film_pipeline.mcp.tools as tools_pkg
+
+    rt = tools_pkg.get_runtime()
+    monkeypatch.setattr(tools_pkg, "get_runtime", lambda: rt)
+
+
 # --- Tool registry -------------------------------------------------------
 
 
@@ -273,11 +289,12 @@ def test_server_rejects_unconfirmed_mutation() -> None:
     assert resp.error.code == MCPErrorCode.CONFIRMATION_REQUIRED
 
 
-def test_server_accepts_confirmed_mutation() -> None:
+def test_server_accepts_confirmed_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
+    _pin_tools_runtime(monkeypatch)
     rt.create_project("conf-test", "Confirm Test")
     rt.set_active("conf-test")
     active = rt.get_active()
@@ -581,11 +598,14 @@ def test_active_project_set_after_resolution() -> None:
     assert server.active_project_id == "film_2026_0002"
 
 
-def test_read_tool_honors_project_ref_without_changing_active() -> None:
+def test_read_tool_honors_project_ref_without_changing_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from film_pipeline.app.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
+    _pin_tools_runtime(monkeypatch)
     rt.create_project(project_id="project-a", title="Project A", slug="project-a")
     rt.create_project(project_id="project-b", title="Project B", slug="project-b")
     rt.set_active("project-a")
@@ -608,11 +628,12 @@ def test_read_tool_honors_project_ref_without_changing_active() -> None:
     assert server.active_project_id == "project-a"
 
 
-def test_list_artifacts_honors_project_ref() -> None:
+def test_list_artifacts_honors_project_ref(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
+    _pin_tools_runtime(monkeypatch)
     rt.create_project(project_id="la-a", title="LA A", slug="la-a")
     rt.create_project(project_id="la-b", title="LA B", slug="la-b")
     rt.set_active("la-a")
@@ -931,22 +952,24 @@ def test_wired_inspect_profile() -> None:
     assert missing["ok"] is False
 
 
-def test_wired_get_runtime_mode_default_mock() -> None:
+def test_wired_get_runtime_mode_default_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import get_runtime_mode
 
     reset_runtime("mock")
+    _pin_tools_runtime(monkeypatch)
     result = asyncio.run(get_runtime_mode({}))
     assert result["ok"] is True
     assert result["server_mode"] == "mock"
     assert result["runtime_mode"] == "mock"
 
 
-def test_wired_get_runtime_mode_after_project() -> None:
+def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app import runtime as runtime_mod
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
+    _pin_tools_runtime(monkeypatch)
     rt.create_project(project_id="test-mode-real", title="Mode Test", slug="mode-test")
     rt.set_active("test-mode-real")
     # Simulate what create_film_project stores
@@ -966,12 +989,13 @@ def test_wired_get_runtime_mode_after_project() -> None:
     assert stack["provider_profile"] == "seedance_primary"
 
 
-def test_wired_get_runtime_mode_rejects_mismatch() -> None:
+def test_wired_get_runtime_mode_rejects_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import get_runtime_mode
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
+    _pin_tools_runtime(monkeypatch)
     rt.create_project(project_id="test-mode-mismatch", title="Mismatch", slug="mismatch")
     rt.set_active("test-mode-mismatch")
     rt.projects["test-mode-mismatch"]["runtime_mode"] = "mock"
@@ -982,12 +1006,15 @@ def test_wired_get_runtime_mode_rejects_mismatch() -> None:
     assert result["project_runtime_mode"] == "mock"
 
 
-def test_wired_create_film_project_rejects_mock_in_real_mode() -> None:
+def test_wired_create_film_project_rejects_mock_in_real_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
+    _pin_tools_runtime(monkeypatch)
 
     # Create with mock provider in real mode — should reject
     result = asyncio.run(
@@ -1018,6 +1045,7 @@ def test_wired_create_film_project_accepts_real_provider(
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
     runtime_mod.reset_runtime("real")
+    _pin_tools_runtime(monkeypatch)
     # Create with real provider in real mode — should accept
     result = asyncio.run(
         create_film_project(
@@ -1052,11 +1080,14 @@ def test_wired_create_film_project_accepts_real_provider(
     assert image_health["status"] == "healthy"
 
 
-def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
+def test_wired_create_film_project_rejects_invalid_runtime_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
     reset_runtime("mock")
+    _pin_tools_runtime(monkeypatch)
     result = asyncio.run(
         create_film_project(
             {
@@ -1071,12 +1102,13 @@ def test_wired_create_film_project_rejects_invalid_runtime_mode() -> None:
     assert "mock" in error or "real" in error
 
 
-def test_wired_create_film_project_defaults_to_mock_mode() -> None:
+def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
 
     runtime_mod.reset_runtime("mock")
     rt = runtime_mod.get_runtime()
+    _pin_tools_runtime(monkeypatch)
 
     result = asyncio.run(
         create_film_project(
@@ -1104,6 +1136,7 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
     reset_runtime("real")
+    _pin_tools_runtime(monkeypatch)
     result = asyncio.run(
         create_film_project(
             {
@@ -1137,6 +1170,7 @@ def test_wired_create_film_project_rejects_missing_google_key_for_real_image_pro
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
         reset_runtime("real")
+        _pin_tools_runtime(monkeypatch)
         result = asyncio.run(
             create_film_project(
                 {
@@ -1155,11 +1189,12 @@ def test_wired_create_film_project_rejects_missing_google_key_for_real_image_pro
     assert {"provider_id": "gemini-imagen-4", "env_var": "GOOGLE_API_KEY"} in missing
 
 
-def test_wired_create_film_project_rejects_mode_mismatch() -> None:
+def test_wired_create_film_project_rejects_mode_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
     reset_runtime("mock")
+    _pin_tools_runtime(monkeypatch)
     result = asyncio.run(
         create_film_project(
             {
@@ -1250,18 +1285,19 @@ def test_tool_registry_has_config_group() -> None:
     }
 
 
-def test_list_providers_real_mode_has_no_mock_fallback() -> None:
+def test_list_providers_real_mode_has_no_mock_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import list_providers
 
     reset_runtime("real")
+    _pin_tools_runtime(monkeypatch)
     result = asyncio.run(list_providers({}))
     assert result["ok"] is True
     assert result["providers"] == []
     assert result["total"] == 0
 
 
-def test_server_stdio_real_mode_requires_bootstrap() -> None:
+def test_server_stdio_real_mode_requires_bootstrap(tmp_path: Path) -> None:
     """Server warns about missing API key but still starts in real mode.
 
     Bootstrap validation is advisory — the server enters the read loop
@@ -1275,6 +1311,7 @@ def test_server_stdio_real_mode_requires_bootstrap() -> None:
         input=b"",
         capture_output=True,
         env=env,
+        cwd=tmp_path,
         check=False,
     )
     stderr_text = proc.stderr.decode("utf-8")

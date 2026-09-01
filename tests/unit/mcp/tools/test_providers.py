@@ -51,3 +51,17 @@ def test_list_providers_returns_mock_fallback_when_empty_in_mock_mode() -> None:
         result = asyncio.run(list_providers({}))
         assert result["ok"] is True
         assert cast(int, result["total"]) >= 1
+
+
+def test_list_providers_includes_real_chat_provider_health() -> None:
+    from film_pipeline.app.runtime import reset_runtime
+
+    rt = reset_runtime("real")
+    rt.seed_default_provider_health()
+
+    result = asyncio.run(list_providers({}))
+
+    assert result["ok"] is True
+    providers = cast(list[dict[str, object]], result["providers"])
+    zai = next(provider for provider in providers if provider["provider_id"] == "zai")
+    assert zai["status"] in {"healthy", "unconfigured"}

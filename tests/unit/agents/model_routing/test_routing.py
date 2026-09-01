@@ -18,6 +18,32 @@ class TestModelRouter:
         model = router.select("strict_validator")
         assert model == "deepseek/deepseek-chat"
 
+    def test_default_profiles_preserve_existing_provider_policy(self) -> None:
+        """The adapter addition must not change the built-in model policy."""
+        router = ModelRouter()
+        expected = {
+            "creative_writer": "deepseek/deepseek-chat",
+            "strict_validator": "deepseek/deepseek-chat",
+            "visual_reasoner": "google/gemini-3-flash-preview",
+            "schema_enforcer": "deepseek/deepseek-chat",
+            "cheap_draft": "google/gemini-3-flash-preview",
+            "operations_triage": "google/gemini-3-flash-preview",
+            "multimodal_reviewer": "google/gemini-3-flash-preview",
+            "text_validator": "deepseek/deepseek-chat",
+        }
+        assert {name: router.select(name) for name in expected} == expected
+
+    def test_zai_model_is_available_when_explicitly_configured(self) -> None:
+        router = ModelRouter(
+            profiles={
+                "zai_chat": {
+                    "primary": "zai/glm-5.3-flash",
+                    "fallback": "deepseek/deepseek-chat",
+                }
+            }
+        )
+        assert router.select("zai_chat") == "zai/glm-5.3-flash"
+
     def test_select_prefer_cheap(self) -> None:
         router = ModelRouter()
         model = router.select("creative_writer", prefer_cheap=True)

@@ -292,6 +292,178 @@ class TestModelAdapter:
             adapter.chat_multimodal("Describe", model="google/gemini", images_b64=["abc"])
 
 
+class TestZaiProvider:
+    """z.ai (GLM) dispatch — models prefixed ``zai/`` bypass OpenRouter."""
+
+    def test_zai_model_posts_to_zai_endpoint_with_stripped_model_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import film_pipeline.providers.credentials as creds
+
+        captured: list[Any] = []
+
+        def _capture(req: Any, *, timeout: float | None = None) -> Any:
+            captured.append(req)
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
+        # Isolate from the developer's local .env, which may set ZAI_BASE_URL.
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key-123")
+
+        assert adapter.chat("Hello", model="zai/glm-5.3-flash") == "ok"
+        assert len(captured) == 1
+        req = captured[0]
+        assert req.full_url == "https://api.z.ai/api/paas/v4/chat/completions"
+        assert req.get_header("Authorization") == "Bearer zai-key-123"
+        assert req.get_header("Content-type") == "application/json"
+        body = json.loads(req.data)
+        assert body["model"] == "glm-5.3-flash"  # prefix must NOT reach the wire
+        assert body["messages"] == [{"role": "user", "content": "Hello"}]
+
+    def test_zai_base_url_override_via_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: list[Any] = []
+
+        def _capture(req: Any) -> Any:
+            captured.append(req)
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "ok"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
+        monkeypatch.setenv("ZAI_BASE_URL", "https://api.z.ai/api/coding/paas/v4")
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        adapter.chat("Hello", model="zai/glm-5.3-flash")
+        assert captured[0].full_url == "https://api.z.ai/api/coding/paas/v4/chat/completions"
+
+    def test_zai_base_url_falls_back_to_dotenv(
+        self, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / ".env").write_text("ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4\n")
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr("film_pipeline.providers.credentials.Path.cwd", lambda: tmp_path)
+        adapter = ModelAdapter(http_opener=MagicMock(), zai_api_key="zai-key")
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
+
+    def test_zai_base_url_default_without_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import film_pipeline.providers.credentials as creds
+
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
+        adapter = ModelAdapter()
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/paas/v4"
+
+    def test_zai_base_url_override_trailing_slash_is_stripped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ZAI_BASE_URL", "https://api.z.ai/api/coding/paas/v4/")
+        adapter = ModelAdapter()
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
+
+    def test_zai_missing_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import film_pipeline.agents.model_adapter as ma
+
+        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        adapter = ModelAdapter(zai_api_key=None)
+
+        with pytest.raises(RuntimeError, match="ZAI_API_KEY is not set"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_no_choices_raises_provider_aware_error(self) -> None:
+        opener = _make_opener({"choices": []})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="z\\.ai returned no choices"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_http_error_is_prefixed_and_redacted(self) -> None:
+        opener = MagicMock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            "https://example.test",
+            401,
+            "Unauthorized",
+            hdrs=Message(),
+            fp=BytesIO(b'{"error":"bad secret sk-test"}'),
+        )
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="z\\.ai chat completions failed: HTTP 401"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+    def test_zai_reasoning_content_with_empty_content_fails_json_parse(self) -> None:
+        """Reasoning models can spend the whole budget on reasoning_content."""
+        opener = _make_opener(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": None,
+                            "reasoning_content": "I thought about it at length.",
+                        }
+                    }
+                ]
+            }
+        )
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        with pytest.raises(ValueError, match="not valid JSON"):
+            adapter.chat_json("Give me JSON", model="zai/glm-5.3-flash")
+
+    def test_zai_null_content_is_treated_as_empty_string(self) -> None:
+        opener = _make_opener({"choices": [{"message": {"content": None}}]})
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        assert adapter.chat("Hello", model="zai/glm-5.3-flash") == ""
+
+    def test_zai_multimodal_preserves_images_in_openai_content_blocks(self) -> None:
+        captured: list[Any] = []
+
+        def _capture(req: Any, *, timeout: float | None = None) -> Any:
+            captured.append({"request": req, "timeout": timeout})
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "vision"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
+        adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
+
+        assert (
+            adapter.chat_multimodal(
+                "Describe",
+                model="zai/glm-5.3-flash",
+                images_b64=["abc"],
+                mime_type="image/jpeg",
+            )
+            == "vision"
+        )
+
+        body = json.loads(captured[0]["request"].data)
+        assert body["messages"] == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/jpeg;base64,abc"},
+                    },
+                ],
+            }
+        ]
+        assert "frequency_penalty" not in body
+
+    def test_zai_rejects_untrusted_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ZAI_BASE_URL", "https://attacker.example/api")
+        adapter = ModelAdapter(zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="ZAI_BASE_URL must be"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+
 def _make_gemini_opener(response_body: dict[str, Any]) -> MagicMock:
     opener = MagicMock()
     opener.open.return_value.__enter__.return_value.read.return_value = json.dumps(
@@ -329,3 +501,26 @@ def test_accepts_timeout_kw_handles_var_kwargs_and_rejects_plain_builtins() -> N
 
     assert _accepts_timeout_kw(accepts_kwargs) is True
     assert _accepts_timeout_kw(len) is False
+
+
+def test_transport_scrubs_sensitive_headers_before_reraising() -> None:
+    from film_pipeline.agents._http_transport import post_json
+
+    opener = MagicMock()
+    secret = "0123456789abcdef0123456789abcdef.secret-value"
+    opener.open.side_effect = OSError(f"network unavailable for {secret}")
+    headers = {"Authorization": f"Bearer {secret}"}
+
+    with pytest.raises(RuntimeError, match="network unavailable") as exc_info:
+        post_json(
+            "https://api.z.ai/api/paas/v4/chat/completions",
+            b"{}",
+            http_opener=opener,
+            timeout_seconds=None,
+            headers=headers,
+            error_prefix="z.ai failed",
+            redact_body=True,
+        )
+
+    assert headers["Authorization"] == "[REDACTED]"
+    assert secret not in str(exc_info.value)
