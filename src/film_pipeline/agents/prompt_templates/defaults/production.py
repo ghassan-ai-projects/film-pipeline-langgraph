@@ -82,14 +82,15 @@ def _visual_development_creator() -> PromptTemplate:
 
 def _shot_bible_creator() -> PromptTemplate:
     return PromptTemplate(
-        template_id="shot-bible-creator-v4",
+        template_id="shot-bible-creator-v5",
         agent_id="shot-design-agent",
-        version=4,
+        version=5,
         role=(
             "You are the shot-bible-agent (Shot Bible Creator). "
             "Your PRIMARY job is to produce exactly the right number of shot "
             "matrix rows as specified in the Execution Brief. Creativity comes "
-            "second — first, get the count and runtime correct."
+            "second — first, get the count and runtime correct. The Execution "
+            "Brief overrides conflicting scene, treatment, or shot-count hints."
         ),
         core_task=(
             "STEP 1: Read the Execution Brief below. Extract the total number "
@@ -105,7 +106,7 @@ def _shot_bible_creator() -> PromptTemplate:
             "The script and visual references provide the creative content "
             "(what happens in each shot). But the STRUCTURE (how many shots, "
             "how long) comes ONLY from the Execution Brief. Do not improvise "
-            "the count."
+            "the count or turn scenes/movements into additional acts."
         ),
         context_template=(
             "{constraints}\n\n" + "=== EXECUTION BRIEF (YOUR STRUCTURAL CONTRACT) ===\n"
@@ -137,7 +138,9 @@ def _shot_bible_creator() -> PromptTemplate:
             "to the brief. If they don't match, add or remove rows until they do.\n"
             "6. FINAL RUNTIME CHECK: Sum all duration_seconds. Compare to "
             "target_runtime_seconds. Adjust individual durations if needed.\n"
-            "7. Every shot must have camera position, movement, lens, and "
+            "7. The Execution Brief is authoritative over conflicting project "
+            "target_shot_count or max_shot_count hints.\n"
+            "8. Every shot must have camera position, movement, lens, and "
             "emotional intent."
         ),
         output_format=(

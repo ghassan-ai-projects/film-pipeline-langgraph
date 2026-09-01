@@ -82,6 +82,16 @@ def _movement_count_issues(
         act_counts[act_id] = act_counts.get(act_id, 0) + 1
 
     issues: list[dict[str, Any]] = []
+    expected_act_ids = {movement.movement_id for movement in brief.movements}
+    unexpected_act_ids = sorted(set(act_counts) - expected_act_ids)
+    if unexpected_act_ids:
+        issues.append(
+            _blocking(
+                "unexpected_act_ids",
+                "Shot matrix contains act IDs not defined by the execution brief: "
+                f"{', '.join(unexpected_act_ids)}.",
+            )
+        )
     for movement in brief.movements:
         actual = act_counts.get(movement.movement_id, 0)
         expected = movement.shot_count

@@ -508,7 +508,7 @@ def get_execution_brief(state: dict[str, Any]) -> Any | None:
 
 def has_execution_brief(state: dict[str, Any]) -> bool:
     """Return True if an ExecutionBrief exists in orchestrator state."""
-    return _EXECUTION_BRIEF in state
+    return bool(state.get(_EXECUTION_BRIEF))
 
 
 # --- Initialization ----------------------------------------------------------
