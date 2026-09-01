@@ -22,6 +22,7 @@ from film_pipeline.graph.nodes._shared import (
 from film_pipeline.graph.nodes._visual_matrix_coverage import (
     _ensure_matrix_scene_coverage as _ensure_matrix_scene_coverage,
 )
+from film_pipeline.schemas.execution_brief import ExecutionBrief
 
 
 def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
@@ -77,11 +78,25 @@ def _collect_updates(
 
 
 def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
-    """Extract structural metadata into state if not already present."""
-    from film_pipeline.graph.orchestrator_state import has_execution_brief, set_execution_brief
+    """Load or extract the structural contract needed by shot generation.
+
+    Persisted states from older runs may contain the cache key with a null
+    value, or may have the artifact without its scalar state ref. Neither
+    shape is sufficient for prompt assembly, so a valid stored brief is
+    rehydrated into both state domains before extraction is considered.
+    """
+    from film_pipeline.graph.orchestrator_state import set_execution_brief
     from film_pipeline.graph.orchestrator_validators import load_execution_brief
 
-    if has_execution_brief(new_state) or load_execution_brief(new_state) is not None:
+    brief = load_execution_brief(new_state)
+    if brief is not None:
+        set_execution_brief(new_state, brief)
+        if not new_state.get("execution_brief_ref"):
+            stored_ref = _latest_execution_brief_ref(new_state)
+            if stored_ref:
+                new_state["execution_brief_ref"] = stored_ref
+                if stored_ref not in (new_state.get("artifact_refs", []) or []):
+                    new_state.setdefault("artifact_refs", []).append(stored_ref)
         return
     extract_result = _run_agent(
         new_state,
@@ -108,7 +123,52 @@ def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
     new_state.setdefault("issues", []).extend(brief_issues)
 
 
-def _design_shot_matrix(new_state: dict[str, Any]) -> Any | None:
+def _latest_execution_brief_ref(state: dict[str, Any]) -> str:
+    """Return the latest stored execution-brief ref, if one exists."""
+    services = _get_services(state)
+    if services is None:
+        return ""
+    from film_pipeline.schemas._base import FilmPhase
+
+    try:
+        artifacts = services.artifact_store.list_artifacts(
+            str(state.get("project_id", "")), FilmPhase("shot_bible")
+        )
+    except (FileNotFoundError, OSError, ValueError):
+        return ""
+    matches = [a for a in artifacts if a.artifact_id == "execution_brief"]
+    if not matches:
+        return ""
+    latest = max(matches, key=lambda artifact: artifact.version)
+    return f"artifact:execution_brief:v{latest.version}"
+
+
+def _execution_brief_contract(brief: ExecutionBrief | None) -> str:
+    """Render the authoritative movement/act contract into the shot task."""
+    if brief is None:
+        return ""
+    movement_lines = "\n".join(
+        "- "
+        f"{movement.movement_id}: exactly {movement.shot_count} rows, "
+        f"{movement.duration_range_seconds[0]}-{movement.duration_range_seconds[1]}s each"
+        for movement in brief.movements
+    )
+    total_shots = sum(movement.shot_count for movement in brief.movements)
+    return (
+        "\n\nAUTHORITATIVE EXECUTION-BRIEF CONTRACT — HIGHEST PRIORITY:\n"
+        f"Total rows: exactly {total_shots}; target runtime: "
+        f"{brief.target_runtime_seconds}s.\n"
+        f"{movement_lines}\n"
+        "The movement_id values above are the only legal act_id values. "
+        "This contract overrides scene-count, treatment-movement, target-shot, "
+        "or max-shot hints when those conflict. Scenes must be distributed inside "
+        "these movements, never turned into additional acts."
+    )
+
+
+def _design_shot_matrix(
+    new_state: dict[str, Any], brief: ExecutionBrief | None = None
+) -> Any | None:
     """Run the shot design agent, backfill scene coverage, and save the matrix."""
     result = _run_agent(
         new_state,
@@ -118,7 +178,8 @@ def _design_shot_matrix(new_state: dict[str, Any]) -> Any | None:
             "Produce the master film matrix: decompose every scene into "
             "individual shots with camera, duration, characters, environment, "
             "and prompt_ref. Match the exact shot count and runtime from "
-            "the Execution Brief."
+            "the Execution Brief. Do not create one act per scene or treatment "
+            "movement." + _execution_brief_contract(brief)
         ),
     )
     shot_matrix = result.get("shot_matrix")
@@ -155,7 +216,9 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
 
     _ensure_execution_brief(new_state)
 
-    shot_matrix = _design_shot_matrix(new_state)
+    from film_pipeline.graph.orchestrator_validators import load_execution_brief
+
+    shot_matrix = _design_shot_matrix(new_state, load_execution_brief(new_state))
 
     _validate_shot_structure_gate(new_state, shot_matrix)
 

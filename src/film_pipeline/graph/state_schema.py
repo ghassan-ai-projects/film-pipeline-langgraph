@@ -201,6 +201,7 @@ class StudioGraphState(TypedDict, total=False):
     _stalled_phase: str
     _repair_feedback: str
     _revision_note: str
+    _resume_to_repair: bool
     _approval_blocked_by_issues: bool
     _context_load_failures: list[str]
     consistency_warnings: list[str]

@@ -160,6 +160,22 @@ def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_pha
     ) or _has_stale_generation_request_blocker(state, active)
 
 
+def _has_pending_human_interrupt(snapshot: Any) -> bool:
+    """Return whether a checkpoint can accept ``Command(resume=...)``.
+
+    A persisted failed ``__start__`` task is a checkpoint, but it is not a
+    resumable human gate. Calling ``Command(resume=...)`` there writes no state
+    channel and raises LangGraph's ``InvalidUpdateError``.
+    """
+    tasks = getattr(snapshot, "tasks", ())
+    if any(getattr(task, "interrupts", ()) for task in tasks or ()):
+        return True
+    next_nodes = tuple(getattr(snapshot, "next", ()) or ())
+    if next_nodes:
+        return "await_approval" in next_nodes
+    return False
+
+
 def _resume_after_approval(
     rt: StudioRuntime,
     active: dict[str, Any],
@@ -325,8 +341,9 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
 def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
     """Request revision of the current phase.
 
-    Resumes the graph via ``Command(resume={"action": "revise"})``.
-    The graph routes to repair automatically.
+    Resumes a live approval interrupt with ``Command(resume=...)``. If the
+    persisted checkpoint is missing or is a failed ``__start__`` task, submits
+    the active state as a normal graph input and explicitly routes it to repair.
     """
     from langgraph.types import Command
 
@@ -337,16 +354,42 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
     graph = ensure_graph(rt)
     config: dict[str, Any] = {
         "configurable": {"thread_id": active["project_id"], "services": rt.services},
+        "recursion_limit": 50,
     }
 
     import film_pipeline.graph.nodes as _gn
 
     token = _gn._SERVICES_CTX.set(rt.services)
     try:
-        state = graph.invoke(
-            Command(resume=_build_resume_payload("revise", active, note=note)),
-            config,
-        )
+        try:
+            snapshot = graph.get_state(config)
+            if _has_pending_human_interrupt(snapshot):
+                state = graph.invoke(
+                    Command(resume=_build_resume_payload("revise", active, note=note)),
+                    config,
+                )
+            else:
+                # Re-submit the persisted runtime state as a real graph input.
+                # This repairs missing/poisoned checkpoints before routing to
+                # repair_phase_node; Command(resume=...) is invalid at __start__.
+                recovery_state = dict(active)
+                recovery_state["_revision_note"] = note
+                recovery_state["_resume_to_repair"] = True
+                state = graph.invoke(recovery_state, config)
+        except Exception as exc:
+            _logger.exception(
+                "Graph revision resume failed for %s at phase %s",
+                active.get("project_id", ""),
+                active.get("current_phase", ""),
+            )
+            rt._record_audit(
+                "system",
+                "resume_failed",
+                project_id=str(active.get("project_id", "")),
+                phase=str(active.get("current_phase", "")),
+                error=type(exc).__name__,
+            )
+            raise
     finally:
         _gn._SERVICES_CTX.reset(token)
     state = cast(dict[str, Any], state)

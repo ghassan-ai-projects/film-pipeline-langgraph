@@ -86,6 +86,7 @@ _AFTER_PHASE_DESTINATIONS: dict[str, str] = {
 _ROUTER_DESTINATIONS: dict[Hashable, str] = {
     node_name: node_name for node_name in _PHASE_TO_NODE.values()
 }
+_ROUTER_DESTINATIONS["repair"] = "repair"
 
 # Approval gate outcomes.
 _APPROVAL_DESTINATIONS: dict[Hashable, str] = {
@@ -196,6 +197,8 @@ def _passthrough(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _route_current_phase(state: dict[str, Any]) -> str:
+    if state.get("_resume_to_repair"):
+        return "repair"
     phase = str(state.get("current_phase", ""))
     if phase in PHASE_ORDER:
         return f"{phase}_node"

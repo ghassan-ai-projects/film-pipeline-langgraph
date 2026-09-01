@@ -190,6 +190,21 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     Builds structured ``RepairFeedback`` (saved as artifact) so agents
     know exactly which rows to fix/preserve instead of guessing from text.
     """
+    # A revision requested after a restart may have no resumable LangGraph
+    # interrupt. The graph entry route marks that recovery case explicitly;
+    # materialize the same revision update that await_approval would have
+    # produced before entering the normal bounded repair loop.
+    revision_update: dict[str, Any] = {}
+    if state.get("_resume_to_repair"):
+        from film_pipeline.graph.nodes.approval import request_revision_node
+        from film_pipeline.graph.state_schema import merge_issues
+
+        revision_update = request_revision_node(state)
+        existing_issues = list(state.get("issues", []) or [])
+        state = dict(state)
+        state.update(revision_update)
+        state["issues"] = merge_issues(existing_issues, revision_update.get("issues", []))
+
     phase = str(state.get("current_phase", ""))
     phase_fn = _PHASE_NODES.get(phase)
     if phase_fn is None:
@@ -218,4 +233,11 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     # counter into the returned update so repair rounds are durable.
     result = cast(dict[str, Any], phase_fn(state))
     result.setdefault("_orchestrator__convergence", convergence_update)
+    if revision_update.get("issues"):
+        result["issues"] = list(revision_update["issues"]) + list(result.get("issues", []))
+    if "_orchestrator__pending_revisions" in revision_update:
+        result["_orchestrator__pending_revisions"] = revision_update[
+            "_orchestrator__pending_revisions"
+        ]
+    result["_resume_to_repair"] = False
     return result
