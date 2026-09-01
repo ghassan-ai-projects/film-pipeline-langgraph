@@ -1,0 +1,3722 @@
+{
+  "repo_path": "/Users/ghassan/my-projects/film-pipeline-langgraph",
+  "repo_label": "film-pipeline-langgraph",
+  "generated_at": "2026-08-29T08:56:05Z",
+  "duration": "561.382792ms",
+  "extractors": [
+    "python"
+  ],
+  "explainers": [
+    "cycles",
+    "layers",
+    "crossrepo",
+    "coverage",
+    "unused-routes",
+    "domain",
+    "query-loops",
+    "dead-methods",
+    "entry-points",
+    "messaging-coverage",
+    "god-class",
+    "hotspots",
+    "dependency-depth",
+    "exported-surface",
+    "complexity-outliers",
+    "intent",
+    "constraints",
+    "vendored-candidates"
+  ],
+  "renderers": [
+    "llm_context"
+  ],
+  "file_hashes": [
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/scope_contract/versions/v001.json",
+      "hash": "0dd45aa10ca70cc36018d36c08cddb2d0a35858b0c1df6831cabfbe8efa205ee",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/config/profile_resolver.py",
+      "hash": "9e80cea636345c1fc985674f7d7950f8872829909eee2292bf4068158ff37c5c",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/executor_delivery.py",
+      "hash": "3a126c5e37500eb36df8e5f4dd0d7032fac4e9d8e3d46d7d5a5a679db56b0d77",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/providers/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/tui/test_view_models_helpers.py",
+      "hash": "fee3579630bfca08c4dc14b9de213f2760d35033032d1755d99bf8080e09c0a2",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/current.json",
+      "hash": "2da41e5751b0f6e6cf6e029befc06fbda82a4f86509311df5aa1a2dd223c4d2f",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/06-generation-plan/cost_estimate/versions/v001.json",
+      "hash": "b02f5fa3d934dce9a41566f44692b4d30868d5c32e9a11f3ba8c67bfa08a34a3",
+      "mod_time": "2026-07-02T21:06:28Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/registry.py",
+      "hash": "0091778fda7875ad4f790b21e387d950f991d729d72501bef9b0bc97ba5cfb7a",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/py.typed",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T17:06:29Z"
+    },
+    {
+      "path": "tests/unit/kb/test_manifest.py",
+      "hash": "ef7b2a17f13a0487d21b80864c0a324d468ee1464c2db12384a65b4896d41157",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie2/.gitignore",
+      "hash": "a860a42733bb2f0d47a7dae5e439bb2c52a80f1b12462795c2aa1208ab0ceea6",
+      "mod_time": "2026-07-02T20:50:59Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/__init__.py",
+      "hash": "5965df02a63e09f701780e8eb1e2f6b94e5a7f616f731e71d57290111fdb0175",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/__init__.py",
+      "hash": "cc0f0b806fcad6a3d57b457b712ffba4369aefa963370bd8470b123ac62401a1",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateways/inprocess.py",
+      "hash": "42a8a9ca4d400c6367d857a9aea24cf0a2560aef1a311f7739f072104d3ae3e8",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_01_happy_path.py",
+      "hash": "6d759262f88c8ff13b3d500e595c0d4f61f58937d6f20d36433bdb7e8c2856b6",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/conftest.py",
+      "hash": "957b53063829b5ae051d449c23382ec278ac6723002e1fa9ee8ec18f055df0e4",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_reference_generation.py",
+      "hash": "9ddcc62883f01d42627b2757a0b7f1ca409a4cd7c2c8b5d7861b24be5f8d267d",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".env.example",
+      "hash": "2a861364078f8fc85e04ebb69b20d08cc857998f92c830566842a778b7d13b8f",
+      "mod_time": "2026-06-19T21:58:18Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v001.meta.json",
+      "hash": "837ea3204aa5344f6c42ebc3a88076f63cc66b05f122a00e13f1c94047379d96",
+      "mod_time": "2026-07-02T08:36:47Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/story_bible/versions/v001.meta.json",
+      "hash": "782c7ec3e0fdb435bd144e138926a2aa90d81f43d8d25960dd5e6af8ecff174e",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie2/checkpoints.json",
+      "hash": "ae80d97b7fc4df0f898299701f7af88d16fc38dd385462e5e29966b0e92b34c1",
+      "mod_time": "2026-07-02T21:06:36Z"
+    },
+    {
+      "path": "src/film_pipeline/config/loader.py",
+      "hash": "e8a7d9d27b1f5f7f5a86ed4c1946b765c649ddf7ba324e0e935e275001480210",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/testing/scenarios.py",
+      "hash": "1cc58a7e35893e1109360174e54f9dbd7592476d8f6136fdbed41406749e798f",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/__init__.py",
+      "hash": "39c7885de2ff14ecc2f113be2c8259d56979e02410b525df34a02bddc811d869",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/graph_state/current.json",
+      "hash": "45a5577ed741ce9439af8013ba134b2bf4f00e3529b8a4584f16ad064be55ddf",
+      "mod_time": "2026-07-02T08:29:02Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_constraints/versions/v001.meta.json",
+      "hash": "923c42b38c9ed338429fd5194a54d5c70044244947381e4bc1a4e788ec6e5835",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/script/current.md",
+      "hash": "21396ca453416dd03eec8737558ac79e6cf577e0ff56b0253188454ec0c99523",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "documentation/product-completion/06-e2e-acceptance-and-release.md",
+      "hash": "332cd37d1c2e58cbe6eadccc50750ded2d4b303f1f44006807504c1f23642381",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/branches.py",
+      "hash": "deda6dc51c9f547cdcd6394621f3186d3c432e6ef074c799c40d2d538ee362e8",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/thresholds.py",
+      "hash": "973ad240f46723a690c750da8b568290b17e9d273f1d5fe468baa2f2623e2a18",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_11_full_flow_3min.py",
+      "hash": "09703a4f137c74ef5e74741901f67d0f0768152e7c90ebc4996086dcc8c460e0",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": "tests/unit/agents/test_handoff.py",
+      "hash": "eb0ab320373362082b573e0abaf3fa9dd055e102dc1ac5e4fcc0fed362becef8",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/05-repository-adaptation.md",
+      "hash": "18e38ca76b2bfda574af6c46ecfa2681ccc2ae3f1da3fa7af24e5b7df897985a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/issue.py",
+      "hash": "d2c8f1b69fb6f7c3b2cac00f2253688774d13cd2bd3f20ca0c779244c8f9151e",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/test_testing_utils.py",
+      "hash": "2f19b89a5fe7215e24edc26f90d559b46c0c2e556dbe4aa2a28507386488d31f",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/02-landscape-and-evidence.md",
+      "hash": "9e35b88b546cceab280937c6fde45a693fdc28eaac5a39f62cac50ded1635c42",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/frame_reviewer.py",
+      "hash": "2637c82ab4210a508bdbf27dd8793d4b64dc9c48bd8c8fb3b04c6b605e4cf407",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/camera.py",
+      "hash": "b94247f127380e1966516cfa9795afe18897147b53b79f8b21f18e5ced0e81f5",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/versions/v002.meta.json",
+      "hash": "036b94ef275413483fd521f3b1a757b5c1cbd2d8725bc092f0ed8111250bdc32",
+      "mod_time": "2026-07-02T08:45:23Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/_json_extraction.py",
+      "hash": "fc0d8d6ccae5acea92fc11596b501cbf5b87ebf06ecf932720bcceb8dba310e1",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/checkpoints.py",
+      "hash": "5458979f067b35b5ea8ff06049f566f3cecedea0c9b33c634b82a9104c5f3700",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/post/assembly_agent.py",
+      "hash": "01918968b794783e3c4f2bfc3ab79a78f88be711e8bc0e5a1f02c299a1a852c3",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/health.py",
+      "hash": "79f84ee0e3d61a581eda24e04eab17aa714c2cac948b6284f8c446b5ef431c02",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/agents/test_shot_bible_agent.py",
+      "hash": "603348b2263bf339136ca536029f4ec177349903807f7b22274f3a06f8783306",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "uv.lock",
+      "hash": "3e374558249a0ad788cf2e2c36cea5b2ca65aae4f65ff781cb62b0a95ada60d7",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_profile/current.json",
+      "hash": "7e8b0bb21ff7074fa6c95574b174d9c6005b09cc066fb67eee7a4a594c4832c9",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/registry.py",
+      "hash": "41c577ab335e58a54f7c3de422bf4c000a17dc2da78df7391f9fbb709244b2df",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_validators/brief.py",
+      "hash": "83c26481f2b8a1d59e35d177825b5f48787861c798a3498dfc3adfaedf14f9c1",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/observability/__init__.py",
+      "hash": "9a725d8f9bf252334a85ae8456a334745cbe2d7c1679e0ad0fb22b549bc0fc44",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/integration/test_intake_constraints.py",
+      "hash": "5da6b1a2d653c75a672c866c5fc733a264b9c00ee4e4802a7bf8ac6827fb8553",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": "tests/unit/agents/test_base_agent.py",
+      "hash": "f40c648d42f189f598c345d456238c8e86f01a2cb95b9b38b35d4b44114bb164",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/checkpoints/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/app/health.py",
+      "hash": "0af4d4cd54eeced41b18371d9195dd10481516bf4b3fdb8f292ab53aa507605f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/__init__.py",
+      "hash": "5f9df1aeae3fcb03d647ecba774c0c9c1cfb97dd24a61a5fc90a7065dca99c6b",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/approval.py",
+      "hash": "ad664df06a6153f126f485eb6ba7200e65001244739c7f2218b4ec9f18b9a09d",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/app/test_safety.py",
+      "hash": "4038d7bd604e8b1fe7b582c854343eed62dfe400ae71d9ea27ee14f25fef701e",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/review/test_generator.py",
+      "hash": "1d885e9941c1471df000dc3dcb96071de60dbb75f3d4230f7f7cbbdfb6945c46",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/04-visual-dev/reference_index/versions/v001.meta.json",
+      "hash": "73fffda4ff602d84ba9b137cbc49acf68195d885567e7a5fe758af7bd20b2c57",
+      "mod_time": "2026-07-02T21:00:05Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/status-tracker.md",
+      "hash": "b34d2f1313860c22d139bb33720c01d331b96e921be0e2590da0983ef8f9a832",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/git_backend.py",
+      "hash": "8ac21f1683aa60381ca38fcb10bd289bfbc01c4948a5c436e9243e4e8617dd3e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/testing/mock_human.py",
+      "hash": "39606b07d8f4a65093284d3ca435f9206a4bb2a6920fbe15724c5a2089608b5b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_projects.py",
+      "hash": "a7e9d672844a2e6c8ce3617f0d1801fb36466d9eaeb03dc13c5a12e0162f3a6f",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/character_bible_agent.py",
+      "hash": "2e2c180eedf72326396a16cb1e7a5b814fcc9e48fe3e97a241c92a32173d9923",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/app/bootstrap.py",
+      "hash": "41ba607bbd1cea59df580f0ce11b9e65ecea9cd9ff3f6e84f697c118ebd478bd",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/compression.py",
+      "hash": "0e311b2dcca52e5062c311d95f1606b38d5977acc4396e78ac4599184f1d63d7",
+      "mod_time": "2026-06-24T23:00:11Z"
+    },
+    {
+      "path": "tests/unit/tui/test_new_widgets.py",
+      "hash": "4f599edcfaeda8934c5a5320f21e9551f09d1ae0f08ff55318e9dee1369e2836",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/state_schema.py",
+      "hash": "21167771ec39037cd4bbbfa4dd91c83eb9b6a1d24cef094d4ed17084843b7a82",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/_text_only.py",
+      "hash": "86c6de50fc9f06e3a91d92e79032a75d1e7e0952082aedd64c40a131b13c606f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/review/generator.py",
+      "hash": "712b7c086704e78835e5f67cbd34e7997ec1807fdd5caa44f6325c0b45a84ff4",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/agents/model_routing/test_routing.py",
+      "hash": "cf50feaf876a42e51fb08ca9ecc0062b7f7421664f4f08b523085f4518b602e1",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "tests/unit/schemas/test_repair.py",
+      "hash": "7f32b128856a9aa21ebe8688cdcbd061bcf73db5812c25f372584631b415daca",
+      "mod_time": "2026-06-24T23:32:13Z"
+    },
+    {
+      "path": "tests/unit/test_artifacts.py",
+      "hash": "57af5d2e0a645ccca1ba74acd34ba04a49bf53207160ebdb6bcc6c592278e68e",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/scene_list/versions/v001.meta.json",
+      "hash": "25f023446118f7be42adc5ca095c048eae6d6e1a630cccdddfc587287c0e3c61",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": "documentation/roadmap-execution/phase-02-truth-defaults-plan.md",
+      "hash": "d54ae6b643f69929b36e92ad78e4649bfb069db87f633e0b12f36b39f05ce4e1",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/_project_discovery.py",
+      "hash": "25df8a99ebd22fe4d49d220775455cb5ea18b71ca8862a5b591b46dc5620f205",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/projects.py",
+      "hash": "864b7f49b83b37088dcbbd53c8e9d666a09869722f79d880fdfaef4405fe3982",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/03-dynamic-routing-and-handoffs.md",
+      "hash": "320e640834010de7ee94d3a928ea5419209f5cc8ce44797c75fb619fa732b6ab",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/constitution_agent.py",
+      "hash": "677d0552f8bae3a73c358b2c4f8cc11095c844ea5e9ad213df27d115bdb05661",
+      "mod_time": "2026-06-22T11:56:23Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/registries/validator_registry.py",
+      "hash": "575aeaf8ae4a62a4ff0169569915221875490c175a8a1f43af9c4c68072f866e",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/e2e/test_orchestrator_decision_loop.py",
+      "hash": "ba3d1b8bab2acac864715385df8110195825a1987351f848b384a4bff54404ad",
+      "mod_time": "2026-06-21T17:37:35Z"
+    },
+    {
+      "path": "tests/test_smoke.py",
+      "hash": "2f0f7b53a6813432096e3bb67657be3d8d2dd17c0fd254defd044fe955819465",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/generation/test_frame_sidecar.py",
+      "hash": "c944a3a6ad02af6b22edbd74a0f858af0c525be7d1f1d55ed8b14841aa60ccad",
+      "mod_time": "2026-06-21T16:04:05Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_constraints/versions/v001.json",
+      "hash": "e8f1bd327e33b224920b4a1f50eddda0f9e20a14e6ea5fa37d39bec5dbc761eb",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/tools/bar_check.py",
+      "hash": "d1be689673eb7207653d8df66679b7a792d28b2cccafa2ffbc85719a27853b48",
+      "mod_time": "2026-08-25T15:58:30Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/wrapup.py",
+      "hash": "4516dbc79934087657455a408af3a1b45458e50a92a8ad09062ccea236d3a665",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/subgraphs/__init__.py",
+      "hash": "3d3bf3f32ed8e450af790dcfec789f6a4e1ca444dfff0e5e06e74b00f2424350",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/validation.py",
+      "hash": "603344cd1f404dddbbf33998c8e6a74949eb625159e05e6c1ec292ce50cebba3",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/agents/test_registry.py",
+      "hash": "8a6a4be5f1fed1b2e1578dd7ce8cab384462c64f3493ad3daf5b53a74ac23f95",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/generation/test_sheet_reviewer.py",
+      "hash": "0336502b28a959c74e761fe4e0f6f3790b73507e0bf3c5e11bf22faad13f852c",
+      "mod_time": "2026-06-22T09:43:29Z"
+    },
+    {
+      "path": "tests/unit/kb/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/01-vision/film_constitution/current.md",
+      "hash": "0cb3915dd6a3e15c4a56b5b3f3ff1b079568a6b950b6034c44ce31ef16a6dd59",
+      "mod_time": "2026-07-02T08:29:22Z"
+    },
+    {
+      "path": "src/film_pipeline/app/safety.py",
+      "hash": "55db647fe4defcaf3425eee6b25d5c8432ad15715bc43ff39a90b2741c214a77",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/integration/providers/test_seedance_adapter.py",
+      "hash": "d83ad3e62a4c1a29599c633118964965be74c2cc71c986ae9dc999d2fc3b7344",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "tests/unit/providers/test_provider_job_status.py",
+      "hash": "4195d018e55f321bb83306cc8432328790bfccdcc2596c550935f42a503ca1c7",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/tui/test_mcp_gateway.py",
+      "hash": "211851597106170bc588b7fa91c5a73e9f5fbb4e58d4ba642683fc312c6e6805",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/tui/test_view_models_reader.py",
+      "hash": "52edfceceeeffdeed6ee3b2551971ade57ba6ebec2fc749a880cffd00f583fe1",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_profile/versions/v001.json",
+      "hash": "7e8b0bb21ff7074fa6c95574b174d9c6005b09cc066fb67eee7a4a594c4832c9",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/sources.md",
+      "hash": "73dafefcac8a7a405cc0f5e8853b0ee98b123d6490e20fb63f2dc8861dde24f4",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/post/__init__.py",
+      "hash": "aceae95a03b8320eafc303e29967e29735da3602ec07fc0bbfc1a0f91aced4d8",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/scene_list/versions/v001.json",
+      "hash": "c9b71684896de09d5617cbc8756fc4915e656df69c9631026c68bf517be28b6b",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/treatment/versions/v001.json",
+      "hash": "ee3a45323bcb5836fd48acf8db89d5ef1b6b59b3931cf5a40560eaa7d42a5fb7",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/01-concept-and-product-thesis.md",
+      "hash": "132ada0aab5cf4d4f63eff8bb418a78d7cfd5840c7f54b659525ffc8ab224943",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/product-completion/acceptance-manifest.yaml",
+      "hash": "b39aa3575cb7566a722bffc440f744a380d2df5c57287d1c896c91f032e7e18f",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/__init__.py",
+      "hash": "fba8d40531eb5138dd2ea2266a75dc04c9e4fd0163b7347d552dd9a34bc3bfb4",
+      "mod_time": "2026-06-22T09:43:29Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/assembly.py",
+      "hash": "594c769bb8df95feadcd6e19e55a2e1a86c3f97e71ece90819a0fd4439134d75",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/cli/test_help_snapshot.py",
+      "hash": "f65c7ad256e8175714d56224ba9250f542936e9413c834917a9a166d41c4c7ec",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "documentation/product-completion/README.md",
+      "hash": "80ca7940ccd52c5b1667ca2d345ca25cb1c1babf879ad549403aba94e180e82d",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/app/runtime.py",
+      "hash": "2f4f1434f527cebed0ae5f01ffbc13f9eefdbd0c94b51249d80833c1d5ea1fc7",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/promote.py",
+      "hash": "e6d96681f297cf727dfab444853f8e47ff85a82037bdbe00060eac5d5dcdcfaf",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/review/actions.py",
+      "hash": "2f1e53c8c3b0b4d5e20a959845f48f6a527cde72692ac3af524796821b763e90",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/providers/test_pricing.py",
+      "hash": "4b51fda9c8767c5d1d559abd3262ad98add55dbff872d9ab58ca25070f1dd4da",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/defaults/__init__.py",
+      "hash": "b3d5baf01f45dfa3cb1b476dcc266ae33fe4005d3b2bf377bee1ba0eafcb7e13",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/_generation_ops.py",
+      "hash": "8b08e826f5a3202b1fbdca7a8ce649c2126021cb26c9c6e786d311ef67021147",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/config.py",
+      "hash": "ea44707a3272c4acb4f324cc469043ca45ed88e41709d85be4ae2547ccc7015f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/state.py",
+      "hash": "779dee47d5ab362c216767f03aa6a13ed8e218a422f5b86897e94c175a170b7a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/delivery_completeness.py",
+      "hash": "ba68f9e20b26120edbf536a3192cfc3cdcc962b5890324f2364e2d0abaab78b2",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/agents/test_prompt_template_registry.py",
+      "hash": "a12bcd57c35eeeba0f038dd95ca4eecc2117df1662c4e7f69191d2d9ecbf7f86",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "tests/unit/graph/test_orchestrator_state.py",
+      "hash": "a4af917c4de9b396c2fc1b5bc7c1e8fe3eaa43ed742c18cbe1e5216a6381fb2e",
+      "mod_time": "2026-06-21T17:28:54Z"
+    },
+    {
+      "path": "tests/unit/test_mcp.py",
+      "hash": "6a751dcfcc714bb2c2acd014d5166b3c1da1c8fe46e21def3dac84c0e88d8356",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/scene_list/versions/v001.meta.json",
+      "hash": "d3ae5eb25d0a4a64b8a2a4eb8e1c6d68fa80ef1b287464376f1d391f84778dd1",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/PLAYBOOK.md",
+      "hash": "70a90644dd010a6577917a432543b1cead7facc7ccf64e4edf13a70e2d2d9530",
+      "mod_time": "2026-08-25T16:00:25Z"
+    },
+    {
+      "path": "src/film_pipeline/app/smoke.py",
+      "hash": "6ca11b30c51f7271a6007e4b694c7996e2cb8904655f934962bf96acd6c26be7",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/rollback.py",
+      "hash": "1e98dfcbdd21e4ca54bb01b9d019dda6447b9bb5b0d751c315657b85af4eb40b",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/config/validator.py",
+      "hash": "977f393a1ec793acbb7f689cc011a304df3dd40e28a1801f34c6574177d7f749",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/__init__.py",
+      "hash": "edba0b42be07eae447fc06461fb32155730ea74ae89de6d058c6ca3bd4694af0",
+      "mod_time": "2026-06-21T16:27:19Z"
+    },
+    {
+      "path": "tests/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/app/test_app_ops.py",
+      "hash": "7527e8f54c040357e01d34b5779aefd3317cee6c5491b5b8e9980fad1288bcb4",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/treatment/versions/v001.meta.json",
+      "hash": "413b8472f8a473ccc248466d8718a65e8df89e3234020203fb2c9a0a724008bb",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/missing/.gitignore",
+      "hash": "a860a42733bb2f0d47a7dae5e439bb2c52a80f1b12462795c2aa1208ab0ceea6",
+      "mod_time": "2026-07-01T22:51:47Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie1/audit-log.json",
+      "hash": "81a5dc146e2392f1f6334d23582033783b753d8dbf5feb4e4275eb3c1eb19d5f",
+      "mod_time": "2026-07-02T08:49:25Z"
+    },
+    {
+      "path": "documentation/product-completion/04-validation-and-mcp-product-surface.md",
+      "hash": "78937addb7c21da518e503dacaacaa90ec4bf9f534531609f56b2ec890007188",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/versioning.py",
+      "hash": "6d11aa781cfbc570fa1722e43cc98ff834d7bed4f367bd5b86f8f84779b3bf75",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/config/merger.py",
+      "hash": "a03249a879f141ff43663ee48f4d10eb22e18888e48f313daf72b2b7df2ef3bf",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/cli/test_run.py",
+      "hash": "46addfd46d3c4350a6ee9ef9c83c7319dc7572bc599c9d8776fe267b06964e25",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": "tests/unit/generation/test_frame_reviewer.py",
+      "hash": "6174a2d2ba9597bc8dd2efb2ef36c59beec1119df5e1a645ccc81246e31be3e8",
+      "mod_time": "2026-06-22T09:43:29Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_constraints/current.json",
+      "hash": "e8f1bd327e33b224920b4a1f50eddda0f9e20a14e6ea5fa37d39bec5dbc761eb",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "documentation/product-completion/03-agents-prompts-and-dynamic-routing.md",
+      "hash": "b6420a84778bd79372769604449821838b638550b30d0012bf3adca0310413c2",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/validation.py",
+      "hash": "af8e7fa7fd2f45516019fa44ec23512361bca89697233ddf0e3b35bab6d693c7",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/screens/__init__.py",
+      "hash": "d2f2501c09bb824298d8a69a41933805b7f8e8b11167d1f3c6d024601049b11f",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "tests/unit/tui/widgets/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/matrix.py",
+      "hash": "567c400ef8cba9c5a669010d867eb273ab45d8ab1082215a0d8ea9c3292aa7b9",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/post/test_post.py",
+      "hash": "79870862073f858f34546e2043256dc7e547f0ec794db0bc55853714680b65cc",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "documentation/product-completion/status-scorecard.md",
+      "hash": "b849fe2bd0368cb973d8e17dc077bad2149e5737d8f5b7befab1f4619a96978c",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/02-core-agent-execution-and-artifacts.md",
+      "hash": "68e9b0e9b984d74a3d4c12ce099ddfdd626990297644eaa8ad0f105eccd72885",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "pyproject.toml",
+      "hash": "920ef856eb0ee80759920e741d15a541f02734a15cd0cbd01d828bef32f14d76",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/__init__.py",
+      "hash": "12a6afab90fecfc5f909457d90fafe35dbb297c2ae495fc460efd049e6c01ce5",
+      "mod_time": "2026-06-23T09:18:01Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/resume.py",
+      "hash": "2157e6e2f2f973d95c36cac6b95470c6bde2670a73a59031966548f15de44778",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/scope_contract.py",
+      "hash": "514eb8332f6a102168bc03fa54bbeca7997ce2d70c77c699c93eb1014b333e2d",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/story_bible.py",
+      "hash": "e4e5ec4b882bc018eceefcb8e69df148a1681004cd67ae99725de6523de8942e",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/scene_browser.py",
+      "hash": "57f41327e16251c9ad2ddb7859dd21c9abc3c3bd4644d9f7915ec34b6464d419",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/00-research-plan.md",
+      "hash": "bb84da90e7015e931d70799d732279a87825514a63f542f16943082bcb6c2128",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/README.md",
+      "hash": "44e5c6f4c7b757df677889e73da7143ba44e40337781ce6629f3347e802b0913",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/invalidation.py",
+      "hash": "38873206c8926c34b4747e602fbc6c3449aed6c2210806eeed5fff79f34265d8",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/constraints/extractor.py",
+      "hash": "376463df245960ed5e88e00fabdd2bfe3489887974aa1630ade62e6cafe75a7e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/action_bar.py",
+      "hash": "f8344bbd363f9462cf41c269d574d3420d2ac57078bfdd8b874f4d1a71fb65c2",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/graph/test_extract_target_scene_count.py",
+      "hash": "20ac047f89153766d66cd3c4e67c7f8da55b793eed49b4477900f8a0e734b6ea",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/test_schemas.py",
+      "hash": "60a94db2cb5e04279c5423973906127e5f3701789272818e1c7ac8d853b7a298",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/defaults/_quality.py",
+      "hash": "74a78f72e371ac4d777664e0c33ed7c8074c89934ef8922eb645e9e391607016",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/frame_sidecar.py",
+      "hash": "9e6745427ddf3e812fdfd9d1b826bcaceda5f6e6f63be2e319dbd47756d9c9ea",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/graph_state/versions/v001.json",
+      "hash": "3957b1c4af51f33ded00d604eb700b2cd9586a86131273eb231ad050ea09030f",
+      "mod_time": "2026-07-02T20:51:11Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/review-findings.md",
+      "hash": "b8a8687e59d69a7ca0b8a659ab8e8f2266004ad9c32055ad97712b78465c55f8",
+      "mod_time": "2026-08-25T17:50:54Z"
+    },
+    {
+      "path": "documentation/reviews/arch-lens-observability.md",
+      "hash": "641acd87807096858ba74c3b8d89c0341b93fec615cfcc28cdff25d0a4b70b21",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/reviews/hardcoded-values-inventory.md",
+      "hash": "c756389a4de6cad9489d45c44e882fa4f223ef82fef67a3f6a5ae1eaca401237",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/conftest.py",
+      "hash": "933b9c5786d922bd2b053784e85558a1b711855f597b4a42a14baa5fa2a3bc84",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_03_reference_failure.py",
+      "hash": "d271b62427e593c931ca7289b1b7e5eb9aaca37df3e98169624a559cbf81550c",
+      "mod_time": "2026-06-20T11:05:27Z"
+    },
+    {
+      "path": "tests/integration/test_reference_generation_mcp.py",
+      "hash": "30d0ce00887363e04e402c2f75d1f6c27a5f7c2d8d59b72e77edd7d565685db9",
+      "mod_time": "2026-06-21T16:27:01Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_operator.py",
+      "hash": "01736f74552fd93ac8adfd0abd8b3a306f9cc1ac1c47b87006b4978de1072311",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/validation/test_impl_validators.py",
+      "hash": "18721c011715326306d6c31f5fe665b66fd7f741190db726726c3cd7cbbf740d",
+      "mod_time": "2026-06-20T10:43:57Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_profile/current.md",
+      "hash": "e360653c76fb29ba6619505b8c4cf3e49b3e8f4ca68e382e7843eaaed3a9ff8a",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": ".git-PHASE02-MSG.txt",
+      "hash": "a84fc830cc7d7548bf4cee37eb9a756f9537fa11cdda839f8142cba5449faff0",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/__init__.py",
+      "hash": "e24abb2a0e1215f83fc716bda8df92a16ab1fe5be8331d89f6660b5c5a535381",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/index_files.py",
+      "hash": "7ed4dd6e3aa14d56544f089dfc068ca83ab7c72e567c7d66771b2be65d8f04b2",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/kb/test_packets.py",
+      "hash": "eab7e450d4d1cbf1fb5a3ea0cf070a5f1748a3efabed60a308a2cc095981613b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/paths.py",
+      "hash": "d22c03cfe013e4018debca1895e032723c7439f3ccb4b31feebb222d8d014024",
+      "mod_time": "2026-06-20T21:26:21Z"
+    },
+    {
+      "path": "tests/unit/agents/test_gen_planner_agent.py",
+      "hash": "ac932f865c3067c7301acedc85a079ab0147cd4462179e97d9301c2fc19cd14e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/current.meta.json",
+      "hash": "4a14564eb83af5adc5b322c8ee79d73903bddbecc88a2658f9ce1366e13fc02d",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_constraints/current.md",
+      "hash": "0afdd7079abe14f1418356883cb1f6def59d03ef67123630665e94f37095b296",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/compositor/__init__.py",
+      "hash": "18f6cf1f30f9b97bc7afbaa0a1b3b9dafe57f1e08d1f6c7c56c7b97fb98acd59",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/base.py",
+      "hash": "da49c66faef927fb6f9b6564431d2d40d036d52097bc068f6c7d3e355b5e710b",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/config/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/generation/test_sheet_manifest.py",
+      "hash": "37e7ab471a00a7cd256cd342b3fe11a68bae21a803e7c051ca51970f1ae250ca",
+      "mod_time": "2026-06-21T16:05:12Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_kb.py",
+      "hash": "5aace0dd18cac3d7e99235dc8545343393df1b011fec75e31c00eee560045d68",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/05-shot-bible/shot_matrix/current.meta.json",
+      "hash": "c2bbed27faa332824b01b2f3852388047a79f8a8ec0ed54c95520ecba9fe8f91",
+      "mod_time": "2026-07-02T21:04:04Z"
+    },
+    {
+      "path": "documentation/product-completion/02-phase-execution-and-artifacts.md",
+      "hash": "f0f0cfdd0766fab1a03252e511e862d79e8c0e8d60aa31b61549ed1da8e0300d",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": ".DS_Store",
+      "hash": "3b40c73c9cee67758bdfb9965770d0cbc6868e6a48e340ddee5a1bf81d622c6b",
+      "mod_time": "2026-06-21T18:43:59Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v002.json",
+      "hash": "eff12c9996f2027d4fbaaee863553d1aec1d815961783ffddc77545a97406b47",
+      "mod_time": "2026-07-02T08:41:00Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/01-vision/film_constitution/current.json",
+      "hash": "2dbf6bb7b5c081c2416c60712201c416afaf33ad2ca5c390630fd0b888f09a1c",
+      "mod_time": "2026-07-02T20:51:39Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/script/versions/v001.json",
+      "hash": "5e59202ad7798d2890e4740c71180efa633e3177e663183f3a6f48a35b8325a7",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_validators/prep_gates.py",
+      "hash": "beb189290bc43cd33e16b33a7c90da6918acf068c396bf1faa06e61e80425d5f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/scene_continuity.py",
+      "hash": "237526c209df367d9d7f30fd38d6a8b722b52ceb8f0a914b76be2925085103f7",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/generation/test_prompt_builder.py",
+      "hash": "ef49100b2635d8158598f895d33134e587e245c301e0120bd7a70503e23579b0",
+      "mod_time": "2026-06-21T16:59:45Z"
+    },
+    {
+      "path": "tests/unit/providers/test_credentials.py",
+      "hash": "a74b96188251da53d6ee9564c950e9d2ad8e9931e1286e1c662ec36918656145",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/failure_classifier.py",
+      "hash": "10c7d0c7677af6ba10a77e1f17ec43af8c3d6f7e941043e8e3e816de8690f803",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/pricing.py",
+      "hash": "015e8073f63090d38c2290c9e8c49af485b665e444e34559d6b3cd1982d6d78e",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/graph/test_prep_gates.py",
+      "hash": "2d699d27a426b26dbe999bb669c9f1447906ab3bf4a36aa9450bce72581675d9",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/app/_graph_exec.py",
+      "hash": "e95b34d0ac6fbeea47a973ee6ac1faf8cd9fa7aafc5b77ced83e208c72a581bf",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/context_packets.py",
+      "hash": "787f8a7f62032cf5bcf49d5d57ea5732b5137c7b1b78c18b3ef2ff6607828d56",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/prompt.py",
+      "hash": "998a7659563e2f2d965e26b66baa6a5cd4766f31c91d23090f7279cf569323bd",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/screens/studio.py",
+      "hash": "b5847d967af7f9cae371a30122779592218569a3ae4e505be77af3b949963a15",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/testing/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/tui/conftest.py",
+      "hash": "994b3b29141aef75e60f4abbd797ece5b6dbaf5d6a32163b0d16cb64a1257d0d",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/graph_state/current.md",
+      "hash": "d097af71995f6f3f768ee36fb2b1b0b625ce49620e45824eb5c556c0dfd017ce",
+      "mod_time": "2026-07-02T20:51:11Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_profile/current.meta.json",
+      "hash": "1f3abe78527beb284f647400d46ee95555958a20d66a2240ef7cb7f9f8bdb370",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/defaults/production.py",
+      "hash": "586a5803bbb1ac739a43177acd425641aeca8a76e0bfb0c3ce30ec9ff71c457c",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/consistency.py",
+      "hash": "1c6c77466c58b999753d12019006249599888aabdef2a5141e12c47c45ee1599",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "documentation/artifact-store.md",
+      "hash": "caaa56211046e0bd08614021fa319c2b0a1a2ba973a8d32a9f0d5d62e5559a06",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/01-model-routing-prompt-framework.md",
+      "hash": "e95ce940efe3d02ca587e96cdd56359ef3e75212bea3528a9a0f3547f24820c5",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "documentation/runbook-first-film.md",
+      "hash": "f6b0bcebadc0145a67b3a3c53908b9e3c56f24c77eb32dafee32d8994138e5f8",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/kb.py",
+      "hash": "0d445ed15144a9d8520f197cb5532c2c8c1e4932ecf97b508a398cbe22479f0c",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/review.py",
+      "hash": "5ae204232648ab9a12b2cc8ccd17eb228d7c5219ddae66576f8d1f86c59cf283",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/__init__.py",
+      "hash": "4adddd01fecf7e4e27b61a04368aa0f38090d58965b9cc40ec873dc5ad8b2699",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/config/test_config_contract.py",
+      "hash": "7014a339ce4628fbfc8f1a4df20b51651b92ec87cdd1317635df1b5d0203d51b",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/01-vision/film_constitution/current.json",
+      "hash": "e41559611aaab609fbfa16ee6bfd54c4d4bdf2bce47010c84cdade413bb46ce3",
+      "mod_time": "2026-07-02T08:29:22Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_profile/current.md",
+      "hash": "90b5eb4f0ab943c0e4f33c59c2a118cce35feafb88cb3c8a048e2b5c5b426944",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/06-generation-plan/cost_estimate/current.md",
+      "hash": "a9de5f0b57da93d06af3939e55300879742edfb993236ade2d274c114b7e714f",
+      "mod_time": "2026-07-02T21:06:28Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie2/audit-log.json",
+      "hash": "8b245ae33311cca7e65f7d0c2a7d61d01d616660747a35af225a487feb13d21e",
+      "mod_time": "2026-07-02T21:06:36Z"
+    },
+    {
+      "path": "documentation/roadmap-execution/phase-01-state-safety-guardrails-plan.md",
+      "hash": "d569f5cf57bc2fd4720d6140797a7f9f1ee0bafb28062ddafac55bf6daf819dd",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/paths.py",
+      "hash": "0516dd8f90224955343deee9c5ab4af963dd9f4d06b3cfdbe3d5dd391a1b9a7f",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/entries.py",
+      "hash": "d50048c3c9187e0614cea53c023e21dce73b25c1c889efff8f731c70d9e180c5",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_10_dynamic_flow.py",
+      "hash": "cb3dc10315525de7282293ee9c0e34d6afd77a458d930d6b6f567a6796336dab",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/treatment/versions/v001.meta.json",
+      "hash": "446e4a2f35a713b5c4a1719978a23da3c91779b3765b3b1c9a089b65a0e4d0b6",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "documentation/openclaw-mcp-operator-guide.md",
+      "hash": "92296d3e4b1a4fe21dad6d17191dcd0ee7243d5b27ae745a84c0c65f619ea269",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "src/film_pipeline/app/logging_setup.py",
+      "hash": "6dc37a1f36ae4076062faca042816194fda805b5e1966a63a366805276ed3aba",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_generation_batch_planning.py",
+      "hash": "c60b8090f004a74cd867d4856646f2cac41167fa8bff2048d8fcc58e8d29fef6",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/_stdio_transport.py",
+      "hash": "3d71b302bcaa71123ee348de5d08c65f5d20bf5718b58869060c069bf2640c4a",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/operator.py",
+      "hash": "48cac261748cbe95466f806bb7693b69e9a11bcc2102eb8002b8b5fb16d72d69",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/_browse_ops.py",
+      "hash": "84edee123bffd9145c2cd7abf2041a42d6ec37153711f77a9bcd733b704c9de7",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/store.py",
+      "hash": "2e713730492da707d105b7a92ce2e002b1139361c51c7a59bb9019a89c53ec42",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/packets.py",
+      "hash": "b35e58fa3d9d5c4512143de8e42796eb74576554f079d1fceaf1948d67a1193e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_assembly.py",
+      "hash": "afc65bd90e494ca16aa0a506182163e24d68b8b19027480e455eda0ae3ccc3cd",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "README.md",
+      "hash": "b6528a0368c0f0c7b0dc05065a6b7dff98d6929ce58ecac0c8c02e1501a47ba0",
+      "mod_time": "2026-08-25T14:53:19Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/09-accessibility-localization-and-measurement.md",
+      "hash": "3718e16d7394c2964cb1a1f02f1196358a6eff546ca1c5b50ec48e7214953f9a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/base.py",
+      "hash": "840e0866618f1e8754c979ff996d4012dd0517389e643f85a6ea3f23373cc3ce",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/compositor/_layout.py",
+      "hash": "4eaef8206c63da4742bbefa2bc8a771d23131a957b776ace21384a9f5b9a51d7",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/system_open.py",
+      "hash": "aa30abd62cef52d5eac8032f782743fb75de566a7ba50f9566810455ef6d7833",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/post/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/tui/widgets/test_project_form_modal.py",
+      "hash": "ad40444a682fdcbda5b2d9fd0a79438d61e47d627f7b81866380dc82ad095c06",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/scene_list/current.meta.json",
+      "hash": "25f023446118f7be42adc5ca095c048eae6d6e1a630cccdddfc587287c0e3c61",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/versions/v001.meta.json",
+      "hash": "0ba73beed182fb978029f69ebaa69a437fc2aaf1310b70af16b8b82b87189c52",
+      "mod_time": "2026-07-02T08:40:25Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_profile/current.meta.json",
+      "hash": "5e9524b47fd6b5a0f548f6de4ffbe5278830c72ac5bb3097cdc67ad518147ceb",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/qc_synthesis_agent.py",
+      "hash": "16cc265c2bd0552414dd9341fbb912a4a3da83dc7f9d609ac58dbeac78464bb3",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/style_bible_agent.py",
+      "hash": "8896c26771a826e0bea3dd84f944333b4acedb59a3c7ec92c9f63a0619326e86",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/registries/model_registry.py",
+      "hash": "d854de6c7eb55ed6b46d8a94faf6966cb5186ebedf8096d339aa692a9df83000",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/graph/test_ensure_matrix_scene_coverage.py",
+      "hash": "527f52874408150355755a985c897e8236d0554ab49d2e56d74df08e8dd78ab8",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/handoff.py",
+      "hash": "179161a341a155d98a181b58cebb819adb0e0800304878b9440fdbb83b839690",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/artifact_list.py",
+      "hash": "eee1024a9bf5a25c3db21a1964184081727ccea428cbb2f8fff1e36557464880",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_06_continuity_drift.py",
+      "hash": "730ff3a5bc33ca6c7b2fa59ce660e27145dd1172dcfc2b2d8ebc0470be747681",
+      "mod_time": "2026-06-20T11:10:28Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/04-validation-runtime-control.md",
+      "hash": "dadb873fe59be3697274e36f1743a933bd1363fd2b04f2647c6bf110e1a899e5",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "documentation/roadmap-execution/README.md",
+      "hash": "6f4b891f8cceee6df72e084a5ee4af66ff7f9362fb5fdc4e9ee2a7e2fa790e2b",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/review/__init__.py",
+      "hash": "e769bdaaad958fbb0388eda4252eec1fe91cc1e59605c47fc87251cb46a900e1",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/graph/test_context_packets.py",
+      "hash": "d0e10b3b05230045480599873762964cff1148bdc5db3bd0168d3c7db56c65ba",
+      "mod_time": "2026-06-24T23:57:36Z"
+    },
+    {
+      "path": "tests/unit/tui/test_inprocess_gateway.py",
+      "hash": "4605e6c661dd1379a2a99e5a54f4a1be2d1039489ac12b1c432e937fe666e6cd",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/graph_state/versions/v001.meta.json",
+      "hash": "6ac5bef3dd6986b58ad49afc4aa69bd6ee1a8d15499de8a8c3f8964f998b2fef",
+      "mod_time": "2026-07-02T08:29:02Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/scope_contract/versions/v001.meta.json",
+      "hash": "755614429914f694cc079b4e0e38e5e9730d3ff39e5f8e451700bfe43b034ff5",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "documentation/implementation-plan/16-productization-release.md",
+      "hash": "02cbe40377e45c11fc1bed49328585888fdb964ee6e06d355d02b7279598aa6e",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/04-technical-feasibility.md",
+      "hash": "82ba76f438e0675d73bc510a4ad7524ae140d1a8432c79c8e354b5e1b1f4d6dd",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/product-completion/00-product-standard.md",
+      "hash": "ebe4a5a6c1e40c934eb4241049b7fa3a5535c16b6910fd7e3c55436dafa54acd",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/_action_routing.py",
+      "hash": "95eaab85b5344a06cb32ed4eaef8d64ad4e1763bf2db56f003cd3b19812469ad",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/subgraphs/qc.py",
+      "hash": "f8b937d2146dc819690b737c0902534c86791db77bb99df9d2300b099ec81132",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/app/services/test_operator_service.py",
+      "hash": "78c5c545fc416a2a0f43da657e5ef1cb236f42437c17efeff5329d923fec94a5",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateway.py",
+      "hash": "5edc19dbe3b0f2311dc1add67f950254a170074de28956ee00529b4d3fcce78b",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/cli/test_driver.py",
+      "hash": "ec0f1560df1bc1af2ea4f6e2e9ed2b145f7397f3166f56793536d6fbfc609fff",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/current.json",
+      "hash": "0d76462d72d2934fa51c74e32269ae63e8ba8b0872d255e44c645c154703ed57",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_agent_artifacts.py",
+      "hash": "eeddfc74d7448b46f6b6fc40f653570c5dba442d14dc414e3f46fe701684aa0d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/generation.py",
+      "hash": "5ff600173238274038ef127b8e4c49f2b8dd85aaa12051a62f8b6d2a442e2aea",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/environment.py",
+      "hash": "7d32a90a58f5c8a0eb893e0333f91516525f4adbf116e529f7389384e4a4e74c",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/e2e/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/generation/test_executor.py",
+      "hash": "76dcdb3d1065ea500ac66efd83c0f91b6468c2525f9bf2bf76cdd22ac9b0c25f",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/tui/widgets/test_confirm_screen.py",
+      "hash": "ffc3d9247ca61bb9df9c849ac7bb1cca64a6345349a8959fc7b557fc888f1da5",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v002.meta.json",
+      "hash": "7d53ee990b12bddb03d13c16c1fefdb8dd2a53303ab65f24d5bbb5ea840f975d",
+      "mod_time": "2026-07-02T08:41:00Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie1/.gitignore",
+      "hash": "a860a42733bb2f0d47a7dae5e439bb2c52a80f1b12462795c2aa1208ab0ceea6",
+      "mod_time": "2026-07-02T08:28:48Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/README.md",
+      "hash": "7c0c725eec3c8cc702847abf81fe125c277f696767f0c07be72aa973ed77dc5a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/constraints/_keywords.py",
+      "hash": "98bf6acaf899e6e8e0c240caccd24f1edf5860a26d8c80064d2e5a63f40fef2d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/view_models/builders_reader.py",
+      "hash": "d613e508dc911f9877cd1ff576f462c9376577c1992bf66a9a0b7f23c1db296c",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/consensus.py",
+      "hash": "0a98978a43ea632039ab11be1627d6ca7159f9c824610d583e752bdca9be9502",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/e2e/test_scenarios_product.py",
+      "hash": "948b3c2a770f49b2b2788db94a8233d964e14946f10f50244b19d4f6477e683c",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/scope_contract/versions/v001.meta.json",
+      "hash": "a1ac054f5f8af61b8ee9b01dbf0b2632c4a18bd1ab9a1ee1e7c47c798f414d67",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".python-version",
+      "hash": "7b55f8e67b5623c4bef3fa691288da9437d79d3aba156de48d481db32ac7d16d",
+      "mod_time": "2026-06-21T17:02:49Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/orchestrator_agent.py",
+      "hash": "9f522806c69caffc05bb4b4b31fa21ac2ca100cb17ad096294fb8a06b57fd26c",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/integration/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_audit.py",
+      "hash": "e511b4926f7498f218d07cae72d7fdd53f35a82e902724074158bf53b8a9c4c1",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": "tests/unit/test_orchestrator_validators.py",
+      "hash": "43dc0d3ab49884a86bb760fbd93b61d2f2c2006073c66522c572cf0de9f418cf",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/treatment/current.json",
+      "hash": "bb186c28d475325418260590f16e64abe03a5aef7be64defae3dc4fb838e74d4",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v003.meta.json",
+      "hash": "4a14564eb83af5adc5b322c8ee79d73903bddbecc88a2658f9ce1366e13fc02d",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v001.json",
+      "hash": "3b56b3cb2e28899617c8bef232b577a0309574b4b32a8314c60762eb17f69213",
+      "mod_time": "2026-07-02T08:36:47Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/LEDGER.md",
+      "hash": "2c5168dbf71c1830ead5d914904436823af87dd595b3c26a685650d13eadd90b",
+      "mod_time": "2026-08-25T18:11:50Z"
+    },
+    {
+      "path": "documentation/release-process.md",
+      "hash": "20d38c7444e9b75bd949c1467977d1d700f78acd87312888edf01d834925b53c",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/contract.py",
+      "hash": "b0b284300f27d0a165507172491cfcf18568f3086078e4beae865fdea24d23b6",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/e2e/test_graph_execution.py",
+      "hash": "61753204060909b4ff70ba0a62d4c696a8192058d995b6d1f9b1d24e431a3150",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/unit/graph/test_state_schema.py",
+      "hash": "421baa6d90635d9a0b4fd715e1a40da3c46176d4b099e5e29b3eb8a5a28ef3e3",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_profile/current.json",
+      "hash": "44e94954a237ffce299314f1da829c4ec306e6fc8a7fa5c5ad1930a43ab12c5c",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/scope_contract/current.meta.json",
+      "hash": "755614429914f694cc079b4e0e38e5e9730d3ff39e5f8e451700bfe43b034ff5",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/services.py",
+      "hash": "26f07853d9d68056c7bc926b100166810c0796c5527c7c3a3f2d2b4f064147b3",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/registry.py",
+      "hash": "6eccfccf0f4e02cd5ec180c1ef416010b4650d6a314dd159dc2359b5e1859897",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/review/test_diff.py",
+      "hash": "112082d09cf883ed25ad02cf3f6233b370e2d95be4d9f6759a87eb01e8038596",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/04-visual-dev/reference_index/versions/v001.json",
+      "hash": "96047b16a027912bd58e405751c3cbbb458290e98459144f635eff64507463f0",
+      "mod_time": "2026-07-02T21:00:05Z"
+    },
+    {
+      "path": "Makefile",
+      "hash": "f451d4c3f0dca7132b935369ecc5fd94536becc220f04c9e3a06dc8bbe37c208",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/manifest.py",
+      "hash": "08408e46e88326b08bbb619519da8eae190b4ff32fc5a50a41acee73fb3cb874",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/adapters/__init__.py",
+      "hash": "5ccb89defcfe54c01f09d6eced50721d3e4c4cd7bd815574574eb51ddb4a83cc",
+      "mod_time": "2026-06-20T22:01:37Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/_base.py",
+      "hash": "c9b6966344454a9933e39f08ae94c94a2cb7bbd63ef977bb9005d96edeca10b4",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/budget.py",
+      "hash": "d1c662e4cbb379ab9702c365d5a6f7cc116a73cb6a80a039eeb6fa5536ae6315",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/validation/test_consensus.py",
+      "hash": "1aee9f8b5daa35038f0c3597ac95ba59c978e66fc9cf56499a049cedf7945313",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/validation/test_llm_script_structure.py",
+      "hash": "a27049aa3843370c05420cd7498bd5442741515f1743a01e810c3b7703e2485c",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "documentation/demo-guide.md",
+      "hash": "b7a2adc5457035ac0c88efa55355dc2e3b7fe3fd0e7ed1c459909903860a3e46",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "documentation/refactoring-plan.md",
+      "hash": "e783b44fe9fc4c1ef54b4ee316966802b240268bcbdd598a9730db42bbc977d7",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/character.py",
+      "hash": "f175767f0c17631d8eb1521092afca7bafd9acb098e9758dd872e43e6cedc837",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/dispatch.py",
+      "hash": "94016b2bad45da953119e206e1d9f2315dc0dc4b93433b5296c952e283b399de",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/outcomes.py",
+      "hash": "e006ae64565054947f313733156841280c267dff68a42c6063df808e3069d4f2",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/environment.py",
+      "hash": "62a623b7362853736903865548836d98dd10d76a000543f52993141b49bea5a2",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/test_config.py",
+      "hash": "2d4b0cf8fc083a16148f517f14bbef9ce7ae272115827fbde4de7dca4fa454e4",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/__init__.py",
+      "hash": "08bdf154f8d081201648fef5d8f3f66b55e183b4518c40c32ac3907504eb0e31",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/composites.py",
+      "hash": "cee6988d9d062e2c902f1aaec3187d842cd866e4d37688b875572ba0c0f2abdf",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/post/delivery_packaging_agent.py",
+      "hash": "2947610ec7d6f1aa1ddcaf5c744c317421d32aedbcd05423ab42d73225a2fad5",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/kb/test_retrieval.py",
+      "hash": "72e625b33373d5795a2a398585333649a38186fd04f13d8c6444600ef296b4bc",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "documentation/audit-findings.md",
+      "hash": "dbd0550a053a952685da122b070f374c4a30b2fa0fc2d22c9f928b7acc96cf99",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "documentation/operations-guide.md",
+      "hash": "0e022e5e4f2aa1204b4705524b9ff8248ac1dd182edfe0a381d3e455e5c593ae",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/conflicts.py",
+      "hash": "ca0918554c33ee564ec10e76b1f9906ae501e510f7827d4549342b9f149bd7b3",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/provider_health.py",
+      "hash": "3bf16546551d531e15809cb83f4103a10c923341c14de1610362a4283e09a217",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/agents/test_environment_bible_agent.py",
+      "hash": "4195e6fa70861d14a40d9a86e97256927732d13d99b4bc1462d7fbb9598c64d9",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/providers/test_imagen4_provider.py",
+      "hash": "7d00dfd45a1a1249a7059951852e609e13eaf807590947b14221583e6b3aacd2",
+      "mod_time": "2026-06-21T16:19:42Z"
+    },
+    {
+      "path": "tests/unit/test_artifacts_manifest.py",
+      "hash": "797786ef5035ace6f2c973513f68ebaca656f6f120060fc8b93e4745d2f42047",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "tests/unit/test_graph.py",
+      "hash": "d27b8d54b45fc6e731f7cfde0f1e8fcda6df958790a2e7e95502a87423b490db",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/graph_state/current.meta.json",
+      "hash": "39349cea86a0baa9b23c203b358c16a1550d2a99cf00769455da2b119ba7e989",
+      "mod_time": "2026-07-02T20:51:11Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/behavior-changes.md",
+      "hash": "f8a8bfbab226c93a7e359f9b3dc2a324524d4f36197a2680ab182480b05bacdd",
+      "mod_time": "2026-08-25T16:49:41Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/camera_bible_agent.py",
+      "hash": "6df7a7bc3e777d5b43ade533c9ab75051ac9066614b4de79040b2001fc6f5ac0",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/versions/v002.json",
+      "hash": "5e9564d9a70ac7f0bb385aea2c2b4bff1cde74e32e4441750008efa0afc577bd",
+      "mod_time": "2026-07-02T08:45:23Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/__init__.py",
+      "hash": "222246fcd7255262fe30e2e2fc4e6d17e2807239af8b6747aeb4b0d38c0d6111",
+      "mod_time": "2026-06-20T08:53:35Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/models.py",
+      "hash": "66fb1c64769e1c59f144970e5c0bb347a3a3574b4ab971eded5ee17002366ec7",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/operator.py",
+      "hash": "14ce8d65c6d8adf2acbf8e6988156fb9e157453ac6ecdb2d8838dd249b75cc82",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_09_project_ambiguity.py",
+      "hash": "1e13cbf63e34fe49d2bb77f2da95e8d205324f7ac0365455095b4b097c1f0cf7",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/agents/test_camera_style_bible.py",
+      "hash": "4e7498cb9ab23b9d131d538c930b90e8cdfc415443688adacab637eb9fc9562d",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/registry.py",
+      "hash": "0138a750794cb205484b72406b4d88cbf3c2e9cb3c7fab113428190a7cff334a",
+      "mod_time": "2026-06-24T20:44:57Z"
+    },
+    {
+      "path": "src/film_pipeline/constraints/__init__.py",
+      "hash": "1a5a64c8b2e5141d31c7276b25b631b5afef6aee150e23d7aac88b8487cc77fe",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/shot.py",
+      "hash": "e8341ebe46191bd106048bdd5c7675b7785dd7b73efb84e88531dbc02c7ade37",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/graph/test_router_validation_status.py",
+      "hash": "bec983e550213180ff31f817a397784e0fef100dad611a5fb0c86343e138b576",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/versions/v001.json",
+      "hash": "7b5b495f9e6053a378ec1310ed02d20e8c29f194bece4bed2366a9d8f3b39688",
+      "mod_time": "2026-07-02T08:40:25Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/03-narrative-and-creator-systems.md",
+      "hash": "bddb538a6006edab6604d5b0ba9ebc685a33715a25520ba8d30197c6376b00fc",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/agents/test_model_adapter.py",
+      "hash": "19ccd55fcdf412d6c9d0c0356a75f3fe011dafa84546da0c6ad4cd73150f49af",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/app/test_runtime.py",
+      "hash": "99105f5f6ca710fbcf45acea3bdb1786e44d9581666a84ed9440898d28b8ed98",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/unit/graph/test_create_path_routing.py",
+      "hash": "8903597491e01490f2b9a203b42ac21c224f0cbc31669422eb570cd99d123962",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/providers/test_failure_classifier.py",
+      "hash": "98ae851dd32f35bc6de968d497f7fc63569021087fa449a007e0cb28b9af3e5a",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/review/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/validation/test_base.py",
+      "hash": "c45729c1ec3aaeae80620a808ee8be0868cbb4534de277725ef78b81d5b932d1",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/05-shot-bible/shot_matrix/current.json",
+      "hash": "c5b96c10e375efd8b154e2bcae8df2946aad293967773961ac70d4b5bb1aca93",
+      "mod_time": "2026-07-02T21:04:04Z"
+    },
+    {
+      "path": "src/film_pipeline/config/runtime_overrides.py",
+      "hash": "47d42e9840ff9da57c0b53aed01dae3a8e49f721f46e85e779bfb6412b764fed",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/__init__.py",
+      "hash": "9134482764c2ceb4ed5acd2022371546d3744224657a740ab53b991bdf4992ba",
+      "mod_time": "2026-06-20T21:27:20Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/app_state.py",
+      "hash": "b985404736a1a687ddb1e95ba4f011e284faff312cdf888a1b827ac69d949d98",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/asset_browser.py",
+      "hash": "8188740af8369edc107aef57240052990c5130a0917845a33acc1840fa06f16b",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/__init__.py",
+      "hash": "b9a688b34b1affebc77fa6813f71442d3dbde42d75a2f6aded6fca3452882a57",
+      "mod_time": "2026-06-20T10:40:05Z"
+    },
+    {
+      "path": "tests/unit/graph/test_wrapup_nodes.py",
+      "hash": "d1b72dbf0ad80723195b53faaaf4e9b1106124ec0ab52414381ad6240389207c",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/validation/test_thresholds.py",
+      "hash": "73280158311ee11f01273673286d675cb558adb03b15accf49261c4c9268c155",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/treatment/current.meta.json",
+      "hash": "446e4a2f35a713b5c4a1719978a23da3c91779b3765b3b1c9a089b65a0e4d0b6",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/_model_output.py",
+      "hash": "1c5a9b92d2a397833e33d3cf5a6c932799de3bed16765b448e4472fe4897fcd9",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/shot_bible_agent.py",
+      "hash": "240fa1d698ef15bd51d3095a210303986d1c899949b5f5fc0f75eb56d18bc6a9",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/cli/io.py",
+      "hash": "7e78d213c200eefbc3160253aa98c11e1c40f5e83a46ba68c06df22cf7b0daae",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/reader.py",
+      "hash": "b4986e9545455fb634623e88e953e9fe1ca26e730dc5aca7df39725eb3b32f94",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/validators/__init__.py",
+      "hash": "9388ade9adb879bbc8e8889317f18e7813cf1843246d959f231f65644d05ff54",
+      "mod_time": "2026-06-22T09:43:29Z"
+    },
+    {
+      "path": "tests/unit/app/test_logging_setup.py",
+      "hash": "88947051e1a4e7dd7329ac691c83dd8bab79888a9db41129324cef76af1397ec",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/providers/test_registry_health.py",
+      "hash": "e45c089b59122f1cfa17fe5ce2755a716fd5b33c2f1935b1bb24c36f1157cbc6",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/scene_list/current.md",
+      "hash": "e5d784a119baac8bac9ed3cd5ca195e5d5245d6cdb1de090071d315e11cf575b",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "tests/unit/testing/test_mock_actors.py",
+      "hash": "29ee6699b46b88fa5e430d89288b2a4d003e5ce02c5010dbf7fd8dd0649cc05a",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/current.meta.json",
+      "hash": "036b94ef275413483fd521f3b1a757b5c1cbd2d8725bc092f0ed8111250bdc32",
+      "mod_time": "2026-07-02T08:45:23Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/07-safety-rights-and-governance.md",
+      "hash": "f840b1830e0dbc542b5e9d9291b4d9bee5979c50090366b175791086cb62e12d",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/post/audio_design_agent.py",
+      "hash": "26695da87220e1d7aadf6ae2e5c3231704226eb84497f94c11947ba4d19def07",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/reference.py",
+      "hash": "052854d40739c5d0e276161a9c62aee4c8dc3a978d0975376928b0011d1e4528",
+      "mod_time": "2026-06-21T16:04:27Z"
+    },
+    {
+      "path": "tests/unit/graph/test_startup_boundaries.py",
+      "hash": "a0ae8261320cc3d4864387d17545c307b1b29f33af3ceb5d4062c3af17fd5504",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/story_bible/current.json",
+      "hash": "3c3e9aa2d01a9d718c560017ed4173bf169c64620560fb104c232e7bbf1d67e7",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/visual.py",
+      "hash": "05cad96657e3c8ce6dbf8e276d07a9917ec7b43434cebdc25ea82d63d4445cae",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/context.py",
+      "hash": "232929be61ebd86509827fc20b0c8946020e99b7d4dff00e1bea232534e8e8f7",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/post/transition_agent.py",
+      "hash": "9557f6ffbddc4117da99fc0b56fcd4fc8fae427d77b52b66c6feb04df49c36c5",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_05_network_error.py",
+      "hash": "093318b749d3e20dd13e7827ef8ec5ae06ee717b14b441d1c8fb2a16f9ee65e4",
+      "mod_time": "2026-06-20T11:06:48Z"
+    },
+    {
+      "path": "tests/unit/graph/test_edges.py",
+      "hash": "e8372628b5f67b77b357b182ecbb280a12bb842216464eadd594a2ff1ddf237a",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_profile/versions/v001.meta.json",
+      "hash": "1f3abe78527beb284f647400d46ee95555958a20d66a2240ef7cb7f9f8bdb370",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/constraints.py",
+      "hash": "3dc092d15a1f1148b0c485fb942981bdd1d4ce46875ad010d1ca2d5df455738f",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/app_commands.py",
+      "hash": "997356b13a7482b43982ebf892d9dc8f6b9f45c0828ebba36e5c3044030140ec",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/generation/test_compositor.py",
+      "hash": "7d4617cae461f13edae90d1defc90a318aad6d31729e9e54a09e1cb03788882c",
+      "mod_time": "2026-06-21T16:27:01Z"
+    },
+    {
+      "path": "tests/unit/observability/test_blockers.py",
+      "hash": "7cbbcb7cab8dff1e2444b5402907ff111383f2a16fa19e5e977309897eed27a9",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "tests/unit/providers/test_veo_fast_provider.py",
+      "hash": "7c71422d8d9e70a983b57688efc2164abb322f27ef6290ac1985cae166178611",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "mcp-arch.yaml",
+      "hash": "17c08b8fe4c15174865911cc039c518359728acfb8c89e373a6eb649701f0f8b",
+      "mod_time": "2026-08-29T08:48:22Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/gen_planner_agent.py",
+      "hash": "7cdc19a02a852579cf81ee53acb4d6abb7d2d4ef6d7301193b944810d3a7655e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/structure_extractor_agent.py",
+      "hash": "0bb9cf86560c696a3c1be780a26d719122e4a2cfa5bc2e2cd9a86acdaff68fdb",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/approval.py",
+      "hash": "9f7864afee9cb7b8282918104b09d1e0f9912cb365a74e34fbc9741a27f8dc2d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/__init__.py",
+      "hash": "53f3a937e09e87c5116a57d990a8d597c82b5c04b9992e2f9d04e956f0b26086",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/view_models/helpers.py",
+      "hash": "a390025758f5c1fca825fd1a2fe2c42a99cc5715cc22ac98e2a757f7c9c31669",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/issue_list.py",
+      "hash": "f057cf03532f551a39c099637b187f5d90c4b87eb5f91af356a92100a7ef1065",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_reference_generation_helpers.py",
+      "hash": "23b0298d74bf3d1899ee60109d6da1e4ab9ce4a56d48336f101f395b147b1cd5",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/06-generation-plan/cost_estimate/current.json",
+      "hash": "b02f5fa3d934dce9a41566f44692b4d30868d5c32e9a11f3ba8c67bfa08a34a3",
+      "mod_time": "2026-07-02T21:06:28Z"
+    },
+    {
+      "path": "LICENSE",
+      "hash": "43ca6e7c6b2e7f73e1b2d2da8118f41f3900cf532d0005fb484a77398ec230a2",
+      "mod_time": "2026-06-19T12:08:15Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/00-program-rules.md",
+      "hash": "2bf19b11a07b34b206018d58f7102b6ce49dd72a876de64bc28559bd471b70d1",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/app/version.py",
+      "hash": "b1e0d2302e0852b3bcdc2226aad21aa5ae3274b2bad69f02e1705b7031ab6ea2",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/router.py",
+      "hash": "1e8afdd75e0427deaa038d53628e13034dc2139ba48b4860a267712360dcde5e",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/credentials.py",
+      "hash": "e57e1e44476d89322f3e568268513e27183ba6d5b74372c4302539f64a42513a",
+      "mod_time": "2026-06-20T22:01:59Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/project.py",
+      "hash": "128b2fb75d90115ee8e8ac27eed8e84fec5523cffd4caea774cef70b2460d4b0",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/script.py",
+      "hash": "89d2f47f9cf17d12b748b9d69d1d04bc7091f12c401a9831407143feba4416aa",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/06-prototype-and-validation-roadmap.md",
+      "hash": "f9950e60ac2aca68756840ad0b2e7026894846049c23ee0d9cec016360af88c9",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/reviews/prep-production-implementation-plan.md",
+      "hash": "ede610dfecc35130e9cdb81df2bd1c97466f86ee821b619efe4ceddf6cb8af96",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "src/film_pipeline/app/_resume.py",
+      "hash": "1f358e271ff15e89b6fb41a96088ec2ff8659fd355da729dc5680c469ab24f62",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/registry.py",
+      "hash": "f0f52ad2c46d58216b4e255e7cf12d55b849be9bcab1adbe343928a98a9e341d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/smoke/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-20T11:52:57Z"
+    },
+    {
+      "path": "tests/unit/test_entrypoints.py",
+      "hash": "09e240fd27f9910ee138d088ace0b1661ad43f6f72f4263cea89a8aea614ec9b",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v001.meta.json",
+      "hash": "013d83d39fb618e3fb760320876cd88646cb023ff4b444920eb6d7b7afd2634a",
+      "mod_time": "2026-07-02T08:36:47Z"
+    },
+    {
+      "path": ".gitignore",
+      "hash": "68e2c2115839d1ed1140dc3f7759752b9e10b4b4e7b5cd049b289284aba34df6",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/app/product_gate.py",
+      "hash": "c343f8599022d07b5f14046cb230d72cd1c60914e47aa6285ff3b6e574725b5e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/prompt_readiness.py",
+      "hash": "886b0a334ca5c45014ca33520a221ba23128b0a730b6d06311dcf33f451a05f3",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/assembly_agent.py",
+      "hash": "40431dbe39347fce0cbbddb89e6bfa676cf11cd2adf0df34d6817ad252bfd526",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/checkpoints/manager.py",
+      "hash": "d07a74c0e52c4e8a5a853393e1e6943688dd8c28e68c0f3a7a8e4911a589131d",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/camera.py",
+      "hash": "316b7c6ab9f793904c683206e7601ffa2e99d963eaff0e06f1151a25b1da0a6a",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/adapters/veo_fast.py",
+      "hash": "7069c281536e43396c2d1a1d795dcb96eb7aec5bf2dacc2994b80631d2dfc3a5",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/factory.py",
+      "hash": "8f9f0df2234867016daeff2b9fe6ff34e71cea9306d4e676206a11b3ec2a70a0",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/mock_image_provider.py",
+      "hash": "9e0bdbbb0bc8d6b9ba8ae6a51c789007d8a43791a01cefb96eecf8b2b29e42d7",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/character.py",
+      "hash": "5edaa19207d00e7cb0dd079f7fe422cce511db3512613e77b8b1f6db4f2fe675",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateways/mcp.py",
+      "hash": "dee6b2161be8978e98b243f912fda6ee8cb9fb43419083ccf52cea7236ad3f79",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/graph_state/current.meta.json",
+      "hash": "6ac5bef3dd6986b58ad49afc4aa69bd6ee1a8d15499de8a8c3f8964f998b2fef",
+      "mod_time": "2026-07-02T08:29:02Z"
+    },
+    {
+      "path": "documentation/roadmap-execution/phase-03-law-and-docs-truth-plan.md",
+      "hash": "a57b4a3fa3664fccca042ad14416000adc532b2c5e981f24322e5116e5a1bf40",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/__init__.py",
+      "hash": "064581b36bdeec904525a3ae1bf5aec07c809dcd254b04c20b768273c63e503f",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/e2e/conftest.py",
+      "hash": "0814e2b81cd99b7c31dee3a04ad7aa7daa15ba9b49e097a76e9d9586cedc5e1f",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_07_rollback.py",
+      "hash": "2dee884e685e95227d47df1aa976fd29b5f0d91d03ec4056557af388aef0bcb4",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/smoke/test_manual_4min_mock_short.py",
+      "hash": "c52482ee54ee721f3450c579382dff8b33b89352b919f6feeef65ae1ecad9b58",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/agents/test_impl_agents.py",
+      "hash": "2b60df4078e2827a8f3bf792ade981e398f21f47f62e5b3bbadd5ffbddc3966e",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/graph/test_channel_registry.py",
+      "hash": "9ddb96c1d49e5f07649f680c4b822e6b2c4983bf5483e78150a03b8086d3997f",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/graph_state/versions/v001.json",
+      "hash": "45a5577ed741ce9439af8013ba134b2bf4f00e3529b8a4584f16ad064be55ddf",
+      "mod_time": "2026-07-02T08:29:02Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/model_adapter.py",
+      "hash": "794c8243b16d9b5e575fb4b1db6c73b5fcda9aacab704a732c6b4a549ac8d79d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/checkpoints/test_checkpoints.py",
+      "hash": "be4e657540cf6a43761f06cc9a8537ae30ef0b095fe4f33929deecbd17657a68",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/generation/test_ledger.py",
+      "hash": "71621747418393d5d4443d4d55991c57a811537c0b869dc511f2cf55b247c5ab",
+      "mod_time": "2026-06-20T10:57:07Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/scope_contract/current.meta.json",
+      "hash": "a1ac054f5f8af61b8ee9b01dbf0b2632c4a18bd1ab9a1ee1e7c47c798f414d67",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "tests/unit/test_app_smoke.py",
+      "hash": "a36fa0ba115fe6e9fb7f2dc14a668294e8af117e4075d95fb435e4cadd3c1903",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/script/current.json",
+      "hash": "5e59202ad7798d2890e4740c71180efa633e3177e663183f3a6f48a35b8325a7",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/defaults/spine.py",
+      "hash": "6148af750c2e1874ddd84794ff4d0ce7503a57feb80a8b317946c4eaab32f7ed",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/frame_heuristics.py",
+      "hash": "d354e0725535767d2f6872b53793f4d5f993afa69f30b350dde8e0959f54de2d",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/gemini_client.py",
+      "hash": "243d2634edc7c1b61fac2bf765582147f071ffef92fa2635eaf513b5b53b2d2f",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_agent_handoff.py",
+      "hash": "b2fa08d7bb3957cbbc376011c1e58bc65216f23ed6e0f743ead86049f467fca2",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/post/validators.py",
+      "hash": "e7e8329c9d5cb4830f7dbe8fe5835a84f35357c1bb8b1d65f21c92f135f28219",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/scene_list/current.json",
+      "hash": "32029fab2fedfe91e6bdc0b3cdccf4e113b6640c846c2436783257e624a501c2",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/helpers.py",
+      "hash": "25ab18553e1435a3fea659c35a9710e346f536ea6b69d9ad388156268d4d9603",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/tui/widgets/test_revision_form_modal.py",
+      "hash": "70100eb555f66f9a6fdf8497a541adf73bf6beade05aa4b3046eda2b036623a3",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/scope_contract/versions/v001.json",
+      "hash": "841888133c57d475782b13086096c61b214e74ac2fa831e1011b8e63833893c5",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_validators/planning_gates.py",
+      "hash": "a5323492a6ad0b61708972d190f96d5a7ed7bf23aea3edf0d5799a42a4f53889",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/providers.py",
+      "hash": "0e0d4b5448e7945c944708ff2cc559bc2a1fcb6031693167a42ec0f8e8f27691",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": ".editorconfig",
+      "hash": "80a3f97882f4f8f8d27549b7339b56c39e09e254e4b03d837caf256a4c8d2f65",
+      "mod_time": "2026-06-21T17:02:49Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/registry.py",
+      "hash": "5517598d58e101f3a41ca16bffb1541c541ff68d3755984106312d7bf5e1e225",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/status.py",
+      "hash": "74efde32bbcb9d7acc1840a585204dca3c42f4c0c1c4e07d21c3e9d55bf85271",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/mock_provider.py",
+      "hash": "bc28b70667a7e9c20c32f055169bd51723a2a180537f70cd7b02f233e302bdb5",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/01-vision/film_constitution/current.meta.json",
+      "hash": "76ec41f03c1818d376996c52ee0cdb2f679a91e0e960d7a9831f331229c2454d",
+      "mod_time": "2026-07-02T08:29:22Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_constraints/current.md",
+      "hash": "6121ef1b6d7f49759b8a6800a2e4a36cd5c62e948a90a6f4c26868f491b25e0e",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/development_agent.py",
+      "hash": "f375017549901cb1419c0529ba3ffe2ee82c3bb12cc78b8fe61872d8d9919fb4",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/executor.py",
+      "hash": "87d24b47fdabfda7f901f69ab5652fdb15831d0de57733f8fc59518ab9c73f80",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateways/_transport.py",
+      "hash": "98bce420567c575feea7e3e1786c195ead55a6d80c9a135e843d6fdbfb9a4a62",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/graph/test_scope_contract.py",
+      "hash": "7c9d8dc48451e0c9f815c325bac866f76ea2fe57a45ef3babefb057c830b346a",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/current.md",
+      "hash": "67d1dfba6c4889ace1005f4840485a185a5fb6dccc7e2abfe9b8cd9b9ddf13f6",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/assembly.py",
+      "hash": "fc7c6b064774d8026941807da54547a33b60e0a968697d3fb857e3d656a61ef8",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/agents/test_runner.py",
+      "hash": "d7bd3d22b285d9817538a93ab6ea31438e33fe7d4b663387223342f9acaf02f8",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/tui/test_system_open.py",
+      "hash": "d449e93260a3959f53ac8d36a8edcc8ccd116d6e1db169fcc917f4f6c5913b03",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie1/checkpoints.json",
+      "hash": "0d11d8f2994f1cee1c4296cd826cc7c1f5184ed5c4bc0f53edc7e56ad04abb02",
+      "mod_time": "2026-07-02T08:49:25Z"
+    },
+    {
+      "path": "tests/e2e/test_real_tui_e2e.py",
+      "hash": "d549be930f0d3525a97b4ba167d012e69bb548bcf812a18134790ebc74d13a74",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "hash": "5a55c81255e1d19b70bd3ca2e27430f82ca5d9c63ccee7e121f9bd0343fab8ff",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/compositor/extras.py",
+      "hash": "6a4f5dd44fab6404274451ce186cf2fba3a2e6d48da5ecac9c607009322526b1",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateways/__init__.py",
+      "hash": "b0bf9fa5ffc698f5a51db2fb2fa10796b4f3330ab0cf1d48b9022203f8b28d98",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/integration/cli/test_run_cli.py",
+      "hash": "682a9dde2b48e33436e21b3b1a4b64e3193a9067ddd37703e7853ae44b5b9f1f",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_config.py",
+      "hash": "af76b909391e6bc5363bec5b2e9f1d16f7bf4779083253fdbb375bace6b9006e",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_intake.py",
+      "hash": "f352cce69e5195bfa582c8caa123d77850e7990dd7b7239c0072e143d81f0d20",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v002.json",
+      "hash": "f14f4d0ca34e7f11d8aa71ad67b1b1a5b5363a618ff016bb04a596ba7f9bd54e",
+      "mod_time": "2026-07-02T08:41:00Z"
+    },
+    {
+      "path": "src/film_pipeline/__init__.py",
+      "hash": "701c80c6c0a03652aaca4d645213966baa6bec9ad003cf4074c80d69830835e3",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_validators/__init__.py",
+      "hash": "4eefc4bbafe6efbe90266689a12fd07f27f527036985fc9ea8d93f65e03a5d72",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/generation/planning.py",
+      "hash": "58f607ca923cf5291f55ff8860d490e9e1deb300576add55205b597a0327ef0b",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/retry_loop.py",
+      "hash": "c6071fdbffa34f5b5c25e650efa3ee3213585a6c6baa693e5fa1f1cd9d6c09ca",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/screens/home.py",
+      "hash": "1e3cbbb6cc70e4f75509908341256dd8042642d8a8de2870a38fcca494205758",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/artifacts/test_matrix_projection.py",
+      "hash": "c0819b49a0bd14a9450ad8bcc9dc7c653e33ae8b62ec91aac6755e4fe58408f8",
+      "mod_time": "2026-06-24T23:31:56Z"
+    },
+    {
+      "path": "tests/unit/kb/test_conflicts.py",
+      "hash": "075b80f65dd3052b3d99c87147cc05cff9e057a215d7902dab91e40b1f80fd02",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/scene_list/current.meta.json",
+      "hash": "d3ae5eb25d0a4a64b8a2a4eb8e1c6d68fa80ef1b287464376f1d391f84778dd1",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/script/current.meta.json",
+      "hash": "2a27d3e62dbe8bf4e64948038390d4286d77f25977782070287c6f0548112318",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/model_routing/__init__.py",
+      "hash": "411f0ca6bded78ad4df7b44103fc7c696204317d7349e82f10d5ac5e1e4aff9e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/edges.py",
+      "hash": "7b33c01426901c7508efe489973ba8c7fdf2859fa917a1c802568e46085978cd",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "documentation/product-completion/01-runtime-and-graph.md",
+      "hash": "17de2fe5e912223df10c3de50ded365cca65f78b5bb8c6e63165943de1b18c1c",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_context.py",
+      "hash": "dbd3d179d6a65e30f9efa28ad5d3284c373cfd97c008c9fffe8d6761df03732f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v003.json",
+      "hash": "0d76462d72d2934fa51c74e32269ae63e8ba8b0872d255e44c645c154703ed57",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/scope_contract/current.md",
+      "hash": "7a2d8b959f2da131680967be36a52d213a0a27ed42cad2c257a53b0b57bd6f9b",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "documentation/reviews/arch-lens-cognition.md",
+      "hash": "1915932c5d9074083a7c40eaed38368fed2d5740c17feb2ccfd6566e9be844f2",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/app/mock_responses.py",
+      "hash": "06e907f329730d1705160924a0564f98bc53590a8e8f974877c2685276558379",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/executor_prompts.py",
+      "hash": "c4784148d7dc02a672567274431be1b139baf7af5b6ddc209d0d3beb507411ad",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/script_structure.py",
+      "hash": "844809da50b0e1173204e475fd5226126dab55f85eec610b50534d217afcc056",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/agents/test_impl_registry.py",
+      "hash": "134944e8119272aa16ee4384558ce363f931716e4fa4a0abd60a90bbb64f6784",
+      "mod_time": "2026-06-24T20:45:21Z"
+    },
+    {
+      "path": "tests/unit/graph/test_scope_contract_node_integration.py",
+      "hash": "5b3dd5e8bf9e264b50e11804fa17911a648d7ac8decdbe81cc5a42d18710e70d",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/scene_list/current.md",
+      "hash": "baa857ab3cb5c6fdcd31496df16e8ade4141ba2bad52619ecc6c210fd2ccba56",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/delta_regenerator.py",
+      "hash": "20e698abec7e70b25c9334a529d5237ea2b704e326687877450e728485a8f5c2",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/kb/test_compression.py",
+      "hash": "a8fb0b57656590b06d9316cfb6fe784cc977519f453a58e34fb17e5771642c5f",
+      "mod_time": "2026-06-24T23:01:14Z"
+    },
+    {
+      "path": "tests/unit/validation/test_registry.py",
+      "hash": "60bada65b7ce93e6c7d15c8ed11c49d81523e2fd5b2da26d6459e503e17cfb6b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "docs/tui-production-readiness-analysis.md",
+      "hash": "c41268d9bdcd5daad94e63f3fad4bc88e71aaf72b07a6498ad3993e193cff647",
+      "mod_time": "2026-07-02T07:36:47Z"
+    },
+    {
+      "path": "src/film_pipeline/observability/audit.py",
+      "hash": "642f93365a4a2c3becf794450e135a1c49b519986dcb2ec293f09ad5a52c4bce",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/integration/test_generation_mcp.py",
+      "hash": "e3466f24a626005127662fbb6b10ea59981811ea9fb5795195c7aeaf7f1922ce",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/logs/test_mcp.log",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-20T21:00:08Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/treatment/current.md",
+      "hash": "f9dc359c2c181b7292dbc1d230de065ed8b7a82ef2c9ace7bba7d9c0d368670f",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "documentation/product-completion/05-generation-providers-and-post.md",
+      "hash": "3cfd5b266e17ef5602e81229c65de4b0228adab1c35758d61ef58458a6c39a68",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "tests/unit/graph/test_nodes_constraints.py",
+      "hash": "9ddba42aa66281d10ded7b39ad196a1947f12cbbb8dc9d5f3650eaafb653048f",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/schemas/test_constraints.py",
+      "hash": "33644eb05347b8dfe8fe2158495bdc12e6d9928d2bae91db3060eb9fa6aad0ac",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/current.md",
+      "hash": "ff79c73d2b0dc09c2a544178890e4e164325df02bc466dd7cc980d1a87ca953a",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/05-shot-bible/shot_matrix/versions/v001.json",
+      "hash": "c5b96c10e375efd8b154e2bcae8df2946aad293967773961ac70d4b5bb1aca93",
+      "mod_time": "2026-07-02T21:04:04Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/artifacts.py",
+      "hash": "a934734b1a897d5cde8beea796893f157acb8d68208792229d92d3a6f9da56af",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/film_constitution.py",
+      "hash": "0185fcf06c5256109a15269769bd4c99e73db8f805767c277283dfdd7904b1cc",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/graph_state/current.json",
+      "hash": "3957b1c4af51f33ded00d604eb700b2cd9586a86131273eb231ad050ea09030f",
+      "mod_time": "2026-07-02T20:51:11Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/06-e2e-operator-proof-and-release.md",
+      "hash": "0f8350bec7e098109a02cf607f656bc1851854692845bbf7cc0e51e0d8fed90e",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "tests/unit/agents/test_character_bible_agent.py",
+      "hash": "072fe8e81c732aa1c1aab7bd1991540bac9f422c7684a62b2ed03af912a1c7e7",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_constraints/versions/v001.json",
+      "hash": "1c512892b6ad560c59e5280174ff58166d0bc7db3411addc1eb52b6072162e9d",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/scope_contract/current.json",
+      "hash": "841888133c57d475782b13086096c61b214e74ac2fa831e1011b8e63833893c5",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/graph_state/versions/v001.meta.json",
+      "hash": "39349cea86a0baa9b23c203b358c16a1550d2a99cf00769455da2b119ba7e989",
+      "mod_time": "2026-07-02T20:51:11Z"
+    },
+    {
+      "path": "docs/movie2.md",
+      "hash": "01e5f9a58db58a445be7b553d4b138b9d9644a18cab4bd178486c747a556abf4",
+      "mod_time": "2026-06-29T23:17:50Z"
+    },
+    {
+      "path": "documentation/architecture-review.md",
+      "hash": "d583103a97ba75ad539934ee86761d8ff89dfb6e6dad3a2773d279286a3011fd",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/config/resolver.py",
+      "hash": "96267599d189110ebe74767ff9f13888f2d1769f30b33a5c3a3ae2235b445cd1",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/compositor/environment.py",
+      "hash": "7db77a75a7582cb8568462523741320a97e181e360165e94a181ea0c281a7be9",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/intake.py",
+      "hash": "6d4dac8d125d5455ea86117157a1d824eab199ac49bb691dd46a19fd9d7aa542",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".env",
+      "hash": "32f3118fb47e63a8392a0d7d137a1add855fb78fb8a61ef086454e3acb31f87d",
+      "mod_time": "2026-08-27T21:17:50Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_constraints/current.meta.json",
+      "hash": "640df5a833efccf3d468910f0267a31f82832da64d28b53fbc4065b2f7218610",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "documentation/README.md",
+      "hash": "4c64bfdce798689135c8eadfc0ce80f6f6101aa8c38635dbae0d836a7d8cb1fc",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/testing/__init__.py",
+      "hash": "87270fac63e2d303ef66cc7f1b9949c8f88d60ec6eadd5a3d8513d0aa10efcf5",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/agents/test_mvp_invariants.py",
+      "hash": "38e008759595f74aecd919f9a6b30233cba49ec60ad28f02c5c6dfaa15e3c7b8",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_review.py",
+      "hash": "9b45d5ee40e2c5bbb23164044a2842225f2f834c1df67b6f7686d90422108f70",
+      "mod_time": "2026-06-29T22:04:02Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/current.meta.json",
+      "hash": "9b83311bf3504b5ff985575165800271e243762190ea343afcd2cd2e14a3a884",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/06-generation-plan/cost_estimate/versions/v001.meta.json",
+      "hash": "743c73b29d040eace055e196ad6b7c4459dd063638bd68f17dfd29e1bbb2fc32",
+      "mod_time": "2026-07-02T21:06:28Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie1/project-state.json",
+      "hash": "41112cb177fc96ab12bf584680e02bca73cebbf6224ca457917e8559b90f669b",
+      "mod_time": "2026-07-02T08:49:25Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_repair_loop.py",
+      "hash": "83ddf32681a25e181f81b012cd0f5cbe99cb6f1b447d1990bd229019dbf989c1",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/app.py",
+      "hash": "5c076fe965776b64b78c7e184b76c562ad1ac867420885c378f5dfa4cc74241a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/app_snapshot.py",
+      "hash": "9f6ddc3a368f1fa0b65378000312d25034689a79c30a906ef3bf227f1c77c72f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/integration/test_dynamic_routing.py",
+      "hash": "1548274c53bfbf0978fcaa1ba2036f821f68552c9219bc284999f54bf00f9485",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/generation/test_compositor_templates.py",
+      "hash": "936caf088aaf63852c44a38edc5c9ad29ba0eae1f61ab565fc0bd8f107f72124",
+      "mod_time": "2026-06-21T16:06:39Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/01-vision/film_constitution/versions/v001.meta.json",
+      "hash": "76ec41f03c1818d376996c52ee0cdb2f679a91e0e960d7a9831f331229c2454d",
+      "mod_time": "2026-07-02T08:29:22Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_constraints/current.json",
+      "hash": "1c512892b6ad560c59e5280174ff58166d0bc7db3411addc1eb52b6072162e9d",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "documentation/reviews/prep-production-quality-review.md",
+      "hash": "d8dfcbbd057f4ee0a72858176100e5532e7e48a819264363322d328e881dcca8",
+      "mod_time": "2026-06-28T08:24:32Z"
+    },
+    {
+      "path": "src/film_pipeline/post/subtitle_agent.py",
+      "hash": "6c9ebec8077173f3922c7ec926f7a81c1e66b184fe12225b1f75586af952e350",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/graph/test_qc_subgraph.py",
+      "hash": "64ff9126a825ed7d8a21c0bfae7936c94dfb8dff2c31c0acfa642787b9d1c5e3",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_checkpoints.py",
+      "hash": "489052de983254f36cc1154c8f8858005b80c17c9566f05dca5a6f442a8626ff",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_generation.py",
+      "hash": "e057ea5db6e7160f1769eb70d3649ee5511a5053308dd9a44188a2c2797535c2",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_planning.py",
+      "hash": "e2c7d2b6af61e392788a369cf8f7d34717a222a97a3b8b069012774828a06c65",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie2/project-state.json",
+      "hash": "638a1f35193aa90bea578cc046aa3f8592f28be4a0ebb578874d30e5fcfc0ed9",
+      "mod_time": "2026-07-02T21:06:36Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/10-claims-and-evidence-ledger.md",
+      "hash": "ac28863892922c18170fe615c0432660c3cb81b44c871ad7152932978e140a2b",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/app/_provider_seeds.py",
+      "hash": "f2eb42f4e2205cd053596044a071285b295d14ca50b63278ba6826a5ab52ddba",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/cli/__init__.py",
+      "hash": "5b43db24a5f54061f018a499281f0b8e83aa5cb7b805027c58b0ba37da82bbd9",
+      "mod_time": "2026-06-29T16:53:59Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/adapters/seedance_openrouter.py",
+      "hash": "fb4ae8c4101c3944ab0ef48e1f20687b1784da1907300e2e16b2e573c01ebd97",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/checkpoint.py",
+      "hash": "dbaa9eb5852fc23d2effcc17f4a1f34272f0f34f16748ad513d4bff7b7781208",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/testing/mock_model.py",
+      "hash": "1043a5aee3fac0844e2fe6e1316cb52b081aba0ad50032b68ce939f363869dcd",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/generation/test_frame_heuristics.py",
+      "hash": "36e993a9679c6249382e0724aa37653e9223d4bd48c5d2d4614985a7f30023dc",
+      "mod_time": "2026-06-21T16:27:01Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/01-vision/film_constitution/current.meta.json",
+      "hash": "76e9c688418307124310fe8552c2cb135f8e9b48816bd11d754b863f10d62ab3",
+      "mod_time": "2026-07-02T20:51:39Z"
+    },
+    {
+      "path": "AGENTS.md",
+      "hash": "12f2fad6930a37d630b0003bf5d9384f7a5b1ea49eb17fe8966e4e44c68a4c4b",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/tools/waivers.txt",
+      "hash": "fb98d66d76e0d53a2b292d0f5c9cd191fa914f25221022e0a6d10b733d2038d2",
+      "mod_time": "2026-08-25T16:50:57Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/handoff.py",
+      "hash": "59b06bed6c45c8ba234ebc2baa3746c080ceccfe6c6c2833cdc1585d6864428b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/environment_bible_agent.py",
+      "hash": "73d4adb6cef86c752b463dd954f55e0c4384beec3d31fc04dc188dd72dd559c4",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/cli/run.py",
+      "hash": "7539be64f0e08c8580cf0a5b96a6a5b5ae7f2c2f446e52849d1437183895e8ec",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/observability/metrics.py",
+      "hash": "eb3a4e9f64fc27ee2e4802caf442ac5a172f75c6bcb2ae100f47d123a69253c1",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/adapters/imagen4_gemini.py",
+      "hash": "3026084f2ca9852037fbd5e41f6bbc25150dbee8be8bf39fab5c50f4e16c363a",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "docs/tmux-tui-testing-guide.md",
+      "hash": "bfa979f84026ab5316f4ed14bc972c5f9c001b3e83dcd9d0dc6d7d7c86f709c5",
+      "mod_time": "2026-07-02T07:49:21Z"
+    },
+    {
+      "path": "documentation/architecture-blueprint.md",
+      "hash": "abbd3ac9cdd20f6bf404803254641e944447a1c71d6dfa713bd8838bd7646cf0",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "documentation/interactive-generative-cinema/08-economics-distribution-and-operations.md",
+      "hash": "ea0c2ed0c89a64333d3e749b22564a73a1be76ed71d5bfec485365095d70a038",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/reviews/arch-lens-flexibility.md",
+      "hash": "b3eb2534e8d478276ee0d52843ed2763b5be0f07bf40a2ea821009d0578af1b0",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/delivery.py",
+      "hash": "a8821515f364a77522b38853f672f18b942646299f546e61976f793cd5fbe9f2",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/matrix_patch.py",
+      "hash": "1ec142cffe4188f04ed518a6b7d3feaa4c48773639f9da8e792396ae50f6826a",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/style.py",
+      "hash": "1d2e7e65c5f4a92a3a7592e263c4d8b41ff44dedcc0ce14174b6022fb3f9445a",
+      "mod_time": "2026-06-21T15:36:53Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/dialogue_voice.py",
+      "hash": "fa6beac161dd4c868f4160f6959935ff8037c8cfef7d7211998328ffcbcbd968",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/04-visual-dev/reference_index/current.json",
+      "hash": "96047b16a027912bd58e405751c3cbbb458290e98459144f635eff64507463f0",
+      "mod_time": "2026-07-02T21:00:05Z"
+    },
+    {
+      "path": "src/film_pipeline/providers/__init__.py",
+      "hash": "60cc93ebb086deaf1773e6d867973af08e2eec6ad03b5c7da933bc01c085e1ef",
+      "mod_time": "2026-06-20T22:01:41Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/project_form.py",
+      "hash": "d30cd48b5b174a9c4ce9ea211c4147c55dc7ed9f38fef91cfb73d735ba6f72a6",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_providers.py",
+      "hash": "f0012b7d90f646f984cb173d90aa9b35e800fbff8080407c121bf47376cb3c6b",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_profile/versions/v001.json",
+      "hash": "44e94954a237ffce299314f1da829c4ec306e6fc8a7fa5c5ad1930a43ab12c5c",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/story_bible/current.meta.json",
+      "hash": "782c7ec3e0fdb435bd144e138926a2aa90d81f43d8d25960dd5e6af8ecff174e",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/acceptance-manifest.yaml",
+      "hash": "3554604544653b02cbee830ab79c09ca6bd4ac3570141bd4c28e701e8d9976fb",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/visual_dev_agent.py",
+      "hash": "beef9f9bc656cf0d799c0e2e645b0ccaff883f848cc862f0039e49f758833f59",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/style.py",
+      "hash": "c4649632605cd41361da482659eaaaabe1f561f4819973d21aa4dbb0ea7fdb9d",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/reference_generation/tool.py",
+      "hash": "ae0ad5691b1b90d293cc84a6bd2ad6cf0a01f5e8953344de08400435515b9a0e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_state.py",
+      "hash": "b6ce2aa5d82b80ab8d477add541d3b07f54315c34584773a9d8de992be0058f5",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/validation/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/prompt_templates/defaults/validators.py",
+      "hash": "f408bf5a9f4942c21de5dd559eafa3534ca62f5e5191520ae6875cfc6bff6447",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/app/_persistence.py",
+      "hash": "f2238f38f25b57f58de4baa2874c0e8db72377e35e70cc0305219381c7437327",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/sheet_reviewer.py",
+      "hash": "8159a86191e902e931110abe5557c643c3f7046080349ce1da1c1a97c243e93e",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/scope_contract.py",
+      "hash": "905a770382f6c1407a716475e964c25165fe45cb767f8ab4efc3a1b6de69d837",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/view_models/models.py",
+      "hash": "1dd34037e7d458b1db94e75f72dde4b4d76885a39766b0d3c435d925d5750433",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "tests/unit/app/test_resume_integrity.py",
+      "hash": "9f219345ccdcd07dde3a86ac69db68aadb1e13734f812349faf1b9c7abf80b26",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/generation/test_executor_download_failed.py",
+      "hash": "d01640a79f4f15c31dff60696e770be6c1e44957e16f8affd490e137979af858",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_validation.py",
+      "hash": "c01c0af0b2ce5b236a5a633ce5e49f34a8a361c9492fc62e9476cf9bf411eb72",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_constraints/current.meta.json",
+      "hash": "923c42b38c9ed338429fd5194a54d5c70044244947381e4bc1a4e788ec6e5835",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": "docs/clean-code-refactor/BASELINE.md",
+      "hash": "a3256088b5e0942b948327285cf89d54ee6619d7633dcf326262a98eb7f0eac9",
+      "mod_time": "2026-08-25T15:10:07Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/acceptance-checklist.md",
+      "hash": "98b3401ea26c4fcaaf41cf99bf6484e04636c320bbe85627f91a061fd9acf3df",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/__init__.py",
+      "hash": "8cfe825e95328e059040ce5ea3af45ab0412eb58d7453001f7a50abc1e65fbdb",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_visual_matrix_coverage.py",
+      "hash": "0a38c0b6d84f6ce56818b1f64cb5e6dffb675991881578102c467a2bfce54669",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/registries/provider_registry.py",
+      "hash": "2965860ea77fd3c0c353ead32424b8134f352dd0727b361495a47347d5f281e8",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/__init__.py",
+      "hash": "bd64ee0ebaceda4cf19542efd805730e342b74ab7a965ada819993f58e13dce5",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/gateways/_translations.py",
+      "hash": "0235f2d2e91504b7dabccfc3b68015ac6da8f2c5e739ba206d2b74c83e4434e9",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/screenwriter_agent.py",
+      "hash": "10d9c9538a822cc15415bb04f307e5e5ebd19e98be0f5291956071b8b43ddfee",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_04_quota_exhausted.py",
+      "hash": "cdbf7eb45f37569693e64bbbc61639b47fc9194b64c527f7cbd92ac5ef46b8aa",
+      "mod_time": "2026-06-20T11:06:31Z"
+    },
+    {
+      "path": "tests/unit/observability/test_observability.py",
+      "hash": "559d6171835c3acb5d6f364c4732089a1b08faa4c9ef26085923ad63a0b1e09b",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/resolution.py",
+      "hash": "feb1fd645641a5a069cebc1ed3b7f608bc3464a186311fe163814f0e99109629",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/subtitle.py",
+      "hash": "e85ac2de1f3622b9aafe6a5a0c8638f60c48c23601ad383f89ee52a6fbbc0c61",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v001.json",
+      "hash": "bc9c319f6951f57f0e5a782821578ecea0368d86bf781fad8690a1d9d8e2ed4b",
+      "mod_time": "2026-07-02T08:36:47Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/project_profile/versions/v001.meta.json",
+      "hash": "5e9524b47fd6b5a0f548f6de4ffbe5278830c72ac5bb3097cdc67ad518147ceb",
+      "mod_time": "2026-07-02T08:28:58Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/project_constraints/versions/v001.meta.json",
+      "hash": "640df5a833efccf3d468910f0267a31f82832da64d28b53fbc4065b2f7218610",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/scope_contract/current.md",
+      "hash": "c0889123a662b4e1d2e1556707ebeb4a50d42710c7e0af9c5d1917c0d34c3105",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "langgraph.json",
+      "hash": "f441536becb10715591793b434677dcf9c1aa03a1ffaf3860e08e0c176679277",
+      "mod_time": "2026-06-24T23:06:12Z"
+    },
+    {
+      "path": "src/film_pipeline/app/services/errors.py",
+      "hash": "2e6cf4bfa01af71091757362509e0ccd53c0d8a4ef8b76f32bf349a851d6a1de",
+      "mod_time": "2026-06-23T09:18:01Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/prompt_builder.py",
+      "hash": "bebafd5da8b974451935ee6e9b9003094c79d9d31c9d86648318f1674dff313a",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/assembly.py",
+      "hash": "6dbad3143b2b00a33217a35f01eeb61f0dee03423d9a3f1dcdde174757ba75da",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/impl/reference_usability.py",
+      "hash": "8a56fab7c9e0429bdb6970fd4a9df27faf412fb8e66b8167852b9dfb761189f9",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/e2e/test_tui_real_text_only_intake.py",
+      "hash": "4bdcc90e14fc172381103798b0aa38213c8528b93c08dfd7dbfdbf2828088673",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/integration/test_mcp_flow.py",
+      "hash": "a8fab851f351cbc3745f22513b5e38966f58783f2e344378ceeff576bdcce159",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/generation/test_delta_regenerator.py",
+      "hash": "7f17e293d79e96babb618858a4a15f21d2272c9b4fc62e36490af281f558ffa9",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/01-vision/film_constitution/versions/v001.json",
+      "hash": "e41559611aaab609fbfa16ee6bfd54c4d4bdf2bce47010c84cdade413bb46ce3",
+      "mod_time": "2026-07-02T08:29:22Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/01-vision/film_constitution/versions/v001.json",
+      "hash": "2dbf6bb7b5c081c2416c60712201c416afaf33ad2ca5c390630fd0b888f09a1c",
+      "mod_time": "2026-07-02T20:51:39Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/01-vision/film_constitution/versions/v001.meta.json",
+      "hash": "76e9c688418307124310fe8552c2cb135f8e9b48816bd11d754b863f10d62ab3",
+      "mod_time": "2026-07-02T20:51:39Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/story_bible/current.md",
+      "hash": "78ca237f047dbf95cb15e501d3fb31aeb11ce898c1f390a7336dac4c29a21bc5",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/05-shot-bible/shot_matrix/current.md",
+      "hash": "5f8ad0e807d128084d6fc5c92be10e8f2cea26ea646383e5771434418292d11d",
+      "mod_time": "2026-07-02T21:04:04Z"
+    },
+    {
+      "path": ".film-pipeline-run/missing/project-state.json",
+      "hash": "5ddaa5e45f92176bcdb9b86021d1b54525e6dc2806c46ae789ccbffb7086be3d",
+      "mod_time": "2026-07-01T11:35:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/bibles/_shared.py",
+      "hash": "e58931c13655c8d24c30c4807ddbc23dfa68a599904e65095f5ab1cd91e202c3",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "tests/unit/graph/test_candidate_ref_propagation.py",
+      "hash": "8f9e02383e9a660943a825a9fc8d28c3d8a5e6cab69e6c02dfa7cbcb44d8c444",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/treatment/current.json",
+      "hash": "ee3a45323bcb5836fd48acf8db89d5ef1b6b59b3931cf5a40560eaa7d42a5fb7",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "hash": "1ec8e2637c5e64981fa933e0206925f67783e5a0a1fd045f63958ab577a5df12",
+      "mod_time": "2026-06-21T17:02:49Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/prep.py",
+      "hash": "33f7ff8e6aae8b31fc1b21f4bdb5a168bef416e1f7f93212af72260f3cfede65",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/_profile_change.py",
+      "hash": "35268bddd632c544739347ee206311347bbf7f8f52398812a37072bb54fc50eb",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/providers/test_mock_provider.py",
+      "hash": "fdece3350c3d44e86b882b9252d48f695c17d2164540ca9b1fc39e3b3b11b6d2",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/treatment/versions/v001.json",
+      "hash": "bb186c28d475325418260590f16e64abe03a5aef7be64defae3dc4fb838e74d4",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/06-generation-plan/cost_estimate/current.meta.json",
+      "hash": "743c73b29d040eace055e196ad6b7c4459dd063638bd68f17dfd29e1bbb2fc32",
+      "mod_time": "2026-07-02T21:06:28Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/compositor/identity.py",
+      "hash": "e9b52fecf315b4356f513b8971d9f56a6ca7632f8e09369c9ded63bfc8638a63",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/observability/blockers.py",
+      "hash": "c4c12c3c9d3343882c9ea7e379b972c9919490268aa3299c7a033cc4fe096129",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/registries/agent_registry.py",
+      "hash": "aafe8208028cfd1ebe7f3e6d020fef3b9ebbbe23a2c78ee677414a95b7a7a61b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/widgets/stage_nav.py",
+      "hash": "83b110b7151e0166d29d951fdd1cb1687d8534f4936df1cf7c1e4faa6ca743e6",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/graph/test_graph.py",
+      "hash": "1553ecf0062ae68157470e7ceb156886ea689db385bf0e84729d99efa26b9ab8",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/treatment/current.md",
+      "hash": "0e1fafe44f2697ebaddb405622f7e41a6035697f3a3404573bab988565f6e1e5",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie2/.graph_state.json",
+      "hash": "638a1f35193aa90bea578cc046aa3f8592f28be4a0ebb578874d30e5fcfc0ed9",
+      "mod_time": "2026-07-02T21:06:36Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/errors.py",
+      "hash": "3de89007cf585dd81d58fb4ff68ffb5b05764be87af7743e675e572f268910d3",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_02_script_revision.py",
+      "hash": "7bb87d150109ba8e650380ba1cfcd139bc2cd202cca5fcf688451be046cc37f9",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/current.md",
+      "hash": "0a4ab5b370cc81edf4d935a43b4cb6c4f76e1501b05e003310a8ae113139d7e4",
+      "mod_time": "2026-07-02T08:45:23Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_agent.py",
+      "hash": "b867f47157113b3ad8c649c4670d823308648d1a749b6470489c37c068b6ad08",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/failure.py",
+      "hash": "9a47ac6251e373c68d104eedced917136607522458b584df3e871df7feff8cb8",
+      "mod_time": "2026-06-21T17:29:01Z"
+    },
+    {
+      "path": "documentation/acceptance-checklist.md",
+      "hash": "9197a6f6c4f397f4fdf4aae26071f522e693c06b653be87573ea957f766a67bb",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "documentation/quality-criteria.md",
+      "hash": "c0ccb4a900d81b1e321d6cc608d4463ffaef314c6ae124bf33679d5def1cd86a",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/index.py",
+      "hash": "5a5a3cece1fe613dbd39919606109459c65f1476ee5c4887210b46e751b15b3f",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/generation/ledger.py",
+      "hash": "b7e837491ac9c161d98b1a5d5574edd8ea85960b8b54642e05849ecc7b65331f",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/screens/modals.py",
+      "hash": "757761dc5e7576ab308b2c013ca139c8dbc1f640b4c12be4df6c685f1c6af7f0",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/e2e/test_real_provider_smoke.py",
+      "hash": "14ff25391488911b7ff047ad9550b7a5a25720fc4a3769c912e528f64cf12037",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v003.meta.json",
+      "hash": "9b83311bf3504b5ff985575165800271e243762190ea343afcd2cd2e14a3a884",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": "tests/unit/agents/test_prompt_quality.py",
+      "hash": "cd1c3529b2250fe3b4a4dd5c9a954038aa1eac38cdfc6dc76341b4cdda0f63cc",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/graph/test_agent_profile_routing.py",
+      "hash": "568fcbd95be5718daac4bddf879db6d6cb2ad1eb6294d78222650834fcc94318",
+      "mod_time": "2026-06-22T09:42:12Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/manifest.py",
+      "hash": "2bf0d41e61c13aad0c8beb3f3e0beca846cc49dc3b696f002dd84e39a73c2e9c",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/integration/test_artifact_spine.py",
+      "hash": "ede5e9b54c5eef3541759efb2801bb8952fa5074314c9ce44a74181769cc8335",
+      "mod_time": "2026-06-21T17:00:25Z"
+    },
+    {
+      "path": "tests/smoke/test_operator_workflow.py",
+      "hash": "b7a36421353a900feb58585528f67ce84dce261c5f546f9d5b3222cf82b29844",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "tests/unit/constraints/test_extractor.py",
+      "hash": "c9064ac7218f51116cf56761339bdd6a14605554ee6ad3ad24055fb354f5c6d3",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": "tests/unit/review/test_actions.py",
+      "hash": "876406d3cadf417762184d4321ba30c1153f6766e6da0fd4308e9b96a815112c",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/04-visual-dev/reference_index/current.md",
+      "hash": "ae409cdf1c8cab2c649678357f830bcd5548f75678f38280ec8bc9ff7f8abcd4",
+      "mod_time": "2026-07-02T21:00:05Z"
+    },
+    {
+      "path": "documentation/reviews/arch-lens-dataflow.md",
+      "hash": "323b0b813da008656f76dda4e87baeb7801c2f6979f49652c9ca5c8358e84c15",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "documentation/reviews/arch-review-critic.md",
+      "hash": "b95d5bb69f8151f4cfb99d97c7c7a14a9c1434e64decc247a3c88ab67dd01878",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_shared.py",
+      "hash": "15edd42b5fe8253532dfc58e08560317c29c46d54ed431cb45c65176332d3357",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/qc.py",
+      "hash": "2572821d540393e79044f976271247bfa45baac556e85ec8004c0bdabbf9a829",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/retrieval.py",
+      "hash": "843cb0289cfbb3ffae7ad28fc8225f531abfe29c000579a8bc792d077a44b177",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/envelope.py",
+      "hash": "6b295f5c0ac6b812346998dd367981d5b6c23456b4ac825ca493cb5c373a2d6d",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/kb.py",
+      "hash": "8166edcf46f8864946fcf0618939bcb852b3717689ba9893012e0f828606e45a",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/story_bible/versions/v002.meta.json",
+      "hash": "6fa554be2e6cbe96e54f71524f8b09a664d3729d8dc5a59313d7a24ca5a73441",
+      "mod_time": "2026-07-02T08:41:00Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/story_bible/versions/v001.json",
+      "hash": "3c3e9aa2d01a9d718c560017ed4173bf169c64620560fb104c232e7bbf1d67e7",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/04-visual-dev/reference_index/current.meta.json",
+      "hash": "73fffda4ff602d84ba9b137cbc49acf68195d885567e7a5fe758af7bd20b2c57",
+      "mod_time": "2026-07-02T21:00:05Z"
+    },
+    {
+      "path": "documentation/reviews/arch-lens-boundaries.md",
+      "hash": "29a7d5ccf5be07f134caa0e26a674559775fa32800705ba1c278744fa67a5af3",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_validators/_shared.py",
+      "hash": "ff4e25361cda8744e536c4da0022c39603da736f617d785d3552e7abe0dff45f",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/e2e/test_tui_new_flow.py",
+      "hash": "f574f252e3191fd0c724e64e5ddc42874d0c98ac725f4ed80488f7f01064e527",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "tests/unit/mcp/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/repair_feedback_script/current.json",
+      "hash": "5e9564d9a70ac7f0bb385aea2c2b4bff1cde74e32e4441750008efa0afc577bd",
+      "mod_time": "2026-07-02T08:45:23Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/__init__.py",
+      "hash": "1c82894b7a64643f5a94fc7405ace036b584ba0bdd96467e7bc25fa402c5f3ee",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/_agent_routing.py",
+      "hash": "a81b71032eba3cb8e3328bbc364c1c981ed233fc4e99e64ac45a21a5be4dcc76",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/review/diff.py",
+      "hash": "1100a467dd94e901fe89b4692f19bfa3cf4f5e37736e1417581c7969926e607f",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/integration/cli/test_run_headless.py",
+      "hash": "34f609d6e6b1c90bd56ad6715158817b93af1ab9eab5060cd9fc40fd31243c7a",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/smoke/conftest.py",
+      "hash": "04d11935e718008cd808a4bf533360ec386b354d9c31502aa975657c54e466b8",
+      "mod_time": "2026-06-20T11:55:05Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/impl/intake_agent.py",
+      "hash": "b750dd4c7fffe2b18ef6970007c2da482e5572208a0de66161429bfe887c42ea",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/orchestrator_state.py",
+      "hash": "d8d8571263f7f7d592e3ac689e9eff06547a68e9c50bf93361abd88a3e2d6dbc",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/kb/__init__.py",
+      "hash": "356be67013f60cd43822927b9c8ab17f98e5c161df6577b856894b86c5a8f565",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/registries/__init__.py",
+      "hash": "02790a9059d6057ce952443f1fa11d3b69f306332c0dda08bf445c85d840141b",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/repair.py",
+      "hash": "c81a0612df434716840f8f4853d62a91f2de19a5f60c699eeae972eab7bb509e",
+      "mod_time": "2026-06-22T10:06:40Z"
+    },
+    {
+      "path": "tests/unit/graph/test_real_human_gates.py",
+      "hash": "9428b2552c9561dc3845a90142ac57f6baa203d5aaf3d1ca91a251ba1ac43fb8",
+      "mod_time": "2026-07-24T10:51:46Z"
+    },
+    {
+      "path": "tests/unit/graph/test_router_blockers.py",
+      "hash": "623484ad366fb000dc601488e4eacc99d30f3ea2815c806bc86f29b8c9618ad5",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/treatment/current.meta.json",
+      "hash": "413b8472f8a473ccc248466d8718a65e8df89e3234020203fb2c9a0a724008bb",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/_http_transport.py",
+      "hash": "2ba2d4b26b27791e5b441514b30815ab0b8cdbe3f94c4d0198342d872637fa87",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_generation_prompts.py",
+      "hash": "066e1b2df649895ed005785e0b623c5eebe6fefadc23001dc5da4b61a1adbd69",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/audit.py",
+      "hash": "f1535912fa0c8ddc73b255ec6f00d53996f3bc40a0d1553664674b0c7fc99292",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/__init__.py",
+      "hash": "814cb317f7d77976c01e4c1c7052a67e34a1b86a69b85f793ae19ecbd57e138d",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/artifact.py",
+      "hash": "287a62fa67e3c788ff840b8c14c32a87b69ce26faf537eb6eab3bfdfc448ecd2",
+      "mod_time": "2026-06-27T13:02:14Z"
+    },
+    {
+      "path": "tests/unit/graph/test_qc_validator_dispatch.py",
+      "hash": "865259b974c26b1e80dc22b85ef852a28b65fe94bb65e86833d9cd680d68b909",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/03-script/script/versions/v003.json",
+      "hash": "2da41e5751b0f6e6cf6e029befc06fbda82a4f86509311df5aa1a2dd223c4d2f",
+      "mod_time": "2026-07-02T08:46:54Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/03-script/script/versions/v001.meta.json",
+      "hash": "2a27d3e62dbe8bf4e64948038390d4286d77f25977782070287c6f0548112318",
+      "mod_time": "2026-07-02T20:55:38Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/server.py",
+      "hash": "05130690f1c0a53b04c3b8360e139631b5041a751c5c02d0f3188913d3460c97",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/continuity.py",
+      "hash": "dbc0498636397ad9b4be0bd8c29c725374be4ff418ce69bbc1ae8afbd06c827f",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/tui/view_models/__init__.py",
+      "hash": "7312ae35afde8b8b7db8792187655d9297346ec85a67b65dd6385fb695c6c838",
+      "mod_time": "2026-07-06T20:04:12Z"
+    },
+    {
+      "path": "tests/e2e/test_scenario_08_kb_conflict.py",
+      "hash": "6b869495471632d8750400d0633a5ff3aac0d7b3a4c9e461a895969b7c13d1e8",
+      "mod_time": "2026-06-20T11:09:17Z"
+    },
+    {
+      "path": "tests/unit/tui/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-29T09:51:48Z"
+    },
+    {
+      "path": "tests/unit/validation/test_assembly_transition_vocabulary.py",
+      "hash": "3f36d5d8f9abf5da72c98b902e58865c5868cec754c51c9280be719eae5353bd",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/01-vision/film_constitution/current.md",
+      "hash": "3aa7124b2d0bb51ca46422e336c0c4e9067455ced798cf8a3fbb487c5078da18",
+      "mod_time": "2026-07-02T20:51:39Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/02-development/scene_list/versions/v001.json",
+      "hash": "32029fab2fedfe91e6bdc0b3cdccf4e113b6640c846c2436783257e624a501c2",
+      "mod_time": "2026-07-02T20:52:53Z"
+    },
+    {
+      "path": "src/film_pipeline/config/__init__.py",
+      "hash": "f68f48f4e07fe92c1464bc99f76c20c889e7da3839f29254775ac4ec5a684add",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/audit.py",
+      "hash": "2056ce7a1648e5c3c6fc1c6fc65ec620deb132c5a28105ce8521b33879ea1066",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/matrix_projection.py",
+      "hash": "eeb18371a6992fe1fde6e43a39f7fd60674c4613ef78ae90ec920cbe33ecc609",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/artifacts/metadata.py",
+      "hash": "288cbc087c647d57cded0df2108964099254c6ad766b4f2f759882bddc385b88",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "src/film_pipeline/cli/driver.py",
+      "hash": "725eb6f743f8c3530ad49e03e27e750d58316c6fa4897133ae2f767ca60b774c",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "src/film_pipeline/mcp/tools/planning.py",
+      "hash": "b64f5ec554b836328a008612fb939b804439220d8d67d3fef231f5b4a64bdbd5",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/cli/test_io.py",
+      "hash": "0133a03030e4571716efb719e7d464eeb9462f7b59b13779db9fc7262cb9e83e",
+      "mod_time": "2026-06-29T23:54:51Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/intake/scope_contract/current.json",
+      "hash": "0dd45aa10ca70cc36018d36c08cddb2d0a35858b0c1df6831cabfbe8efa205ee",
+      "mod_time": "2026-07-02T20:51:04Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/generation.py",
+      "hash": "7f808581fe49334c33e58f1ff68d056a6b77c9c17eaa9b0001fb5978aab97165",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/logs/test_unit.log",
+      "hash": "f860ebcdd14c64a6241941237ec15857499ec1ac326cae531baaf2666545a922",
+      "mod_time": "2026-06-20T21:00:17Z"
+    },
+    {
+      "path": "tests/unit/app/test_product_gate.py",
+      "hash": "8a00fa3036b2af0259402f21cc7882d0f51afdca0fb8ec6bb948cbcfc64bc4fa",
+      "mod_time": "2026-06-26T13:53:08Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_bibles.py",
+      "hash": "e8c531052f669b4ebc770e847e57413b42556c650d8029c9c1ce651ac1b7f699",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "documentation/product-completion-plan/05-mcp-surface-and-generation-runtime.md",
+      "hash": "c6cb476b2db1ad509d974019d988cc26bebae202500892420d3c1b22750d45fe",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/runner.py",
+      "hash": "5abbaa38aeade8a03fc7ccab5fb4fd148d38c0a446b6262bdc1267418ffe7491",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/nodes/_agent_prompt_context.py",
+      "hash": "0f7c0efb5a328384b1b07c78c5af4921dafab00a09d6b056b2888c3dcc733280",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": "tests/unit/config/test_profile_resolver.py",
+      "hash": "b6422a66babd46a1b0a2e3c2f86cde16ad5b67cba3216c2d2923c9ad329efdd5",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/graph/test_services.py",
+      "hash": "e085d7507a8bb020b005dc4840b33664848e55e135a96128f2757819ee4fb654",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/unit/mcp/tools/test_artifacts.py",
+      "hash": "616da5d193ff9b224da602de4af83fd99dad30bf6b3734d08e433973641e7b25",
+      "mod_time": "2026-07-06T07:08:55Z"
+    },
+    {
+      "path": "tests/unit/tui/test_app_redesign.py",
+      "hash": "1df0a52b4557aa8bef3e6b25d89c123f7080d783ab7e32816b571c7eef3cb521",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/02-development/scene_list/current.json",
+      "hash": "c9b71684896de09d5617cbc8756fc4915e656df69c9631026c68bf517be28b6b",
+      "mod_time": "2026-07-02T08:30:49Z"
+    },
+    {
+      "path": ".film-pipeline-run/movie1/.graph_state.json",
+      "hash": "41112cb177fc96ab12bf584680e02bca73cebbf6224ca457917e8559b90f669b",
+      "mod_time": "2026-07-02T08:49:25Z"
+    },
+    {
+      "path": "src/film_pipeline/app/__init__.py",
+      "hash": "d3d2d0c6064b3bc591bb63c469af4bff96ab206e60a5b9ac53ba3a6303b0b04a",
+      "mod_time": "2026-06-27T22:53:06Z"
+    },
+    {
+      "path": "src/film_pipeline/validation/base.py",
+      "hash": "b9a0b1074b6c17b7ba69abac6ced54d71128710e299f363b366497ea97071727",
+      "mod_time": "2026-08-26T09:22:17Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie1/intake/graph_state/current.md",
+      "hash": "d097af71995f6f3f768ee36fb2b1b0b625ce49620e45824eb5c556c0dfd017ce",
+      "mod_time": "2026-07-02T08:29:02Z"
+    },
+    {
+      "path": "src/film_pipeline/schemas/execution_brief.py",
+      "hash": "9dcc1b8c51e0909ecdaab58be5f402c0806fc9462c2b0137fb0c1957d82a7d53",
+      "mod_time": "2026-06-21T20:46:36Z"
+    },
+    {
+      "path": "tests/unit/tui/test_inprocess_gateway_generation_delegations.py",
+      "hash": "7050941599598f2391956aa590e0dfe1e4fe19eae75016882a2cc424f03846a9",
+      "mod_time": "2026-08-26T07:24:44Z"
+    },
+    {
+      "path": ".film-pipeline-run/artifacts/movie2/05-shot-bible/shot_matrix/versions/v001.meta.json",
+      "hash": "c2bbed27faa332824b01b2f3852388047a79f8a8ec0ed54c95520ecba9fe8f91",
+      "mod_time": "2026-07-02T21:04:04Z"
+    },
+    {
+      "path": "src/film_pipeline/agents/mvp/__init__.py",
+      "hash": "a78774ff3d8b557991bb507dbf8686ac10599dad0b14da114c8b03c429eb7bd9",
+      "mod_time": "2026-06-29T16:43:48Z"
+    },
+    {
+      "path": "src/film_pipeline/graph/graph.py",
+      "hash": "aa65d8c286e342c16744b2c7eb220f65710412e5647b93671103b2ea11654879",
+      "mod_time": "2026-08-26T22:07:14Z"
+    },
+    {
+      "path": "tests/integration/test_validation_runtime.py",
+      "hash": "09eddba76bc773ad1add1fb6ee02a31b747696ce16360ddea4aaba6481b0be26",
+      "mod_time": "2026-07-04T13:10:04Z"
+    },
+    {
+      "path": "tests/unit/agents/__init__.py",
+      "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mod_time": "2026-06-19T22:45:33Z"
+    },
+    {
+      "path": "tests/unit/graph/test_generation_node_ledger.py",
+      "hash": "716a3a39298bc5c15b6dd295a12a550bd175ecfff73526e9c910f3440e029d02",
+      "mod_time": "2026-08-26T22:07:14Z"
+    }
+  ],
+  "fact_count": 8189,
+  "insight_count": 80,
+  "enola_version": "dev",
+  "snapshot_id": "sha256:4a8ba5c12ed69efece07ac0750fcdeb267e6a55e05207134f45bb0c642fd9772",
+  "git": {
+    "ref": "main",
+    "commit": "4f802b1f808b1341cccdf0d199985f5a8d7d50a6",
+    "dirty": true,
+    "remote": "github.com/ghassan-ai-projects/film-pipeline-langgraph"
+  },
+  "config_hash": "sha256:684c374664f98a9a80d3d46f8133bd94ba05fdc66f003d4d4aaece52fa2f1767",
+  "extractor_version": "v257",
+  "files_seen": 720,
+  "files_parsed": 475,
+  "source_bytes": 2763433,
+  "dirs_skipped": 89,
+  "skipped_sample": [
+    ".claude/ (glob: .claude/**)",
+    ".film-pipeline-run/missing/.git/ (glob: **/.git/**)",
+    ".film-pipeline-run/movie1/.git/ (glob: **/.git/**)",
+    ".film-pipeline-run/movie2/.git/ (glob: **/.git/**)",
+    ".fleet/ (glob: .fleet/**)",
+    ".git/ (glob: .git/**)",
+    ".mypy_cache/ (glob: **/.mypy_cache/**)",
+    ".pytest_cache/ (glob: **/.pytest_cache/**)",
+    ".qwen/ (glob: .qwen/**)",
+    ".ruff_cache/ (glob: **/.ruff_cache/**)",
+    ".uv-cache/ (glob: .uv-cache/**)",
+    ".venv/ (glob: .venv/**)",
+    "dist/ (glob: dist/**)",
+    "film-knowledge-base/ (glob: film-knowledge-base/**)",
+    "profiles/ (glob: profiles/**)",
+    "projects/ (glob: projects/**)",
+    "scripts/ (glob: scripts/**)",
+    "src/film_pipeline/__pycache__/ (glob: **/__pycache__/**)",
+    "src/film_pipeline/agents/__pycache__/ (glob: **/__pycache__/**)",
+    "src/film_pipeline/agents/impl/__pycache__/ (glob: **/__pycache__/**)"
+  ],
+  "ignore_glob_hash": "sha256:60ea26f406b3bb389acbe24033cfb35c1704897e65ee73b06ec46765f2c5fabe",
+  "shadowed_extractors": [
+    "manifests",
+    "mdintent"
+  ],
+  "heuristic_insights": 74,
+  "census": {
+    "files_walked": 720,
+    "parsed": 475,
+    "excluded_by_ignore": 0,
+    "excluded_by_kind": 221,
+    "excluded_kinds": {
+      "(no extension)": 2,
+      ".ds_store": 1,
+      ".editorconfig": 1,
+      ".env": 1,
+      ".example": 1,
+      ".gitignore": 4,
+      ".json": 108,
+      ".lock": 1,
+      ".log": 2,
+      ".md": 91,
+      ".python-version": 1,
+      ".txt": 2,
+      ".typed": 1,
+      ".yaml": 4,
+      ".yml": 1
+    },
+    "skipped_with_cause": 24,
+    "top_skip_causes": [
+      {
+        "cause": "claimed by python, no facts emitted",
+        "count": 24
+      }
+    ]
+  },
+  "output_hashes": {
+    "facts.jsonl": "sha256:cce57f8adf644bc3c71aa3ec306e4334b3c538fdb18d6c185ab63f49368b1aaf",
+    "insights.json": "sha256:c79471a29d5d0b2bb3f1a9c5c2c49d414339c318069bbf278ed424a93408fa31",
+    "llm_context.md": "sha256:3bfa77eef5b0fcfa732f403e1147e7d2eecf2a47b6db26d7a403e3ef96b07103"
+  },
+  "unseen": {
+    "files_excluded_by_ignore": 0,
+    "dirs_excluded_by_ignore": 89,
+    "outside_graph": {
+      "imports": 1606
+    },
+    "dead_exemptions": 0,
+    "dynamic_feature_classes": 0
+  }
+}

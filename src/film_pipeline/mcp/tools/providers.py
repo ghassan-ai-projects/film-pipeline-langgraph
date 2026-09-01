@@ -35,7 +35,10 @@ async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
 
 async def list_providers(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    provider_ids = rt.list_providers()
+    # Include model-provider health rows (for example z.ai) alongside media
+    # adapters. Model adapters intentionally do not implement the media
+    # provider contract, so they remain health-only entries here.
+    provider_ids = list(dict.fromkeys([*rt.list_providers(), *rt.get_all_health()]))
     result = []
     for pid in provider_ids:
         health = rt.get_provider_health(pid)

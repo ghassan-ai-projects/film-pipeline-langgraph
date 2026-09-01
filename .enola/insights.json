@@ -1,0 +1,3514 @@
+[
+  {
+    "title": "Cyclic dependency detected (2 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/agents/prompt_templates -\u003e src/film_pipeline/agents/prompt_templates/defaults -\u003e src/film_pipeline/agents/prompt_templates. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/agents/prompt_templates",
+        "detail": "module \"src/film_pipeline/agents/prompt_templates\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/agents/prompt_templates/defaults",
+        "detail": "module \"src/film_pipeline/agents/prompt_templates/defaults\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "Cyclic dependency detected (7 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/app -\u003e src/film_pipeline/app/services -\u003e src/film_pipeline/mcp -\u003e src/film_pipeline/mcp/tools -\u003e src/film_pipeline/mcp/tools/bibles -\u003e src/film_pipeline/mcp/tools/generation -\u003e src/film_pipeline/mcp/tools/reference_generation -\u003e src/film_pipeline/app. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/app",
+        "detail": "module \"src/film_pipeline/app\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/app/services",
+        "detail": "module \"src/film_pipeline/app/services\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/mcp",
+        "detail": "module \"src/film_pipeline/mcp\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools",
+        "detail": "module \"src/film_pipeline/mcp/tools\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/bibles",
+        "detail": "module \"src/film_pipeline/mcp/tools/bibles\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/generation",
+        "detail": "module \"src/film_pipeline/mcp/tools/generation\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/reference_generation",
+        "detail": "module \"src/film_pipeline/mcp/tools/reference_generation\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "Cyclic dependency detected (4 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/graph. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/graph",
+        "detail": "module \"src/film_pipeline/graph\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes",
+        "detail": "module \"src/film_pipeline/graph/nodes\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators",
+        "detail": "module \"src/film_pipeline/graph/orchestrator_validators\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs",
+        "detail": "module \"src/film_pipeline/graph/subgraphs\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "Cyclic dependency detected (2 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/providers. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/providers",
+        "detail": "module \"src/film_pipeline/providers\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters",
+        "detail": "module \"src/film_pipeline/providers/adapters\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "Cyclic dependency detected (2 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries -\u003e src/film_pipeline/schemas. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/schemas",
+        "detail": "module \"src/film_pipeline/schemas\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries",
+        "detail": "module \"src/film_pipeline/schemas/registries\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "Cyclic dependency detected (4 modules)",
+    "source": "cycles",
+    "description": "The following modules form a dependency cycle: src/film_pipeline/tui -\u003e src/film_pipeline/tui/gateways -\u003e src/film_pipeline/tui/screens -\u003e src/film_pipeline/tui/widgets -\u003e src/film_pipeline/tui. This can cause initialization issues, make refactoring harder, and indicates tight coupling.",
+    "confidence": 1,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/tui",
+        "detail": "module \"src/film_pipeline/tui\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/tui/gateways",
+        "detail": "module \"src/film_pipeline/tui/gateways\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/tui/screens",
+        "detail": "module \"src/film_pipeline/tui/screens\" is part of the cycle"
+      },
+      {
+        "fact": "src/film_pipeline/tui/widgets",
+        "detail": "module \"src/film_pipeline/tui/widgets\" is part of the cycle"
+      }
+    ],
+    "suggested_actions": [
+      "Introduce an interface to break the cycle",
+      "Extract shared types to a separate package",
+      "Consider merging tightly coupled modules"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/schemas/_base.SchemaBase (99 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/schemas/_base.SchemaBase\" is depended upon by 99 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/schemas/_base.py",
+        "symbol": "src/film_pipeline/schemas/_base.SchemaBase",
+        "detail": "99 symbols depend on this",
+        "line": 266
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ApprovalRecord",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ProfileChangeApproval",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ProfileChangeProposal",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ReviewPackage",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.RevisionRequest",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/artifact.ArtifactMetadata",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/artifact.ArtifactRef",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/artifact.ArtifactVersion",
+        "detail": "depends on src/film_pipeline/schemas/_base.SchemaBase"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.get_runtime (95 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.get_runtime\" is depended upon by 95 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.get_runtime",
+        "detail": "95 symbols depend on this",
+        "line": 420
+      },
+      {
+        "symbol": "src/film_pipeline/app/health._record_provider_status",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.runtime",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.set_runtime_mode",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/server.MCPServer",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/server.MCPServer._auto_register_from_runtime",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints.setup_method",
+        "detail": "depends on src/film_pipeline/app/runtime.get_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.StudioRuntime.create_project (87 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.StudioRuntime.create_project\" is depended upon by 87 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime.create_project",
+        "detail": "87 symbols depend on this",
+        "line": 97
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_then_approve_constitution",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_with_real_llm",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure.test_blocking_issue_preserves_prior_artifacts",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure.test_validation_issues_are_stored_in_state",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_04_quota_exhausted.TestQuotaExhausted",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.StudioRuntime.set_active (85 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.StudioRuntime.set_active\" is depended upon by 85 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime.set_active",
+        "detail": "85 symbols depend on this",
+        "line": 200
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_then_approve_constitution",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_with_real_llm",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure.test_blocking_issue_preserves_prior_artifacts",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure.test_validation_issues_are_stored_in_state",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_04_quota_exhausted.TestQuotaExhausted",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.set_active"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.StudioRuntime.get_active (72 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.StudioRuntime.get_active\" is depended upon by 72 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime.get_active",
+        "detail": "72 symbols depend on this",
+        "line": 206
+      },
+      {
+        "symbol": "src/film_pipeline/app/_graph_exec.approve_phase",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "src/film_pipeline/app/_graph_exec.request_revision",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "src/film_pipeline/app/_graph_exec.run_validation",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_then_approve_constitution",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_with_real_llm",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime.get_active"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/tui/app.FilmStudioApp.open_project (64 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/tui/app.FilmStudioApp.open_project\" is depended upon by 64 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/tui/app.py",
+        "symbol": "src/film_pipeline/tui/app.FilmStudioApp.open_project",
+        "detail": "64 symbols depend on this",
+        "line": 229
+      },
+      {
+        "symbol": "src/film_pipeline/tui/app.FilmStudioApp",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_back_pops_screen_and_returns_home",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_generation_button_relabels_after_completion",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_hides_generate_for_completed_text_only_policy",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_no_dashboard",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_shows_complete_action_for_text_only_policy_before_completion",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_approve_disabled_when_not_eligible",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_approve_phase_calls_gateway",
+        "detail": "depends on src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/mcp/tools/helpers._ok (57 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/mcp/tools/helpers._ok\" is depended upon by 57 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/mcp/tools/helpers.py",
+        "symbol": "src/film_pipeline/mcp/tools/helpers._ok",
+        "detail": "57 symbols depend on this",
+        "line": 27
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/_profile_change.approve_profile_change",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/_profile_change.propose_profile_change",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_artifact",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_reference",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_scene",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_shot",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.list_artifacts",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.list_assets",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._ok"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/mcp/tools/helpers._error (53 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/mcp/tools/helpers._error\" is depended upon by 53 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/mcp/tools/helpers.py",
+        "symbol": "src/film_pipeline/mcp/tools/helpers._error",
+        "detail": "53 symbols depend on this",
+        "line": 32
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/_profile_change.approve_profile_change",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/_profile_change.propose_profile_change",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_artifact",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_reference",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_scene",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.inspect_shot",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.list_artifacts",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/artifacts.list_assets",
+        "detail": "depends on src/film_pipeline/mcp/tools/helpers._error"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/generation/prompt_builder.build_structured_prompt (33 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/generation/prompt_builder.build_structured_prompt\" is depended upon by 33 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/prompt_builder.py",
+        "symbol": "src/film_pipeline/generation/prompt_builder.build_structured_prompt",
+        "detail": "33 symbols depend on this",
+        "line": 85
+      },
+      {
+        "symbol": "src/film_pipeline/generation/executor_prompts._structured_prompt",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_generation_prompts._build_prompt_from_matrix_row",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/reference_generation/entries._reference_prompt",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt.test_character_prompt_does_not_contain_no_people",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt.test_expression_frustrated_appears",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt.test_expression_neutral_is_omitted_from_blocks",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt.test_falls_back_to_constitution_truths_without_bible",
+        "detail": "depends on src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.StudioRuntime._run_phase_node (31 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.StudioRuntime._run_phase_node\" is depended upon by 31 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime._run_phase_node",
+        "detail": "31 symbols depend on this",
+        "line": 238
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_approval_advances_through_spine",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_constitution_produces_valid_artifact",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_development_consumes_constitution",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_full_spine_produces_all_artifacts",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_intake_produces_profile",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      },
+      {
+        "symbol": "tests/integration/test_artifact_spine.TestArtifactSpine.test_script_consumes_development",
+        "detail": "depends on src/film_pipeline/app/runtime.StudioRuntime._run_phase_node"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/runtime.reset_runtime (30 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/runtime.reset_runtime\" is depended upon by 30 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.reset_runtime",
+        "detail": "30 symbols depend on this",
+        "line": 410
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.set_runtime_mode",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/conftest._isolated_runtime_root",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints.setup_method",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_mcp_flow.TestMCPFlow",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_mcp_flow.TestMCPFlow.setup_class",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_mcp_flow.TestMCPFlow.setup_method",
+        "detail": "depends on src/film_pipeline/app/runtime.reset_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/artifacts/store.ArtifactStore.save (24 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/artifacts/store.ArtifactStore.save\" is depended upon by 24 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/artifacts/store.py",
+        "symbol": "src/film_pipeline/artifacts/store.ArtifactStore.save",
+        "detail": "24 symbols depend on this",
+        "line": 38
+      },
+      {
+        "symbol": "src/film_pipeline/artifacts/store.ArtifactStore",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/checkpoints._persist_candidate",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/validation._save_report",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor.test_load_shot_bible_legacy",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor._save_prompt_package",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor._save_shot_matrix",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor_download_failed.test_download_failed_marks_row_failed",
+        "detail": "depends on src/film_pipeline/artifacts/store.ArtifactStore.save"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/constraints/extractor.extract_constraints (23 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/constraints/extractor.extract_constraints\" is depended upon by 23 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/constraints/extractor.py",
+        "symbol": "src/film_pipeline/constraints/extractor.extract_constraints",
+        "detail": "23 symbols depend on this",
+        "line": 336
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_budget",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_character_constraints",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_delivery_modes",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_film_type",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_forbidden_topics",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_language",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_locations",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      },
+      {
+        "symbol": "tests/unit/constraints/test_extractor.test_extract_pacing",
+        "detail": "depends on src/film_pipeline/constraints/extractor.extract_constraints"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/providers/credentials.lookup (23 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/providers/credentials.lookup\" is depended upon by 23 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/providers/credentials.py",
+        "symbol": "src/film_pipeline/providers/credentials.lookup",
+        "detail": "23 symbols depend on this",
+        "line": 23
+      },
+      {
+        "symbol": "src/film_pipeline/agents/model_adapter.ModelAdapter",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/model_adapter.ModelAdapter._api_key",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/model_adapter.ModelAdapter._gemini_api_key",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/gemini_client.call_gemini",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini.Imagen4GeminiProvider",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini.Imagen4GeminiProvider.__init__",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini.Imagen4GeminiProvider._api_key",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/seedance_openrouter.SeedanceOpenRouterProvider",
+        "detail": "depends on src/film_pipeline/providers/credentials.lookup"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/mock_responses.default_mock_responses (21 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/mock_responses.default_mock_responses\" is depended upon by 21 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/mock_responses.py",
+        "symbol": "src/film_pipeline/app/mock_responses.default_mock_responses",
+        "detail": "21 symbols depend on this",
+        "line": 97
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime._build_services_for_mode",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver.setup_runtime",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "tests/e2e/conftest.graph_services",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "tests/unit/agents/test_mvp_invariants.TestMVPAgentInvariants",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "tests/unit/agents/test_mvp_invariants.TestMVPAgentInvariants.mock_responses",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "tests/unit/graph/test_candidate_ref_propagation._mock_state",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      },
+      {
+        "symbol": "tests/unit/graph/test_channel_registry.TestShotBibleBriefReachesUpdates",
+        "detail": "depends on src/film_pipeline/app/mock_responses.default_mock_responses"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/services/operator.OperatorService._state_for_project (21 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/services/operator.OperatorService._state_for_project\" is depended upon by 21 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/services/operator.py",
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService._state_for_project",
+        "detail": "21 symbols depend on this",
+        "line": 427
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.add_operator_comment",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.get_audit_feed",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.inspect_artifact",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.list_artifacts",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.list_assets",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.list_checkpoints",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_browse_ops.list_operator_comments",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/_generation_ops.approve_generation_spend",
+        "detail": "depends on src/film_pipeline/app/services/operator.OperatorService._state_for_project"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch (21 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch\" is depended upon by 21 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/ledger.py",
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch",
+        "detail": "21 symbols depend on this",
+        "line": 59
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_generation_batch_planning._plan_generation_ledger",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/planning.plan_generation_batch",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError.test_approve_spend_duplicate_prevention",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError.test_start_batch_skips_duplicate",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/unit/generation/test_ledger.TestGenerationLedgerManager",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/unit/generation/test_ledger.TestGenerationLedgerManager.test_approve_spend_budget_gate_passes",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/generation/ledger.GenerationLedgerManager.load (20 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/generation/ledger.GenerationLedgerManager.load\" is depended upon by 20 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.95,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/ledger.py",
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.load",
+        "detail": "20 symbols depend on this",
+        "line": 49
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.approve_spend",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.estimate_total_cost",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.get_row",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.list_rows",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.promote_to_production",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/app/logging_setup.configure_logging (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/app/logging_setup.configure_logging\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/logging_setup.py",
+        "symbol": "src/film_pipeline/app/logging_setup.configure_logging",
+        "detail": "19 symbols depend on this",
+        "line": 37
+      },
+      {
+        "symbol": "src/film_pipeline/cli/run.main",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/server.main",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/app.main",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_disabling_persistence_removes_an_existing_file_handler",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_env_level_mapping",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_file_handler_when_persistent",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_later_persistent_call_completes_stdio_only_bootstrap",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_no_file_handler_without_persistence",
+        "detail": "depends on src/film_pipeline/app/logging_setup.configure_logging"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/checkpoints/git_backend.py",
+        "symbol": "src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp",
+        "detail": "19 symbols depend on this",
+        "line": 73
+      },
+      {
+        "symbol": "src/film_pipeline/app/_persistence.project_git_backend",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "src/film_pipeline/checkpoints/git_backend.GitBackend",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/e2e/conftest.git_backend",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/unit/checkpoints/test_checkpoints.TestBranches",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/unit/checkpoints/test_checkpoints.TestBranches.test_create_branch",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/unit/checkpoints/test_checkpoints.TestBranches.test_list_active",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/unit/checkpoints/test_checkpoints.TestCheckpointManager",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      },
+      {
+        "symbol": "tests/unit/checkpoints/test_checkpoints.TestCheckpointManager.test_create_and_get",
+        "detail": "depends on src/film_pipeline/checkpoints/git_backend.GitBackend.init_temp"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/ledger.py",
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row",
+        "detail": "19 symbols depend on this",
+        "line": 194
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/dispatch._mark_row_running",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/dispatch._poll_row_status",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/dispatch._submit_failure",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/dispatch.cancel_generation_request",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/dispatch.resume_generation_polling",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError.test_start_batch_skips_duplicate",
+        "detail": "depends on src/film_pipeline/generation/ledger.GenerationLedgerManager.update_row"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/graph/edges.after_approval (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/graph/edges.after_approval\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/edges.py",
+        "symbol": "src/film_pipeline/graph/edges.after_approval",
+        "detail": "19 symbols depend on this",
+        "line": 110
+      },
+      {
+        "symbol": "src/film_pipeline/graph/graph._wire_gate_edges",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_after_approval_await",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_after_approval_repair_path",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_edge_routing_after_phase",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/integration/test_dynamic_routing.TestAfterApprovalEdges",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/integration/test_dynamic_routing.TestAfterApprovalEdges.test_approved_intake_advances_to_constitution",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/integration/test_dynamic_routing.TestAfterApprovalEdges.test_final_phase_ends",
+        "detail": "depends on src/film_pipeline/graph/edges.after_approval"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/graph/services.GraphServices.for_mock_runtime (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/graph/services.GraphServices.for_mock_runtime\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/services.py",
+        "symbol": "src/film_pipeline/graph/services.GraphServices.for_mock_runtime",
+        "detail": "19 symbols depend on this",
+        "line": 66
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime._build_services_for_mode",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver.setup_runtime",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/services.GraphServices",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "tests/unit/graph/test_candidate_ref_propagation._mock_state",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "tests/unit/graph/test_channel_registry.TestShotBibleBriefReachesUpdates",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "tests/unit/graph/test_channel_registry.TestShotBibleBriefReachesUpdates._services_env",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "tests/unit/graph/test_create_path_routing.test_extraction_produces_execution_brief_through_full_lifecycle",
+        "detail": "depends on src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/providers/pricing.rate_for (19 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/providers/pricing.rate_for\" is depended upon by 19 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.9093330115684356,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/providers/pricing.py",
+        "symbol": "src/film_pipeline/providers/pricing.rate_for",
+        "detail": "19 symbols depend on this",
+        "line": 73
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini.Imagen4GeminiProvider",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini.Imagen4GeminiProvider.estimate_cost",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/seedance_openrouter.SeedanceOpenRouterProvider",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/seedance_openrouter.SeedanceOpenRouterProvider.estimate_cost",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/veo_fast.VeoFastProvider",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/adapters/veo_fast.VeoFastProvider.estimate_cost",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/factory._default_cost_profile",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/pricing.estimate_cost_for_duration",
+        "detail": "depends on src/film_pipeline/providers/pricing.rate_for"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "High fan-in symbol: src/film_pipeline/agents/registry.AgentRegistry.register_many (18 dependents)",
+    "source": "god-class",
+    "description": "\"src/film_pipeline/agents/registry.AgentRegistry.register_many\" is depended upon by 18 other symbols — well above the repo average. High fan-in concentrates change risk: edits here ripple across many call sites, and it often indicates a missing or overly broad abstraction.",
+    "confidence": 0.8614733793806232,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/agents/registry.py",
+        "symbol": "src/film_pipeline/agents/registry.AgentRegistry.register_many",
+        "detail": "18 symbols depend on this",
+        "line": 36
+      },
+      {
+        "symbol": "src/film_pipeline/agents/registry.AgentRegistry",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/services._mvp_agent_registry",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/e2e/conftest.agent_registry",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/integration/test_generation_mcp.rt",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/unit/agents/test_registry.TestAgentRegistry",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/unit/agents/test_registry.TestAgentRegistry.test_all_agents_have_capabilities",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/unit/agents/test_registry.TestAgentRegistry.test_all_agents_have_output_artifacts",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      },
+      {
+        "symbol": "tests/unit/agents/test_registry.TestAgentRegistry.test_all_agents_have_prompt_framework",
+        "detail": "depends on src/film_pipeline/agents/registry.AgentRegistry.register_many"
+      }
+    ],
+    "suggested_actions": [
+      "Split the symbol along distinct responsibilities its callers use",
+      "Introduce narrower interfaces so callers depend only on what they need",
+      "Stabilize its public contract to limit churn for dependents"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/app/runtime.StudioRuntime.create_project (fan-in 87, fan-out 6)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/app/runtime.StudioRuntime.create_project\" is a pinch point: 87 symbols call into it and it calls out to 6 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime.create_project",
+        "detail": "fan-in 87 × fan-out 6 = score 522",
+        "line": 97
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime",
+        "detail": "calls into src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke",
+        "detail": "calls into src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_then_approve_constitution",
+        "detail": "calls into src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_real_provider_smoke.TestRealProviderSmoke.test_intake_with_real_llm",
+        "detail": "calls into src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_03_reference_failure.TestReferenceFailure",
+        "detail": "calls into src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "CheckpointManager",
+        "detail": "called by src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "STATE_FILENAME",
+        "detail": "called by src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app",
+        "detail": "called by src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/_persistence.project_git_backend",
+        "detail": "called by src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.StudioRuntime._persist_project_state",
+        "detail": "called by src/film_pipeline/app/runtime.StudioRuntime.create_project"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/schemas/_base.SchemaBase (fan-in 99, fan-out 4)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/schemas/_base.SchemaBase\" is a pinch point: 99 symbols call into it and it calls out to 4 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/schemas/_base.py",
+        "symbol": "src/film_pipeline/schemas/_base.SchemaBase",
+        "detail": "fan-in 99 × fan-out 4 = score 396",
+        "line": 266
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ApprovalRecord",
+        "detail": "calls into src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ProfileChangeApproval",
+        "detail": "calls into src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ProfileChangeProposal",
+        "detail": "calls into src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.ReviewPackage",
+        "detail": "calls into src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/approval.RevisionRequest",
+        "detail": "calls into src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "BaseModel",
+        "detail": "called by src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "ConfigDict",
+        "detail": "called by src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "Field",
+        "detail": "called by src/film_pipeline/schemas/_base.SchemaBase"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas",
+        "detail": "called by src/film_pipeline/schemas/_base.SchemaBase"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/app/runtime.get_runtime (fan-in 95, fan-out 3)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/app/runtime.get_runtime\" is a pinch point: 95 symbols call into it and it calls out to 3 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.get_runtime",
+        "detail": "fan-in 95 × fan-out 3 = score 285",
+        "line": 420
+      },
+      {
+        "symbol": "src/film_pipeline/app/health._record_provider_status",
+        "detail": "calls into src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService",
+        "detail": "calls into src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.runtime",
+        "detail": "calls into src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.set_runtime_mode",
+        "detail": "calls into src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/server.MCPServer",
+        "detail": "calls into src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app",
+        "detail": "called by src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime._configured_server_mode",
+        "detail": "called by src/film_pipeline/app/runtime.get_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.create_runtime",
+        "detail": "called by src/film_pipeline/app/runtime.get_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/tui/app.FilmStudioApp.open_project (fan-in 64, fan-out 3)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/tui/app.FilmStudioApp.open_project\" is a pinch point: 64 symbols call into it and it calls out to 3 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/tui/app.py",
+        "symbol": "src/film_pipeline/tui/app.FilmStudioApp.open_project",
+        "detail": "fan-in 64 × fan-out 3 = score 192",
+        "line": 229
+      },
+      {
+        "symbol": "src/film_pipeline/tui/app.FilmStudioApp",
+        "detail": "calls into src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_back_pops_screen_and_returns_home",
+        "detail": "calls into src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_generation_button_relabels_after_completion",
+        "detail": "calls into src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_hides_generate_for_completed_text_only_policy",
+        "detail": "calls into src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "tests/unit/tui/test_app_redesign.test_action_bar_no_dashboard",
+        "detail": "calls into src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "StudioScreen",
+        "detail": "called by src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "src/film_pipeline/tui",
+        "detail": "called by src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/app.FilmStudioApp.action_refresh",
+        "detail": "called by src/film_pipeline/tui/app.FilmStudioApp.open_project"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/artifacts/store.ArtifactStore.save (fan-in 24, fan-out 7)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/artifacts/store.ArtifactStore.save\" is a pinch point: 24 symbols call into it and it calls out to 7 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/artifacts/store.py",
+        "symbol": "src/film_pipeline/artifacts/store.ArtifactStore.save",
+        "detail": "fan-in 24 × fan-out 7 = score 168",
+        "line": 38
+      },
+      {
+        "symbol": "src/film_pipeline/artifacts/store.ArtifactStore",
+        "detail": "calls into src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/checkpoints._persist_candidate",
+        "detail": "calls into src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/validation._save_report",
+        "detail": "calls into src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor",
+        "detail": "calls into src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor.test_load_shot_bible_legacy",
+        "detail": "calls into src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "film_pipeline.schemas.artifact.ArtifactMetadata.artifact_id",
+        "detail": "called by src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "film_pipeline.schemas.artifact.ArtifactMetadata.project_id",
+        "detail": "called by src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "film_pipeline.schemas.artifact.ArtifactMetadata.version",
+        "detail": "called by src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/artifacts",
+        "detail": "called by src/film_pipeline/artifacts/store.ArtifactStore.save"
+      },
+      {
+        "symbol": "src/film_pipeline/artifacts/store.ArtifactStore._artifact_path",
+        "detail": "called by src/film_pipeline/artifacts/store.ArtifactStore.save"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/validation/consensus.ConsensusBuilder.build (fan-in 18, fan-out 9)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/validation/consensus.ConsensusBuilder.build\" is a pinch point: 18 symbols call into it and it calls out to 9 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/validation/consensus.py",
+        "symbol": "src/film_pipeline/validation/consensus.ConsensusBuilder.build",
+        "detail": "fan-in 18 × fan-out 9 = score 162",
+        "line": 21
+      },
+      {
+        "symbol": "src/film_pipeline/validation/consensus.ConsensusBuilder",
+        "detail": "calls into src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/validation/test_consensus.TestConsensusBuilder",
+        "detail": "calls into src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/validation/test_consensus.TestConsensusBuilder.test_artifact_refs",
+        "detail": "calls into src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/validation/test_consensus.TestConsensusBuilder.test_blocked_consensus_recommendation",
+        "detail": "calls into src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/validation/test_consensus.TestConsensusBuilder.test_blocking_consensus",
+        "detail": "calls into src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "ConsensusReport",
+        "detail": "called by src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "film_pipeline.schemas._base.ValidationStatus.ERROR",
+        "detail": "called by src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/validation",
+        "detail": "called by src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/validation/consensus._calculate_agreement",
+        "detail": "called by src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/validation/consensus._compare_findings",
+        "detail": "called by src/film_pipeline/validation/consensus.ConsensusBuilder.build"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/generation/prompt_builder.build_structured_prompt (fan-in 33, fan-out 4)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/generation/prompt_builder.build_structured_prompt\" is a pinch point: 33 symbols call into it and it calls out to 4 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/prompt_builder.py",
+        "symbol": "src/film_pipeline/generation/prompt_builder.build_structured_prompt",
+        "detail": "fan-in 33 × fan-out 4 = score 132",
+        "line": 85
+      },
+      {
+        "symbol": "src/film_pipeline/generation/executor_prompts._structured_prompt",
+        "detail": "calls into src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_generation_prompts._build_prompt_from_matrix_row",
+        "detail": "calls into src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/reference_generation/entries._reference_prompt",
+        "detail": "calls into src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt",
+        "detail": "calls into src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "tests/unit/generation/test_prompt_builder.TestCharacterPrompt.test_character_prompt_does_not_contain_no_people",
+        "detail": "calls into src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/generation",
+        "detail": "called by src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/prompt_builder._build_character_prompt",
+        "detail": "called by src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/prompt_builder._build_environment_prompt",
+        "detail": "called by src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/prompt_builder._build_generic_prompt",
+        "detail": "called by src/film_pipeline/generation/prompt_builder.build_structured_prompt"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/agents/runner.PromptRunner.call_model (fan-in 15, fan-out 8)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/agents/runner.PromptRunner.call_model\" is a pinch point: 15 symbols call into it and it calls out to 8 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/agents/runner.py",
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner.call_model",
+        "detail": "fan-in 15 × fan-out 8 = score 120",
+        "line": 346
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner",
+        "detail": "calls into src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner",
+        "detail": "calls into src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner.run",
+        "detail": "calls into src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner.run_from_template",
+        "detail": "calls into src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "tests/unit/agents/test_runner.TestPromptRunner",
+        "detail": "calls into src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents",
+        "detail": "called by src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner._attempt_fallback_model",
+        "detail": "called by src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner._attempt_normal_call",
+        "detail": "called by src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner._attempt_structured_retry",
+        "detail": "called by src/film_pipeline/agents/runner.PromptRunner.call_model"
+      },
+      {
+        "symbol": "src/film_pipeline/agents/runner.PromptRunner._find_mock_response",
+        "detail": "called by src/film_pipeline/agents/runner.PromptRunner.call_model"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/kb/packets.KBContextPacketBuilder.build (fan-in 12, fan-out 9)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/kb/packets.KBContextPacketBuilder.build\" is a pinch point: 12 symbols call into it and it calls out to 9 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/kb/packets.py",
+        "symbol": "src/film_pipeline/kb/packets.KBContextPacketBuilder.build",
+        "detail": "fan-in 12 × fan-out 9 = score 108",
+        "line": 66
+      },
+      {
+        "symbol": "src/film_pipeline/kb/packets.KBContextPacketBuilder",
+        "detail": "calls into src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/kb.kb_get_context_packet",
+        "detail": "calls into src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/kb/test_packets.TestPackets",
+        "detail": "calls into src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/kb/test_packets.TestPackets.test_build_basic",
+        "detail": "calls into src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "tests/unit/kb/test_packets.TestPackets.test_build_different_phase_different_context",
+        "detail": "calls into src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "KBConflictDetector",
+        "detail": "called by src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "KBContextPacket",
+        "detail": "called by src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "KBRetrieval",
+        "detail": "called by src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/kb",
+        "detail": "called by src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      },
+      {
+        "symbol": "src/film_pipeline/kb/conflicts.KBConflictDetector.detect_conflicts",
+        "detail": "called by src/film_pipeline/kb/packets.KBContextPacketBuilder.build"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch (fan-in 21, fan-out 5)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch\" is a pinch point: 21 symbols call into it and it calls out to 5 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/ledger.py",
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch",
+        "detail": "fan-in 21 × fan-out 5 = score 105",
+        "line": 59
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_generation_batch_planning._plan_generation_ledger",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/generation/planning.plan_generation_batch",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "tests/e2e/test_scenario_05_network_error.TestNetworkError.test_approve_spend_duplicate_prevention",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "GenerationLedgerRow",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "film_pipeline.schemas._base.GenerationStatus.PREPARED",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/generation",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager._persist",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.load",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.plan_batch"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/graph/graph.build_graph (fan-in 13, fan-out 8)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/graph/graph.build_graph\" is a pinch point: 13 symbols call into it and it calls out to 8 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/graph.py",
+        "symbol": "src/film_pipeline/graph/graph.build_graph",
+        "detail": "fan-in 13 × fan-out 8 = score 104",
+        "line": 170
+      },
+      {
+        "symbol": "src/film_pipeline/app/_graph_exec.ensure_graph",
+        "detail": "calls into src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "src/film_pipeline/app/smoke.check_graph_compiles",
+        "detail": "calls into src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution",
+        "detail": "calls into src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_approval_triggers_phase_transition",
+        "detail": "calls into src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_graph_interrupts_at_approval_gate",
+        "detail": "calls into src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "StateGraph",
+        "detail": "called by src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "StudioGraphState",
+        "detail": "called by src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "src/film_pipeline/graph",
+        "detail": "called by src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/graph._default_checkpointer",
+        "detail": "called by src/film_pipeline/graph/graph.build_graph"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/graph._register_nodes",
+        "detail": "called by src/film_pipeline/graph/graph.build_graph"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/generation/ledger.GenerationLedgerManager.load (fan-in 20, fan-out 5)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/generation/ledger.GenerationLedgerManager.load\" is a pinch point: 20 symbols call into it and it calls out to 5 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/ledger.py",
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.load",
+        "detail": "fan-in 20 × fan-out 5 = score 100",
+        "line": 49
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.approve_spend",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.estimate_total_cost",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.get_row",
+        "detail": "calls into src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "LEDGER_ARTIFACT_ID",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "film_pipeline.schemas._base.FilmPhase.GENERATION",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "film_pipeline.schemas.generation.GenerationLedger.model_validate",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/ledger.GenerationLedgerManager.create",
+        "detail": "called by src/film_pipeline/generation/ledger.GenerationLedgerManager.load"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/graph/nodes/_agent._run_agent (fan-in 11, fan-out 9)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/graph/nodes/_agent._run_agent\" is a pinch point: 11 symbols call into it and it calls out to 9 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/nodes/_agent.py",
+        "symbol": "src/film_pipeline/graph/nodes/_agent._run_agent",
+        "detail": "fan-in 11 × fan-out 9 = score 99",
+        "line": 187
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/approval._run_orchestrator_agent",
+        "detail": "calls into src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/prep._classify_film_idea",
+        "detail": "calls into src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/prep.constitution_node",
+        "detail": "calls into src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/prep.development_node",
+        "detail": "calls into src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/prep.script_node",
+        "detail": "calls into src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes",
+        "detail": "called by src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_agent._execute_agent",
+        "detail": "called by src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_agent._generate_model_output",
+        "detail": "called by src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_agent._open_kb_session",
+        "detail": "called by src/film_pipeline/graph/nodes/_agent._run_agent"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/nodes/_agent._resolve_routing",
+        "detail": "called by src/film_pipeline/graph/nodes/_agent._run_agent"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/app/logging_setup.configure_logging (fan-in 19, fan-out 5)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/app/logging_setup.configure_logging\" is a pinch point: 19 symbols call into it and it calls out to 5 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/logging_setup.py",
+        "symbol": "src/film_pipeline/app/logging_setup.configure_logging",
+        "detail": "fan-in 19 × fan-out 5 = score 95",
+        "line": 37
+      },
+      {
+        "symbol": "src/film_pipeline/cli/run.main",
+        "detail": "calls into src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/server.main",
+        "detail": "calls into src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/app.main",
+        "detail": "calls into src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_disabling_persistence_removes_an_existing_file_handler",
+        "detail": "calls into src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "tests/unit/app/test_logging_setup.test_env_level_mapping",
+        "detail": "calls into src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "Path",
+        "detail": "called by src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "RotatingFileHandler",
+        "detail": "called by src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/app",
+        "detail": "called by src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/app/_persistence.use_persistent_runtime",
+        "detail": "called by src/film_pipeline/app/logging_setup.configure_logging"
+      },
+      {
+        "symbol": "src/film_pipeline/app/logging_setup._resolve_level",
+        "detail": "called by src/film_pipeline/app/logging_setup.configure_logging"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/graph/services.GraphServices.for_mock_runtime (fan-in 19, fan-out 5)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/graph/services.GraphServices.for_mock_runtime\" is a pinch point: 19 symbols call into it and it calls out to 5 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/services.py",
+        "symbol": "src/film_pipeline/graph/services.GraphServices.for_mock_runtime",
+        "detail": "fan-in 19 × fan-out 5 = score 95",
+        "line": 66
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime._build_services_for_mode",
+        "detail": "calls into src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver",
+        "detail": "calls into src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/cli/driver.HeadlessDriver.setup_runtime",
+        "detail": "calls into src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/services.GraphServices",
+        "detail": "calls into src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "tests/unit/graph/test_candidate_ref_propagation._mock_state",
+        "detail": "calls into src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "ModelRouter",
+        "detail": "called by src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "PromptRunner",
+        "detail": "called by src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/graph",
+        "detail": "called by src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/services._artifact_store",
+        "detail": "called by src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/services._mvp_agent_registry",
+        "detail": "called by src/film_pipeline/graph/services.GraphServices.for_mock_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/app/runtime.reset_runtime (fan-in 30, fan-out 3)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/app/runtime.reset_runtime\" is a pinch point: 30 symbols call into it and it calls out to 3 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/runtime.py",
+        "symbol": "src/film_pipeline/app/runtime.reset_runtime",
+        "detail": "fan-in 30 × fan-out 3 = score 90",
+        "line": 410
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService",
+        "detail": "calls into src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/services/operator.OperatorService.set_runtime_mode",
+        "detail": "calls into src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/conftest._isolated_runtime_root",
+        "detail": "calls into src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints",
+        "detail": "calls into src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "tests/integration/test_intake_constraints.TestIntakeConstraints.setup_method",
+        "detail": "calls into src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app",
+        "detail": "called by src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime._normalize_server_mode",
+        "detail": "called by src/film_pipeline/app/runtime.reset_runtime"
+      },
+      {
+        "symbol": "src/film_pipeline/app/runtime.create_runtime",
+        "detail": "called by src/film_pipeline/app/runtime.reset_runtime"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/generation/executor.GenerationExecutor.plan (fan-in 17, fan-out 5)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/generation/executor.GenerationExecutor.plan\" is a pinch point: 17 symbols call into it and it calls out to 5 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/executor.py",
+        "symbol": "src/film_pipeline/generation/executor.GenerationExecutor.plan",
+        "detail": "fan-in 17 × fan-out 5 = score 85",
+        "line": 95
+      },
+      {
+        "symbol": "src/film_pipeline/generation/executor.GenerationExecutor",
+        "detail": "calls into src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor",
+        "detail": "calls into src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor.test_approve_spend_transitions_rows",
+        "detail": "calls into src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor.test_dispatchable_requests",
+        "detail": "calls into src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "tests/unit/generation/test_executor.TestGenerationExecutor.test_plan_from_shot_matrix",
+        "detail": "calls into src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "GenerationStepResult",
+        "detail": "called by src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "src/film_pipeline/generation",
+        "detail": "called by src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/executor.GenerationExecutor._shot_rows_by_id",
+        "detail": "called by src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/executor.GenerationExecutor.shot_ids",
+        "detail": "called by src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      },
+      {
+        "symbol": "src/film_pipeline/providers/pricing.estimate_cost_for_duration",
+        "detail": "called by src/film_pipeline/generation/executor.GenerationExecutor.plan"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/generation/frame_heuristics.run_heuristic_checks (fan-in 12, fan-out 7)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/generation/frame_heuristics.run_heuristic_checks\" is a pinch point: 12 symbols call into it and it calls out to 7 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/frame_heuristics.py",
+        "symbol": "src/film_pipeline/generation/frame_heuristics.run_heuristic_checks",
+        "detail": "fan-in 12 × fan-out 7 = score 84",
+        "line": 102
+      },
+      {
+        "symbol": "src/film_pipeline/mcp/tools/reference_generation/retry_loop._grade_generated_frame",
+        "detail": "calls into src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "tests/unit/generation/test_frame_heuristics.TestRunHeuristicChecks",
+        "detail": "calls into src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "tests/unit/generation/test_frame_heuristics.TestRunHeuristicChecks.test_empty_file_fails_file_exists",
+        "detail": "calls into src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "tests/unit/generation/test_frame_heuristics.TestRunHeuristicChecks.test_missing_file_fails",
+        "detail": "calls into src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "tests/unit/generation/test_frame_heuristics.TestRunHeuristicChecks.test_result_passed_false_when_failures",
+        "detail": "calls into src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "HeuristicResult",
+        "detail": "called by src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "src/film_pipeline/generation",
+        "detail": "called by src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/frame_heuristics._check_face_size",
+        "detail": "called by src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/frame_heuristics._check_file_readable",
+        "detail": "called by src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      },
+      {
+        "symbol": "src/film_pipeline/generation/frame_heuristics._check_has_content",
+        "detail": "called by src/film_pipeline/generation/frame_heuristics.run_heuristic_checks"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/providers/factory.build_provider_adapter (fan-in 8, fan-out 10)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/providers/factory.build_provider_adapter\" is a pinch point: 8 symbols call into it and it calls out to 10 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/providers/factory.py",
+        "symbol": "src/film_pipeline/providers/factory.build_provider_adapter",
+        "detail": "fan-in 8 × fan-out 10 = score 80",
+        "line": 18
+      },
+      {
+        "symbol": "src/film_pipeline/app/_provider_seeds.seed_default_provider_adapters",
+        "detail": "calls into src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "src/film_pipeline/config/profile_resolver.register_project_providers",
+        "detail": "calls into src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "tests/integration/test_reference_generation_mcp.TestReferenceGenerationMCP",
+        "detail": "calls into src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "tests/integration/test_reference_generation_mcp.TestReferenceGenerationMCP.test_generate_reference_images_updates_visual_dev_artifact",
+        "detail": "calls into src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "tests/unit/mcp/tools/test_generation.rt",
+        "detail": "calls into src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "Imagen4GeminiProvider",
+        "detail": "called by src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "MockImageProvider",
+        "detail": "called by src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "MockVideoProvider",
+        "detail": "called by src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "ProviderRegistryEntry",
+        "detail": "called by src/film_pipeline/providers/factory.build_provider_adapter"
+      },
+      {
+        "symbol": "SeedanceOpenRouterProvider",
+        "detail": "called by src/film_pipeline/providers/factory.build_provider_adapter"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Call-graph hotspot: src/film_pipeline/graph/edges.after_approval (fan-in 19, fan-out 4)",
+    "source": "hotspots",
+    "description": "\"src/film_pipeline/graph/edges.after_approval\" is a pinch point: 19 symbols call into it and it calls out to 4 others, so a large share of call chains pass through it (degree-centrality proxy for betweenness). Such chokepoints are high-risk to change and high-value to test.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/edges.py",
+        "symbol": "src/film_pipeline/graph/edges.after_approval",
+        "detail": "fan-in 19 × fan-out 4 = score 76",
+        "line": 110
+      },
+      {
+        "symbol": "src/film_pipeline/graph/graph._wire_gate_edges",
+        "detail": "calls into src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution",
+        "detail": "calls into src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_after_approval_await",
+        "detail": "calls into src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_after_approval_repair_path",
+        "detail": "calls into src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "tests/e2e/test_graph_execution.TestGraphExecution.test_edge_routing_after_phase",
+        "detail": "calls into src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "src/film_pipeline/graph",
+        "detail": "called by src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/edges._is_auto_mode",
+        "detail": "called by src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/edges._record_stall",
+        "detail": "called by src/film_pipeline/graph/edges.after_approval"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.is_stalled",
+        "detail": "called by src/film_pipeline/graph/edges.after_approval"
+      }
+    ],
+    "suggested_actions": [
+      "Add focused tests around this chokepoint before refactoring",
+      "Consider decomposing it so call paths don't all funnel through one symbol",
+      "Verify it isn't doing orchestration that belongs in callers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/tui (depth 22)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/tui\" has a longest dependency chain of 22 modules: src/film_pipeline/tui -\u003e src/film_pipeline/tui/gateways -\u003e src/film_pipeline/tui/screens -\u003e src/film_pipeline/tui/widgets -\u003e src/film_pipeline/tui/view_models -\u003e src/film_pipeline/app -\u003e src/film_pipeline/app/services -\u003e src/film_pipeline/mcp -\u003e src/film_pipeline/mcp/tools -\u003e src/film_pipeline/mcp/tools/bibles -\u003e src/film_pipeline/mcp/tools/generation -\u003e src/film_pipeline/mcp/tools/reference_generation -\u003e src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/tui"
+      },
+      {
+        "fact": "src/film_pipeline/tui/gateways"
+      },
+      {
+        "fact": "src/film_pipeline/tui/screens"
+      },
+      {
+        "fact": "src/film_pipeline/tui/widgets"
+      },
+      {
+        "fact": "src/film_pipeline/tui/view_models"
+      },
+      {
+        "fact": "src/film_pipeline/app"
+      },
+      {
+        "fact": "src/film_pipeline/app/services"
+      },
+      {
+        "fact": "src/film_pipeline/mcp"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/bibles"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/generation"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/reference_generation"
+      },
+      {
+        "fact": "src/film_pipeline/graph"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs"
+      },
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/cli (depth 18)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/cli\" has a longest dependency chain of 18 modules: src/film_pipeline/cli -\u003e src/film_pipeline/app -\u003e src/film_pipeline/app/services -\u003e src/film_pipeline/mcp -\u003e src/film_pipeline/mcp/tools -\u003e src/film_pipeline/mcp/tools/bibles -\u003e src/film_pipeline/mcp/tools/generation -\u003e src/film_pipeline/mcp/tools/reference_generation -\u003e src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/cli"
+      },
+      {
+        "fact": "src/film_pipeline/app"
+      },
+      {
+        "fact": "src/film_pipeline/app/services"
+      },
+      {
+        "fact": "src/film_pipeline/mcp"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/bibles"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/generation"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/reference_generation"
+      },
+      {
+        "fact": "src/film_pipeline/graph"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs"
+      },
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/tui/view_models (depth 18)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/tui/view_models\" has a longest dependency chain of 18 modules: src/film_pipeline/tui/view_models -\u003e src/film_pipeline/app -\u003e src/film_pipeline/app/services -\u003e src/film_pipeline/mcp -\u003e src/film_pipeline/mcp/tools -\u003e src/film_pipeline/mcp/tools/bibles -\u003e src/film_pipeline/mcp/tools/generation -\u003e src/film_pipeline/mcp/tools/reference_generation -\u003e src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/tui/view_models"
+      },
+      {
+        "fact": "src/film_pipeline/app"
+      },
+      {
+        "fact": "src/film_pipeline/app/services"
+      },
+      {
+        "fact": "src/film_pipeline/mcp"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/bibles"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/generation"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/reference_generation"
+      },
+      {
+        "fact": "src/film_pipeline/graph"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs"
+      },
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/app (depth 17)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/app\" has a longest dependency chain of 17 modules: src/film_pipeline/app -\u003e src/film_pipeline/app/services -\u003e src/film_pipeline/mcp -\u003e src/film_pipeline/mcp/tools -\u003e src/film_pipeline/mcp/tools/bibles -\u003e src/film_pipeline/mcp/tools/generation -\u003e src/film_pipeline/mcp/tools/reference_generation -\u003e src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/app"
+      },
+      {
+        "fact": "src/film_pipeline/app/services"
+      },
+      {
+        "fact": "src/film_pipeline/mcp"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/bibles"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/generation"
+      },
+      {
+        "fact": "src/film_pipeline/mcp/tools/reference_generation"
+      },
+      {
+        "fact": "src/film_pipeline/graph"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs"
+      },
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/graph (depth 10)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/graph\" has a longest dependency chain of 10 modules: src/film_pipeline/graph -\u003e src/film_pipeline/graph/nodes -\u003e src/film_pipeline/graph/orchestrator_validators -\u003e src/film_pipeline/graph/subgraphs -\u003e src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/graph"
+      },
+      {
+        "fact": "src/film_pipeline/graph/nodes"
+      },
+      {
+        "fact": "src/film_pipeline/graph/orchestrator_validators"
+      },
+      {
+        "fact": "src/film_pipeline/graph/subgraphs"
+      },
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/agents/impl (depth 6)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/agents/impl\" has a longest dependency chain of 6 modules: src/film_pipeline/agents/impl -\u003e src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/agents/impl"
+      },
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/post (depth 6)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/post\" has a longest dependency chain of 6 modules: src/film_pipeline/post -\u003e src/film_pipeline/validation/impl -\u003e src/film_pipeline/validation -\u003e src/film_pipeline/validation/validators -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/post"
+      },
+      {
+        "fact": "src/film_pipeline/validation/impl"
+      },
+      {
+        "fact": "src/film_pipeline/validation"
+      },
+      {
+        "fact": "src/film_pipeline/validation/validators"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline (depth 5)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline\" has a longest dependency chain of 5 modules: src/film_pipeline -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/agents (depth 5)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/agents\" has a longest dependency chain of 5 modules: src/film_pipeline/agents -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/agents"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Deep dependency chain: src/film_pipeline/config (depth 5)",
+    "source": "dependency-depth",
+    "description": "Module \"src/film_pipeline/config\" has a longest dependency chain of 5 modules: src/film_pipeline/config -\u003e src/film_pipeline/providers -\u003e src/film_pipeline/providers/adapters -\u003e src/film_pipeline/schemas -\u003e src/film_pipeline/schemas/registries. Deep chains slow comprehension and widen rebuild/retest impact when a module near the bottom changes.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "fact": "src/film_pipeline/config"
+      },
+      {
+        "fact": "src/film_pipeline/providers"
+      },
+      {
+        "fact": "src/film_pipeline/providers/adapters"
+      },
+      {
+        "fact": "src/film_pipeline/schemas"
+      },
+      {
+        "fact": "src/film_pipeline/schemas/registries"
+      }
+    ],
+    "suggested_actions": [
+      "Flatten the chain by depending on shared abstractions instead of deep transitive modules",
+      "Check whether intermediate modules are pass-through layers that can be removed",
+      "Introduce interfaces to decouple the deepest modules from their consumers"
+    ]
+  },
+  {
+    "title": "Large public surface: src/film_pipeline/graph/orchestrator_state exports 38 of 38 symbols (100%)",
+    "source": "exported-surface",
+    "description": "Module \"src/film_pipeline/graph/orchestrator_state\" exports 38 of its 38 symbols (100%). A large, near-fully-exported module hides little of its implementation, so consumers can couple to internals and it is hard to change without breaking them. Worth a visibility review — though a deliberate library API may legitimately export most of its surface.",
+    "confidence": 0.6,
+    "evidence": [
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.OrchChannelSpec",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.add_failure_decision",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.add_revision_request",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.advance_review_round",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.close_review_cycle",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.ensure_orchestrator_state",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.get_active_review_cycle",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/graph/orchestrator_state.get_approved_refs",
+        "detail": "exported"
+      }
+    ],
+    "suggested_actions": [
+      "Unexport symbols that are only used within the module",
+      "Define a small, intentional public API and hide the rest",
+      "Split the module if it has several independent public responsibilities"
+    ]
+  },
+  {
+    "title": "Large public surface: src/film_pipeline/tui/gateway exports 26 of 26 symbols (100%)",
+    "source": "exported-surface",
+    "description": "Module \"src/film_pipeline/tui/gateway\" exports 26 of its 26 symbols (100%). A large, near-fully-exported module hides little of its implementation, so consumers can couple to internals and it is hard to change without breaking them. Worth a visibility review — though a deliberate library API may legitimately export most of its surface.",
+    "confidence": 0.6,
+    "evidence": [
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.add_operator_comment",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.approve_generation_spend",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.approve_phase",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.create_project",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.get_audit_feed",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.get_dashboard",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateway.StudioGateway.get_generation_workspace",
+        "detail": "exported"
+      }
+    ],
+    "suggested_actions": [
+      "Unexport symbols that are only used within the module",
+      "Define a small, intentional public API and hide the rest",
+      "Split the module if it has several independent public responsibilities"
+    ]
+  },
+  {
+    "title": "Large public surface: src/film_pipeline/tui/gateways/inprocess exports 26 of 27 symbols (96%)",
+    "source": "exported-surface",
+    "description": "Module \"src/film_pipeline/tui/gateways/inprocess\" exports 26 of its 27 symbols (96%). A large, near-fully-exported module hides little of its implementation, so consumers can couple to internals and it is hard to change without breaking them. Worth a visibility review — though a deliberate library API may legitimately export most of its surface.",
+    "confidence": 0.6,
+    "evidence": [
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.add_operator_comment",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.approve_generation_spend",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.approve_phase",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.create_project",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.get_audit_feed",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.get_dashboard",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/tui/gateways/inprocess.InProcessStudioGateway.get_generation_workspace",
+        "detail": "exported"
+      }
+    ],
+    "suggested_actions": [
+      "Unexport symbols that are only used within the module",
+      "Define a small, intentional public API and hide the rest",
+      "Split the module if it has several independent public responsibilities"
+    ]
+  },
+  {
+    "title": "Large public surface: src/film_pipeline/schemas/_base exports 21 of 21 symbols (100%)",
+    "source": "exported-surface",
+    "description": "Module \"src/film_pipeline/schemas/_base\" exports 21 of its 21 symbols (100%). A large, near-fully-exported module hides little of its implementation, so consumers can couple to internals and it is hard to change without breaking them. Worth a visibility review — though a deliberate library API may legitimately export most of its surface.",
+    "confidence": 0.6,
+    "evidence": [
+      {
+        "symbol": "src/film_pipeline/schemas/_base.AgentFamily",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.AgentRole",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.ArtifactStatus",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.ArtifactType",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.FailureClass",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.FilmPhase",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.FilmType",
+        "detail": "exported"
+      },
+      {
+        "symbol": "src/film_pipeline/schemas/_base.GenerationMode",
+        "detail": "exported"
+      }
+    ],
+    "suggested_actions": [
+      "Unexport symbols that are only used within the module",
+      "Define a small, intentional public API and hide the rest",
+      "Split the module if it has several independent public responsibilities"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/app/logging_setup.configure_logging (23)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/app/logging_setup.configure_logging\" has a cyclomatic complexity of 23 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/app/logging_setup.py",
+        "symbol": "src/film_pipeline/app/logging_setup.configure_logging",
+        "detail": "cyclomatic complexity 23 at line 37",
+        "line": 37
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: docs/clean-code-refactor/tools/bar_check.main (15)",
+    "source": "complexity-outliers",
+    "description": "\"docs/clean-code-refactor/tools/bar_check.main\" has a cyclomatic complexity of 15 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "docs/clean-code-refactor/tools/bar_check.py",
+        "symbol": "docs/clean-code-refactor/tools/bar_check.main",
+        "detail": "cyclomatic complexity 15 at line 126",
+        "line": 126
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/graph/nodes/_generation_prompts._resolve_prompt_for_request (15)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/graph/nodes/_generation_prompts._resolve_prompt_for_request\" has a cyclomatic complexity of 15 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/nodes/_generation_prompts.py",
+        "symbol": "src/film_pipeline/graph/nodes/_generation_prompts._resolve_prompt_for_request",
+        "detail": "cyclomatic complexity 15 at line 149",
+        "line": 149
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: docs/clean-code-refactor/tools/bar_check.check_file (13)",
+    "source": "complexity-outliers",
+    "description": "\"docs/clean-code-refactor/tools/bar_check.check_file\" has a cyclomatic complexity of 13 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "docs/clean-code-refactor/tools/bar_check.py",
+        "symbol": "docs/clean-code-refactor/tools/bar_check.check_file",
+        "detail": "cyclomatic complexity 13 at line 69",
+        "line": 69
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/generation/frame_reviewer.should_review_frame (13)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/generation/frame_reviewer.should_review_frame\" has a cyclomatic complexity of 13 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/generation/frame_reviewer.py",
+        "symbol": "src/film_pipeline/generation/frame_reviewer.should_review_frame",
+        "detail": "cyclomatic complexity 13 at line 53",
+        "line": 53
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/tui/widgets/action_bar.ActionBar._stage_actions (13)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/tui/widgets/action_bar.ActionBar._stage_actions\" has a cyclomatic complexity of 13 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/tui/widgets/action_bar.py",
+        "symbol": "src/film_pipeline/tui/widgets/action_bar.ActionBar._stage_actions",
+        "detail": "cyclomatic complexity 13 at line 90",
+        "line": 90
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/graph/state_schema.merge_issues (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/graph/state_schema.merge_issues\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/state_schema.py",
+        "symbol": "src/film_pipeline/graph/state_schema.merge_issues",
+        "detail": "cyclomatic complexity 12 at line 67",
+        "line": 67
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/mcp/tools/planning._fallback_video_route (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/mcp/tools/planning._fallback_video_route\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/mcp/tools/planning.py",
+        "symbol": "src/film_pipeline/mcp/tools/planning._fallback_video_route",
+        "detail": "cyclomatic complexity 12 at line 111",
+        "line": 111
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/providers/adapters/imagen4_gemini._extract_image_bytes (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/providers/adapters/imagen4_gemini._extract_image_bytes\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/providers/adapters/imagen4_gemini.py",
+        "symbol": "src/film_pipeline/providers/adapters/imagen4_gemini._extract_image_bytes",
+        "detail": "cyclomatic complexity 12 at line 171",
+        "line": 171
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/schemas/constraints.render_constraints (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/schemas/constraints.render_constraints\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/schemas/constraints.py",
+        "symbol": "src/film_pipeline/schemas/constraints.render_constraints",
+        "detail": "cyclomatic complexity 12 at line 132",
+        "line": 132
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/schemas/repair.RepairFeedback.to_agent_context (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/schemas/repair.RepairFeedback.to_agent_context\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/schemas/repair.py",
+        "symbol": "src/film_pipeline/schemas/repair.RepairFeedback.to_agent_context",
+        "detail": "cyclomatic complexity 12 at line 57",
+        "line": 57
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/tui/screens/studio.StudioScreen._do_next_action (12)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/tui/screens/studio.StudioScreen._do_next_action\" has a cyclomatic complexity of 12 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/tui/screens/studio.py",
+        "symbol": "src/film_pipeline/tui/screens/studio.StudioScreen._do_next_action",
+        "detail": "cyclomatic complexity 12 at line 395",
+        "line": 395
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/agents/impl/structure_extractor_agent._coerce_runtime (11)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/agents/impl/structure_extractor_agent._coerce_runtime\" has a cyclomatic complexity of 11 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/agents/impl/structure_extractor_agent.py",
+        "symbol": "src/film_pipeline/agents/impl/structure_extractor_agent._coerce_runtime",
+        "detail": "cyclomatic complexity 11 at line 96",
+        "line": 96
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/graph/_agent_routing.route_agent (11)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/graph/_agent_routing.route_agent\" has a cyclomatic complexity of 11 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/graph/_agent_routing.py",
+        "symbol": "src/film_pipeline/graph/_agent_routing.route_agent",
+        "detail": "cyclomatic complexity 11 at line 143",
+        "line": 143
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  },
+  {
+    "title": "High cyclomatic complexity: src/film_pipeline/kb/retrieval.KBRetrieval.by_tags (11)",
+    "source": "complexity-outliers",
+    "description": "\"src/film_pipeline/kb/retrieval.KBRetrieval.by_tags\" has a cyclomatic complexity of 11 — well above the repo average. Highly branched functions are hard to test fully and are frequent defect sites.",
+    "confidence": 0.7,
+    "evidence": [
+      {
+        "file": "src/film_pipeline/kb/retrieval.py",
+        "symbol": "src/film_pipeline/kb/retrieval.KBRetrieval.by_tags",
+        "detail": "cyclomatic complexity 11 at line 34",
+        "line": 34
+      }
+    ],
+    "suggested_actions": [
+      "Extract guard clauses and nested branches into helper functions",
+      "Replace deep conditionals with table/strategy dispatch where possible",
+      "Add tests covering the distinct branches before refactoring"
+    ]
+  }
+]

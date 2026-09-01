@@ -1,11 +1,12 @@
-"""E2E smoke test against real model providers (OpenRouter).
+"""E2E smoke test against the default real chat provider (z.ai).
 
 **NOT in CI.** Gated behind ``RUN_REAL_E2E=1`` env var.
-Requires ``OPENROUTER_API_KEY`` set in the environment.
+Requires ``ZAI_API_KEY`` set in the environment (and the other provider keys
+needed by the selected real profile).
 
 Usage::
 
-    RUN_REAL_E2E=1 OPENROUTER_API_KEY=sk-or-... \\
+    RUN_REAL_E2E=1 ZAI_API_KEY=... \\
         pytest tests/e2e/test_real_provider_smoke.py -v -s
 
 Cost: ~$0.01-0.05 per run (1-2 short LLM calls).
@@ -20,17 +21,18 @@ from typing import Any
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv("RUN_REAL_E2E"),
-    reason="RUN_REAL_E2E not set — real-provider tests are manual-only",
+    os.getenv("RUN_REAL_E2E") != "1" or not credentials.is_configured("zai"),
+    reason="Set RUN_REAL_E2E=1 and configure ZAI_API_KEY for manual live tests",
 )
 
 
 @pytest.mark.e2e
 class TestRealProviderSmoke:
-    """Smoke-test the graph with real LLM calls through OpenRouter."""
+    """Smoke-test the graph with real LLM calls through z.ai."""
 
     def test_intake_with_real_llm(self, tmp_path: Path) -> None:
         """Verify intake phase produces a real project profile.

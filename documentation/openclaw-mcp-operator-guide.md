@@ -58,7 +58,8 @@ Chat agents default to z.ai's `glm-5.3-flash`; export `ZAI_API_KEY` to use it.
 Coding-plan keys must also set `ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4`
 (the standard endpoint rejects them with error 1113 "Insufficient balance").
 
-Real-mode bootstrap expects `OPENROUTER_API_KEY`.
+Real-mode bootstrap expects both `OPENROUTER_API_KEY` for the media fallback
+and `ZAI_API_KEY` for the default chat agents.
 Real-mode project creation with the real provider stack also expects `GOOGLE_API_KEY`
 because the image lane now uses Gemini Imagen 4 instead of `mock-image-provider`.
 

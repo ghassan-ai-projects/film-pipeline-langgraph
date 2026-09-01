@@ -29,7 +29,7 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.real_provider,
     pytest.mark.skipif(
-        not os.getenv("RUN_REAL_E2E") or not credentials.is_configured("zai"),
+        os.getenv("RUN_REAL_E2E") != "1" or not credentials.is_configured("zai"),
         reason="RUN_REAL_E2E not set or ZAI_API_KEY not configured — live test is manual-only",
     ),
 ]
@@ -49,7 +49,7 @@ class TestZaiLive:
         text = adapter.chat(
             "Reply with exactly: OK",
             model="zai/glm-5.3-flash",
-            max_tokens=2048,
+            max_tokens=4096,
         )
         assert isinstance(text, str)
         assert text.strip(), "Empty content from z.ai — reasoning likely exhausted max_tokens."
@@ -60,7 +60,7 @@ class TestZaiLive:
         result = adapter.chat_json(
             'Return JSON {"status": "ok", "score": 42} and nothing else.',
             model="zai/glm-5.3-flash",
-            max_tokens=2048,
+            max_tokens=4096,
             temperature=0.0,
         )
         assert isinstance(result, dict)

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import urllib.error
 from email.message import Message
 from io import BytesIO
@@ -358,6 +357,14 @@ class TestZaiProvider:
 
         assert adapter._zai_base_url() == "https://api.z.ai/api/paas/v4"
 
+    def test_zai_base_url_override_trailing_slash_is_stripped(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("ZAI_BASE_URL", "https://api.z.ai/api/coding/paas/v4/")
+        adapter = ModelAdapter()
+
+        assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
+
     def test_zai_missing_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import film_pipeline.agents.model_adapter as ma
 
@@ -413,20 +420,48 @@ class TestZaiProvider:
 
         assert adapter.chat("Hello", model="zai/glm-5.3-flash") == ""
 
-    def test_zai_multimodal_drops_images_with_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        opener = _make_opener({"choices": [{"message": {"content": "text only"}}]})
+    def test_zai_multimodal_preserves_images_in_openai_content_blocks(self) -> None:
+        captured: list[Any] = []
+
+        def _capture(req: Any, *, timeout: float | None = None) -> Any:
+            captured.append({"request": req, "timeout": timeout})
+            return BytesIO(json.dumps({"choices": [{"message": {"content": "vision"}}]}).encode())
+
+        opener = MagicMock()
+        opener.open = _capture
         adapter = ModelAdapter(http_opener=opener, zai_api_key="zai-key")
 
-        with caplog.at_level(logging.WARNING):
-            result = adapter.chat_multimodal(
-                "Describe", model="zai/glm-5.3-flash", images_b64=["abc"]
+        assert (
+            adapter.chat_multimodal(
+                "Describe",
+                model="zai/glm-5.3-flash",
+                images_b64=["abc"],
+                mime_type="image/jpeg",
             )
+            == "vision"
+        )
 
-        assert result == "text only"
-        assert "dropping 1 images" in caplog.text
-        assert "zai/glm-5.3-flash" in caplog.text
+        body = json.loads(captured[0]["request"].data)
+        assert body["messages"] == [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Describe"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/jpeg;base64,abc"},
+                    },
+                ],
+            }
+        ]
+        assert "frequency_penalty" not in body
+
+    def test_zai_rejects_untrusted_base_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("ZAI_BASE_URL", "https://attacker.example/api")
+        adapter = ModelAdapter(zai_api_key="zai-key")
+
+        with pytest.raises(RuntimeError, match="ZAI_BASE_URL must be"):
+            adapter.chat("Hello", model="zai/glm-5.3-flash")
 
 
 def _make_gemini_opener(response_body: dict[str, Any]) -> MagicMock:
@@ -466,3 +501,26 @@ def test_accepts_timeout_kw_handles_var_kwargs_and_rejects_plain_builtins() -> N
 
     assert _accepts_timeout_kw(accepts_kwargs) is True
     assert _accepts_timeout_kw(len) is False
+
+
+def test_transport_scrubs_sensitive_headers_before_reraising() -> None:
+    from film_pipeline.agents._http_transport import post_json
+
+    opener = MagicMock()
+    secret = "0123456789abcdef0123456789abcdef.secret-value"
+    opener.open.side_effect = OSError(f"network unavailable for {secret}")
+    headers = {"Authorization": f"Bearer {secret}"}
+
+    with pytest.raises(RuntimeError, match="network unavailable") as exc_info:
+        post_json(
+            "https://api.z.ai/api/paas/v4/chat/completions",
+            b"{}",
+            http_opener=opener,
+            timeout_seconds=None,
+            headers=headers,
+            error_prefix="z.ai failed",
+            redact_body=True,
+        )
+
+    assert headers["Authorization"] == "[REDACTED]"
+    assert secret not in str(exc_info.value)

@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from film_pipeline.kb.paths import kb_manifest_path
+from film_pipeline.providers import credentials
 
 
 def validate_environment() -> list[str]:
@@ -61,8 +62,21 @@ def _unusable_artifacts_dir_issues() -> list[str]:
 
 
 def _missing_real_mode_credentials_issues() -> list[str]:
-    """Report a real-mode configuration without an OpenRouter API key."""
+    """Report a real-mode configuration missing required provider keys.
+
+    Chat agents default to z.ai's ``zai/glm-5.3-flash`` primary, so real mode
+    needs ``ZAI_API_KEY`` in addition to OpenRouter. The z.ai check goes
+    through the same env-then-.env resolution the adapter uses at call time.
+    """
     mcp_mode = os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower()
-    if mcp_mode != "real" or os.getenv("OPENROUTER_API_KEY"):
+    if mcp_mode != "real":
         return []
-    return ["OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real."]
+    issues: list[str] = []
+    if not credentials.is_configured("seedance-openrouter"):
+        issues.append("OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real.")
+    if not credentials.is_configured("zai"):
+        issues.append(
+            "ZAI_API_KEY is required when FILM_PIPELINE_MCP_MODE=real "
+            "because the default chat models use z.ai GLM."
+        )
+    return issues

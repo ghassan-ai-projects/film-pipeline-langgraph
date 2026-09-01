@@ -159,7 +159,8 @@ GOOGLE_API_KEY=...
 ```
 
 Chat agents default to z.ai's `glm-5.3-flash` (model prefix `zai/`); set
-`ZAI_API_KEY` to use it, keeping OpenRouter/Gemini models as fallbacks:
+`ZAI_API_KEY` to use it. OpenRouter/Gemini remain configured for media lanes
+and model fallbacks:
 
 ```bash
 ZAI_API_KEY=...
@@ -173,6 +174,16 @@ Then launch in real mode:
 ```bash
 uv run film-pipeline-tui --real
 ```
+
+To verify the configured z.ai chat path without running media generation:
+
+```bash
+RUN_REAL_E2E=1 uv run pytest tests/integration/providers/test_zai_llm_live.py \
+  -v -s -n 0 --no-cov
+```
+
+The live checks are excluded from `make test-integration` and must be enabled
+explicitly because they call the configured provider.
 
 Generation with real providers incurs cost and polling latency.
 
@@ -237,5 +248,6 @@ Hard acceptance and product-completion docs live in [documentation/product-compl
 - Optional: provider keys via environment variables or a local `.env` file
 - `OPENROUTER_API_KEY` for real Seedance/OpenRouter calls
 - `GOOGLE_API_KEY` for Gemini Imagen 4 and Veo-family adapters
-- `ZAI_API_KEY` for z.ai chat models (`glm-5.3-flash`); `ZAI_BASE_URL` must
-  point coding-plan keys at `https://api.z.ai/api/coding/paas/v4`
+- `ZAI_API_KEY` for z.ai chat models (`glm-5.3-flash`); ordinary z.ai keys use
+  `https://api.z.ai/api/paas/v4`, while coding-plan keys use
+  `https://api.z.ai/api/coding/paas/v4`

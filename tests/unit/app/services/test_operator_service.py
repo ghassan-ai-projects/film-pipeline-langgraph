@@ -600,7 +600,7 @@ class TestProviderHealthSeeding:
         runtime.seed_default_provider_health()
 
         health = runtime.get_all_health()
-        assert set(health) == {"seedance-openrouter", "veo-fast", "gemini-imagen-4"}
+        assert set(health) == {"zai", "seedance-openrouter", "veo-fast", "gemini-imagen-4"}
         assert all(entry["status"] in {"healthy", "unconfigured"} for entry in health.values())
 
 
