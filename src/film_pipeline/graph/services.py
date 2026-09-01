@@ -93,7 +93,7 @@ class GraphServices:
 
         This keeps the same agent registry and artifact store contract as mock
         mode, but removes canned prompt responses and enables the real model
-        adapter path through OpenRouter.
+        adapter path through the configured model profile and provider adapter.
         """
         runner = PromptRunner(
             model_adapter=ModelAdapter(),

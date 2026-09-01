@@ -1,11 +1,12 @@
-"""E2E smoke test against real model providers (OpenRouter).
+"""E2E smoke test against the default real chat provider via OpenRouter.
 
 **NOT in CI.** Gated behind ``RUN_REAL_E2E=1`` env var.
-Requires ``OPENROUTER_API_KEY`` set in the environment.
+Requires ``OPENROUTER_API_KEY`` set in the environment (and the other provider keys
+needed by the selected real profile).
 
 Usage::
 
-    RUN_REAL_E2E=1 OPENROUTER_API_KEY=sk-or-... \\
+    RUN_REAL_E2E=1 OPENROUTER_API_KEY=... \\
         pytest tests/e2e/test_real_provider_smoke.py -v -s
 
 Cost: ~$0.01-0.05 per run (1-2 short LLM calls).
@@ -20,11 +21,12 @@ from typing import Any
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv("RUN_REAL_E2E"),
-    reason="RUN_REAL_E2E not set — real-provider tests are manual-only",
+    os.getenv("RUN_REAL_E2E") != "1" or not credentials.is_configured("seedance-openrouter"),
+    reason="Set RUN_REAL_E2E=1 and configure OPENROUTER_API_KEY for manual live tests",
 )
 
 

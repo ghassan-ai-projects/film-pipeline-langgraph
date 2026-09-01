@@ -11,6 +11,7 @@ import pytest
 from film_pipeline.providers.credentials import (
     _env_var_for,
     _read_dotenv,
+    env_or_dotenv,
     is_configured,
     lookup,
     redact,
@@ -23,12 +24,48 @@ class TestCredentials:
         assert _env_var_for("veo-fast") == "GOOGLE_API_KEY"
         assert _env_var_for("gemini-imagen-4") == "GOOGLE_API_KEY"
         assert _env_var_for("imagen-4") == "GOOGLE_API_KEY"
+        assert _env_var_for("zai") == "ZAI_API_KEY"
 
     def test_env_var_for_unknown_provider(self) -> None:
         assert _env_var_for("unknown") is None
 
     def test_lookup_returns_none_for_unknown_provider(self) -> None:
         assert lookup("totally-unknown-provider") is None
+
+    def test_lookup_returns_zai_key(self) -> None:
+        with mock.patch.dict(os.environ, {"ZAI_API_KEY": "zai-test-1234"}):
+            assert lookup("zai") == "zai-test-1234"
+
+    def test_env_or_dotenv_prefers_environment(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("ZAI_BASE_URL=https://dotenv.example/v4\n")
+        with (
+            mock.patch.dict(os.environ, {"ZAI_BASE_URL": "https://env.example/v4"}),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            assert env_or_dotenv("ZAI_BASE_URL") == "https://env.example/v4"
+
+    def test_env_or_dotenv_falls_back_to_dotenv(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("ZAI_BASE_URL=https://dotenv.example/v4\n")
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            assert env_or_dotenv("ZAI_BASE_URL") == "https://dotenv.example/v4"
+
+    def test_env_or_dotenv_missing_returns_none(self, tmp_path: Path) -> None:
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            assert env_or_dotenv("ZAI_BASE_URL") is None
+
+    def test_env_or_dotenv_ignores_blank_values(self, tmp_path: Path) -> None:
+        (tmp_path / ".env").write_text("ZAI_API_KEY=\n")
+        with (
+            mock.patch.dict(os.environ, {"ZAI_API_KEY": "   "}, clear=True),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            assert env_or_dotenv("ZAI_API_KEY") is None
 
     def test_lookup_returns_key(self) -> None:
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-1234"}):
@@ -83,6 +120,12 @@ class TestCredentials:
         text = "Using key-abcdefghijklmnop"
         assert "key-" not in redact(text)
         assert "[REDACTED]" in redact(text)
+
+    def test_redact_zai_id_secret_key(self) -> None:
+        key = "0123456789abcdef0123456789abcdef.secret-part-123456"
+        redacted = redact(f"Authorization: Bearer {key}")
+        assert key not in redacted
+        assert "[REDACTED]" in redacted
 
     def test_read_dotenv_ignores_comments_and_quotes(self, tmp_path: Path) -> None:
         (tmp_path / ".env").write_text(

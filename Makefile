@@ -48,7 +48,7 @@ test-unit: ## Run unit tests only (fast, no coverage)
 	$(UV_RUN) pytest tests/unit tests/test_smoke.py --no-cov
 
 test-integration: ## Run integration tests
-	$(UV_RUN) pytest -m integration --no-cov
+	$(UV_RUN) pytest -m "integration and not real_provider" --no-cov
 
 test-e2e: ## Run end-to-end tests
 	$(UV_RUN) pytest -m e2e --no-cov

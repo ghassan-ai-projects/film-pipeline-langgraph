@@ -10,8 +10,9 @@ generation:
 
 # Model routing overrides — raise the creative agents to a stronger tier for
 # festival quality. These flow through ModelRouter.resolve_model_params at run
-# time (no code change needed). Set `primary` to your licensed top model — any
-# OpenRouter id — e.g. primary: anthropic/claude-opus-4 or google/gemini-3-pro.
+# time (no code change needed). Set `primary` to your licensed top model id —
+# e.g. an OpenRouter id such as anthropic/claude-opus-4, or an explicitly
+# configured adapter id such as zai/glm-5.3-flash.
 model_profiles:
   creative_writer:
     # primary: <your-strong-model-id>

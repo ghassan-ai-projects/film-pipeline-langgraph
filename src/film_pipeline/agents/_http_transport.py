@@ -41,12 +41,34 @@ def post_json(
             raw: Any = json.loads(resp.read())
             return dict(raw)
     except (urllib.error.HTTPError, OSError) as e:
-        detail = str(e)
+        # The exception traceback can retain this local mapping. Scrub it
+        # before raising so a failed live probe cannot expose bearer tokens in
+        # pytest or debugger output.
+        _redact_sensitive_headers(headers)
+        detail = redact(str(e))
         if isinstance(e, urllib.error.HTTPError):
             body_text = e.read().decode(errors="replace")
             body_detail = redact(body_text)[:200] if redact_body else body_text[:200]
             detail = f"HTTP {e.code}: {body_detail}"
         raise RuntimeError(f"{error_prefix}: {detail}") from e
+
+
+def _redact_sensitive_headers(headers: dict[str, str]) -> None:
+    """Replace credential-bearing header values in a mapping in place."""
+    for name in headers:
+        normalized = name.lower().replace("_", "-")
+        if (
+            normalized
+            in {
+                "authorization",
+                "proxy-authorization",
+                "x-api-key",
+                "x-goog-api-key",
+            }
+            or "token" in normalized
+            or "api-key" in normalized
+        ):
+            headers[name] = "[REDACTED]"
 
 
 def _open_with_timeout(

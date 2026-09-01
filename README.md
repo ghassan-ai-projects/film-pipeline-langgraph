@@ -158,11 +158,43 @@ OPENROUTER_API_KEY=...
 GOOGLE_API_KEY=...
 ```
 
+Chat agents retain the existing DeepSeek/Gemini routing defaults. The z.ai
+adapter is opt-in: set a profile's `primary` model to
+`zai/glm-5.3-flash` in the resolved project configuration, then provide
+`ZAI_API_KEY`. OpenRouter/Gemini remain configured for media lanes and model
+fallbacks:
+
+```bash
+ZAI_API_KEY=...  # only needed when a configured profile uses zai/<model>
+# Coding-plan keys ONLY work against the coding endpoint — with the default
+# endpoint they fail with error 1113 "Insufficient balance".
+ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4
+```
+
+For example, opt one profile into z.ai without changing the adapter or the
+other profiles:
+
+```yaml
+model_profiles:
+  creative_writer:
+    primary: zai/glm-5.3-flash
+```
+
 Then launch in real mode:
 
 ```bash
 uv run film-pipeline-tui --real
 ```
+
+To verify the optional z.ai adapter without running media generation:
+
+```bash
+RUN_REAL_E2E=1 uv run pytest tests/integration/providers/test_zai_llm_live.py \
+  -v -s -n 0 --no-cov
+```
+
+The live checks are excluded from `make test-integration` and must be enabled
+explicitly because they call the configured provider.
 
 Generation with real providers incurs cost and polling latency.
 
@@ -227,3 +259,6 @@ Hard acceptance and product-completion docs live in [documentation/product-compl
 - Optional: provider keys via environment variables or a local `.env` file
 - `OPENROUTER_API_KEY` for real Seedance/OpenRouter calls
 - `GOOGLE_API_KEY` for Gemini Imagen 4 and Veo-family adapters
+- `ZAI_API_KEY` when a configured profile uses a z.ai chat model
+  (`glm-5.3-flash`); ordinary z.ai keys use `https://api.z.ai/api/paas/v4`, while coding-plan keys use
+  `https://api.z.ai/api/coding/paas/v4`

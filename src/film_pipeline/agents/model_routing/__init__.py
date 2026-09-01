@@ -1,17 +1,21 @@
 """Model routing — profiles, router, fallback chain.
 
-Model profiles are loaded from config (with sensible defaults). The router
-resolves logical profile names to provider model ids. Callers must always
-resolve through the router — no hardcoded model strings in execution paths.
+Project model profiles are declared in ``profiles/base.studio.yaml`` and may be
+overridden by later profile layers. The router keeps a last-resort fallback
+for direct callers that do not have resolved project configuration. Callers
+must always resolve through the router — no hardcoded model strings in
+execution paths.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-# Default profiles — overridable via constructor or config.
-# These use logical model names that providers map to real model ids.
-_DEFAULT_PROFILES: dict[str, dict[str, object]] = {
+# Last-resort profiles for direct router users without resolved project config.
+# The project-facing source of truth is profiles/base.studio.yaml. Provider
+# adapters do not change this policy; a z.ai model is selected only when
+# configuration explicitly asks for a ``zai/<model>`` id.
+_FALLBACK_PROFILES: dict[str, dict[str, object]] = {
     "creative_writer": {
         "primary": "deepseek/deepseek-chat",
         "fallback": "google/gemini-3-flash-preview",
@@ -77,7 +81,7 @@ class ModelRouter:
     are used. Tests may inject custom profiles.
     """
 
-    profiles: dict[str, dict[str, object]] = field(default_factory=lambda: dict(_DEFAULT_PROFILES))
+    profiles: dict[str, dict[str, object]] = field(default_factory=lambda: dict(_FALLBACK_PROFILES))
 
     def select(self, profile_name: str, prefer_cheap: bool = False) -> str:
         """Select the best available model for a given profile."""
