@@ -22,6 +22,7 @@ folder was retired and folded in here).
 
 - Operations guide: [operations-guide.md](./operations-guide.md)
 - Runbook (first film): [runbook-first-film.md](./runbook-first-film.md)
+- Runbook (The Third Interval, pre-generation): [runbook-the-third-interval.md](./runbook-the-third-interval.md)
 - Release process: [release-process.md](./release-process.md)
 - Demo guide: [demo-guide.md](./demo-guide.md)
 - Acceptance checklist: [acceptance-checklist.md](./acceptance-checklist.md)

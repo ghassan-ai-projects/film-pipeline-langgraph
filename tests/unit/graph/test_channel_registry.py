@@ -220,6 +220,8 @@ WRITER_DISPOSITIONS: dict[tuple[str, str], str] = {
     ("_agent_handoff.py", "_routing_decisions"): "explicit-writer",
     ("_generation_batch_planning.py", "generation_requests"): "explicit-writer",
     ("_repair_loop.py", "_repair_feedback"): "propagated",
+    ("_repair_loop.py", "_orchestrator__pending_revisions"): "explicit-writer",
+    ("_repair_loop.py", "issues"): "explicit-writer",
     ("_shared.py", "generation_requests"): "explicit-writer",
     ("_shared.py", "issues"): "explicit-writer",
     ("approval.py", "_repair_feedback"): (

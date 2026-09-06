@@ -84,13 +84,16 @@ def test_mcp_gateway_approve_and_revision() -> None:
         request = ProjectCreateRequest(project_id="mcp-gw-approve", title="T")
         gateway.create_project(request)
         gateway.set_active_project("mcp-gw-approve")
+        idea = gateway.submit_idea("mcp-gw-approve", "A short film about a second chance.")
+        assert idea.ok is True
         result = gateway.approve_phase("mcp-gw-approve")
         assert isinstance(result.ok, bool)
 
-        # Requesting revision without a graph checkpoint raises; the gateway
-        # surfaces this as a RuntimeError from the MCP error response.
-        with pytest.raises(RuntimeError):
-            gateway.request_revision("Refine tone.", "mcp-gw-approve")
+        # An active project can enter the revision path; the gateway must
+        # surface the successful mutation.
+        revision = gateway.request_revision("Refine tone.", "mcp-gw-approve")
+        assert revision.ok is True
+        assert revision.project_id == "mcp-gw-approve"
     finally:
         gateway.close()
 
