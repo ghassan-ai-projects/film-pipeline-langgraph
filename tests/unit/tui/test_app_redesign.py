@@ -39,6 +39,69 @@ from tests.unit.tui.conftest import (
 from ._helpers import _run
 
 
+class GenerationPhaseGateway(RecordingGateway):
+    def __init__(self) -> None:
+        super().__init__()
+        self._planned = False
+
+    def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
+        dashboard = super().get_dashboard(project_id)
+        return DashboardSummary(
+            project_id=dashboard.project_id,
+            title=dashboard.title,
+            slug=dashboard.slug,
+            current_phase="generation",
+            runtime_mode=dashboard.runtime_mode,
+            workflow_mode=dashboard.workflow_mode,
+            status="in_progress",
+            next_action="run_generation",
+            route_reason="ready to generate",
+            eligible_actions=["run_generation"],
+            blocked_actions=dashboard.blocked_actions,
+            issue_count=dashboard.issue_count,
+            artifact_count=dashboard.artifact_count,
+            checkpoint_count=dashboard.checkpoint_count,
+            has_blockers=False,
+        )
+
+
+class PlannedGenerationPhaseGateway(GenerationPhaseGateway):
+    def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
+        if not self._planned:
+            return GenerationWorkspace(
+                project_id=project_id or self.active_project_id,
+                phase="generation",
+                provider="mock-video-provider",
+                model="mock-fast",
+                estimated_cost_usd=0.0,
+                rows=[],
+                next_step="plan",
+            )
+        return super().get_generation_workspace(project_id)
+
+    def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self._planned = True
+        return super().plan_generation(project_id)
+
+
+class BatchGenerationPhaseGateway(PlannedGenerationPhaseGateway):
+    def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
+        self.start_calls += 1
+        workspace = self.get_generation_workspace(project_id)
+        return GenerationWorkspace(
+            project_id=workspace.project_id,
+            phase=workspace.phase,
+            provider=workspace.provider,
+            model=workspace.model,
+            estimated_cost_usd=workspace.estimated_cost_usd,
+            rows=[{**row, "status": "running"} for row in workspace.rows],
+            planned=1,
+            submitted=1,
+            running=1,
+            next_step="poll",
+        )
+
+
 def test_app_starts_on_project_gallery() -> None:
     async def _body() -> None:
         gateway = RecordingGateway()
@@ -1717,27 +1780,6 @@ def test_studio_tabs_and_default_selection() -> None:
 
 
 def test_generate_button_shows_in_generation_phase() -> None:
-    class GenerationPhaseGateway(RecordingGateway):
-        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
-            dashboard = super().get_dashboard(project_id)
-            return DashboardSummary(
-                project_id=dashboard.project_id,
-                title=dashboard.title,
-                slug=dashboard.slug,
-                current_phase="generation",
-                runtime_mode=dashboard.runtime_mode,
-                workflow_mode=dashboard.workflow_mode,
-                status="in_progress",
-                next_action="run_generation",
-                route_reason="ready to generate",
-                eligible_actions=["run_generation"],
-                blocked_actions=dashboard.blocked_actions,
-                issue_count=dashboard.issue_count,
-                artifact_count=dashboard.artifact_count,
-                checkpoint_count=dashboard.checkpoint_count,
-                has_blockers=False,
-            )
-
     async def _body() -> None:
         gateway = GenerationPhaseGateway()
         app = FilmStudioApp(gateway=gateway)
@@ -1755,64 +1797,8 @@ def test_generate_button_shows_in_generation_phase() -> None:
 
 
 def test_generate_button_runs_generation_batch() -> None:
-    class GenerationPhaseGateway(RecordingGateway):
-        _planned: bool = False
-
-        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
-            dashboard = super().get_dashboard(project_id)
-            return DashboardSummary(
-                project_id=dashboard.project_id,
-                title=dashboard.title,
-                slug=dashboard.slug,
-                current_phase="generation",
-                runtime_mode=dashboard.runtime_mode,
-                workflow_mode=dashboard.workflow_mode,
-                status="in_progress",
-                next_action="run_generation",
-                route_reason="ready to generate",
-                eligible_actions=["run_generation"],
-                blocked_actions=dashboard.blocked_actions,
-                issue_count=dashboard.issue_count,
-                artifact_count=dashboard.artifact_count,
-                checkpoint_count=dashboard.checkpoint_count,
-                has_blockers=False,
-            )
-
-        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
-            if not self._planned:
-                return GenerationWorkspace(
-                    project_id=project_id or self.active_project_id,
-                    phase="generation",
-                    provider="mock-video-provider",
-                    model="mock-fast",
-                    estimated_cost_usd=0.0,
-                    rows=[],
-                    next_step="plan",
-                )
-            return super().get_generation_workspace(project_id)
-
-        def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
-            self._planned = True
-            return super().plan_generation(project_id)
-
-        def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
-            self.start_calls += 1
-            workspace = self.get_generation_workspace(project_id)
-            return GenerationWorkspace(
-                project_id=workspace.project_id,
-                phase=workspace.phase,
-                provider=workspace.provider,
-                model=workspace.model,
-                estimated_cost_usd=workspace.estimated_cost_usd,
-                rows=[{**row, "status": "running"} for row in workspace.rows],
-                planned=1,
-                submitted=1,
-                running=1,
-                next_step="poll",
-            )
-
     async def _body() -> None:
-        gateway = GenerationPhaseGateway()
+        gateway = BatchGenerationPhaseGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -1833,48 +1819,8 @@ def test_generate_button_runs_generation_batch() -> None:
 
 
 def test_command_palette_generate_runs_batch() -> None:
-    class GenerationPhaseGateway(RecordingGateway):
-        _planned: bool = False
-
-        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
-            dashboard = super().get_dashboard(project_id)
-            return DashboardSummary(
-                project_id=dashboard.project_id,
-                title=dashboard.title,
-                slug=dashboard.slug,
-                current_phase="generation",
-                runtime_mode=dashboard.runtime_mode,
-                workflow_mode=dashboard.workflow_mode,
-                status="in_progress",
-                next_action="run_generation",
-                route_reason="ready to generate",
-                eligible_actions=["run_generation"],
-                blocked_actions=dashboard.blocked_actions,
-                issue_count=dashboard.issue_count,
-                artifact_count=dashboard.artifact_count,
-                checkpoint_count=dashboard.checkpoint_count,
-                has_blockers=False,
-            )
-
-        def get_generation_workspace(self, project_id: str | None = None) -> GenerationWorkspace:
-            if not self._planned:
-                return GenerationWorkspace(
-                    project_id=project_id or self.active_project_id,
-                    phase="generation",
-                    provider="mock-video-provider",
-                    model="mock-fast",
-                    estimated_cost_usd=0.0,
-                    rows=[],
-                    next_step="plan",
-                )
-            return super().get_generation_workspace(project_id)
-
-        def plan_generation(self, project_id: str | None = None) -> GenerationWorkspace:
-            self._planned = True
-            return super().plan_generation(project_id)
-
     async def _body() -> None:
-        gateway = GenerationPhaseGateway()
+        gateway = PlannedGenerationPhaseGateway()
         app = FilmStudioApp(gateway=gateway)
         async with app.run_test() as pilot:
             await pilot.pause()
@@ -1890,27 +1836,6 @@ def test_command_palette_generate_runs_batch() -> None:
 
 
 def test_reader_shows_generation_prompts() -> None:
-    class GenerationPhaseGateway(RecordingGateway):
-        def get_dashboard(self, project_id: str | None = None) -> DashboardSummary:
-            dashboard = super().get_dashboard(project_id)
-            return DashboardSummary(
-                project_id=dashboard.project_id,
-                title=dashboard.title,
-                slug=dashboard.slug,
-                current_phase="generation",
-                runtime_mode=dashboard.runtime_mode,
-                workflow_mode=dashboard.workflow_mode,
-                status="in_progress",
-                next_action="run_generation",
-                route_reason="ready to generate",
-                eligible_actions=["run_generation"],
-                blocked_actions=dashboard.blocked_actions,
-                issue_count=dashboard.issue_count,
-                artifact_count=dashboard.artifact_count,
-                checkpoint_count=dashboard.checkpoint_count,
-                has_blockers=False,
-            )
-
     async def _body() -> None:
         gateway = GenerationPhaseGateway()
         app = FilmStudioApp(gateway=gateway)
