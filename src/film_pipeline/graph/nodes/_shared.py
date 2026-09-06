@@ -208,3 +208,24 @@ def _is_new_issue(issue: dict[str, Any], original_state: dict[str, Any]) -> bool
         i.get("issue_id") for i in (original_state.get("issues", []) or []) if i.get("issue_id")
     }
     return iid not in orig_ids
+
+
+def _collect_updates(
+    gate_updates: dict[str, Any],
+    new_state: dict[str, Any],
+    original: dict[str, Any],
+    ref_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Compute a node update from a before/after state diff."""
+    updates: dict[str, Any] = dict(gate_updates)
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ref_keys:
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
