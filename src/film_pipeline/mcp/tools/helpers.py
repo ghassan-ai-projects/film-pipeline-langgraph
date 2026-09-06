@@ -72,6 +72,16 @@ def _services(rt: object) -> Any:
     return rt.services
 
 
+def _register_active_artifact_ref(
+    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
+) -> None:
+    """Record an artifact reference on the active project and persist state."""
+    active[state_key] = ref
+    active.setdefault("artifact_refs", []).append(ref)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
+
+
 def _coerce_runtime_arg(args: dict[str, object]) -> int:
     """Read the user-supplied expected length from tool args.
 

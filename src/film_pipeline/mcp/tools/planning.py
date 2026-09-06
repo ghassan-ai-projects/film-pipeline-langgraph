@@ -7,7 +7,13 @@ from typing import Any, cast
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
-from .helpers import _error, _latest_artifact_version, _ok, _services
+from .helpers import (
+    _error,
+    _latest_artifact_version,
+    _ok,
+    _register_active_artifact_ref,
+    _services,
+)
 
 
 async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
@@ -80,16 +86,6 @@ def _save_gen_planning_candidate(
         created_at=datetime.now(UTC),
     )
     return store.save(content, meta)
-
-
-def _register_active_artifact_ref(
-    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
-) -> None:
-    """Record an artifact reference on the active project and persist state."""
-    active[state_key] = ref
-    active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
 
 
 def _load_master_matrix(store: Any, project_id: str) -> Any:

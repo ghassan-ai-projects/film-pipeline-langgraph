@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from .. import helpers as _helpers
 from ..helpers import _latest_artifact_version, _services
+
+_register_active_artifact_ref = _helpers._register_active_artifact_ref
 
 
 def _dialogue_line(dialogue: object) -> str | None:
@@ -135,13 +138,3 @@ def _save_visual_dev_candidate(
         created_at=datetime.now(UTC),
     )
     return store.save(bible, meta)
-
-
-def _register_active_artifact_ref(
-    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
-) -> None:
-    """Record an artifact reference on the active project and persist state."""
-    active[state_key] = ref
-    active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)

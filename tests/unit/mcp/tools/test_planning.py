@@ -56,6 +56,14 @@ def test_initialize_budget_success(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     active = rt.get_active()
     assert active is not None
     assert active["budget_state_ref"] == result["budget_state_ref"]
+    assert result["budget_state_ref"] in active["artifact_refs"]
+
+    fresh = StudioRuntime(runtime_root=tmp_path / "runtime")
+    persisted = fresh.get_project("plan-budget-1")
+    assert persisted is not None
+    persisted_ref = str(result["budget_state_ref"])
+    assert persisted["budget_state_ref"] == persisted_ref
+    assert persisted_ref in persisted["artifact_refs"]
 
 
 def test_initialize_budget_creates_new_version(
