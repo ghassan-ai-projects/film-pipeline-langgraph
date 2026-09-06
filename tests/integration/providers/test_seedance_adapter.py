@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import tempfile
-from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
 import pytest
+from tests._helpers import _mock_opener
 
 from film_pipeline.providers.adapters.seedance_openrouter import (
     SeedanceOpenRouterProvider,
@@ -18,19 +17,6 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
-
-
-def _mock_opener(response_body: dict[str, object], code: int = 200) -> mock.Mock:
-    """Build a mock urllib opener that returns a canned JSON response."""
-
-    def _open(req: object) -> BytesIO:
-        if code >= 400:
-            raise OSError(f"HTTP {code}")
-        return BytesIO(json.dumps(response_body).encode())
-
-    opener = mock.Mock()
-    opener.open = _open
-    return opener
 
 
 @pytest.fixture

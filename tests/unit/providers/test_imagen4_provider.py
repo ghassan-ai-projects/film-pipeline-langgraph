@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import base64
-import json
 import tempfile
-from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
@@ -17,6 +15,7 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
+from tests._helpers import _mock_opener
 
 
 @pytest.fixture
@@ -103,14 +102,3 @@ def _make_provider(
             entry=entry,
             http_opener=_mock_opener(response_body or {}, code=code),
         )
-
-
-def _mock_opener(response_body: dict[str, object], code: int = 200) -> mock.Mock:
-    def _open(_req: object) -> BytesIO:
-        if code >= 400:
-            raise OSError(f"HTTP {code}")
-        return BytesIO(json.dumps(response_body).encode())
-
-    opener = mock.Mock()
-    opener.open = _open
-    return opener
