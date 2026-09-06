@@ -26,7 +26,7 @@ from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeP
 from film_pipeline.schemas.artifact import ArtifactMetadata
 
 from .helpers import (
-    _active_project_id,
+    _active_project_with_state,
     _error,
     _ok,
     _services,
@@ -50,7 +50,7 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     human approves it via ``approve_profile_change``.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
+    active = _active_project_with_state(args, rt)
     if active is None:
         return _error("No active project.")
     project_id, state = active
@@ -102,7 +102,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     downstream artifacts, and records the approval.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
+    active = _active_project_with_state(args, rt)
     if active is None:
         return _error("No active project.")
     project_id, state = active
@@ -146,17 +146,6 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
         approval_ref=approval_ref,
         message="Profile change approved and applied.",
     )
-
-
-def _active_state(rt: Any, args: dict[str, object]) -> tuple[str, Any] | None:
-    """Resolve ``(project_id, state)`` for the request, or ``None`` without one."""
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    state = rt.get_project(project_id)
-    if state is None:
-        return None
-    return project_id, state
 
 
 def _requested_profile_changes(args: dict[str, object]) -> dict[str, str]:

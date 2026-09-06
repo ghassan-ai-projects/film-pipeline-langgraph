@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import (
-    _active_project_id,
+    _active_project_with_state,
     _error,
     _load_artifact,
     _load_latest_reference_index,
@@ -34,17 +34,6 @@ def _parse_phase(phase_str: str) -> FilmPhase | None:
         return FilmPhase(phase_str)
     except ValueError:
         return None
-
-
-def _require_project(args: dict[str, object], rt: Any) -> tuple[str, dict[str, object]] | None:
-    """Resolve (project_id, state) for a request, or None when unavailable."""
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    state = rt.get_project(project_id)
-    if state is None:
-        return None
-    return project_id, state
 
 
 def _stored_qc_reports(state: dict[str, object]) -> list[object] | None:
@@ -309,7 +298,7 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     by the QC node). Falls back to live validator runs if no stored reports.
     """
     rt = tools_pkg.get_runtime()
-    resolved = _require_project(args, rt)
+    resolved = _active_project_with_state(args, rt)
     if resolved is None:
         return _error("No active project.")
     project_id, state = resolved
@@ -347,7 +336,7 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
     Reads from stored ``issues`` in project state (populated by QC node).
     """
     rt = tools_pkg.get_runtime()
-    resolved = _require_project(args, rt)
+    resolved = _active_project_with_state(args, rt)
     if resolved is None:
         return _error("No active project.")
     _project_id, state = resolved

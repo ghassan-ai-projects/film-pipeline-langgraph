@@ -51,6 +51,19 @@ def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
     return None
 
 
+def _active_project_with_state(
+    args: dict[str, object], rt: Any
+) -> tuple[str, dict[str, Any]] | None:
+    """Return the resolved project id and its state, or ``None`` when absent."""
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        return None
+    state = rt.get_project(project_id)
+    if state is None:
+        return None
+    return project_id, state
+
+
 def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     """Return the active project's state, or ``None`` when none resolves.
 
@@ -60,10 +73,8 @@ def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     binding sees the patch.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    return rt.get_project(project_id)
+    resolved = _active_project_with_state(args, rt)
+    return None if resolved is None else resolved[1]
 
 
 def _services(rt: object) -> Any:
