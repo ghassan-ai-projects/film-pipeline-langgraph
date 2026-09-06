@@ -149,15 +149,6 @@ def _character_mock_payload(
     }
 
 
-def _request_character_bible_output(
-    rt: Any, prompt: str, character_id: str, character_name: str, project_id: str
-) -> dict[str, Any]:
-    """Obtain CharacterBible JSON from the model adapter or mock fallback."""
-    return _chat_json_or_mock(
-        rt, prompt, _character_mock_payload(character_id, character_name, project_id)
-    )
-
-
 def _execute_character_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run CharacterBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
@@ -244,8 +235,8 @@ async def generate_character_bible(args: dict[str, object]) -> dict[str, object]
     )
 
     try:
-        model_output = _request_character_bible_output(
-            rt, prompt, character_id, character_name, project_id
+        model_output = _chat_json_or_mock(
+            rt, prompt, _character_mock_payload(character_id, character_name, project_id)
         )
         result = _execute_character_bible_agent(model_output)
         if result is None:

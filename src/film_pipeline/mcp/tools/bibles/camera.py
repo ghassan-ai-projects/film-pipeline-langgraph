@@ -48,17 +48,6 @@ def _camera_mock_payload(project_id: str) -> dict[str, Any]:
     }
 
 
-def _request_camera_bible_output(
-    rt: Any, project_id: str, camera_philosophy: str
-) -> dict[str, Any]:
-    """Obtain CameraLanguageBible JSON from the model adapter or mock fallback."""
-    return _chat_json_or_mock(
-        rt,
-        _camera_bible_prompt(camera_philosophy),
-        _camera_mock_payload(project_id),
-    )
-
-
 def _execute_camera_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run CameraBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
@@ -113,8 +102,10 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
         return _error("FilmConstitution not found.")
 
     try:
-        model_output = _request_camera_bible_output(
-            rt, project_id, _constitution_camera_philosophy(constitution)
+        model_output = _chat_json_or_mock(
+            rt,
+            _camera_bible_prompt(_constitution_camera_philosophy(constitution)),
+            _camera_mock_payload(project_id),
         )
         result = _execute_camera_bible_agent(model_output)
         if result is None:

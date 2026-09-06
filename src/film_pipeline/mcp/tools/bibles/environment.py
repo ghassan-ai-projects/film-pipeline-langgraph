@@ -128,15 +128,6 @@ def _environment_mock_payload(
     }
 
 
-def _request_environment_bible_output(
-    rt: Any, prompt: str, environment_id: str, environment_name: str, project_id: str
-) -> dict[str, Any]:
-    """Obtain EnvironmentBible JSON from the model adapter or mock fallback."""
-    return _chat_json_or_mock(
-        rt, prompt, _environment_mock_payload(environment_id, environment_name, project_id)
-    )
-
-
 def _execute_environment_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run EnvironmentBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
@@ -225,8 +216,8 @@ async def generate_environment_bible(args: dict[str, object]) -> dict[str, objec
     )
 
     try:
-        model_output = _request_environment_bible_output(
-            rt, prompt, environment_id, environment_name, project_id
+        model_output = _chat_json_or_mock(
+            rt, prompt, _environment_mock_payload(environment_id, environment_name, project_id)
         )
         result = _execute_environment_bible_agent(model_output)
         if result is None:

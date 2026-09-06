@@ -49,11 +49,6 @@ def _style_mock_payload(project_id: str) -> dict[str, Any]:
     }
 
 
-def _request_style_bible_output(rt: Any, prompt: str, project_id: str) -> dict[str, Any]:
-    """Obtain StyleBible JSON from the model adapter or mock fallback."""
-    return _chat_json_or_mock(rt, prompt, _style_mock_payload(project_id))
-
-
 def _execute_style_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run StyleBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
@@ -114,7 +109,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     )
 
     try:
-        model_output = _request_style_bible_output(rt, prompt, project_id)
+        model_output = _chat_json_or_mock(rt, prompt, _style_mock_payload(project_id))
         result = _execute_style_bible_agent(model_output)
         if result is None:
             return _error("StyleBible agent produced invalid output.")
