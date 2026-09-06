@@ -26,9 +26,15 @@ from film_pipeline.app.runtime import StudioRuntime
 
 
 class _FakeSnapshot:
-    def __init__(self, values: dict[str, Any] | None, nxt: tuple[str, ...] = ()) -> None:
+    def __init__(
+        self,
+        values: dict[str, Any] | None,
+        nxt: tuple[str, ...] = (),
+        tasks: tuple[Any, ...] = (),
+    ) -> None:
         self.values = values or {}
         self.next = nxt
+        self.tasks = tasks
 
 
 class _FakeGraph:
@@ -44,12 +50,14 @@ class _FakeGraph:
         self.result_state = result_state or {}
         self.invoke_error = invoke_error
         self.invoke_calls = 0
+        self.last_input: Any = None
 
     def get_state(self, config: dict[str, Any]) -> _FakeSnapshot:
         return self.snapshot
 
     def invoke(self, command: Any, config: dict[str, Any]) -> dict[str, Any]:
         self.invoke_calls += 1
+        self.last_input = command
         if self.invoke_error is not None:
             raise self.invoke_error
         return self.result_state
@@ -125,6 +133,92 @@ def test_successful_resume_returns_state_without_failure_audit(
     assert state is result_state
     assert not _audit(rt, "resume_failed")
     assert not _audit(rt, "resume_stalled_manual_advance")
+
+
+def test_revision_reenters_repair_from_failed_start_checkpoint(
+    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A persisted ``__start__`` failure must be recovered with graph input."""
+    result_state: dict[str, Any] = {"project_id": "p1", "current_phase": "shot_bible"}
+    graph = _FakeGraph(
+        snapshot=_FakeSnapshot({"current_phase": "shot_bible"}, ("__start__",)),
+        result_state=result_state,
+    )
+    rt.active_project_id = "p1"
+    _patch_graph(monkeypatch, graph)
+
+    state = _graph_exec.request_revision(rt, "Align the shot matrix with the brief.")
+
+    assert state is result_state
+    assert graph.invoke_calls == 1
+    assert isinstance(graph.last_input, dict)
+    assert graph.last_input["_resume_to_repair"] is True
+    assert graph.last_input["_revision_note"] == "Align the shot matrix with the brief."
+    assert not _audit(rt, "resume_failed")
+
+
+def test_revision_uses_interrupt_resume_when_approval_is_pending(
+    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live approval interrupt keeps the normal LangGraph resume path."""
+    result_state: dict[str, Any] = {"project_id": "p1", "current_phase": "shot_bible"}
+    graph = _FakeGraph(
+        snapshot=_FakeSnapshot({"current_phase": "shot_bible"}, ("await_approval",)),
+        result_state=result_state,
+    )
+    rt.active_project_id = "p1"
+    _patch_graph(monkeypatch, graph)
+
+    _graph_exec.request_revision(rt, "Please revise the structure.")
+
+    assert graph.invoke_calls == 1
+    assert graph.last_input.resume["action"] == "revise"
+
+
+def test_real_graph_recovers_failed_start_and_reaches_approval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A poisoned start checkpoint is repaired through the actual graph wiring."""
+    from langchain_core.runnables import RunnableConfig
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.errors import InvalidUpdateError
+    from langgraph.types import Command
+
+    from film_pipeline.graph import graph as graph_module
+
+    reached_repair: list[bool] = []
+
+    def fake_repair(state: dict[str, Any]) -> dict[str, Any]:
+        reached_repair.append(bool(state.get("_resume_to_repair")))
+        return {
+            "current_phase": "shot_bible",
+            "approved": False,
+            "human_approval_required": True,
+            "human_approval_phase": "shot_bible",
+            "issues": [],
+            "_resume_to_repair": False,
+        }
+
+    monkeypatch.setattr(graph_module, "repair_phase_node", fake_repair)
+    graph = graph_module.build_graph(checkpointer=MemorySaver())
+    config: RunnableConfig = {"configurable": {"thread_id": "poisoned-start"}}
+
+    with pytest.raises(InvalidUpdateError, match="Must write to at least one"):
+        graph.invoke(Command(resume={"action": "revise"}), config)
+
+    result = graph.invoke(
+        {
+            "project_id": "poisoned-start",
+            "current_phase": "shot_bible",
+            "_resume_to_repair": True,
+        },
+        config,
+    )
+    snapshot = graph.get_state(config)
+
+    assert reached_repair == [True]
+    assert result["current_phase"] == "shot_bible"
+    assert snapshot.next == ("await_approval",)
 
 
 def test_stalled_resume_advances_and_audits(

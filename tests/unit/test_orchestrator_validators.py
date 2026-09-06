@@ -104,6 +104,26 @@ class TestGateAShotStructure:
         assert issues[0]["severity"] == "blocking"
         assert "shot_count_mismatch" in issues[0]["code"]
 
+    def test_blocks_on_act_ids_outside_execution_brief(self) -> None:
+        brief = _brief(
+            runtime=48,
+            movements=[
+                MovementSpec(movement_id="act_1", shot_count=1, duration_range_seconds=(10, 15)),
+                MovementSpec(movement_id="act_2", shot_count=1, duration_range_seconds=(10, 15)),
+                MovementSpec(movement_id="act_3", shot_count=1, duration_range_seconds=(10, 15)),
+            ],
+        )
+        matrix = FakeMatrix(
+            rows=[
+                FakeRow(shot_id="s_001", act_id="act_1", duration_seconds=12),
+                FakeRow(shot_id="s_002", act_id="act_2", duration_seconds=12),
+                FakeRow(shot_id="s_003", act_id="act_3", duration_seconds=12),
+                FakeRow(shot_id="s_004", act_id="act_4", duration_seconds=12),
+            ]
+        )
+        issues = validate_shot_structure({}, brief, matrix)
+        assert [issue["code"] for issue in issues] == ["unexpected_act_ids"]
+
     def test_blocks_on_runtime_mismatch(self) -> None:
         brief = _brief(
             runtime=240,

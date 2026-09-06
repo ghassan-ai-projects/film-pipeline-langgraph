@@ -45,8 +45,26 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     project_id = str(state.get("project_id", ""))
     if not project_id:
         return None
+    ref = str(state.get("execution_brief_ref", "") or "")
+    artifact_id = "execution_brief"
+    version = 1
+    parts = ref.split(":")
+    if len(parts) >= 3 and parts[1]:
+        artifact_id = parts[1]
+        try:
+            version = int(parts[2].removeprefix("v"))
+        except ValueError:
+            return None
+    elif not ref:
+        try:
+            artifacts = services.artifact_store.list_artifacts(project_id, FilmPhase.SHOT_BIBLE)
+            matches = [a for a in artifacts if a.artifact_id == "execution_brief"]
+            if matches:
+                version = max(a.version for a in matches)
+        except (FileNotFoundError, OSError, ValueError):
+            return None
     try:
-        data = services.artifact_store.load(project_id, FilmPhase.SHOT_BIBLE, "execution_brief", 1)
+        data = services.artifact_store.load(project_id, FilmPhase.SHOT_BIBLE, artifact_id, version)
         if isinstance(data, dict):
             return ExecutionBrief(**data)
     except (FileNotFoundError, ValueError, KeyError, TypeError):

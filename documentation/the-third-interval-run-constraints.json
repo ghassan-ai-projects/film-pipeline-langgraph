@@ -1,0 +1,56 @@
+{
+  "target_runtime_seconds": 600,
+  "target_scene_count": 5,
+  "target_shot_count": 55,
+  "max_shot_count": 55,
+  "film_type": "visual_poetry",
+  "pacing_style": "slow_cinema",
+  "tone": "surreal, philosophical, restrained, irreversible",
+  "genre": "dialogue-free surreal philosophical short",
+  "visual_style": "Camino photographic master plates with turbulent painted texture, impossible spatial relations, and permeable landscape edges",
+  "target_audience": "adult festival short-film audience",
+  "themes": [
+    "unity without sameness",
+    "consequence beyond intention",
+    "the illusion of separateness",
+    "irreversible absence"
+  ],
+  "required_elements": [
+    "five sequential Camino master plates in yellow-to-barren order",
+    "one solitary young man with a hard contour and unnaturally sharp shadow",
+    "the two-note bird call and silent third interval",
+    "the iridescent insect dies and is never resurrected",
+    "ants carry the insect across the growing fissure",
+    "the shadow hole, crack, blossom, raindrop, and pre-existing underground network",
+    "contact transfers form, movement, or rhythm",
+    "a hard boundary represents imagined separateness"
+  ],
+  "locations": [
+    "yellow field and painted sky",
+    "half-yellow half-green field",
+    "entirely green landscape with distant almond tree",
+    "first barren field",
+    "final barren field"
+  ],
+  "character_constraints": [
+    "no dialogue",
+    "face remains secondary; hands, feet, posture, shadow, silhouette, and hesitation carry performance",
+    "the man must not borrow landscape texture until the ending contact",
+    "the insect does not return and the barren field does not bloom"
+  ],
+  "forbidden_topics": [
+    "glowing waves",
+    "written messages",
+    "cosmic montage",
+    "literal musical notation",
+    "resurrection",
+    "new flowers",
+    "hopeful sunrise",
+    "melting clocks"
+  ],
+  "provider_preferences": [
+    "seedance-openrouter",
+    "veo-3.1-fast"
+  ],
+  "notes": "Source treatment: /Users/ghassan/my-projects/film-pipeline-langgraph/docs/The-Third-Interval-Final-Story-Treatment.md. Existing source plates supplied by the operator: /Users/ghassan/ai-movies/camino-del-genesis/reference-images/1-yello.jpg, 2-green-yellow.jpg, 3-green.jpg, 4-land-green.jpg, 5-land.jpg. Preserve these as source plates; do not overwrite the existing Camino del Genesis destination. Safe run boundary: complete intake through generation planning, including prompts, shot matrix, continuity, budget, and generation plan; do not plan_generation_batch, approve_generation_spend, start_generation_batch, poll, download, or create video clips."
+}
