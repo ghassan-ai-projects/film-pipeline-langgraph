@@ -8,16 +8,11 @@ from typing import cast
 from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     approve_intake,
-    create_film_project,
     get_intake_analysis,
-    set_active_project,
     submit_idea,
 )
 
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+from ._helpers import _make_active_project
 
 
 def test_submit_idea_requires_active_project() -> None:

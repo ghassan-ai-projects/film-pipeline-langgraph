@@ -10,20 +10,15 @@ import pytest
 from film_pipeline.mcp.tools import (
     compare_versions,
     create_checkpoint,
-    create_film_project,
     get_checkpoint,
     get_invalidation_report,
     list_artifact_versions,
     list_checkpoints,
     rollback_artifact,
     rollback_to_checkpoint,
-    set_active_project,
 )
 
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+from ._helpers import _make_active_project
 
 
 def test_create_checkpoint_requires_active_project() -> None:

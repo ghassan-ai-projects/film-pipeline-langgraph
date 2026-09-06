@@ -11,7 +11,6 @@ import pytest
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
-    create_film_project,
     inspect_artifact,
     inspect_reference,
     inspect_scene,
@@ -19,8 +18,9 @@ from film_pipeline.mcp.tools import (
     list_artifacts,
     list_assets,
     list_shots,
-    set_active_project,
 )
+
+from ._helpers import _make_active_project
 
 
 def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
@@ -35,11 +35,6 @@ def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> Studio
     state = rt._run_phase_node(state, "shot_bible")
     rt.projects[project_id] = state
     return rt
-
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
 
 
 def test_list_artifacts_requires_active_project() -> None:

@@ -7,19 +7,14 @@ from typing import cast
 
 from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
-    create_film_project,
     get_blockers,
     get_current_phase,
     get_film_state,
     get_next_actions,
     get_orchestrator_summary,
-    set_active_project,
 )
 
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+from ._helpers import _make_active_project
 
 
 def test_get_current_phase_requires_active_project() -> None:
