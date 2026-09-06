@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
+from film_pipeline.schemas._base import IssueSeverity, ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import ValidatorRegistryEntry
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
@@ -52,6 +52,19 @@ class _BlockingValidator(_ConcreteValidator):
             )
             for i in raw["issues"]
         ]
+
+
+class _DefaultIssueValidator(BaseValidator):
+    def _validate_rules(
+        self,
+        artifact: dict[str, Any],
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        _ = context
+        return artifact
+
+    def extract_score(self, raw: dict[str, Any]) -> float:
+        return float(raw.get("score", 0))
 
 
 @dataclass(frozen=True)
@@ -111,6 +124,34 @@ class _FailingLLMValidator(_ConcreteValidator):
 
 
 class TestBaseValidator:
+    def test_default_extract_issues_maps_common_fields(self) -> None:
+        entry = ValidatorRegistryEntry(
+            validator_id="test-v",
+            scope=ValidationScope.ARTIFACT,
+            modalities=[ValidationModality.TEXT],
+        )
+        validator = _DefaultIssueValidator(entry)
+
+        issues = validator.extract_issues(
+            {
+                "issues": [
+                    {
+                        "code": "missing-shot",
+                        "message": "Shot is missing.",
+                        "severity": "blocking",
+                        "suggestion": "Add the shot.",
+                        "affected_entity": "shot-1",
+                        "affected_field": "prompt",
+                        "affected_shot": "S001-01",
+                    }
+                ]
+            }
+        )
+
+        assert len(issues) == 1
+        assert issues[0].severity == IssueSeverity.BLOCKING
+        assert issues[0].affected_shot == "S001-01"
+
     def test_run_pass(self) -> None:
         entry = ValidatorRegistryEntry(
             validator_id="test-v",

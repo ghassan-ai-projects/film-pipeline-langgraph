@@ -240,10 +240,24 @@ class BaseValidator(ABC):
         """Extract a 0-100 score from the raw validation output."""
         ...
 
-    @abstractmethod
     def extract_issues(self, raw: dict[str, Any]) -> list[ValidationIssue]:
-        """Extract issues (blocking + warnings) from raw output."""
-        ...
+        """Extract standard issues (blocking + warnings) from raw output.
+
+        Validators may override this when their model output uses a different
+        issue shape, but the common JSON contract is handled here.
+        """
+        return [
+            ValidationIssue(
+                code=str(issue.get("code", "unknown")),
+                message=str(issue.get("message", "")),
+                severity=IssueSeverity(issue.get("severity", "info")),
+                suggestion=str(issue.get("suggestion", "")),
+                affected_entity=str(issue.get("affected_entity", "")),
+                affected_field=str(issue.get("affected_field", "")),
+                affected_shot=str(issue.get("affected_shot", "")),
+            )
+            for issue in raw.get("issues", [])
+        ]
 
     # ── Full lifecycle ──────────────────────────────────────────────
 

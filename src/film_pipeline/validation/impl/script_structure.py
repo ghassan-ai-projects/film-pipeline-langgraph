@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.schemas._base import IssueSeverity, ValidationModality, ValidationScope
+from film_pipeline.schemas._base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
     ValidatorThresholds,
 )
-from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator
 
 _CONFLICT_KEYWORDS = frozenset({"conflict", "tension", "argue", "fight", "disagree", "struggle"})
@@ -224,17 +223,3 @@ class ScriptStructureValidator(BaseValidator):
         score -= blocking_count * 25.0
         score -= warning_count * 10.0
         return max(0.0, min(100.0, score))
-
-    def extract_issues(self, raw: dict[str, Any]) -> list[ValidationIssue]:
-        return [
-            ValidationIssue(
-                code=str(i.get("code", "unknown")),
-                message=str(i.get("message", "")),
-                severity=IssueSeverity(i.get("severity", "info")),
-                suggestion=str(i.get("suggestion", "")),
-                affected_entity=str(i.get("affected_entity", "")),
-                affected_field=str(i.get("affected_field", "")),
-                affected_shot=str(i.get("affected_shot", "")),
-            )
-            for i in raw.get("issues", [])
-        ]
