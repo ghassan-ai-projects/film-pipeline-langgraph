@@ -14,28 +14,17 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.checkpoints.git_backend import GitBackend
-from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.packets import KBContextPacketBuilder
-from film_pipeline.providers.health import ProviderHealthTracker
 from film_pipeline.providers.mock_provider import MockVideoProvider
-from film_pipeline.providers.registry import ProviderRegistry
 from film_pipeline.schemas.registries.provider_registry import (
     CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
-from film_pipeline.testing.mock_human import DecisionProfile, MockHumanActor
 from film_pipeline.testing.mock_model import MockModelAdapter
-from film_pipeline.validation.registry import ValidatorRegistry
 from film_pipeline.validation.validators import MVP_VALIDATORS
-
-
-@pytest.fixture
-def mock_human() -> MockHumanActor:
-    return MockHumanActor(profile=DecisionProfile.APPROVE_ALL)
 
 
 @pytest.fixture
@@ -58,13 +47,6 @@ def agent_registry() -> AgentRegistry:
 
 
 @pytest.fixture
-def validator_registry() -> ValidatorRegistry:
-    reg = ValidatorRegistry()
-    reg.register_many(MVP_VALIDATORS)
-    return reg
-
-
-@pytest.fixture
 def mock_provider() -> MockVideoProvider:
     entry = ProviderRegistryEntry(
         provider_id="mock-video-provider",
@@ -83,20 +65,6 @@ def mock_provider() -> MockVideoProvider:
 
 
 @pytest.fixture
-def provider_registry(mock_provider: MockVideoProvider) -> ProviderRegistry:
-    reg = ProviderRegistry()
-    reg.register(mock_provider)
-    return reg
-
-
-@pytest.fixture
-def health_tracker() -> ProviderHealthTracker:
-    tracker = ProviderHealthTracker()
-    tracker.register("mock-video-provider")
-    return tracker
-
-
-@pytest.fixture
 def kb_manifest() -> KBManifest:
     manifest_path = Path("film-knowledge-base/index/kb-manifest.yaml")
     if not manifest_path.exists():
@@ -107,16 +75,6 @@ def kb_manifest() -> KBManifest:
 @pytest.fixture
 def kb_builder(kb_manifest: KBManifest) -> KBContextPacketBuilder:
     return KBContextPacketBuilder(kb_manifest)
-
-
-@pytest.fixture
-def git_backend(tmp_path: Path) -> GitBackend:
-    return GitBackend.init_temp(tmp_path / "repo")
-
-
-@pytest.fixture
-def checkpoint_manager(git_backend: GitBackend) -> CheckpointManager:
-    return CheckpointManager(git_backend)
 
 
 @pytest.fixture
