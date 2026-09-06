@@ -116,7 +116,6 @@ def main() -> int:
         print(f"{RED}  Profile list failed — cannot continue profile inspection{RESET}")
     else:
         profile_count = r.get("profile_count", 0)
-        r.get("profiles", [])
         print(f"  Found {profile_count} profiles")
 
     # Inspect key profiles
