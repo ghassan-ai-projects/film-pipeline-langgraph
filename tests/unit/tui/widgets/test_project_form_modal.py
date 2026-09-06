@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 from textual.widgets import Button, Input, Select, Static, TextArea
 
 from film_pipeline.app.services.models import ProjectCreateRequest
@@ -12,9 +9,7 @@ from film_pipeline.tui.app import FilmStudioApp
 from film_pipeline.tui.widgets.project_form import ProjectForm
 from tests.unit.tui.conftest import RecordingGateway
 
-
-def _run(async_fn: Any) -> Any:
-    return asyncio.run(async_fn)
+from .._helpers import _run
 
 
 def _fill_identity_fields(form: ProjectForm) -> None:

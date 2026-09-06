@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 from textual.widgets import Button, Static
 
 from film_pipeline.tui.app import FilmStudioApp
 from film_pipeline.tui.screens.modals import ConfirmScreen
 from tests.unit.tui.conftest import RecordingGateway
 
-
-def _run(async_fn: Any) -> Any:
-    return asyncio.run(async_fn)
+from .._helpers import _run
 
 
 def test_confirm_screen_renders_title_and_message() -> None:

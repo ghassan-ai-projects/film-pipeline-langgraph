@@ -2,18 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
-
 from textual.widgets import Button, Static, TextArea
 
 from film_pipeline.tui.app import FilmStudioApp
 from film_pipeline.tui.screens.modals import RevisionForm
 from tests.unit.tui.conftest import RecordingGateway
 
-
-def _run(async_fn: Any) -> Any:
-    return asyncio.run(async_fn)
+from .._helpers import _run
 
 
 def test_revision_form_whitespace_note_is_rejected() -> None:

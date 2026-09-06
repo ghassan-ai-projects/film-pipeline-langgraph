@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
 from unittest.mock import patch
 
 from textual.coordinate import Coordinate
@@ -16,9 +14,7 @@ from film_pipeline.tui.widgets.reader import Reader
 from film_pipeline.tui.widgets.scene_browser import SceneBrowser
 from tests.unit.tui.conftest import RecordingGateway
 
-
-def _run(async_fn: Any) -> Any:
-    return asyncio.run(async_fn)
+from ._helpers import _run
 
 
 def test_reader_shows_project_overview_by_default() -> None:

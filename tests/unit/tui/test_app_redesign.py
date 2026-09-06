@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import replace
-from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -38,10 +36,7 @@ from tests.unit.tui.conftest import (
     RecordingGateway,
 )
 
-
-def _run(async_fn: Any) -> Any:
-    """Run an async test body in a fresh event loop."""
-    return asyncio.run(async_fn)
+from ._helpers import _run
 
 
 def test_app_starts_on_project_gallery() -> None:
