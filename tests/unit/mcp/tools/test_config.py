@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
 from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import reset_runtime
 from film_pipeline.mcp.tools import (
     approve_profile_change,
     create_film_project,
@@ -18,13 +16,6 @@ from film_pipeline.mcp.tools import (
     propose_profile_change,
     set_active_project,
 )
-
-
-@pytest.fixture(autouse=True)
-def _reset_to_mock_mode() -> Generator[None, None, None]:
-    reset_runtime("mock")
-    yield
-    reset_runtime("mock")
 
 
 def test_list_profiles_returns_known_fields() -> None:

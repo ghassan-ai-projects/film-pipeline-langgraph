@@ -3,20 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
 from typing import cast
 
-import pytest
-
-from film_pipeline.app.runtime import reset_runtime
 from film_pipeline.mcp.tools import add_operator_comment, list_operator_comments
-
-
-@pytest.fixture(autouse=True)
-def _reset_to_mock_mode() -> Generator[None, None, None]:
-    reset_runtime("mock")
-    yield
-    reset_runtime("mock")
 
 
 def test_add_operator_comment_requires_active_project() -> None:
