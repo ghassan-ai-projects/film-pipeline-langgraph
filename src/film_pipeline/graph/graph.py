@@ -44,7 +44,6 @@ def _checkpoint_dir() -> Path:
 
 
 _CHECKPOINT_DIR: Path = _checkpoint_dir()
-_CHECKPOINT_DB: Path = _CHECKPOINT_DIR / "checkpoints.sqlite"
 
 
 def _default_checkpointer(runtime_root: Path | None = None) -> BaseCheckpointSaver[Any]:
