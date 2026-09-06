@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -11,8 +12,11 @@ from film_pipeline.mcp.envelope import RequestEnvelope
 from film_pipeline.mcp.tools.helpers import (
     _active_project_state,
     _active_project_with_state,
+    _save_candidate_artifact,
     _store_project_state,
 )
+from film_pipeline.schemas._base import ArtifactType
+from film_pipeline.schemas.artifact import ArtifactMetadata
 
 
 class _Runtime:
@@ -49,6 +53,18 @@ class _PersistingRuntime:
 class _FailingPersistRuntime(_PersistingRuntime):
     def _persist_project_state(self, project_id: str) -> None:
         raise RuntimeError(f"persist failed for {project_id}")
+
+
+class _ArtifactStore:
+    def __init__(self) -> None:
+        self.saved: tuple[object, object] | None = None
+
+    def list_artifacts(self, _project_id: str, _phase: object) -> list[object]:
+        return [SimpleNamespace(artifact_id="candidate", version=2)]
+
+    def save(self, payload: object, metadata: object) -> str:
+        self.saved = payload, metadata
+        return "saved-ref"
 
 
 def test_active_project_with_state_uses_active_project() -> None:
@@ -121,3 +137,32 @@ def test_store_project_state_propagates_persistence_errors() -> None:
         _store_project_state(runtime, "failed", state)
 
     assert runtime.projects["failed"] is state
+
+
+def test_save_candidate_artifact_preserves_metadata_and_store_result() -> None:
+    store = _ArtifactStore()
+    payload = object()
+
+    result = _save_candidate_artifact(
+        store,
+        "artifact-project",
+        "visual_dev",
+        "candidate",
+        ArtifactType.REFERENCE_INDEX,
+        "test.creator",
+        payload,
+    )
+
+    assert result == "saved-ref"
+    assert store.saved is not None
+    saved_payload, raw_metadata = store.saved
+    metadata = raw_metadata
+    assert isinstance(metadata, ArtifactMetadata)
+    assert saved_payload is payload
+    assert metadata.artifact_id == "candidate"
+    assert metadata.project_id == "artifact-project"
+    assert metadata.phase.value == "visual_dev"
+    assert metadata.version == 3
+    assert metadata.status.value == "candidate"
+    assert metadata.parents == []
+    assert metadata.created_by == "test.creator"

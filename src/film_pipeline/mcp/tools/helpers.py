@@ -83,6 +83,37 @@ def _store_project_state(rt: Any, project_id: str, state: dict[str, Any]) -> Non
     rt._persist_project_state(project_id)
 
 
+def _save_candidate_artifact(
+    store: Any,
+    project_id: str,
+    phase: str,
+    artifact_id: str,
+    artifact_type: Any,
+    created_by: str,
+    payload: Any,
+) -> Any:
+    """Save the next CANDIDATE artifact version for a phase."""
+    from datetime import UTC, datetime
+
+    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactMetadata
+
+    artifact_phase = FilmPhase(phase)
+    next_version = _latest_artifact_version(store, project_id, artifact_phase, artifact_id) + 1
+    meta = ArtifactMetadata(
+        artifact_id=artifact_id,
+        artifact_type=artifact_type,
+        project_id=project_id,
+        phase=artifact_phase,
+        version=next_version,
+        status=ArtifactStatus.CANDIDATE,
+        parents=[],
+        created_by=created_by,
+        created_at=datetime.now(UTC),
+    )
+    return store.save(payload, meta)
+
+
 def _services(rt: object) -> Any:
     """Assert services are initialized and return them."""
     assert hasattr(rt, "services") and rt.services is not None

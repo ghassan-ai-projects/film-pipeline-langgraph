@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _latest_artifact_version, _ok, _services, _store_project_state
+from ..helpers import _error, _ok, _save_candidate_artifact, _services, _store_project_state
 from ._shared import _extract_script_text
 
 if TYPE_CHECKING:
@@ -63,26 +63,18 @@ def _save_next_candidate_version(
     payload: Any,
 ) -> str:
     """Save payload as the next CANDIDATE version of an artifact in the shot_bible phase."""
-    from datetime import UTC, datetime
-
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-
-    next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), artifact_id) + 1
+    return cast(
+        str,
+        _save_candidate_artifact(
+            store,
+            project_id,
+            "shot_bible",
+            artifact_id,
+            artifact_type,
+            "mcp.generate_shot_bible",
+            payload,
+        ),
     )
-    meta = ArtifactMetadata(
-        artifact_id=artifact_id,
-        artifact_type=artifact_type,
-        project_id=project_id,
-        phase=FilmPhase("shot_bible"),
-        version=next_version,
-        status=ArtifactStatus.CANDIDATE,
-        parents=[],
-        created_by="mcp.generate_shot_bible",
-        created_at=datetime.now(UTC),
-    )
-    return cast(str, store.save(payload, meta))
 
 
 def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLedger) -> str:

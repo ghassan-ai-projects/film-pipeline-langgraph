@@ -9,9 +9,9 @@ from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
 from .helpers import (
     _error,
-    _latest_artifact_version,
     _ok,
     _register_active_artifact_ref,
+    _save_candidate_artifact,
     _services,
 )
 
@@ -66,26 +66,15 @@ def _save_gen_planning_candidate(
     content: Any,
 ) -> Any:
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
-    from datetime import UTC, datetime
-
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-
-    next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
+    return _save_candidate_artifact(
+        store,
+        project_id,
+        "gen_planning",
+        artifact_id,
+        artifact_type,
+        created_by,
+        content,
     )
-    meta = ArtifactMetadata(
-        artifact_id=artifact_id,
-        artifact_type=artifact_type,
-        project_id=project_id,
-        phase=FilmPhase("gen_planning"),
-        version=next_version,
-        status=ArtifactStatus.CANDIDATE,
-        parents=[],
-        created_by=created_by,
-        created_at=datetime.now(UTC),
-    )
-    return store.save(content, meta)
 
 
 def _load_master_matrix(store: Any, project_id: str) -> Any:

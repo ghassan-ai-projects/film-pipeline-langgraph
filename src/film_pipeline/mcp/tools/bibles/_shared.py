@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from .. import helpers as _helpers
-from ..helpers import _latest_artifact_version, _services
+from ..helpers import _save_candidate_artifact, _services
 
 _register_active_artifact_ref = _helpers._register_active_artifact_ref
 
@@ -118,23 +118,12 @@ def _save_visual_dev_candidate(
     bible: Any,
 ) -> Any:
     """Persist a bible as the next CANDIDATE version in visual_dev."""
-    from datetime import UTC, datetime
-
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-
-    next_version = (
-        _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), artifact_id) + 1
+    return _save_candidate_artifact(
+        store,
+        project_id,
+        "visual_dev",
+        artifact_id,
+        artifact_type,
+        created_by,
+        bible,
     )
-    meta = ArtifactMetadata(
-        artifact_id=artifact_id,
-        artifact_type=artifact_type,
-        project_id=project_id,
-        phase=FilmPhase("visual_dev"),
-        version=next_version,
-        status=ArtifactStatus.CANDIDATE,
-        parents=[],
-        created_by=created_by,
-        created_at=datetime.now(UTC),
-    )
-    return store.save(bible, meta)
