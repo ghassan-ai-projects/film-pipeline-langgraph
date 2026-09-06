@@ -77,6 +77,12 @@ def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     return None if resolved is None else resolved[1]
 
 
+def _store_project_state(rt: Any, project_id: str, state: dict[str, Any]) -> None:
+    """Store the exact state object in the runtime and persist it."""
+    rt.projects[project_id] = state
+    rt._persist_project_state(project_id)
+
+
 def _services(rt: object) -> Any:
     """Assert services are initialized and return them."""
     assert hasattr(rt, "services") and rt.services is not None
@@ -89,8 +95,7 @@ def _register_active_artifact_ref(
     """Record an artifact reference on the active project and persist state."""
     active[state_key] = ref
     active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    _store_project_state(rt, project_id, active)
 
 
 def _coerce_runtime_arg(args: dict[str, object]) -> int:

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _latest_artifact_version, _ok, _services
+from ..helpers import _error, _latest_artifact_version, _ok, _services, _store_project_state
 from ._shared import _extract_script_text
 
 if TYPE_CHECKING:
@@ -235,8 +235,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
 
         ledger_ref = _generate_continuity_ledger(store, project_id, matrix)
 
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
+        _store_project_state(rt, project_id, active)
 
         return _ok(
             shot_matrix_ref=ref,

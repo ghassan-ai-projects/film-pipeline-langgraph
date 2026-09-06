@@ -15,6 +15,7 @@ from .helpers import (
     _ok,
     _report_summary,
     _services,
+    _store_project_state,
 )
 
 if TYPE_CHECKING:
@@ -256,8 +257,7 @@ def _record_validation_results(
     """Write validation outcomes into project state and persist them."""
     active["_validation_reports"] = reports
     active.setdefault("validation_refs", []).extend(saved_refs)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    _store_project_state(rt, project_id, active)
 
 
 async def run_validation(args: dict[str, object]) -> dict[str, object]:

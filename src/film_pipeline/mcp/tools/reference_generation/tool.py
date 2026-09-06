@@ -34,7 +34,13 @@ from film_pipeline.mcp.tools.reference_generation.retry_loop import (
     _run_retry_attempts,
 )
 
-from ..helpers import _error, _load_latest_reference_index, _ok, _services
+from ..helpers import (
+    _error,
+    _load_latest_reference_index,
+    _ok,
+    _services,
+    _store_project_state,
+)
 
 
 def _persist_updated_index(
@@ -52,8 +58,7 @@ def _persist_updated_index(
     if ref:
         active["visual_refs"] = ref
         active.setdefault("artifact_refs", []).append(ref)
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
+        _store_project_state(rt, project_id, active)
     return ref
 
 

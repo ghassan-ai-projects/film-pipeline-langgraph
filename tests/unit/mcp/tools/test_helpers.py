@@ -8,7 +8,11 @@ import pytest
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.mcp.envelope import RequestEnvelope
-from film_pipeline.mcp.tools.helpers import _active_project_state, _active_project_with_state
+from film_pipeline.mcp.tools.helpers import (
+    _active_project_state,
+    _active_project_with_state,
+    _store_project_state,
+)
 
 
 class _Runtime:
@@ -31,6 +35,20 @@ class _Runtime:
         if project_id == self.missing_project_id:
             return None
         return self.projects.get(project_id)
+
+
+class _PersistingRuntime:
+    def __init__(self) -> None:
+        self.projects: dict[str, dict[str, Any]] = {}
+        self.persisted: list[tuple[str, dict[str, Any]]] = []
+
+    def _persist_project_state(self, project_id: str) -> None:
+        self.persisted.append((project_id, self.projects[project_id]))
+
+
+class _FailingPersistRuntime(_PersistingRuntime):
+    def _persist_project_state(self, project_id: str) -> None:
+        raise RuntimeError(f"persist failed for {project_id}")
 
 
 def test_active_project_with_state_uses_active_project() -> None:
@@ -82,3 +100,24 @@ def test_active_project_state_keeps_state_only_contract(
     result = _active_project_state({})
 
     assert result is state
+
+
+def test_store_project_state_preserves_identity_and_persistence_order() -> None:
+    runtime = _PersistingRuntime()
+    state = {"project_id": "stored"}
+
+    _store_project_state(runtime, "stored", state)
+
+    assert runtime.projects["stored"] is state
+    assert runtime.persisted == [("stored", state)]
+    assert runtime.persisted[0][1] is state
+
+
+def test_store_project_state_propagates_persistence_errors() -> None:
+    runtime = _FailingPersistRuntime()
+    state = {"project_id": "failed"}
+
+    with pytest.raises(RuntimeError, match="persist failed for failed"):
+        _store_project_state(runtime, "failed", state)
+
+    assert runtime.projects["failed"] is state

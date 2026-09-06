@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..helpers import _ok, _services
+from ..helpers import _ok, _services, _store_project_state
 
 _STALE_ISSUE_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
 
@@ -114,6 +114,5 @@ def _complete_text_only_generation(
     _apply_text_only_state(active, requests)
     _ensure_text_only_manifest_entry(store, project_id)
 
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    _store_project_state(rt, project_id, active)
     return _ok(text_only=True, completed=len(requests), rows=[])
