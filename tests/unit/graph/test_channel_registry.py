@@ -110,10 +110,12 @@ def _assert_not_copied(dest: dict[str, Any], key: str) -> None:
     assert key not in dest, f"'{key}' must not be auto-propagated"
 
 
-@pytest.mark.parametrize("spec", ORCH_CHANNELS, ids=lambda spec: spec.key)
+@pytest.mark.parametrize(
+    "spec",
+    [row for row in ORCH_CHANNELS if row.propagation != "append_only"],
+    ids=lambda spec: spec.key,
+)
 def test_full_and_explicit_policies(spec: OrchChannelSpec) -> None:
-    if spec.propagation == "append_only":
-        pytest.skip("append-only policies are exercised by the slicing tests")
     value = _sample_value(spec.key)
     dest: dict[str, Any] = {}
     _propagate_side_effects({spec.key: value}, dest)
