@@ -1,7 +1,7 @@
 """Logging bootstrap for the console entrypoints [O-F10].
 
 Only console-script binaries configure logging (``mcp.server.main``,
-``tui.app.main``, ``cli.run.main``); libraries never do. The stderr handler
+``cli.run.main``); libraries never do. The stderr handler
 defaults to WARNING because the MCP stdio transport shares the stderr stream —
 anything chattier corrupts the protocol channel. When state persistence is
 enabled and a runtime root is known, a rotating file handler records INFO+.

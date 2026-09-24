@@ -36,7 +36,7 @@ class HeadlessDriver:
     """Drive a film project from idea file through a target phase.
 
     The driver is intentionally thin: it reuses the existing MCP tool surface
-    so behavior stays identical to the TUI/MCP workflow, and it auto-approves
+    so behavior stays identical to the MCP workflow, and it auto-approves
     every gate so no human is required.
     """
 

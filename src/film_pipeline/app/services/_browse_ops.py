@@ -36,7 +36,7 @@ def add_operator_comment(
         target_id=target_id,
         body=body,
         phase=request.phase.strip(),
-        source=request.source.strip() or "tui",
+        source=request.source.strip() or "operator",
     )
     return _comment_from_raw(raw)
 

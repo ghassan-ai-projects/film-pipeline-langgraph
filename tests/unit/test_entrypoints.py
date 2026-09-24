@@ -1,4 +1,4 @@
-"""Entrypoint bootstrap tests for the three console surfaces."""
+"""Entrypoint bootstrap tests for the console surfaces (CLI, MCP)."""
 
 from __future__ import annotations
 
@@ -24,27 +24,6 @@ def test_cli_main_configures_logging_for_request_root(
     runtime_root = tmp_path / "runtime"
     assert run.main([str(idea), "--runtime-root", str(runtime_root)]) == 0
     configure.assert_called_once_with(runtime_root, persist_enabled=True)
-
-
-def test_tui_main_configures_logging_for_runtime_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    from film_pipeline.tui import app
-
-    fake_app = MagicMock()
-    monkeypatch.setattr(app, "FilmStudioApp", MagicMock(return_value=fake_app))
-    configure = MagicMock()
-    monkeypatch.setattr("film_pipeline.app.logging_setup.configure_logging", configure)
-    runtime_root = tmp_path / "runtime"
-    monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
-    monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(runtime_root))
-
-    assert app.main(["--create"]) == 0
-    # The real entrypoint sets this flag; remove the mutation explicitly so
-    # later tests cannot accidentally build a persistent SQLite checkpointer.
-    monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
-    configure.assert_called_once_with(runtime_root)
-    fake_app.run.assert_called_once_with()
 
 
 def test_mcp_main_configures_logging_before_stdio_server(

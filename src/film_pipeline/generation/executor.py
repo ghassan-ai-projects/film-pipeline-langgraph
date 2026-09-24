@@ -5,8 +5,8 @@ shot matrix into ledger rows, submitting them to provider adapters, polling
 jobs to completion, downloading outputs into the project's asset tree, and
 recording every delivered file in the project asset manifest.
 
-Both the operator service (TUI) and MCP tools drive generation through this
-executor so the two surfaces stay behaviorally identical. Prompt resolution
+Both the operator service and MCP tools drive generation through this
+executor so the surfaces stay behaviorally identical. Prompt resolution
 lives in ``executor_prompts`` and asset delivery in ``executor_delivery``;
 this module keeps batch orchestration and ledger state transitions.
 """
