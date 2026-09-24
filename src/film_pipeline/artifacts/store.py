@@ -1,106 +1,315 @@
-"""Artifact store — save, load, list, version, supersede.
+"""Artifact store — the canonical registry for all typed artifacts (layout v2).
 
-The canonical registry for all typed artifacts. Every phase writes artifacts
-through this store so the project directory stays consistent.
+On-disk layout per artifact (``<root>/<project>/artifacts/<NN-phase>/<id>/``):
+
+- ``meta.json``     — artifact-level current pointer + status (the only mutable file)
+- ``current.md``    — generated human-readable view of the current version
+- ``versions/vNNN.json`` — immutable envelopes: provenance + payload + checksum
+
+A derived ``<root>/<project>/index/artifacts.json`` is regenerated on every
+write. Legacy (pre-upgrade) layouts are still readable read-only until the
+storage migration moves them forward. See ``documentation/storage-upgrade-plan.md``.
+
+Transitional note (P2): registry kinds flagged ``mutable`` (the generation
+ledger, budget state) still rewrite their single version file in place to
+match their writers; P3 moves them to a revision-counted single file so the
+immutability rule holds for every version file.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
 
-from film_pipeline.artifacts.metadata import read_metadata, write_metadata
-from film_pipeline.artifacts.paths import (
-    artifact_dir,
-    artifact_path,
-    current_artifact_path,
-    phase_dir,
+from film_pipeline.artifacts import paths
+from film_pipeline.artifacts.envelope import (
+    ArtifactCurrentMeta,
+    ArtifactEnvelope,
+    ChecksumMismatchError,
+    SchemaTooNewError,
+    payload_checksum,
 )
-from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
+from film_pipeline.artifacts.registry import (
+    REGISTRY,
+    KindNotRegisteredError,
+    KindSpec,
+    migrate_payload,
+    validate_artifact_id,
+)
+from film_pipeline.artifacts.serialization import atomic_write_text, dump_json
+from film_pipeline.artifacts.storage import ensure_storage_root
+from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+
+_logger = logging.getLogger(__name__)
 
 
 class ArtifactStore:
     """Persist and retrieve typed artifacts with metadata and versioning."""
 
     def __init__(self, root: Path) -> None:
-        self._root = root
+        self._root = ensure_storage_root(root)
 
     @property
     def root(self) -> Path:
         """The storage root this store reads and writes."""
         return self._root
 
-    def _artifact_path(self, project_id: str, phase: str, artifact_id: str, version: int) -> Path:
-        return artifact_path(project_id, phase, artifact_id, version, root=self._root)
+    # --- Paths -------------------------------------------------------------
 
-    def _current_path(self, project_id: str, phase: str, artifact_id: str) -> Path:
-        return current_artifact_path(project_id, phase, artifact_id, root=self._root)
+    def _project_dir(self, project_id: str) -> Path:
+        return self._root / project_id
+
+    def _artifacts_base(self, project_id: str) -> Path:
+        return self._project_dir(project_id) / "artifacts"
+
+    def _artifact_dir(self, project_id: str, phase: str, artifact_id: str) -> Path:
+        return (
+            self._artifacts_base(project_id) / paths.PHASE_DIR_MAP.get(phase, phase) / artifact_id
+        )
+
+    def _versions_dir(self, project_id: str, phase: str, artifact_id: str) -> Path:
+        return self._artifact_dir(project_id, phase, artifact_id) / "versions"
+
+    def _version_path(self, project_id: str, phase: str, artifact_id: str, version: int) -> Path:
+        return self._versions_dir(project_id, phase, artifact_id) / f"v{version:03}.json"
+
+    def _meta_path(self, project_id: str, phase: str, artifact_id: str) -> Path:
+        return self._artifact_dir(project_id, phase, artifact_id) / "meta.json"
+
+    def _index_path(self, project_id: str) -> Path:
+        return self._project_dir(project_id) / "index" / "artifacts.json"
+
+    # --- Write path ---------------------------------------------------------
 
     def save(self, artifact: BaseModel, meta: ArtifactMetadata) -> Path:
-        """Save an artifact's content and metadata to disk."""
-        version_path = self._artifact_path(
-            meta.project_id, meta.phase.value, meta.artifact_id, meta.version
+        """Store a new version of an artifact and return its ``meta.json`` path.
+
+        Mutable kinds (per the registry) write at the caller's ``meta.version``
+        — ledger-style writers pass 1 and rewrite in place, state writers
+        append — while immutable kinds get a store-assigned new version.
+        """
+        validate_artifact_id(meta.artifact_id)
+        spec = REGISTRY.spec_for(meta.artifact_id)
+        phase = meta.phase.value
+        # The store owns version numbering for immutable kinds (meta.version
+        # is advisory). Mutable kinds write at the caller's version:
+        # ledger-style writers pass 1 (rewrite in place, transitional P2
+        # stance — P3 moves them to a revision-counted single file) while
+        # state writers pass next_version (append).
+        version = (
+            meta.version
+            if spec.mutable
+            else self.next_version(meta.project_id, phase, meta.artifact_id)
         )
-        current_path = self._current_path(meta.project_id, meta.phase.value, meta.artifact_id)
+        now = datetime.now(UTC)
         payload = artifact.model_dump(mode="json")
-        content = artifact.model_dump_json(indent=2)
-        _write_artifact_files(version_path, current_path, content, payload, meta)
-        return current_path
+        envelope = ArtifactEnvelope(
+            kind=spec.kind,
+            schema_version=spec.schema_version,
+            artifact_id=meta.artifact_id,
+            artifact_type=meta.artifact_type,
+            project_id=meta.project_id,
+            phase=meta.phase,
+            version=version,
+            created_at=meta.created_at,
+            created_by=meta.created_by,
+            reviewed_by=meta.reviewed_by,
+            validation_refs=meta.validation_refs,
+            approval_ref=meta.approval_ref,
+            kb_context_ref=meta.kb_context_ref,
+            parents=meta.parents,
+            built_from=meta.built_from,
+            prompt_template_version=None,
+            model_profile=None,
+            change_summary=meta.change_summary,
+            checksum=payload_checksum(payload),
+            payload=payload,
+        )
+        current_meta = ArtifactCurrentMeta(
+            artifact_id=meta.artifact_id,
+            artifact_type=meta.artifact_type,
+            project_id=meta.project_id,
+            phase=meta.phase,
+            current_version=version,
+            # Callers may pre-approve a written artifact (e.g. profile-change
+            # config snapshots); the store never invents a higher status.
+            status=meta.status,
+            created_at=meta.created_at,
+            updated_at=now,
+            created_by=meta.created_by,
+            reviewed_by=meta.reviewed_by,
+            validation_refs=meta.validation_refs,
+            approval_ref=meta.approval_ref,
+            kb_context_ref=meta.kb_context_ref,
+            checksum=envelope.checksum,
+        )
+
+        version_path = self._version_path(meta.project_id, phase, meta.artifact_id, version)
+        meta_path = self._meta_path(meta.project_id, phase, meta.artifact_id)
+        atomic_write_text(version_path, dump_json(_envelope_to_dict(envelope)))
+        atomic_write_text(meta_path, dump_json(_meta_to_dict(current_meta)))
+        atomic_write_text(
+            meta_path.parent / "current.md",
+            _render_markdown(meta, payload),
+        )
+        self._write_index(meta.project_id)
+        return meta_path
+
+    def _write_index(self, project_id: str) -> None:
+        """Regenerate the derived artifact index for one project."""
+        entry_fields = (
+            "artifact_id",
+            "artifact_type",
+            "phase",
+            "current_version",
+            "status",
+            "created_at",
+            "updated_at",
+        )
+        entries: list[dict[str, Any]] = []
+        base = self._artifacts_base(project_id)
+        if base.is_dir():
+            for meta_file in sorted(base.glob("*/*/meta.json")):
+                meta = _read_meta_file(meta_file)
+                if meta is None:
+                    continue
+                entries.append({field: meta.get(field) for field in entry_fields})
+        payload = {"schema_version": 1, "artifacts": entries}
+        atomic_write_text(self._index_path(project_id), dump_json(payload))
+
+    # --- Read path ----------------------------------------------------------
 
     def load(
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> dict[str, Any]:
-        """Load an artifact's content as a raw dict."""
-        content_path = self._artifact_path(project_id, phase.value, artifact_id, version)
-        data: dict[str, Any] = json.loads(content_path.read_text())
-        return data
+        """Load an artifact body (payload) as a raw dict."""
+        path = self._version_path(project_id, phase.value, artifact_id, version)
+        if not path.exists():
+            legacy = self._legacy_load_payload(project_id, phase.value, artifact_id, version)
+            if legacy is not None:
+                return legacy
+            raise FileNotFoundError(f"Artifact version not found: {path}")
+        return self._read_checked_envelope(path, artifact_id).payload
+
+    def load_envelope(
+        self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
+    ) -> ArtifactEnvelope:
+        """Load one artifact version envelope, schema-checked and migrated."""
+        path = self._version_path(project_id, phase.value, artifact_id, version)
+        if not path.exists():
+            raise FileNotFoundError(f"Artifact version not found: {path}")
+        return self._read_checked_envelope(path, artifact_id)
+
+    def _read_checked_envelope(self, path: Path, artifact_id: str) -> ArtifactEnvelope:
+        """Read, integrity-check, and schema-check one envelope."""
+        envelope = _read_envelope(path)
+        spec = self._safe_spec(artifact_id)
+        if envelope.schema_version > spec.schema_version:
+            raise SchemaTooNewError(
+                envelope.kind, envelope.schema_version, spec.schema_version, str(path)
+            )
+        if envelope.schema_version < spec.schema_version:
+            migrated = migrate_payload(
+                envelope.kind,
+                envelope.payload,
+                envelope.schema_version,
+                spec.schema_version,
+            )
+            return envelope.model_copy(
+                update={"payload": migrated, "schema_version": spec.schema_version}
+            )
+        return envelope
 
     def list_artifacts(
         self, project_id: str, phase: FilmPhase | None = None
     ) -> list[ArtifactMetadata]:
-        """List all artifact metadata in a project, optionally filtered by phase."""
-        base = self._root / project_id
-        if phase is not None:
-            base = phase_dir(project_id, phase.value, root=self._root)
+        """List artifact metadata for a project, optionally filtered by phase."""
         results: list[ArtifactMetadata] = []
-        for meta_path in base.rglob("current.meta.json"):
-            results.append(read_metadata(meta_path))
+        base = self._artifacts_base(project_id)
+        if base.is_dir():
+            pattern = (
+                "*/*/meta.json"
+                if phase is None
+                else f"{paths.PHASE_DIR_MAP.get(phase.value, phase.value)}/*/meta.json"
+            )
+            for meta_path in sorted(base.glob(pattern)):
+                meta = _read_meta_file(meta_path)
+                if meta is not None:
+                    results.append(_meta_record_to_metadata(meta))
+        for legacy in self._legacy_list(project_id, phase):
+            if not any(
+                r.artifact_id == legacy.artifact_id and r.phase == legacy.phase for r in results
+            ):
+                results.append(legacy)
         return results
 
     def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
-        """Determine the next version number for an artifact.
+        """Next version number for an artifact: max(existing) + 1."""
+        for versions_dir in (
+            self._versions_dir(project_id, phase, artifact_id),
+            self._project_dir(project_id)
+            / paths.PHASE_DIR_MAP.get(phase, phase)
+            / artifact_id
+            / "versions",
+        ):
+            existing = _scan_versions(versions_dir)
+            if existing:
+                return max(existing) + 1
+        return 1
 
-        Scans existing artifact files in the phase directory and returns
-        max(version) + 1, or 1 if no prior versions exist.
-        """
-        version_dir = artifact_dir(project_id, phase, artifact_id, root=self._root) / "versions"
-        if not version_dir.exists():
-            return 1
-
-        existing = list(version_dir.glob("v*.json"))
-        if not existing:
-            return 1
-
-        versions: list[int] = []
-        for p in existing:
-            try:
-                versions.append(int(p.stem.removeprefix("v")))
-            except ValueError:
-                continue
-
-        return max(versions) + 1 if versions else 1
+    def latest_version(self, project_id: str, phase: str, artifact_id: str) -> int:
+        """Version number of the current version (0 when the artifact is absent)."""
+        meta = _read_meta_file(self._meta_path(project_id, phase, artifact_id))
+        if meta is not None:
+            return int(meta["current_version"])
+        legacy = _scan_versions(
+            self._project_dir(project_id)
+            / paths.PHASE_DIR_MAP.get(phase, phase)
+            / artifact_id
+            / "versions"
+        )
+        return max(legacy) if legacy else 0
 
     def load_metadata(
         self, project_id: str, phase: str, artifact_id: str, version: int
     ) -> ArtifactMetadata:
-        """Load only the metadata sidecar, not the full artifact body."""
-        content_path = self._artifact_path(project_id, phase, artifact_id, version)
-        meta_path = _meta_sidecar(content_path)
-        return read_metadata(meta_path)
+        """Metadata for one version; non-current versions report SUPERSEDED.
+
+        Immutable per-version fields (provenance, lineage) come from that
+        version's envelope; mutable artifact-level fields (status, review
+        refs) come from ``meta.json``.
+        """
+        meta = _read_meta_file(self._meta_path(project_id, phase, artifact_id))
+        if meta is None:
+            return self._legacy_load_metadata(project_id, phase, artifact_id, version)
+        current_version = int(meta["current_version"])
+        mutable_fields = {
+            "approval_ref": meta.get("approval_ref"),
+            "kb_context_ref": meta.get("kb_context_ref"),
+            "reviewed_by": list(meta.get("reviewed_by", [])),
+            "validation_refs": list(meta.get("validation_refs", [])),
+        }
+        if version != current_version:
+            version_path = self._version_path(project_id, phase, artifact_id, version)
+            if not version_path.exists():
+                raise FileNotFoundError(f"Artifact version not found: {version_path}")
+            record = _envelope_to_metadata(_read_envelope(version_path), ArtifactStatus.SUPERSEDED)
+            return record.model_copy(update=mutable_fields)
+        envelope_path = self._version_path(project_id, phase, artifact_id, current_version)
+        if envelope_path.exists():
+            record = _envelope_to_metadata(
+                _read_envelope(envelope_path), ArtifactStatus(str(meta["status"]))
+            )
+            return record.model_copy(update=mutable_fields)
+        return _meta_record_to_metadata(meta)
+
+    # --- Status transitions --------------------------------------------------
 
     def approve(
         self,
@@ -110,7 +319,7 @@ class ArtifactStore:
         version: int,
         approval_ref: str | None = None,
     ) -> ArtifactMetadata:
-        """Transition an artifact version from CANDIDATE to APPROVED."""
+        """Transition the artifact (at its current version) from CANDIDATE to APPROVED."""
         return self._transition_status(
             project_id,
             phase,
@@ -119,13 +328,13 @@ class ArtifactStore:
             expected_status=ArtifactStatus.CANDIDATE,
             next_status=ArtifactStatus.APPROVED,
             action="approve",
-            extra_updates={"approval_ref": approval_ref},
+            approval_ref=approval_ref,
         )
 
     def supersede(
         self, project_id: str, phase: str, artifact_id: str, version: int
     ) -> ArtifactMetadata:
-        """Transition an artifact version from APPROVED to SUPERSEDED."""
+        """Transition the artifact (at its current version) from APPROVED to SUPERSEDED."""
         return self._transition_status(
             project_id,
             phase,
@@ -134,6 +343,7 @@ class ArtifactStore:
             expected_status=ArtifactStatus.APPROVED,
             next_status=ArtifactStatus.SUPERSEDED,
             action="supersede",
+            approval_ref=None,
         )
 
     def _transition_status(
@@ -145,52 +355,179 @@ class ArtifactStore:
         expected_status: ArtifactStatus,
         next_status: ArtifactStatus,
         action: str,
-        extra_updates: dict[str, Any] | None = None,
+        approval_ref: str | None,
     ) -> ArtifactMetadata:
-        """Require one status on a version and persist its successor."""
-        meta = self.load_metadata(project_id, phase, artifact_id, version)
-        if meta.status != expected_status:
+        meta_path = self._meta_path(project_id, phase, artifact_id)
+        raw = _read_meta_file(meta_path)
+        if raw is None:
+            raise ValueError(f"Cannot {action} {artifact_id}: artifact not found at {meta_path}")
+        current_version = int(raw["current_version"])
+        if version != current_version:
             raise ValueError(
-                f"Cannot {action} {artifact_id} v{version}: status is {meta.status.value}, "
+                f"Cannot {action} {artifact_id} v{version}: only the current version "
+                f"v{current_version} can be transitioned."
+            )
+        status = ArtifactStatus(str(raw["status"]))
+        if status != expected_status:
+            raise ValueError(
+                f"Cannot {action} {artifact_id}: status is {status.value}, "
                 f"expected {expected_status.value}"
             )
-        updated = meta.model_copy(update={"status": next_status, **(extra_updates or {})})
-        self._write_metadata_for(project_id, phase, artifact_id, version, updated)
-        return updated
+        updates: dict[str, Any] = {
+            "status": next_status.value,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        if approval_ref is not None:
+            updates["approval_ref"] = approval_ref
+        raw.update(updates)
+        atomic_write_text(meta_path, dump_json(raw))
+        self._write_index(project_id)
+        return _meta_record_to_metadata(raw)
 
-    def _write_metadata_for(
-        self,
-        project_id: str,
-        phase: str,
-        artifact_id: str,
-        version: int,
-        meta: ArtifactMetadata,
-    ) -> None:
-        """Persist metadata to both the version sidecar and current sidecar."""
-        version_path = self._artifact_path(project_id, phase, artifact_id, version)
-        current_path = self._current_path(project_id, phase, artifact_id)
-        write_metadata(_meta_sidecar(version_path), meta)
-        write_metadata(_meta_sidecar(current_path), meta)
+    # --- Legacy (pre-upgrade) read-only support -------------------------------
+
+    def _legacy_load_payload(
+        self, project_id: str, phase: str, artifact_id: str, version: int
+    ) -> dict[str, Any] | None:
+        path = paths.artifact_path(project_id, phase, artifact_id, version, root=self._root)
+        if not path.exists():
+            return None
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+
+    def _legacy_load_metadata(
+        self, project_id: str, phase: str, artifact_id: str, version: int
+    ) -> ArtifactMetadata:
+        path = paths.artifact_path(project_id, phase, artifact_id, version, root=self._root)
+        sidecar = path.with_suffix(".meta.json")
+        if not sidecar.exists():
+            raise ValueError(f"Artifact metadata not found: {sidecar}")
+        return ArtifactMetadata.model_validate_json(sidecar.read_text(encoding="utf-8"))
+
+    def _legacy_list(self, project_id: str, phase: FilmPhase | None) -> list[ArtifactMetadata]:
+        base = self._project_dir(project_id)
+        if not base.is_dir():
+            return []
+        # Legacy sidecars live at <project>/<phase>/<id>/current.meta.json —
+        # two directory levels deep; the phase filter pins the first level.
+        pattern = (
+            "*/*/current.meta.json"
+            if phase is None
+            else f"{paths.PHASE_DIR_MAP.get(phase.value, phase.value)}/*/current.meta.json"
+        )
+        results: list[ArtifactMetadata] = []
+        for sidecar in sorted(base.glob(pattern)):
+            try:
+                results.append(
+                    ArtifactMetadata.model_validate_json(sidecar.read_text(encoding="utf-8"))
+                )
+            except ValueError:
+                continue
+        return results
+
+    def _safe_spec(self, artifact_id: str) -> KindSpec:
+        try:
+            return REGISTRY.spec_for(artifact_id)
+        except KindNotRegisteredError:
+            return KindSpec(artifact_id=artifact_id, kind=f"film.studio/{artifact_id}")
 
 
-def _meta_sidecar(content_path: Path) -> Path:
-    return content_path.with_suffix(".meta.json")
+# --- Module helpers -----------------------------------------------------------
 
 
-def _write_artifact_files(
-    version_path: Path,
-    current_path: Path,
-    content: str,
-    payload: dict[str, Any],
-    meta: ArtifactMetadata,
-) -> None:
-    version_path.parent.mkdir(parents=True, exist_ok=True)
-    current_path.parent.mkdir(parents=True, exist_ok=True)
-    version_path.write_text(content)
-    current_path.write_text(content)
-    write_metadata(_meta_sidecar(version_path), meta)
-    write_metadata(_meta_sidecar(current_path), meta)
-    current_path.with_suffix(".md").write_text(_render_markdown(meta, payload))
+def _scan_versions(versions_dir: Path) -> list[int]:
+    if not versions_dir.is_dir():
+        return []
+    versions: list[int] = []
+    for path in versions_dir.glob("v*.json"):
+        try:
+            versions.append(int(path.stem.removeprefix("v")))
+        except ValueError:
+            continue
+    return versions
+
+
+def _read_envelope(path: Path) -> ArtifactEnvelope:
+    """Parse one envelope file: integrity-check the checksum, warn on unknown keys."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    envelope = ArtifactEnvelope.model_validate(raw)
+    if envelope.checksum and envelope.checksum != payload_checksum(envelope.payload):
+        raise ChecksumMismatchError(
+            f"Artifact {path} failed its integrity check: stored "
+            f"{envelope.checksum} != computed {payload_checksum(envelope.payload)}. "
+            "The file was modified outside film-pipeline or is corrupt; restore it "
+            "from a checkpoint or backup."
+        )
+    unknown = set(raw) - set(ArtifactEnvelope.model_fields)
+    if unknown:
+        _logger.warning(
+            "Artifact %s carries unknown envelope fields %s (written by a newer "
+            "build?); they are preserved on disk but not interpreted.",
+            path,
+            sorted(unknown),
+        )
+    return envelope
+
+
+def _read_meta_file(meta_path: Path) -> dict[str, Any] | None:
+    try:
+        raw = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _envelope_to_metadata(envelope: ArtifactEnvelope, status: ArtifactStatus) -> ArtifactMetadata:
+    """Build the public ``ArtifactMetadata`` view from a version envelope.
+
+    Status is artifact-level (from ``meta.json``); envelopes are immutable.
+    """
+    return ArtifactMetadata(
+        artifact_id=envelope.artifact_id,
+        artifact_type=envelope.artifact_type,
+        project_id=envelope.project_id,
+        phase=envelope.phase,
+        version=envelope.version,
+        status=status,
+        parents=envelope.parents,
+        created_by=envelope.created_by,
+        reviewed_by=envelope.reviewed_by,
+        validation_refs=envelope.validation_refs,
+        approval_ref=envelope.approval_ref,
+        kb_context_ref=envelope.kb_context_ref,
+        created_at=envelope.created_at,
+        built_from=envelope.built_from,
+        change_summary=envelope.change_summary,
+    )
+
+
+def _meta_record_to_metadata(raw: dict[str, Any]) -> ArtifactMetadata:
+    """Build the public ``ArtifactMetadata`` view from a ``meta.json`` record."""
+    return ArtifactMetadata(
+        artifact_id=str(raw["artifact_id"]),
+        artifact_type=ArtifactType(str(raw["artifact_type"])),
+        project_id=str(raw["project_id"]),
+        phase=FilmPhase(str(raw["phase"])),
+        version=int(raw["current_version"]),
+        status=ArtifactStatus(str(raw["status"])),
+        parents=[],
+        created_by=str(raw.get("created_by", "")),
+        reviewed_by=list(raw.get("reviewed_by", [])),
+        validation_refs=list(raw.get("validation_refs", [])),
+        approval_ref=raw.get("approval_ref"),
+        kb_context_ref=raw.get("kb_context_ref"),
+        created_at=datetime.fromisoformat(str(raw["created_at"])),
+        built_from={},
+        change_summary="",
+    )
+
+
+def _envelope_to_dict(envelope: ArtifactEnvelope) -> dict[str, Any]:
+    return envelope.model_dump(mode="json")
+
+
+def _meta_to_dict(meta: ArtifactCurrentMeta) -> dict[str, Any]:
+    return meta.model_dump(mode="json")
 
 
 def _render_markdown(meta: ArtifactMetadata, payload: dict[str, Any]) -> str:

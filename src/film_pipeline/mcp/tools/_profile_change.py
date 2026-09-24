@@ -17,6 +17,7 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.artifacts.registry import sanitize_artifact_id
 from film_pipeline.config.profile_resolver import (
     register_project_providers,
     resolve_project_config,
@@ -384,12 +385,16 @@ def _save_proposal_artifact(
     return _save_intake_artifact(
         rt,
         project_id,
-        f"profile_change_proposal:{proposal.proposal_id}",
+        _proposal_artifact_id(proposal.proposal_id),
         proposal,
         artifact_type=ArtifactType.REVISION_REQUEST,
         status=ArtifactStatus.CANDIDATE,
         created_by="propose_profile_change",
     )
+
+
+def _proposal_artifact_id(proposal_id: str) -> str:
+    return f"profile_change_proposal__{sanitize_artifact_id(proposal_id)}"
 
 
 def _load_proposal_artifact(
@@ -398,7 +403,7 @@ def _load_proposal_artifact(
     proposal_id: str,
 ) -> ProfileChangeProposal | None:
     store = _services(rt).artifact_store
-    artifact_id = f"profile_change_proposal:{proposal_id}"
+    artifact_id = _proposal_artifact_id(proposal_id)
     version = store.next_version(project_id, "intake", artifact_id) - 1
     if version <= 0:
         return None
@@ -417,7 +422,7 @@ def _save_approval_artifact(
     return _save_intake_artifact(
         rt,
         project_id,
-        f"profile_change_approval:{approval.approval_id}",
+        f"profile_change_approval__{sanitize_artifact_id(approval.approval_id)}",
         approval,
         artifact_type=ArtifactType.APPROVAL_RECORD,
         status=ArtifactStatus.APPROVED,
@@ -440,7 +445,7 @@ def _save_resolved_config_artifact(
     return _save_intake_artifact(
         rt,
         project_id,
-        f"project_config:v{profile_version}",
+        f"project_config_v{profile_version}",
         body,
         artifact_type=ArtifactType.PROJECT_CONFIG,
         status=ArtifactStatus.APPROVED,
@@ -459,7 +464,7 @@ def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -
     return _save_intake_artifact(
         rt,
         project_id,
-        f"invalidation_report_profile_change:{proposal_id}",
+        f"invalidation_report_profile_change__{sanitize_artifact_id(proposal_id)}",
         report,
         artifact_type=ArtifactType.INVALIDATION_REPORT,
         status=ArtifactStatus.CANDIDATE,

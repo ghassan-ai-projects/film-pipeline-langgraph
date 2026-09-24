@@ -9,8 +9,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from film_pipeline.artifacts.storage import PROFILE_SANDBOX, init_storage_root
+from film_pipeline.artifacts.store import ArtifactStore
 
 
 def sandbox_store_root(path: Path) -> Path:
     """Create and mark ``path`` as a sandbox storage root; return it."""
     return init_storage_root(path, profile=PROFILE_SANDBOX)
+
+
+def make_store(path: Path) -> ArtifactStore:
+    """Create a marked sandbox storage root at ``path`` and a store over it."""
+    return ArtifactStore(root=sandbox_store_root(path))

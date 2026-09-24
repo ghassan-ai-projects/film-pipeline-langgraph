@@ -3,6 +3,23 @@
 **Depends on:** Phase 01 (Schemas), Phase 03 (Config & Profile System)
 **Blocks:** Phase 05 (LangGraph Skeleton), Phase 08 (Review Package), Phase 11 (Checkpoint/Resume)
 
+> **Storage upgrade note (2026-09).** The artifact engine now writes **layout
+> v2** (see `documentation/storage-upgrade-plan.md`, decisions D3/D4). Per
+> artifact: `artifacts/<NN-phase>/<artifact_id>/` holds
+> `meta.json` (current version + status — the only mutable file),
+> `current.md` (generated human view), and immutable
+> `versions/vNNN.json` envelopes carrying provenance, payload, and a payload
+> checksum. A derived `index/artifacts.json` is regenerated on every write.
+> Every artifact id must be lowercase snake_case and registered in
+> `artifacts/registry.py` (kind → payload model, schema version, mutability);
+> unregistered ids are refused at save time. Envelopes carry an int
+> `schema_version`; readers reject newer versions with `SchemaTooNewError`
+> and migrate older ones via the registered migration chain. Legacy
+> pre-upgrade projects remain readable read-only until the storage migration
+> command (P6) moves them forward. The sections below describe the original
+> phase-04 contract; where they disagree with layout v2, the plan and the
+> code win (the full doc rewrite lands with the upgrade's final phase).
+
 ---
 
 ## Goal

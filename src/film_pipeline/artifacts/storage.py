@@ -33,8 +33,10 @@ LEGACY_PERSIST_ROOT_ENV = "FILM_PIPELINE_PERSIST_ROOT"
 MARKER_FILENAME = "storage.json"
 
 #: On-disk layout version this build writes. Roots written before the storage
-#: upgrade carry no marker at all (layout v0) and are marked when first opened.
-LAYOUT_VERSION = 1
+#: upgrade carry no marker at all (layout v0); P1 roots were marked v1 (old
+#: artifact layout under new root discipline). v2 introduces the envelope
+#: artifact tree (storage-upgrade-plan.md P2).
+LAYOUT_VERSION = 2
 MARKER_SCHEMA_VERSION = 1
 
 PROFILE_PRODUCTION = "production"

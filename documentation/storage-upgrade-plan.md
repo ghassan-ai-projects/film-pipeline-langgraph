@@ -122,7 +122,9 @@ marker to **v2** when the new engine lands, and v1 roots become migration inputs
   `invalidation_report_profile_change:<id>` → `invalidation_report_profile_change__<id>`;
   the migrator maps legacy colon-id directories to the new names (round-trip tested).
 - Phase dir names unchanged (`intake`, `01-vision`…`10-delivery`), generated from ONE
-  enum-driven map; `app/_persistence._DISCOVERED_PHASE_ORDER` is deleted.
+  enum-driven map (`paths.PHASE_DIR_MAP`); discovery's `_DISCOVERED_PHASE_ORDER` is
+  derived from that map (amendment: derived rather than deleted, so write-side and
+  discovery-side names cannot drift).
 - `versions/` envelopes are immutable **except nothing** — `status` lives at artifact
   level in `meta.json` (current) and in the derived index; a non-current version is
   superseded by definition. `approve()`/`supersede()` mutate `meta.json` + index only.
@@ -294,8 +296,14 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   **rollback path mapping** (restore by mapped tracked paths, not raw ids — layout
   changed so git paths changed), **compat shim**: exact P2 signatures `save→Path`,
   `load→payload dict`, `list_artifacts→list[ArtifactMetadata]`, `next_version`,
-  `load_metadata`, `approve`, `supersede`, proven by `tests/unit/artifacts/test_compat_shim.py`
-  (shim deleted in P3); all ~30 direct store-construction tests moved to `make_store()`;
+  `load_metadata`, `approve`, `supersede` — proven by the rewritten
+  `tests/unit/test_artifacts.py` + `tests/unit/artifacts/test_store_v2.py`
+  (amendment: coverage distributed instead of one named shim file; the signature
+  tests move/delete with the shim in P3). Direct test store constructions stay
+  as-is (amendment: fresh-directory auto-init makes `ArtifactStore(root=tmp)`
+  and `make_store()` equivalent in tests; `make_store()` is the pattern for new
+  tests). `save` honors a caller-provided `meta.status` (e.g. pre-approved
+  config snapshots) but owns version numbering for immutable kinds;
   golden-layout test; parent-chain + status-transition tests; N−1 migration mechanism
   test; read-only **legacy loader** so old-layout projects stay listable/loadable
   (tested) until P6 migrates them. Docs: artifact layout v2 sketch in artifact-store.md.
@@ -366,4 +374,5 @@ Each phase's Done = its bar + quality bar §1 + `make ci-check` + reviewer sign-
 10. Asset paths inside manifests become project-relative; media layout unified under
     `media/` with `take-NNN` naming (P5).
 11. Status becomes an artifact-level property (current version's state) instead of
-    per-version sidecar data; `supersede` semantics preserved (non-current = superseded) (P2).
+    per-version sidecar data; `supersede` semantics preserved (non-current = superseded).
+    `save()` honors a caller-provided status (pre-approved writes stay approved) (P2).

@@ -5,6 +5,8 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from film_pipeline.checkpoints.branches import BranchManager
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
@@ -195,6 +197,33 @@ class TestRollbackManager:
             # Rollback single artifact to v1
             rm.rollback_artifact("f.txt", commit1, performed_by="test")
             assert (Path(d) / "f.txt").read_text() == "v1"
+
+    def test_rollback_artifact_resolves_layout_nested_paths(self) -> None:
+        """Artifact ids are not git paths: nested layout files must be resolved."""
+        with tempfile.TemporaryDirectory() as d:
+            git = GitBackend.init_temp(Path(d))
+            nested = Path(d) / "artifacts" / "03-script" / "script" / "versions"
+            nested.mkdir(parents=True)
+            (nested / "v001.json").write_text("v1")
+            commit1 = git.commit("v1", ["artifacts/03-script/script/versions/v001.json"])
+            (nested / "v001.json").write_text("v2")
+            git.commit("v2", ["artifacts/03-script/script/versions/v001.json"])
+            mgr = CheckpointManager(git)
+            rm = RollbackManager(checkpoint_manager=mgr, git=git)
+            # The raw id is NOT a tracked path; rollback must map it to the
+            # nested layout files before restoring.
+            rm.rollback_artifact("script", commit1, performed_by="test")
+            assert (nested / "v001.json").read_text() == "v1"
+
+    def test_rollback_artifact_unknown_id_is_actionable(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            git = GitBackend.init_temp(Path(d))
+            (Path(d) / "f.txt").write_text("v1")
+            commit1 = git.commit("v1", ["f.txt"])
+            mgr = CheckpointManager(git)
+            rm = RollbackManager(checkpoint_manager=mgr, git=git)
+            with pytest.raises(ValueError, match="no tracked files"):
+                rm.rollback_artifact("missing_artifact", commit1, performed_by="test")
 
 
 class TestBranches:

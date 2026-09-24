@@ -233,6 +233,9 @@ def test_rollback_artifact_specific_checkpoint_git_restore_fails(
     assert cp is not None
     manager = rt.checkpoint_managers.get("proj-cp-restore-fail")
     assert manager is not None
+    monkeypatch.setattr(
+        manager.git, "list_files", lambda _c: ["artifacts/03-script/script/meta.json"]
+    )
 
     def _raise(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("git")
@@ -268,6 +271,9 @@ def test_rollback_artifact_fallback_loop_success(monkeypatch: pytest.MonkeyPatch
     def _restore(commit: str, files: list[str]) -> None:
         calls.append((commit, files))
 
+    monkeypatch.setattr(
+        manager.git, "list_files", lambda _c: ["artifacts/post/my_artifact/meta.json"]
+    )
     monkeypatch.setattr(manager.git, "restore_files", _restore)
     result = asyncio.run(rollback_artifact({"confirmed": True, "artifact_id": "my_artifact"}))
 
@@ -286,6 +292,9 @@ def test_rollback_artifact_specific_checkpoint_success(
     rt = gr()
     manager = rt.checkpoint_managers.get("proj-cp-restore-ok")
     assert manager is not None
+    monkeypatch.setattr(
+        manager.git, "list_files", lambda _c: ["artifacts/03-script/script/meta.json"]
+    )
     monkeypatch.setattr(manager.git, "restore_files", lambda *_args, **_kwargs: None)
     result = asyncio.run(
         rollback_artifact(

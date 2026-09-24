@@ -58,6 +58,11 @@ class GitBackend:
         """Restore specific files from a commit."""
         self._run("checkout", commit, "--", *files)
 
+    def list_files(self, commit: str) -> list[str]:
+        """Return every tracked file path at a commit (unquoted, NUL-delimited)."""
+        output = self._run("ls-tree", "-z", "-r", "--name-only", commit)
+        return [entry for entry in output.split("\x00") if entry]
+
     def log(self, max_count: int = 20) -> list[str]:
         """Return recent commit hashes."""
         output = self._run("log", f"--max-count={max_count}", "--format=%H")

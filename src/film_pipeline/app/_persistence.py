@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.artifacts.paths import PHASE_DIR_MAP
 from film_pipeline.artifacts.storage import default_runtime_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
@@ -29,19 +30,10 @@ AUDIT_FILENAME = "audit-log.json"
 _PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
 # Phase directories ordered newest-first; the first one holding any JSON
-# artifact decides a discovered project's current phase.
-_DISCOVERED_PHASE_ORDER: tuple[tuple[str, str], ...] = (
-    ("10-delivery", "delivery"),
-    ("09-post", "post"),
-    ("08-validation", "qc"),
-    ("07-generated-assets", "generation"),
-    ("06-generation-plan", "gen_planning"),
-    ("05-shot-bible", "shot_bible"),
-    ("04-visual-dev", "visual_dev"),
-    ("03-script", "script"),
-    ("02-development", "development"),
-    ("01-vision", "constitution"),
-    ("intake", "intake"),
+# artifact decides a discovered project's current phase. Derived from the
+# canonical map so discovery can never drift from the write side.
+_DISCOVERED_PHASE_ORDER: tuple[tuple[str, str], ...] = tuple(
+    (dirname, phase) for phase, dirname in reversed(PHASE_DIR_MAP.items())
 )
 
 
@@ -63,14 +55,20 @@ def use_persistent_runtime() -> bool:
 
 
 def looks_like_project_dir(project_dir: Path) -> bool:
-    return any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json"))
+    """Recognize both storage layouts: legacy sidecars and v2 artifact trees."""
+    if any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json")):
+        return True
+    return any(project_dir.glob("artifacts/*/*/meta.json"))
 
 
 def latest_discovered_phase(project_dir: Path) -> str:
     for dirname, phase in _DISCOVERED_PHASE_ORDER:
-        candidate = project_dir / dirname
-        if candidate.exists() and any(candidate.rglob("*.json")):
-            return phase
+        for candidate in (
+            project_dir / dirname,
+            project_dir / "artifacts" / dirname,
+        ):
+            if candidate.exists() and any(candidate.rglob("*.json")):
+                return phase
     return ""
 
 

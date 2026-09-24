@@ -151,6 +151,12 @@ class InMemoryGitBackend(GitBackend):
         else:
             self._write_tree(target.tree, only=files)
 
+    def list_files(self, commit: str) -> list[str]:
+        target = self._find_commit(commit)
+        if target is None:
+            raise RuntimeError(f"git ls-tree {commit} failed: unknown commit")
+        return sorted(target.tree)
+
     def log(self, max_count: int = 20) -> list[str]:
         hashes = [c.hash for c in reversed(self._state.commits)]
         return hashes[:max_count]
