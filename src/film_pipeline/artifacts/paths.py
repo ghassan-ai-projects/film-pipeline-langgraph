@@ -49,6 +49,11 @@ def current_artifact_path(project_slug: str, phase: str, artifact_id: str, root:
     return artifact_dir(project_slug, phase, artifact_id, root) / "current.json"
 
 
+def media_scene_dir(project_slug: str, scene_id: str, shot_id: str, root: Path) -> Path:
+    """A shot's media directory: ``<project>/media/scenes/<scene>/<shot>``."""
+    return project_dir(project_slug, root) / "media" / "scenes" / scene_id / shot_id
+
+
 def generated_asset_dir(project_slug: str, scene_id: str, shot_id: str, root: Path) -> Path:
     return phase_dir(project_slug, "generation", root) / "scenes" / scene_id / shot_id
 

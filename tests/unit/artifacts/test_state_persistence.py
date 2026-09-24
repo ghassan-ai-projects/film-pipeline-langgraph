@@ -6,6 +6,7 @@ import json
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from film_pipeline.testing.storage import make_store
 
@@ -318,3 +319,140 @@ class TestOperatorFreshness:
                 (project_dir / "project-state.json").stat().st_mtime, tz=UTC
             ).isoformat()
         )
+
+
+class TestMediaLayout:
+    def test_delivery_lands_in_media_with_sidecar_and_relative_manifest(
+        self, tmp_path: Path
+    ) -> None:
+        """Generated media lives under media/, pinned by sidecar + manifest."""
+        from film_pipeline.generation.executor_delivery import deliver_completed_job
+        from film_pipeline.providers.base import (
+            BaseProviderAdapter,
+            ProviderJob,
+            ProviderJobStatus,
+        )
+
+        store_root = make_store(tmp_path / "store").root
+
+        class _DownloadOnly:
+            """Only download runs in this test; cast keeps the signature."""
+
+            def download(self, job: ProviderJob, output_dir: str) -> str:
+                target = Path(output_dir) / "shot_0001.mp4"
+                target.write_bytes(b"clip-bytes")
+                return str(target)
+
+        adapter = cast(BaseProviderAdapter, _DownloadOnly())
+
+        job = ProviderJob(
+            job_id="j1",
+            shot_id="shot_0001",
+            provider_id="mock",
+            model="mock-fast",
+            status=ProviderJobStatus.COMPLETED,
+        )
+        paths = deliver_completed_job(
+            store_root, adapter, job, "p1", "shot_0001", {"scene_id": "SC_001"}
+        )
+        assert paths
+        media_dir = tmp_path / "store/p1/media/scenes/SC_001/shot_0001"
+        assert (media_dir / "shot_0001.mp4").exists()
+        sidecars = list(media_dir.glob("take-*.json"))
+        assert len(sidecars) == 1
+        sidecar = json.loads(sidecars[0].read_text())
+        assert sidecar["take"] == 1
+        assert sidecar["files"][0]["sha256"].startswith("sha256:") is False
+        assert len(sidecar["files"][0]["sha256"]) == 64
+
+        from film_pipeline.artifacts.manifest import read_manifest
+
+        manifest = read_manifest("p1", root=tmp_path / "store")
+        assert manifest is not None
+        entry = manifest.entries[0]
+        assert entry.path.startswith("media/scenes/")
+        assert entry.sha256
+        # Resolved against the project dir, the path exists on disk.
+        assert (tmp_path / "store/p1" / entry.path).exists()
+
+    def test_second_delivery_does_not_re_record_sidecars(self, tmp_path: Path) -> None:
+        """Re-delivery must not record the previous take's sidecar as media."""
+        from film_pipeline.artifacts.manifest import read_manifest
+        from film_pipeline.generation.executor_delivery import deliver_completed_job
+        from film_pipeline.providers.base import (
+            BaseProviderAdapter,
+            ProviderJob,
+            ProviderJobStatus,
+        )
+
+        store_root = make_store(tmp_path / "store").root
+
+        class _DownloadOnly:
+            def download(self, job: ProviderJob, output_dir: str) -> str:
+                target = Path(output_dir) / "shot_0001.mp4"
+                target.write_bytes(b"clip-" + str(Path(output_dir)).encode()[-6:])
+                return str(target)
+
+        adapter = cast(BaseProviderAdapter, _DownloadOnly())
+        job = ProviderJob(
+            job_id="j1",
+            shot_id="shot_0001",
+            provider_id="mock",
+            model="mock-fast",
+            status=ProviderJobStatus.COMPLETED,
+        )
+        for _ in range(2):
+            deliver_completed_job(
+                store_root, adapter, job, "p1", "shot_0001", {"scene_id": "SC_001"}
+            )
+
+        manifest = read_manifest("p1", root=store_root)
+        assert manifest is not None
+        clip_entries = [e for e in manifest.entries if e.kind == "generated_clip"]
+        assert len(clip_entries) == 2
+        assert all(e.path.endswith(".mp4") for e in clip_entries)
+        active = [e for e in clip_entries if e.active]
+        assert len(active) == 1
+        assert active[0].take == 2
+
+    def test_active_take_invariant(self) -> None:
+        from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
+
+        manifest = AssetManifest(project_id="p1")
+        first = AssetEntry(
+            asset_id="shot_0001:generated_clip:take1",
+            path="media/a.mp4",
+            kind="generated_clip",
+            shot_id="shot_0001",
+            take=1,
+        )
+        manifest.add(first)
+        second = AssetEntry(
+            asset_id="shot_0001:generated_clip:take2",
+            path="media/b.mp4",
+            kind="generated_clip",
+            shot_id="shot_0001",
+            take=2,
+        )
+        manifest.add_take(second)
+        actives = [
+            e
+            for e in manifest.entries
+            if e.shot_id == "shot_0001" and e.kind == "generated_clip" and e.active
+        ]
+        assert len(actives) == 1
+        assert actives[0].asset_id.endswith("take2")
+
+    def test_checkpoint_never_tracks_media(self, tmp_path: Path) -> None:
+        """A project checkpoint commit must not include media files."""
+        from film_pipeline.app._persistence import project_git_backend
+
+        project_root = tmp_path / "p1"
+        (project_root / "media" / "scenes").mkdir(parents=True)
+        (project_root / "media" / "scenes" / "clip.mp4").write_bytes(b"x" * 32)
+        (project_root / "project.json").write_text("{}")
+        git = project_git_backend(project_root)
+        git.commit("checkpoint: with media present")
+        tracked = git.list_files("HEAD")
+        assert all(not path.startswith("media/") for path in tracked)
+        assert "project.json" in tracked

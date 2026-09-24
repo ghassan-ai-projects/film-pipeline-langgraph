@@ -36,7 +36,10 @@ LEGACY_AUDIT_FILENAME = "audit-log.json"
 
 # Keep per-project git checkpoint repos small: media lives in the artifact
 # tree and is tracked by the asset manifest, not by checkpoint commits.
-_PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
+_PROJECT_GITIGNORE = "media/\n07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
+# Pre-P5 projects carry the old template; it is a generated file, so it is
+# upgraded in place when unchanged.
+_LEGACY_PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
 # Phase directories ordered newest-first; the first one holding any JSON
 # artifact decides a discovered project's current phase. Derived from the
@@ -104,7 +107,7 @@ def project_git_backend(project_root: Path) -> GitBackend:
     already_initialized = (project_root / ".git").exists()
     git = _GIT_BACKEND_TYPE.init_temp(project_root)
     gitignore = project_root / ".gitignore"
-    if not gitignore.exists():
+    if not gitignore.exists() or gitignore.read_text(encoding="utf-8") == _LEGACY_PROJECT_GITIGNORE:
         gitignore.write_text(_PROJECT_GITIGNORE)
     if not already_initialized:
         with contextlib.suppress(RuntimeError):

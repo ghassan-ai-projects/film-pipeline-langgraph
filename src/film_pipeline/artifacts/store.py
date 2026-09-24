@@ -20,7 +20,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -178,9 +178,10 @@ class ArtifactStore:
         atomic_write_text(meta_path, dump_json(_meta_to_dict(current_meta)))
         atomic_write_text(
             meta_path.parent / "current.md",
-            _render_markdown(meta, payload),
+            _render_markdown(spec.kind, meta, payload),
         )
         self._write_index(meta.project_id)
+        self._safe_write_readme(meta.project_id)
         return ArtifactRef(artifact_id=meta.artifact_id, version=version, phase=meta.phase.value)
 
     # --- Mutable kinds (single revision-counted file) ------------------------
@@ -245,6 +246,7 @@ class ArtifactStore:
         atomic_write_text(path, dump_json(_envelope_to_dict(envelope)))
         self._write_mutable_meta(meta, revision, now, envelope.checksum)
         self._write_index(meta.project_id)
+        self._safe_write_readme(meta.project_id)
         return ArtifactRef(artifact_id=meta.artifact_id, version=revision, phase=meta.phase.value)
 
     def _write_mutable_meta(
@@ -325,6 +327,76 @@ class ArtifactStore:
         raise FileNotFoundError(
             f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
         )
+
+    def _safe_write_readme(self, project_id: str) -> None:
+        """Best-effort README regeneration: a corrupt sibling record must
+        never fail the artifact write that triggered it."""
+        try:
+            self._write_project_readme(project_id)
+        except (OSError, ValueError, KeyError) as exc:
+            _logger.warning("Could not regenerate README for %s: %s", project_id, exc)
+
+    def _write_project_readme(self, project_id: str) -> None:
+        """Regenerate the generated project README (phase, artifact links)."""
+        record = _read_meta_file(self._project_dir(project_id) / "project.json")
+        phase = str((record or {}).get("current_phase", "")) or "intake"
+        title = str((record or {}).get("title", "")) or project_id
+        lines = [
+            f"# {title}",
+            "",
+            f"Project `{project_id}` — current phase: **{phase}**.",
+            "",
+            "## Artifacts (current versions)",
+            "",
+        ]
+        artifacts = self.list_artifacts(project_id)
+        if artifacts:
+            for meta in artifacts:
+                phase_dirname = paths.PHASE_DIR_MAP.get(meta.phase.value, meta.phase.value)
+                view = (
+                    self._project_dir(project_id)
+                    / "artifacts"
+                    / phase_dirname
+                    / meta.artifact_id
+                    / "current.md"
+                )
+                if view.exists():
+                    link = f"artifacts/{phase_dirname}/{meta.artifact_id}/current.md"
+                    lines.append(
+                        f"- [{meta.artifact_id}]({link}) — {meta.phase.value}, "
+                        f"v{meta.version}, {meta.status.value}"
+                    )
+                else:
+                    lines.append(
+                        f"- {meta.artifact_id} — {meta.phase.value}, "
+                        f"v{meta.version}, {meta.status.value}"
+                    )
+        else:
+            lines.append("_No artifacts yet._")
+        deliverables = self._project_dir(project_id) / "deliverables"
+        if deliverables.is_dir() and any(deliverables.glob("*.md")):
+            lines += ["", "## Deliverables", "", "- See [deliverables/](deliverables/README.md)."]
+        atomic_write_text(
+            self._project_dir(project_id) / "README.md",
+            "".join(f"{line}\n" for line in lines),
+        )
+
+    def _record_deliverable(self, project_id: str, phase: str, artifact_id: str) -> None:
+        """Copy the approved artifact's human view into ``deliverables/``."""
+        source = self._artifact_dir(project_id, phase, artifact_id) / "current.md"
+        if not source.exists():
+            return
+        deliverables = self._project_dir(project_id) / "deliverables"
+        deliverables.mkdir(parents=True, exist_ok=True)
+        atomic_write_text(
+            deliverables / f"{phase}-{artifact_id}.md",
+            source.read_text(encoding="utf-8"),
+        )
+        lines = ["# Deliverables", "", "Approved artifacts, one file per approval:", ""]
+        for entry in sorted(deliverables.glob("*.md")):
+            if entry.name != "README.md":
+                lines.append(f"- [{entry.stem}]({entry.name})")
+        atomic_write_text(deliverables / "README.md", "".join(f"{line}\n" for line in lines))
 
     def _write_index(self, project_id: str) -> None:
         """Regenerate the derived artifact index for one project."""
@@ -588,6 +660,9 @@ class ArtifactStore:
         raw.update(updates)
         atomic_write_text(meta_path, dump_json(raw))
         self._write_index(project_id)
+        if next_status == ArtifactStatus.APPROVED:
+            self._record_deliverable(project_id, phase, artifact_id)
+        self._safe_write_readme(project_id)
         return _meta_record_to_metadata(raw)
 
     # --- Legacy (pre-upgrade) read-only support -------------------------------
@@ -736,7 +811,39 @@ def _meta_to_dict(meta: ArtifactCurrentMeta) -> dict[str, Any]:
     return meta.model_dump(mode="json")
 
 
-def _render_markdown(meta: ArtifactMetadata, payload: dict[str, Any]) -> str:
+_RENDERER_BY_SLUG: dict[str, Any] = {}
+
+
+def _renderer_for(kind: str) -> Callable[[dict[str, Any]], str] | None:
+    """Renderer for a kind slug, resolved once from the rendering module."""
+    if not _RENDERER_BY_SLUG:
+        import importlib
+
+        rendering = importlib.import_module("film_pipeline.artifacts.rendering")
+        _RENDERER_BY_SLUG.update(
+            {
+                "script": rendering.render_script,
+                "scene-list": rendering.render_scene_list,
+                "shot-matrix": rendering.render_shot_matrix,
+                "master-film-matrix": rendering.render_shot_matrix,
+                "validation-report": rendering.render_validation_report,
+                "consensus-report": rendering.render_consensus_report,
+                "review-package": rendering.render_review_package,
+                "treatment": rendering.render_prose,
+                "logline": rendering.render_prose,
+                "premise": rendering.render_prose,
+                "film-constitution": rendering.render_prose,
+                "character-bible": rendering.render_bible,
+                "environment-bible": rendering.render_bible,
+                "camera-language-bible": rendering.render_bible,
+                "style-bible": rendering.render_bible,
+                "story-bible": rendering.render_bible,
+            }
+        )
+    return _RENDERER_BY_SLUG.get(kind.rsplit("/", 1)[-1])
+
+
+def _render_markdown(kind: str, meta: ArtifactMetadata, payload: dict[str, Any]) -> str:
     title = f"# {meta.artifact_id}\n\n"
     details = [
         f"- phase: {meta.phase.value}",
@@ -744,7 +851,8 @@ def _render_markdown(meta: ArtifactMetadata, payload: dict[str, Any]) -> str:
         f"- version: {meta.version}",
         f"- status: {meta.status.value}",
     ]
-    body = _markdown_body(payload)
+    renderer = _renderer_for(kind)
+    body = renderer(payload) if renderer is not None else _markdown_body(payload)
     detail_text = "\n".join(details)
     return f"{title}{detail_text}\n\n{body}\n"
 

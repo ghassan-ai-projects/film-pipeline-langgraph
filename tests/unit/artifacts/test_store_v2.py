@@ -61,6 +61,7 @@ class TestGoldenLayout:
             "p1/artifacts/01-vision/film_constitution/current.md",
             "p1/artifacts/01-vision/film_constitution/versions/v001.json",
             "p1/index/artifacts.json",
+            "p1/README.md",
             "p1/.storage.lock",
             "storage.json",
         }

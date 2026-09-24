@@ -88,9 +88,30 @@ class InMemoryGitBackend(GitBackend):
             tree[file.relative_to(self.repo_path).as_posix()] = file.read_bytes()
         return tree
 
-    @staticmethod
-    def _is_ignored(file: Path) -> bool:
-        return ".git" in file.parts
+    def _is_ignored(self, file: Path) -> bool:
+        if ".git" in file.parts:
+            return True
+        # Mirror the project .gitignore (dir prefixes, exact names, *.ext
+        # globs) so tracked-path assertions behave like real git.
+        gitignore = self.repo_path / ".gitignore"
+        if not gitignore.exists():
+            return False
+        rel = file.relative_to(self.repo_path).as_posix()
+        patterns = [
+            line.strip()
+            for line in gitignore.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        for pattern in patterns:
+            if pattern.endswith("/"):
+                if rel.startswith(pattern) or f"/{pattern}" in f"/{rel}/":
+                    return True
+            elif pattern.startswith("*."):
+                if rel.endswith(pattern[1:]):
+                    return True
+            elif rel == pattern or rel.startswith(f"{pattern}/"):
+                return True
+        return False
 
     def _latest_tree(self) -> dict[str, bytes]:
         commits = self._state.commits
@@ -104,6 +125,8 @@ class InMemoryGitBackend(GitBackend):
             target.write_bytes(data)
 
     def _find_commit(self, ref: str) -> _Commit | None:
+        if ref == "HEAD":
+            return self._state.commits[-1] if self._state.commits else None
         for commit in reversed(self._state.commits):
             if commit.hash == ref or commit.hash.startswith(ref):
                 return commit

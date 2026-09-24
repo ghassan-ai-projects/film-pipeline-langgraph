@@ -343,12 +343,12 @@ class TestArtifactStore:
         artifact_dir = tmp_path / "store" / "p1" / "artifacts" / "05-shot-bible" / "shot_matrix"
         markdown = (artifact_dir / "current.md").read_text()
 
-        assert "## SC_001" in markdown
-        assert "- camera_movement: dolly from wide to close" in markdown
-        assert "Mara opens the note." in markdown
-        assert "MARA (whispering) It came early." in markdown
-        assert "- asset_refs: note_ref" in markdown
-        assert "- reference_refs: platform_ref" in markdown
+        # The typed matrix renderer emits a table plus per-shot story functions.
+        assert "## Shot Matrix" in markdown
+        assert "| Shot | Scene | Act | Duration | Camera | Status |" in markdown
+        assert "| shot_001 | SC_001 |" in markdown
+        assert "slow push-in" in markdown  # camera_profile column
+        assert "**shot_001**: Reveal the message." in markdown
 
     def test_rejects_invalid_artifact_id(self, tmp_path: Path) -> None:
         store = ArtifactStore(root=tmp_path / "store")

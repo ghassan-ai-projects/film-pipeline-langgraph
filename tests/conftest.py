@@ -43,6 +43,13 @@ def _isolated_runtime_root(
     reset_in_memory_git()
     reset_runtime()
 
+    # Defensively rebind the tool->runtime function to the genuine one: a
+    # stale MagicMock must never survive into the next test regardless of
+    # how it got there.
+    import film_pipeline.mcp.tools as tools_pkg
+
+    tools_pkg.get_runtime = reset_runtime.__globals__["get_runtime"]
+
 
 @pytest.fixture
 def store_root(tmp_path: Path) -> Path:

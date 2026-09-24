@@ -88,6 +88,24 @@ Legacy files (`project-state.json`, `checkpoints.json`, `audit-log.json`)
 are still readable but are no longer written; the storage migration moves
 them into the layout above. (`.graph_state.json` has no reader at all.)
 
+### Browsing a project (what to open)
+
+- `README.md` — GENERATED entry point: current phase and every artifact with
+  a direct link to its human view. Never hand-edit it.
+- `artifacts/<phase>/<artifact_id>/current.md` — the readable view of each
+  artifact (screenplay-style script, shot-matrix tables, validation findings,
+  bible sections). Generated from typed renderers; regenerated on every save.
+- `deliverables/` — filled automatically when a phase is approved at the
+  human gate; one markdown file per approved artifact plus a `README.md`.
+- `media/scenes/<scene>/<shot>/` — generated clips and frames with a
+  `take-NNN.json` sidecar (kind, take, sha256 per file).
+- `index/artifacts.json` — derived machine index, regenerated on every
+  write, always safe to delete. (`asset-manifest.json` moves here as
+  `index/assets.json` in the storage migration.)
+
+Media and asset-manifest paths are relative to the project directory, so a
+project folder can be moved or archived whole.
+
 ## Before Starting Real Mode
 
 Set:

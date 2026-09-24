@@ -327,11 +327,23 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   for P7: `delete_project` archival is not under the project lock (documented
   as requiring quiescence) and a pre-existing `test_mcp` get_runtime
   mock-leak flake. Docs: state files table.
-- **P5 — Readability + media.** D9 renderers, README, deliverables-on-approve wired at
-  `_graph_exec.approve_phase`, media root unified (`media/`, take-NNN + sidecars),
-  `assets.json` project-relative + sha256, one sidecar convention, `_asset_kind` suffix
-  parsing retired, active-take invariant test, `_PROJECT_GITIGNORE` updated + test that
-  checkpoints never track media. Docs: browsing guide.
+- **P5 — Readability + media.** D9 typed renderers (registered by kind in
+  `artifacts/rendering.py`; screenplay-style script, tables for scene list and
+  shot matrix, findings sections for reports, bible sections), generated
+  project `README.md` regenerated on save/approve, deliverables-on-approve wired
+  at `_graph_exec.approve_phase` (the production caller of the status machine),
+  generated media unified under `media/scenes/<scene>/<shot>/` with one
+  `take-NNN.json` sidecar convention (kind/take/sha256), `assets.json`
+  project-relative + sha256, active-take invariant enforced by the manifest
+  API + test, `_PROJECT_GITIGNORE` covers `media/` + checkpoint-never-tracks-
+  media test.
+  Amendments: provider filenames are kept (renaming to `take-NNN.<ext>` is
+  deferred to P6 where legacy media moves anyway — downstream consumers parse
+  delivered names); reference media still lives in the runtime tree via
+  `reference_generation` (a known P6-merge item, since P6 is what unifies the
+  runtime/artifact roots); the asset-manifest filename stays
+  `asset-manifest.json` in place (physical move to `index/assets.json` lands
+  with the P6 migrator to avoid a dual-read window). Docs: browsing guide.
 - **P6 — Migration.** D8 complete migrator + committed old-layout fixtures (incl. a
   runtime-tree project, colon-id artifacts, path-shaped refs) + round-trip tests
   (dry-run writes nothing; migrate → verify passes; re-run no-op; quarantine; rollback

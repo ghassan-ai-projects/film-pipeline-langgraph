@@ -23,6 +23,7 @@ from film_pipeline.app._resume import (
 )
 from film_pipeline.artifacts.serialization import write_json_atomic
 from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 
 if TYPE_CHECKING:
@@ -246,6 +247,32 @@ def _resume_after_approval(
         _gn._SERVICES_CTX.reset(token)
 
 
+def _approve_phase_artifacts(rt: StudioRuntime, project_id: str, phase: str) -> None:
+    """Transition the approved phase's current artifacts to APPROVED.
+
+    The human gate is the one place the artifact status machine fires in
+    production: approved artifacts gain an approval ref and their human
+    views land in ``deliverables/``. Best-effort — a store transition
+    failure must not undo the phase approval itself.
+    """
+    if rt.services is None:
+        return
+    store = rt.services.artifact_store
+    for meta in store.list_artifacts(project_id, FilmPhase(phase)):
+        try:
+            store.approve(
+                project_id,
+                phase,
+                meta.artifact_id,
+                meta.version,
+                approval_ref=f"approval:{phase}:{meta.artifact_id}:v{meta.version}",
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            _logger.warning(
+                "Could not mark %s v%d approved: %s", meta.artifact_id, meta.version, exc
+            )
+
+
 def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     """Approve the current phase and advance.
 
@@ -265,6 +292,7 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     rt.projects[active["project_id"]] = state
     rt._persist_project_state(active["project_id"])
     save_graph_state(rt, dict(state), active["project_id"])
+    _approve_phase_artifacts(rt, active["project_id"], current_phase)
 
     checkpoint = rt.create_checkpoint(
         project_id=active["project_id"],
