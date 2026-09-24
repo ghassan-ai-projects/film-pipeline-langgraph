@@ -119,7 +119,6 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "scope_contract": _spec("scope_contract"),
         "intake_analysis": _spec("intake_analysis"),
         "project_config": _spec("project_config"),
-        "graph_state": _spec("graph_state", payload_model=CheckpointState),
         # vision / development / script
         "film_constitution": _spec("film_constitution"),
         "logline": _spec("logline"),

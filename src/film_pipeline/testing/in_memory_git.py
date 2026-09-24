@@ -116,12 +116,14 @@ class InMemoryGitBackend(GitBackend):
         tree = self._latest_tree()
         current = self._snapshot_tree()
         if files:
-            # ``git add -- <files>``: stage only the named paths over the prior tree.
+            # ``git add -- <files>``: stage only the named paths over the prior
+            # tree. Real git fails on a pathspec that matches nothing — mirror
+            # that so stale file names cannot hide behind the double.
             for rel in files:
                 if rel in current:
                     tree[rel] = current[rel]
                 else:
-                    tree.pop(rel, None)
+                    raise RuntimeError(f"git add -- {rel} failed: pathspec did not match any files")
         else:
             # ``git add -A``: the working tree becomes the new snapshot.
             tree = current

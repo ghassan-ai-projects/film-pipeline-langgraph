@@ -311,13 +311,22 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   parsers and 6 phase scanners; fix path-as-ref (save returns `ArtifactRef`); fix v1
   hardcodes; ledger becomes a mutable kind; `store._root` private access replaced by
   public API; shim deleted; defined `list_artifacts` ordering. Docs: ref grammar.
-- **P4 — State persistence collapse.** `project.json` typed record; single
-  `state/graph-state.json` written **once per mutating operation** (write-point policy
-  per §5a); `project-state.json`, `.graph_state.json`, `intake/graph_state` artifact
-  removed; operator freshness signal (`operator.py:89`) re-pointed at `project.json`;
-  JSONL audit + checkpoints; sqlite checkpointer moved under the storage root; flock;
-  resume-behavior test (gate → restart → resume) proving persistence-after-every-mutation.
-  Docs: state files table.
+- **P4 — State persistence collapse.** `project.json` typed record
+  (`schemas/runtime_state.py::ProjectRecord`, extra="allow" for runtime keys,
+  schema_version-gated on read); single `state/graph-state.json` written once
+  per mutating operation from `auto_checkpoint` (guarded; unserializable
+  values degrade via `str()`); `project-state.json`, `.graph_state.json`,
+  `intake/graph_state` artifact removed (legacy records still restore,
+  and a typed record always wins over a stale legacy file); JSONL append-only
+  audit + checkpoints (id-deduped, torn lines warn); per-project flock wraps
+  save/save_mutable/transitions (`.storage.lock`; the InMemoryGitBackend now
+  raises on unknown pathspecs like real git); operator freshness re-pointed;
+  gate → restart → resume test proves persistence-after-every-mutation.
+  Amendments: the dead `graph_state` registry entry was removed; the dead
+  `metadata.py` module was deleted in P2 (earlier than P7); follow-ups noted
+  for P7: `delete_project` archival is not under the project lock (documented
+  as requiring quiescence) and a pre-existing `test_mcp` get_runtime
+  mock-leak flake. Docs: state files table.
 - **P5 — Readability + media.** D9 renderers, README, deliverables-on-approve wired at
   `_graph_exec.approve_phase`, media root unified (`media/`, take-NNN + sidecars),
   `assets.json` project-relative + sha256, one sidecar convention, `_asset_kind` suffix

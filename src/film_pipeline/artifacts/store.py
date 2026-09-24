@@ -17,8 +17,11 @@ as a single revision-counted ``<id>.json`` written through
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -84,6 +87,23 @@ class ArtifactStore:
     def _index_path(self, project_id: str) -> Path:
         return self._project_dir(project_id) / "index" / "artifacts.json"
 
+    @contextmanager
+    def _project_lock(self, project_id: str) -> Iterator[None]:
+        """Serialize mutating operations per project (single-writer guard).
+
+        The lock file lives inside the project directory so it travels with
+        the data; ``flock`` releases it automatically if a process dies.
+        Readers never take the lock.
+        """
+        lock_path = self._project_dir(project_id) / ".storage.lock"
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     # --- Write path ---------------------------------------------------------
 
     def save(self, artifact: BaseModel, meta: ArtifactMetadata) -> ArtifactRef:
@@ -101,6 +121,12 @@ class ArtifactStore:
                 f"{meta.artifact_id} is a mutable kind; persist it with "
                 "save_mutable() so its revision-counted file stays the only copy."
             )
+        with self._project_lock(meta.project_id):
+            return self._save_locked(artifact, meta, spec)
+
+    def _save_locked(
+        self, artifact: BaseModel, meta: ArtifactMetadata, spec: KindSpec
+    ) -> ArtifactRef:
         phase = meta.phase.value
         version = self.next_version(meta.project_id, phase, meta.artifact_id)
         now = datetime.now(UTC)
@@ -178,6 +204,16 @@ class ArtifactStore:
         spec = REGISTRY.spec_for(meta.artifact_id)
         if not spec.mutable:
             raise ValueError(f"{meta.artifact_id} is not a mutable kind; use save() to version it.")
+        with self._project_lock(meta.project_id):
+            return self._save_mutable_locked(artifact, meta, spec, change_summary)
+
+    def _save_mutable_locked(
+        self,
+        artifact: BaseModel,
+        meta: ArtifactMetadata,
+        spec: KindSpec,
+        change_summary: str,
+    ) -> ArtifactRef:
         phase = meta.phase.value
         path = self._mutable_path(meta.project_id, phase, meta.artifact_id)
         revision = 1
@@ -494,6 +530,29 @@ class ArtifactStore:
         )
 
     def _transition_status(
+        self,
+        project_id: str,
+        phase: str,
+        artifact_id: str,
+        version: int,
+        expected_status: ArtifactStatus,
+        next_status: ArtifactStatus,
+        action: str,
+        approval_ref: str | None,
+    ) -> ArtifactMetadata:
+        with self._project_lock(project_id):
+            return self._transition_status_locked(
+                project_id,
+                phase,
+                artifact_id,
+                version,
+                expected_status,
+                next_status,
+                action,
+                approval_ref,
+            )
+
+    def _transition_status_locked(
         self,
         project_id: str,
         phase: str,

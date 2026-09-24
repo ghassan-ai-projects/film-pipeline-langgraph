@@ -8,22 +8,31 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.artifacts.paths import PHASE_DIR_MAP
+from film_pipeline.artifacts.serialization import write_json_atomic
 from film_pipeline.artifacts.storage import default_runtime_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
+from film_pipeline.schemas.runtime_state import ProjectRecord
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from film_pipeline.app.runtime import StudioRuntime
 
-STATE_FILENAME = "project-state.json"
-CHECKPOINTS_FILENAME = "checkpoints.json"
-AUDIT_FILENAME = "audit-log.json"
+PROJECT_FILENAME = "project.json"
+LEGACY_STATE_FILENAME = "project-state.json"  # read-only fallback
+GRAPH_STATE_RELPATH = "state/graph-state.json"
+CHECKPOINTS_RELPATH = "checkpoints/checkpoints.jsonl"
+AUDIT_RELPATH = "audit/audit-log.jsonl"
+LEGACY_CHECKPOINTS_FILENAME = "checkpoints.json"
+LEGACY_AUDIT_FILENAME = "audit-log.json"
 
 # Keep per-project git checkpoint repos small: media lives in the artifact
 # tree and is tracked by the asset manifest, not by checkpoint commits.
@@ -134,10 +143,12 @@ def _read_json_file(path: Path) -> Any | None:
 
 
 def _restore_state_project(rt: StudioRuntime, state_path: Path) -> bool:
-    """Load one persisted runtime state file into the registries.
+    """Load one persisted project record into the registries.
 
-    Returns whether the project was restored. Projects already loaded in
-    memory and hidden directories are never overwritten.
+    ``state_path`` is a ``project.json``; the legacy ``project-state.json``
+    name is accepted read-only until the storage migration. Returns whether
+    the project was restored. Projects already loaded in memory and hidden
+    directories are never overwritten.
     """
     project_root = state_path.parent
     project_id = project_root.name
@@ -145,6 +156,25 @@ def _restore_state_project(rt: StudioRuntime, state_path: Path) -> bool:
         return False
     state = _read_json_file(state_path)
     if not isinstance(state, dict):
+        return False
+    try:
+        file_version = int(state.get("schema_version", 1))
+    except (TypeError, ValueError):
+        _logger.warning("Project record %s has a malformed schema_version.", state_path)
+        return False
+    if file_version > ProjectRecord().schema_version:
+        _logger.warning(
+            "Project record %s was written by a newer layout (schema_version %d "
+            "> %d); upgrade film-pipeline to load it.",
+            state_path,
+            file_version,
+            ProjectRecord().schema_version,
+        )
+        return False
+    try:
+        state = ProjectRecord.model_validate(state).model_dump(mode="json")
+    except ValueError as exc:
+        _logger.warning("Skipping unreadable project record %s: %s", state_path, exc)
         return False
     # Discovered projects may carry a project_id that differs from the
     # directory name; regular persisted projects must match.
@@ -196,7 +226,8 @@ def _adopt_discovered_project(
     known_ids.add(project_id)
     project_root.mkdir(parents=True, exist_ok=True)
     rt.checkpoint_managers[project_id] = CheckpointManager(project_git_backend(project_root))
-    persist_project_state(rt, project_id)
+    if not (project_root / PROJECT_FILENAME).exists():
+        persist_project_state(rt, project_id)
     return 1
 
 
@@ -226,10 +257,20 @@ def load_persisted_projects(rt: StudioRuntime) -> int:
         return 0
 
     # 1. Load projects that have a persisted runtime state file.
-    restored = sum(
-        _restore_state_project(rt, state_path)
-        for state_path in sorted(root.glob(f"*/{STATE_FILENAME}"))
-    )
+    # Typed records win: restore every project.json first, then legacy
+    # project-state.json files only for projects without one (the stale
+    # legacy file must never shadow the newer record).
+    seen: set[Path] = set()
+    restored = 0
+    for state_path in sorted(root.glob(f"*/{PROJECT_FILENAME}")):
+        if _restore_state_project(rt, state_path):
+            restored += 1
+        seen.add(state_path.parent.resolve())
+    for state_path in sorted(root.glob(f"*/{LEGACY_STATE_FILENAME}")):
+        if state_path.parent.resolve() in seen:
+            continue
+        if _restore_state_project(rt, state_path):
+            restored += 1
 
     # 2. Discover projects that only exist in artifact storage.
     known_ids = set(rt.projects.keys())
@@ -238,13 +279,49 @@ def load_persisted_projects(rt: StudioRuntime) -> int:
     return restored
 
 
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    items: list[dict[str, Any]] = []
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            _logger.warning(
+                "Skipping unparseable line %d in %s (torn or corrupt JSONL).",
+                number,
+                path,
+            )
+            continue
+        if isinstance(item, dict):
+            items.append(item)
+    return items
+
+
+def _jsonl_ids(path: Path, id_field: str) -> set[str]:
+    return {str(item[id_field]) for item in _read_jsonl(path) if item.get(id_field) is not None}
+
+
+def _append_jsonl(path: Path, lines: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        for line in lines:
+            handle.write(line + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
 def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) -> None:
-    path = project_root / CHECKPOINTS_FILENAME
-    raw = _read_json_file(path)
-    if not isinstance(raw, list):
-        return
+    items = _read_jsonl(project_root / CHECKPOINTS_RELPATH)
+    if not items:
+        # Legacy rewritten-array file, read-only until the storage migration.
+        legacy = _read_json_file(project_root / LEGACY_CHECKPOINTS_FILENAME)
+        items = legacy if isinstance(legacy, list) else []
     manager = rt.checkpoint_managers.get(project_id)
-    for item in raw:
+    for item in items:
         try:
             meta = CheckpointMetadata.model_validate(item)
         except ValueError:
@@ -255,46 +332,55 @@ def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) 
 
 
 def restore_audit_events(rt: StudioRuntime, project_root: Path) -> None:
-    path = project_root / AUDIT_FILENAME
-    raw = _read_json_file(path)
-    if not isinstance(raw, list):
-        return
+    events = _read_jsonl(project_root / AUDIT_RELPATH)
+    if not events:
+        legacy = _read_json_file(project_root / LEGACY_AUDIT_FILENAME)
+        events = legacy if isinstance(legacy, list) else []
     known_ids = {event.get("event_id") for event in rt.audit_events}
-    for item in raw:
+    for item in events:
         if isinstance(item, dict) and item.get("event_id") not in known_ids:
             rt.audit_events.append(item)
     rt.audit_events.sort(key=lambda event: str(event.get("timestamp", "")))
 
 
 def persist_checkpoints(rt: StudioRuntime, project_id: str) -> None:
+    """Append checkpoint metadata not yet on disk to the project's JSONL log."""
     project_root = rt.project_roots.get(project_id)
     if project_root is None:
         return
-    metas = [
-        json.loads(meta.model_dump_json())
-        for meta in rt.checkpoints.values()
-        if meta.project_id == project_id
-    ]
-    project_root.mkdir(parents=True, exist_ok=True)
-    (project_root / CHECKPOINTS_FILENAME).write_text(json.dumps(metas, indent=2))
+    log_path = project_root / CHECKPOINTS_RELPATH
+    known = _jsonl_ids(log_path, "checkpoint_id")
+    lines: list[str] = []
+    for meta in rt.checkpoints.values():
+        if meta.project_id != project_id or meta.checkpoint_id in known:
+            continue
+        lines.append(json.dumps(meta.model_dump(mode="json"), sort_keys=True))
+    if lines:
+        _append_jsonl(log_path, lines)
 
 
 def persist_audit_events(rt: StudioRuntime, project_id: str) -> None:
+    """Append audit events not yet on disk to the project's JSONL log."""
     project_root = rt.project_roots.get(project_id)
     if project_root is None:
         return
-    events = [
-        event
-        for event in rt.audit_events
-        if event.get("details", {}).get("project_id") == project_id
-    ]
-    project_root.mkdir(parents=True, exist_ok=True)
-    (project_root / AUDIT_FILENAME).write_text(json.dumps(events, indent=2, default=str))
+    log_path = project_root / AUDIT_RELPATH
+    known = _jsonl_ids(log_path, "event_id")
+    lines: list[str] = []
+    for event in rt.audit_events:
+        if event.get("details", {}).get("project_id") != project_id:
+            continue
+        if event.get("event_id") in known:
+            continue
+        lines.append(json.dumps(event, sort_keys=True, default=str))
+    if lines:
+        _append_jsonl(log_path, lines)
 
 
 def persist_project_state(rt: StudioRuntime, project_id: str) -> None:
+    """Persist the typed project record (``project.json``, atomic)."""
     project = rt.projects[project_id]
     project_root = rt.project_roots[project_id]
     project_root.mkdir(parents=True, exist_ok=True)
-    state_path = project_root / STATE_FILENAME
-    state_path.write_text(json.dumps(project, indent=2, sort_keys=True, default=str))
+    record = ProjectRecord.model_validate(project)
+    write_json_atomic(project_root / PROJECT_FILENAME, record.model_dump(mode="json"))

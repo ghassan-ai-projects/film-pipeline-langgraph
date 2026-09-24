@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,10 +12,10 @@ from film_pipeline.app.safety import ProductionDataError
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
 from film_pipeline.graph.services import GraphServices
-from film_pipeline.schemas._base import ArtifactType, FilmPhase
+from film_pipeline.schemas._base import FilmPhase
 
 
-def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
+def test_auto_checkpoint_references_state_snapshot_and_appends_jsonl() -> None:
     rt = StudioRuntime(server_mode="mock")
     rt.create_project("p5", title="Test")
     state = rt.get_project("p5")
@@ -29,14 +30,27 @@ def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
     cp = checkpoints[0]
     assert cp.phase.value == "script"
     assert cp.reason == "auto: graph step completed"
-    assert cp.graph_state_ref.startswith("artifact:intake:graph_state:v")
+    # The snapshot lives at state/graph-state.json; checkpoints reference it.
+    assert cp.graph_state_ref == "state/graph-state.json"
     assert cp.artifact_versions.get("script") == "artifact:script:v1"
 
+    # The state snapshot was written and carries the step state.
+    project_root = rt.project_roots["p5"]
+    snapshot_file = project_root / "state" / "graph-state.json"
+    assert snapshot_file.exists()
+    snapshot = json.loads(snapshot_file.read_text())
+    assert snapshot["schema_version"] == 1
+    assert snapshot["state"]["current_phase"] == "script"
+
+    # No graph_state artifact is written anymore.
     assert rt.services is not None
-    store = rt.services.artifact_store
-    metas = store.list_artifacts("p5", FilmPhase("intake"))
-    assert len(metas) == 1
-    assert metas[0].artifact_type == ArtifactType.CHECKPOINT
+    assert rt.services.artifact_store.list_artifacts("p5", FilmPhase("intake")) == []
+
+    # Checkpoint metadata is append-only JSONL.
+    log_file = project_root / "checkpoints" / "checkpoints.jsonl"
+    assert log_file.exists()
+    lines = [line for line in log_file.read_text().splitlines() if line]
+    assert len(lines) == 1
 
 
 def test_delete_project_removes_state_and_directories(tmp_path: Path) -> None:

@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
+from film_pipeline.app import _persistence
 from film_pipeline.app._resume import (
     _approval_made_progress,
     _build_resume_payload,
@@ -19,7 +21,9 @@ from film_pipeline.app._resume import (
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
+from film_pipeline.artifacts.serialization import write_json_atomic
 from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 
 if TYPE_CHECKING:
     from film_pipeline.app.runtime import StudioRuntime
@@ -70,50 +74,28 @@ def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
         _gn._SERVICES_CTX.reset(token)
     pid = str(result.get("project_id", ""))
     if pid:
-        save_graph_state(rt, dict(result), pid)
         auto_checkpoint(rt, result)
     return result
 
 
 def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
-    """Create a checkpoint after a graph step completes."""
+    """Persist the state snapshot and create a checkpoint after a graph step."""
     project_id = str(state.get("project_id", ""))
     if not project_id or project_id not in rt.projects:
-        return
-    manager = rt.checkpoint_managers.get(project_id)
-    if manager is None:
         return
     phase = str(state.get("current_phase", "") or "intake")
     if not phase:
         return
 
-    graph_state_ref = ""
-    if rt.services is not None:
-        store = rt.services.artifact_store
-        try:
-            from datetime import UTC, datetime
-
-            from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-            from film_pipeline.schemas.artifact import ArtifactMetadata
-            from film_pipeline.schemas.checkpoint import CheckpointState
-
-            version = store.next_version(project_id, "intake", "graph_state")
-            meta = ArtifactMetadata(
-                artifact_id="graph_state",
-                artifact_type=ArtifactType.CHECKPOINT,
-                project_id=project_id,
-                phase=FilmPhase("intake"),
-                version=version,
-                status=ArtifactStatus.CANDIDATE,
-                created_by="runtime_auto_checkpoint",
-                created_at=datetime.now(UTC),
-            )
-            safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
-            graph_state_ref = store.save(CheckpointState(state=safe_state), meta).to_string()
-        except Exception as exc:
-            _logger.warning(
-                "Auto-checkpoint could not persist graph state for %s: %s", project_id, exc
-            )
+    # The graph state snapshot lives at state/graph-state.json: one atomic
+    # write per mutating operation; checkpoints only reference it. The old
+    # per-step graph_state artifact is gone. A failed snapshot must not
+    # crash a run that already completed.
+    try:
+        save_graph_state(rt, dict(state), project_id)
+    except Exception as exc:
+        _logger.warning("Auto-checkpoint could not persist graph state for %s: %s", project_id, exc)
+    graph_state_ref = _persistence.GRAPH_STATE_RELPATH
 
     from film_pipeline.graph.orchestrator_state import get_candidate_refs
 
@@ -142,14 +124,24 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
 
 
 def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) -> None:
-    """Persist graph state to disk for crash recovery."""
+    """Persist one machine state snapshot for crash recovery (atomic).
+
+    Values the typed snapshot cannot serialize degrade through
+    ``str()`` — crash recovery must never fail on state content.
+    """
     root = rt.project_roots.get(project_id)
     if root is None:
         return
-    root.mkdir(parents=True, exist_ok=True)
-    state_path = root / ".graph_state.json"
     safe = {k: v for k, v in state.items() if not k.startswith("_services")}
-    state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
+    try:
+        payload: dict[str, Any] = GraphStateSnapshot(state=safe).model_dump(mode="json")
+    except ValueError:
+        payload = {
+            "schema_version": 1,
+            "saved_at": datetime.now(UTC).isoformat(),
+            "state": json.loads(json.dumps(safe, default=str)),
+        }
+    write_json_atomic(root / _persistence.GRAPH_STATE_RELPATH, payload)
 
 
 def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_phase: str) -> bool:

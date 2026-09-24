@@ -25,7 +25,7 @@ The following improvements are now live across the pipeline:
 | 6 | Scoped context packets | Agents receive only phase-relevant data, reducing token cost ~80% |
 | 7 | QC subgraph with parallel validators | 6 validators run concurrently via `Send` API |
 | 8 | `top_p` + `frequency_penalty` sampling | Creative agents use `frequency_penalty=0.3` to reduce repetition |
-| P0 | Graph state checkpointing | `.graph_state.json` persisted after every graph interaction for crash recovery |
+| P0 | Graph state checkpointing | `state/graph-state.json` written atomically after every graph interaction for crash recovery |
 
 ## Modes
 
@@ -69,6 +69,24 @@ actionable error instead of being silently adopted. Never point
 
 Developer scripts under `scripts/` write to `.scratch/` (never the repo or
 your home directory); `make scratch-clean` removes it.
+
+### Per-project state files
+
+Each project directory holds one human entry point and quarantined machine
+state (storage upgrade P4):
+
+| File | Purpose |
+|---|---|
+| `project.json` | Typed project record — id, title, phase, approval flags. The entry point for humans and tools. |
+| `state/graph-state.json` | Machine-only LangGraph snapshot, written atomically after every mutating operation. Not for human reading. |
+| `checkpoints/checkpoints.jsonl` | Append-only checkpoint metadata (one JSON object per line). |
+| `audit/audit-log.jsonl` | Append-only audit trail (one JSON object per line). |
+| `.storage.lock` | Internal write lock; safe to ignore, never edit. |
+| `artifacts/<phase>/<id>/` | Versioned artifacts: `meta.json` (current), `current.md` (human view), `versions/`. |
+
+Legacy files (`project-state.json`, `checkpoints.json`, `audit-log.json`)
+are still readable but are no longer written; the storage migration moves
+them into the layout above. (`.graph_state.json` has no reader at all.)
 
 ## Before Starting Real Mode
 

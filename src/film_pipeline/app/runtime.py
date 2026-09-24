@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
-    STATE_FILENAME,
+    PROJECT_FILENAME,
     configured_runtime_root,
     project_git_backend,
     use_persistent_runtime,
@@ -121,7 +121,7 @@ class StudioRuntime:
         self.project_roots[project_id] = project_root
         self.checkpoint_managers[project_id] = CheckpointManager(git)
         self._persist_project_state(project_id)
-        git.commit("project: initialize runtime state", [STATE_FILENAME])
+        git.commit("project: initialize runtime state", [PROJECT_FILENAME])
         self._record_audit("system", "create_project", project_id=project_id)
         return state
 
@@ -130,6 +130,9 @@ class StudioRuntime:
 
     def delete_project(self, project_id: str, *, force: bool = False) -> bool:
         """Remove a project from runtime state and archive its on-disk data.
+
+        Call only while no other session is writing to the project (the
+        store's per-project lock covers saves, not archival).
 
         Returns ``True`` when the project existed and was removed, ``False``
         otherwise. Runtime state is moved to ``~/.film-pipeline/trash`` instead
