@@ -13,6 +13,12 @@ from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
+from film_pipeline.artifacts.storage import (
+    PROFILE_PRODUCTION,
+    PROFILE_SANDBOX,
+    ensure_storage_root,
+    resolve_storage_root,
+)
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas.kb import KBContextPacket
 
@@ -24,12 +30,7 @@ def _default_artifact_root() -> Path:
     """Pick a safe artifact root based on the persistence environment."""
     if os.getenv("FILM_PIPELINE_NO_PERSIST"):
         return Path(tempfile.gettempdir()) / f"film_pipeline_artifacts_{os.getpid()}"
-    if os.getenv("FILM_PIPELINE_PERSIST_STATE"):
-        return (
-            Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
-            / "artifacts"
-        )
-    return Path("projects")
+    return resolve_storage_root()
 
 
 def _mvp_agent_registry() -> AgentRegistry:
@@ -43,7 +44,9 @@ def _mvp_agent_registry() -> AgentRegistry:
 
 def _artifact_store(artifacts_root: str | Path | None) -> ArtifactStore:
     """Build an artifact store at ``artifacts_root`` or the environment default."""
-    return ArtifactStore(root=Path(artifacts_root or _default_artifact_root()))
+    root = Path(artifacts_root) if artifacts_root is not None else _default_artifact_root()
+    profile = PROFILE_SANDBOX if os.getenv("FILM_PIPELINE_NO_PERSIST") else PROFILE_PRODUCTION
+    return ArtifactStore(root=ensure_storage_root(root, profile=profile))
 
 
 @dataclass
@@ -57,7 +60,7 @@ class GraphServices:
     """
 
     prompt_runner: PromptRunner = field(default_factory=PromptRunner)
-    artifact_store: ArtifactStore = field(default_factory=ArtifactStore)
+    artifact_store: ArtifactStore = field(default_factory=lambda: _artifact_store(None))
     agent_registry: AgentRegistry | None = None
     validator_registry: Any = None  # ValidatorRegistry
     kb_builder: KBContextPacketBuilder | None = None

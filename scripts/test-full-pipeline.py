@@ -12,6 +12,10 @@ import time
 
 os.chdir("/Users/ghassan/my-projects/film-pipeline-langgraph")
 
+from _scratch_bootstrap import use_scratch_roots
+
+use_scratch_roots()
+
 proc = subprocess.Popen(
     ["uv", "run", "python", "-m", "film_pipeline.mcp.server"],
     stdin=subprocess.PIPE,

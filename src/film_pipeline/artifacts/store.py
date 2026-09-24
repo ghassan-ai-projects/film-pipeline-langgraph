@@ -26,8 +26,13 @@ from film_pipeline.schemas.artifact import ArtifactMetadata
 class ArtifactStore:
     """Persist and retrieve typed artifacts with metadata and versioning."""
 
-    def __init__(self, root: Path = Path("projects")) -> None:
+    def __init__(self, root: Path) -> None:
         self._root = root
+
+    @property
+    def root(self) -> Path:
+        """The storage root this store reads and writes."""
+        return self._root
 
     def _artifact_path(self, project_id: str, phase: str, artifact_id: str, version: int) -> Path:
         return artifact_path(project_id, phase, artifact_id, version, root=self._root)

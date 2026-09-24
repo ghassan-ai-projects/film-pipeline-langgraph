@@ -24,17 +24,11 @@ def test_default_checkpointer_returns_sqlite_when_persist_enabled(
 ) -> None:
     from film_pipeline.graph import graph as graph_module
 
-    original_dir = graph_module._CHECKPOINT_DIR
-    try:
-        graph_module._CHECKPOINT_DIR = tmp_path
-        graph_module._CHECKPOINT_DB = tmp_path / "cp.sqlite"
-        monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
-        monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
-        saver = _default_checkpointer()
-        assert isinstance(saver, SqliteSaver)
-    finally:
-        graph_module._CHECKPOINT_DIR = original_dir
-        graph_module._CHECKPOINT_DB = original_dir / "checkpoints.sqlite"
+    monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
+    monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
+    monkeypatch.setattr(graph_module, "default_checkpoints_root", lambda: tmp_path / "checkpoints")
+    saver = _default_checkpointer()
+    assert isinstance(saver, SqliteSaver)
 
 
 def test_build_graph_uses_supplied_checkpointer() -> None:

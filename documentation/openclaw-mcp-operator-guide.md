@@ -45,6 +45,31 @@ Notes:
 - the server now speaks stdio MCP directly for `initialize`, `tools/list`, and `tools/call`
 - `run-mcp-headless` is identical to `run-mcp-real` — the headless behavior comes from the `auto-approve` profile at project creation time, not the server
 
+## Storage Locations (where your projects live)
+
+All project storage resolves through one variable, in priority order:
+
+1. `FILM_PIPELINE_STORAGE_ROOT` — canonical. Points at the directory that
+   contains one subdirectory per project (e.g. `~/.film-pipeline/projects`).
+2. `FILM_PIPELINE_PERSIST_ROOT` — **deprecated** alias; projects are derived
+   as `<persist_root>/projects`. A deprecation warning is logged.
+3. Default: `~/.film-pipeline/projects`.
+
+Related roots are derived from the same base (`~/.film-pipeline` by default):
+`runtime/` (runtime state), `checkpoints/` (LangGraph checkpointer),
+`runs/<name>/` (headless CLI runs), `trash/` (archived deletions).
+
+Storage roots are marker-gated: each root carries a `storage.json` marker.
+A fresh directory is initialized automatically on first use. An existing
+film-pipeline tree from before this upgrade is detected and **marked in
+place** so it keeps working until you run the storage migration. Any other
+directory that was not created by film-pipeline is **refused** with an
+actionable error instead of being silently adopted. Never point
+`FILM_PIPELINE_STORAGE_ROOT` at an arbitrary directory with unrelated files.
+
+Developer scripts under `scripts/` write to `.scratch/` (never the repo or
+your home directory); `make scratch-clean` removes it.
+
 ## Before Starting Real Mode
 
 Set:

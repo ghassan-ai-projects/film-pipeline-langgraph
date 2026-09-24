@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
@@ -171,10 +170,7 @@ async def list_assets(args: dict[str, object]) -> dict[str, object]:
     if project_id is None:
         return _error("No active project.")
     store = _services(rt).artifact_store
-    root = getattr(store, "_root", None)
-    if not isinstance(root, Path):
-        root = Path("projects")
-    manifest = read_manifest(project_id, root=root)
+    manifest = read_manifest(project_id, root=store.root)
     if manifest is None:
         return _ok(assets=[])
     return _ok(

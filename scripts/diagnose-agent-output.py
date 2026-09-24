@@ -28,13 +28,17 @@ if env_file.exists():
 
 os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
 
-from film_pipeline.agents.model_adapter import ModelAdapter
-from film_pipeline.agents.model_routing import ModelRouter
-from film_pipeline.agents.prompt_templates.registry import get_registry
+from _scratch_bootstrap import use_scratch_roots
+
+use_scratch_roots()
+
 from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
 from film_pipeline.agents.impl.development_agent import DevelopmentAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
-from film_pipeline.schemas.handoff import AgentRegistration, AgentRole, AgentFamily
+from film_pipeline.agents.model_adapter import ModelAdapter
+from film_pipeline.agents.model_routing import ModelRouter
+from film_pipeline.agents.prompt_templates.registry import get_registry
+from film_pipeline.schemas.handoff import AgentFamily, AgentRegistration, AgentRole
 
 # ── Setup ────────────────────────────────────────────────────────────────
 reg = get_registry()
@@ -47,6 +51,7 @@ IDEA = (
     "changing fields while birds, rain, blossoms, and insects pass a single "
     "message between sky and earth."
 )
+
 
 # Fake contract for agent instantiation
 def _fake_contract(agent_id: str):
@@ -63,7 +68,9 @@ def _fake_contract(agent_id: str):
     )
 
 
-def diagnose_agent(agent_id: str, agent_cls, model_profile: str, task: str, context_vars: dict[str, str]):
+def diagnose_agent(
+    agent_id: str, agent_cls, model_profile: str, task: str, context_vars: dict[str, str]
+):
     print(f"\n{'=' * 70}")
     print(f"🔍 {agent_cls.__name__} (profile={model_profile})")
     print(f"{'=' * 70}")
@@ -95,7 +102,9 @@ def diagnose_agent(agent_id: str, agent_cls, model_profile: str, task: str, cont
         return
 
     print(f"\n📤 Raw model output keys: {sorted(raw.keys())}")
-    print(f"   Top-level structure: {json.dumps({k: type(v).__name__ for k, v in raw.items()}, indent=2)}")
+    print(
+        f"   Top-level structure: {json.dumps({k: type(v).__name__ for k, v in raw.items()}, indent=2)}"
+    )
 
     # 3. Execute
     agent = agent_cls(_fake_contract(agent_id))
@@ -107,7 +116,7 @@ def diagnose_agent(agent_id: str, agent_cls, model_profile: str, task: str, cont
 
     try:
         result = agent.run(state, kb, task, raw)
-        print(f"\n✅ execute() succeeded")
+        print("\n✅ execute() succeeded")
         print(f"   Result keys: {sorted(result.keys())}")
         for key, val in result.items():
             if hasattr(val, "__class__"):
@@ -118,7 +127,7 @@ def diagnose_agent(agent_id: str, agent_cls, model_profile: str, task: str, cont
                     for fk, fv in list(dumped.items())[:3]:
                         fv_str = str(fv)[:100]
                         print(f"     .{fk}: {fv_str}")
-        print(f"   validate(): ✅ True")
+        print("   validate(): ✅ True")
     except ValueError as e:
         msg = str(e)
         print(f"\n❌ Agent raised ValueError: {msg[:500]}")
@@ -133,37 +142,61 @@ def diagnose_agent(agent_id: str, agent_cls, model_profile: str, task: str, cont
 
 # ── Mock upstream artifacts for context injection ──────────────────────────
 
-constitution_content = json.dumps({
-    "project_id": PROJECT_ID,
-    "theme": "Hope travels on the smallest wings.",
-    "tone": "serene, melancholic, transcendent",
-    "emotional_promise": "A quiet realization that nature already holds every message we need.",
-    "visual_language": "static camera, natural light, painterly compositions",
-    "camera_philosophy": "observational, breath-paced, never intrusive",
-    "quality_bar": "Every frame could be a painting.",
-    "character_truths": [
-        {"character_id": "walker", "truth": "Never speaks, only walks."},
-    ],
-    "taboo_mistakes": ["No dialogue.", "No modern technology."],
-})
+constitution_content = json.dumps(
+    {
+        "project_id": PROJECT_ID,
+        "theme": "Hope travels on the smallest wings.",
+        "tone": "serene, melancholic, transcendent",
+        "emotional_promise": "A quiet realization that nature already holds every message we need.",
+        "visual_language": "static camera, natural light, painterly compositions",
+        "camera_philosophy": "observational, breath-paced, never intrusive",
+        "quality_bar": "Every frame could be a painting.",
+        "character_truths": [
+            {"character_id": "walker", "truth": "Never speaks, only walks."},
+        ],
+        "taboo_mistakes": ["No dialogue.", "No modern technology."],
+    }
+)
 
-treatment_content = json.dumps({
-    "text": "A young walker crosses five fields, each carrying a fragment of a message from sky to earth.",
-    "themes": ["connection", "stillness", "passage"],
-    "act_map": {
-        "act1_setup": "Walker enters first field. Birds pass a whisper.",
-        "act2_confrontation": "Rain and blossoms obscure the message. Walker hesitates.",
-        "act3_resolution": "Insects carry the final fragment. Walker understands without words.",
-    },
-})
+treatment_content = json.dumps(
+    {
+        "text": "A young walker crosses five fields, each carrying a fragment of a message from sky to earth.",
+        "themes": ["connection", "stillness", "passage"],
+        "act_map": {
+            "act1_setup": "Walker enters first field. Birds pass a whisper.",
+            "act2_confrontation": "Rain and blossoms obscure the message. Walker hesitates.",
+            "act3_resolution": "Insects carry the final fragment. Walker understands without words.",
+        },
+    }
+)
 
-scene_list_content = json.dumps({
-    "scenes": [
-        {"scene_id": "s_001", "dramatic_function": "Opening image.", "emotional_shift": "peace → anticipation", "conflict": "walker vs. silence", "outcome": "Walker begins."},
-        {"scene_id": "s_002", "dramatic_function": "First message fragment.", "emotional_shift": "anticipation → wonder", "conflict": "walker vs. distance", "outcome": "Birds deliver fragment."},
-        {"scene_id": "s_003", "dramatic_function": "Climax — final fragment.", "emotional_shift": "doubt → clarity", "conflict": "walker vs. impermanence", "outcome": "Message complete."},
-    ],
-})
+scene_list_content = json.dumps(
+    {
+        "scenes": [
+            {
+                "scene_id": "s_001",
+                "dramatic_function": "Opening image.",
+                "emotional_shift": "peace → anticipation",
+                "conflict": "walker vs. silence",
+                "outcome": "Walker begins.",
+            },
+            {
+                "scene_id": "s_002",
+                "dramatic_function": "First message fragment.",
+                "emotional_shift": "anticipation → wonder",
+                "conflict": "walker vs. distance",
+                "outcome": "Birds deliver fragment.",
+            },
+            {
+                "scene_id": "s_003",
+                "dramatic_function": "Climax — final fragment.",
+                "emotional_shift": "doubt → clarity",
+                "conflict": "walker vs. impermanence",
+                "outcome": "Message complete.",
+            },
+        ],
+    }
+)
 
 # ── Run diagnostics ────────────────────────────────────────────────────────
 

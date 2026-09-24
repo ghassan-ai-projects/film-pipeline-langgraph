@@ -21,13 +21,13 @@ repos:
       # content: safe on a shared multi-agent tree. See .fleet/FLAGS.md #1.
       - id: ruff-check
         name: ruff check (staged files)
-        entry: uv run --python 3.12 --group dev ruff check --fix
+        entry: uv run --python 3.12 --group dev ruff check --fix --force-exclude
         language: system
         types_or: [python, pyi]
 
       - id: ruff-format
         name: ruff format (staged files)
-        entry: uv run --python 3.12 --group dev ruff format
+        entry: uv run --python 3.12 --group dev ruff format --force-exclude
         language: system
         types_or: [python, pyi]
 

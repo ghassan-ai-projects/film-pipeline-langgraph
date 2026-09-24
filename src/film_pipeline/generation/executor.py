@@ -405,5 +405,4 @@ class GenerationExecutor:
         )
 
     def _root(self) -> Path:
-        root = getattr(self._store, "_root", None)
-        return root if isinstance(root, Path) else Path("projects")
+        return self._store.root

@@ -6,10 +6,13 @@ phase transitions via _approve_current_phase + _advance_to_next_phase.
 
 import json
 import os
-from pathlib import Path
 
 os.chdir("/Users/ghassan/my-projects/film-pipeline-langgraph")
 
+
+from _scratch_bootstrap import use_scratch_roots
+
+SCRATCH_ARTIFACTS = use_scratch_roots()
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.schemas._base import FilmPhase
 
@@ -26,7 +29,7 @@ for pid in list(rt.projects.keys()):
 # Clean artifact store files from previous run
 import shutil
 
-projects_dir = Path("projects")
+projects_dir = SCRATCH_ARTIFACTS
 for d in projects_dir.iterdir():
     if d.is_dir() and d.name.startswith("old-chinese-story"):
         shutil.rmtree(d)

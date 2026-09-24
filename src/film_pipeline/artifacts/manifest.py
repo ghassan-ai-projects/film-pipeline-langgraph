@@ -44,7 +44,7 @@ class AssetManifest(BaseModel):
         return [e for e in self.entries if e.shot_id == shot_id]
 
 
-def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManifest | None:
+def read_manifest(project_id: str, root: Path) -> AssetManifest | None:
     manifest_path = root / project_id / "asset-manifest.json"
     if not manifest_path.exists():
         return None
@@ -54,7 +54,7 @@ def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManife
     return manifest.model_copy(update={"project_id": project_id})
 
 
-def write_manifest(manifest: AssetManifest, root: Path = Path("projects")) -> None:
+def write_manifest(manifest: AssetManifest, root: Path) -> None:
     manifest_path = root / manifest.project_id / "asset-manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(manifest.model_dump_json(indent=2))

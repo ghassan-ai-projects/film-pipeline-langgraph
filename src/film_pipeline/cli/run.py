@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from film_pipeline.artifacts.storage import default_run_root
 from film_pipeline.cli.driver import HeadlessDriverError, HeadlessRunSpec, run_headless
 from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
 
@@ -107,8 +108,11 @@ def _add_runtime_path_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--runtime-root",
         type=Path,
-        default=Path.home() / ".film-pipeline" / "runs" / "default",
-        help="Directory for runtime state and artifacts. Default: ~/.film-pipeline/runs/default.",
+        default=None,
+        help=(
+            "Directory for runtime state and artifacts. "
+            "Default: <storage root>/../runs/default (see FILM_PIPELINE_STORAGE_ROOT)."
+        ),
     )
     parser.add_argument(
         "--constraints-file",
@@ -186,7 +190,7 @@ def _build_run_request(args_ns: argparse.Namespace, profile_stack: list[str]) ->
         title=title,
         slug=slug,
         runtime_mode=args_ns.runtime_mode,
-        runtime_root=args_ns.runtime_root,
+        runtime_root=args_ns.runtime_root or default_run_root(),
         profile_stack=profile_stack,
         target_phase=args_ns.target_phase,
         target_runtime_seconds=args_ns.target_runtime_seconds or None,

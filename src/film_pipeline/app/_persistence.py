@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.artifacts.storage import default_runtime_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
@@ -43,14 +44,11 @@ _DISCOVERED_PHASE_ORDER: tuple[tuple[str, str], ...] = (
     ("intake", "intake"),
 )
 
-PERSIST_ROOT = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
-RUNTIME_ROOT = PERSIST_ROOT / "runtime"
-
 
 def configured_runtime_root() -> Path:
     """Return the runtime root selected by the environment or default config."""
     raw_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-    return Path(raw_root) if raw_root else RUNTIME_ROOT
+    return Path(raw_root) if raw_root else default_runtime_root()
 
 
 def use_persistent_runtime() -> bool:
@@ -62,15 +60,6 @@ def use_persistent_runtime() -> bool:
     return bool(os.getenv("FILM_PIPELINE_PERSIST_STATE")) and not bool(
         os.getenv("FILM_PIPELINE_NO_PERSIST")
     )
-
-
-def is_same_or_child(child: Path, parent: Path) -> bool:
-    try:
-        resolved_child = child.resolve()
-        resolved_parent = parent.resolve()
-    except OSError:
-        return False
-    return resolved_child == resolved_parent or resolved_parent in resolved_child.parents
 
 
 def looks_like_project_dir(project_dir: Path) -> bool:
@@ -117,34 +106,21 @@ def project_git_backend(project_root: Path) -> GitBackend:
 
 
 def artifact_root(rt: StudioRuntime) -> Path | None:
-    store = rt.services.artifact_store if rt.services is not None else None
-    root = getattr(store, "_root", None)
-    return root if isinstance(root, Path) else None
+    """Return the artifact store root configured on the runtime."""
+    if rt.services is None:
+        return None
+    return rt.services.artifact_store.root
 
 
 def artifact_discovery_roots(rt: StudioRuntime) -> list[Path]:
-    """Return artifact roots to scan for existing projects.
+    """Return artifact roots scanned for existing projects.
 
-    The current configured root is checked first.  Legacy CWD-relative
-    ``projects/`` and ``.film-pipeline-run/artifacts`` are scanned
-    read-only so older projects remain loadable after the migration to
-    ``~/.film-pipeline/artifacts``.
+    Only the configured storage root is scanned. Legacy CWD-relative
+    ``projects/`` and ``.film-pipeline-run/artifacts`` are never adopted at
+    runtime; old projects come forward through the storage migration command.
     """
-    roots: list[Path] = []
     current = artifact_root(rt)
-    if current is not None:
-        roots.append(current)
-    legacy = [Path("projects"), Path(".film-pipeline-run") / "artifacts"]
-    for candidate in legacy:
-        try:
-            resolved = candidate.resolve()
-        except OSError:
-            continue
-        if resolved not in roots and all(
-            not is_same_or_child(resolved, existing) for existing in roots
-        ):
-            roots.append(resolved)
-    return roots
+    return [current] if current is not None else []
 
 
 def _read_json_file(path: Path) -> Any | None:

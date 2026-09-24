@@ -19,12 +19,14 @@ from film_pipeline.app.safety import (
 
 def test_persist_root_defaults_to_home_dot_film_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("FILM_PIPELINE_PERSIST_ROOT", raising=False)
+    monkeypatch.delenv("FILM_PIPELINE_STORAGE_ROOT", raising=False)
     assert persist_root() == Path.home() / ".film-pipeline"
 
 
-def test_persist_root_uses_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", "/tmp/film-pipeline-test")
-    assert persist_root() == Path("/tmp/film-pipeline-test")
+def test_persist_root_derives_from_storage_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", "/tmp/film-pipeline-test/projects")
+    expected = Path("/tmp/film-pipeline-test/projects").resolve().parent
+    assert persist_root() == expected
 
 
 def test_temp_path_is_safe_to_delete(tmp_path: Path) -> None:
@@ -36,7 +38,7 @@ def test_temp_path_is_safe_to_delete(tmp_path: Path) -> None:
 def test_persist_root_path_is_safe_to_delete(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(tmp_path))
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", str(tmp_path / "projects"))
     subdir = tmp_path / "runs" / "default"
     subdir.mkdir(parents=True)
     assert is_safe_to_delete(subdir) is True
@@ -63,7 +65,7 @@ def test_require_safe_to_delete_message_offers_working_remedies() -> None:
     with pytest.raises(ProductionDataError) as excinfo:
         require_safe_to_delete(Path.cwd())
     message = str(excinfo.value)
-    assert "FILM_PIPELINE_PERSIST_ROOT" in message
+    assert "FILM_PIPELINE_STORAGE_ROOT" in message
     assert ".film-pipeline-allow-delete" in message
 
 

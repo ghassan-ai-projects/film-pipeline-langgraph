@@ -8,7 +8,9 @@ import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.safety import ProductionDataError
+from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
+from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import ArtifactType, FilmPhase
 
 
@@ -38,13 +40,16 @@ def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
 
 
 def test_delete_project_removes_state_and_directories(tmp_path: Path) -> None:
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=tmp_path / "projects")),
+    )
     assert rt.services is not None
-    rt.services.artifact_store._root = tmp_path / "projects"
     rt.create_project("p-delete", title="Delete Me")
     rt.set_active("p-delete")
     project_root = rt.project_roots["p-delete"]
-    artifact_dir = rt.services.artifact_store._root / "p-delete"
+    artifact_dir = rt.services.artifact_store.root / "p-delete"
 
     deleted = rt.delete_project("p-delete")
 
@@ -76,14 +81,17 @@ def test_delete_project_clears_active_project_only_when_matching(tmp_path: Path)
 
 def test_delete_project_archives_to_trash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     persist = tmp_path / "persist"
-    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(persist))
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", str(persist / "projects"))
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=tmp_path / "projects")),
+    )
     assert rt.services is not None
-    rt.services.artifact_store._root = tmp_path / "projects"
     rt.create_project("p-trash", title="Trash Me")
     rt.set_active("p-trash")
     project_root = rt.project_roots["p-trash"]
-    artifact_dir = rt.services.artifact_store._root / "p-trash"
+    artifact_dir = rt.services.artifact_store.root / "p-trash"
     artifact_dir.mkdir(parents=True, exist_ok=True)
     (project_root / "state.json").write_text("{}")
     (artifact_dir / "idea.json").write_text("{}")
@@ -121,10 +129,14 @@ def test_delete_project_allows_production_with_force(tmp_path: Path) -> None:
 def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     tmp_path: Path,
 ) -> None:
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
-    assert rt.services is not None
+    from film_pipeline.artifacts.store import ArtifactStore
+
     projects_root = tmp_path / "projects"
-    rt.services.artifact_store._root = projects_root
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=projects_root)),
+    )
 
     rt.create_project("persisted", title="Persisted Project")
     rt._persist_project_state("persisted")
@@ -133,9 +145,11 @@ def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     (discovered_root / "intake").mkdir(parents=True)
     (discovered_root / "intake" / "idea.v001.json").write_text("{}")
 
-    fresh = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
-    assert fresh.services is not None
-    fresh.services.artifact_store._root = projects_root
+    fresh = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=projects_root)),
+    )
     fresh.load_persisted_projects()
 
     assert "persisted" in fresh.projects

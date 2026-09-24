@@ -40,26 +40,26 @@ def _meta(**kw: object) -> ArtifactMetadata:
 
 class TestPaths:
     def test_project_dir(self) -> None:
-        assert project_dir("slug") == Path("projects") / "slug"
+        assert project_dir("slug", Path("/store")) == Path("/store") / "slug"
 
     def test_phase_dir_mapping(self) -> None:
-        p = phase_dir("slug", "script")
+        p = phase_dir("slug", "script", Path("/store"))
         assert p.parts[-2:] == ("slug", "03-script")
 
     def test_phase_dir_fallback(self) -> None:
-        p = phase_dir("slug", "unknown_phase")
+        p = phase_dir("slug", "unknown_phase", Path("/store"))
         assert p.parts[-1] == "unknown_phase"
 
     def test_artifact_path(self) -> None:
-        p = artifact_path("slug", "script", "artifact:scene:S001", 3)
+        p = artifact_path("slug", "script", "artifact:scene:S001", 3, Path("/store"))
         assert p.parts[-3:] == ("artifact_scene_S001", "versions", "v003.json")
 
     def test_generated_asset_dir(self) -> None:
-        p = generated_asset_dir("slug", "SC_001", "shot_001")
+        p = generated_asset_dir("slug", "SC_001", "shot_001", Path("/store"))
         assert p.parts[-4:] == ("07-generated-assets", "scenes", "SC_001", "shot_001")
 
     def test_reference_dir(self) -> None:
-        p = reference_dir("slug", "characters")
+        p = reference_dir("slug", "characters", Path("/store"))
         assert "references" in p.parts
         assert p.name == "characters"
 

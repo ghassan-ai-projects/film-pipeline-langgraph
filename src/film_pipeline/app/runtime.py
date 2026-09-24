@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,13 +18,13 @@ from uuid import uuid4
 
 from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
-    RUNTIME_ROOT,
     STATE_FILENAME,
     configured_runtime_root,
     project_git_backend,
     use_persistent_runtime,
 )
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
+from film_pipeline.artifacts.storage import default_runtime_root, resolve_storage_root
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
@@ -62,10 +63,14 @@ class StudioRuntime:
             if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
                 self.runtime_root = configured_runtime_root()
             elif use_persistent_runtime():
-                self.runtime_root = RUNTIME_ROOT
+                self.runtime_root = default_runtime_root()
                 self.runtime_root.mkdir(parents=True, exist_ok=True)
             else:
-                self.runtime_root = Path("projects")
+                # Non-persistent invocation: use a throwaway directory and
+                # never touch the user's home or the current directory.
+                self.runtime_root = Path(tempfile.gettempdir()) / (
+                    f"film_pipeline_runtime_{os.getpid()}"
+                )
         if self.services is None:
             artifacts_root = self.runtime_root / "artifacts" if explicit_runtime_root else None
             self.services = _build_services_for_mode(
@@ -185,9 +190,9 @@ class StudioRuntime:
 
     def _artifact_root(self) -> Path:
         """Resolve the directory where the artifact store keeps project artifacts."""
-        if self.services is not None and hasattr(self.services.artifact_store, "_root"):
-            return self.services.artifact_store._root
-        return Path("projects")
+        if self.services is not None:
+            return self.services.artifact_store.root
+        return resolve_storage_root()
 
     def _drop_project_checkpoints(self, project_id: str) -> None:
         """Forget every checkpoint belonging to the deleted project."""
