@@ -9,7 +9,23 @@ from film_pipeline.app.services.models import (
     OperatorCommentRequest,
     ProjectCreateRequest,
 )
+from film_pipeline.tui.gateways._transport import MCPProcessTransport
 from film_pipeline.tui.gateways.mcp import MCPStudioGateway
+
+
+def test_mcp_gateway_default_command_uses_running_interpreter() -> None:
+    """The default launch runs the in-package server with the current interpreter.
+
+    Shelling out to ``uv run`` required an external ``uv`` binary and a writable
+    uv cache merely to start a module that ships with this package.
+    """
+    import sys
+
+    assert MCPProcessTransport._default_command() == [
+        sys.executable,
+        "-m",
+        "film_pipeline.mcp.server",
+    ]
 
 
 def test_mcp_gateway_full_lifecycle() -> None:
