@@ -6,6 +6,7 @@ from typing import Any
 
 from film_pipeline.graph import context_packets as cp
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.artifact import ArtifactRef
 
 
 class FakeArtifactStore:
@@ -24,6 +25,11 @@ class FakeArtifactStore:
         if artifact_id not in self.artifacts:
             raise FileNotFoundError(artifact_id)
         return self.artifacts[artifact_id]
+
+    def load_ref(self, project_id: str, ref: str | ArtifactRef) -> dict[str, Any]:
+        parsed = ref if isinstance(ref, ArtifactRef) else ArtifactRef.from_string(ref)
+        phase = FilmPhase(parsed.phase) if parsed.phase else FilmPhase("intake")
+        return self.load(project_id, phase, parsed.artifact_id, parsed.version)
 
 
 class FakeServices:

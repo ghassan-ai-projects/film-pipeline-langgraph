@@ -143,7 +143,7 @@ class DeliveryPackagingAgent:
         from datetime import UTC, datetime
 
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
         from film_pipeline.schemas.delivery import DeliveryPackage as DeliveryPackageModel
 
         artifact_id = "delivery_package"
@@ -174,8 +174,8 @@ class DeliveryPackagingAgent:
             created_by="delivery-packaging-agent",
             created_at=datetime.now(UTC),
         )
-        artifact_store.save(model, meta)
-        return f"artifact:{artifact_id}:v1"
+        ref: ArtifactRef = artifact_store.save(model, meta)
+        return ref.to_string()
 
     def validate(
         self,

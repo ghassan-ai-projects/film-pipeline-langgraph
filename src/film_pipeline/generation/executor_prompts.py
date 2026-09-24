@@ -18,7 +18,7 @@ def load_latest_artifact(
     store: ArtifactStore, project_id: str, phase: FilmPhase, artifact_id: str
 ) -> dict[str, Any] | None:
     """Load the newest version of an artifact body, or None when absent."""
-    latest = store.next_version(project_id, phase.value, artifact_id) - 1
+    latest = store.latest_version(project_id, phase.value, artifact_id)
     if latest < 1:
         return None
     try:

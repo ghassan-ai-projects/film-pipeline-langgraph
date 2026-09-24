@@ -22,7 +22,7 @@ from film_pipeline.artifacts.registry import KindNotRegisteredError
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.artifacts.versioning import approve, create_version, supersede
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
-from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
 
 def _meta(**kw: object) -> ArtifactMetadata:
@@ -100,10 +100,10 @@ class TestArtifactStore:
             phase=FilmPhase.INTAKE,
             artifact_type=ArtifactType.PROJECT_CONFIG,
         )
-        meta_path = store.save(art, meta)
-        assert meta_path.name == "meta.json"
-        artifact_dir = meta_path.parent
-        assert artifact_dir.parts[-4:] == ("p1", "artifacts", "intake", "project_profile")
+        ref = store.save(art, meta)
+        assert isinstance(ref, ArtifactRef)
+        assert ref.to_string() == "artifact:intake:project_profile:v1"
+        artifact_dir = tmp_path / "store" / "p1" / "artifacts" / "intake" / "project_profile"
         assert (artifact_dir / "meta.json").exists()
         assert (artifact_dir / "current.md").exists()
         assert (artifact_dir / "versions" / "v001.json").exists()
@@ -308,7 +308,7 @@ class TestArtifactStore:
             artifact_id: str
             rows: list[dict[str, Any]]
 
-        path = store.save(
+        store.save(
             _ShotMatrix(
                 artifact_id="shot_matrix",
                 rows=[
@@ -340,7 +340,8 @@ class TestArtifactStore:
             ),
         )
 
-        markdown = (path.parent / "current.md").read_text()
+        artifact_dir = tmp_path / "store" / "p1" / "artifacts" / "05-shot-bible" / "shot_matrix"
+        markdown = (artifact_dir / "current.md").read_text()
 
         assert "## SC_001" in markdown
         assert "- camera_movement: dolly from wide to close" in markdown

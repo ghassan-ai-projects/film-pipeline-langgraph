@@ -29,7 +29,7 @@ def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
     cp = checkpoints[0]
     assert cp.phase.value == "script"
     assert cp.reason == "auto: graph step completed"
-    assert cp.graph_state_ref.startswith("artifact:graph_state:v")
+    assert cp.graph_state_ref.startswith("artifact:intake:graph_state:v")
     assert cp.artifact_versions.get("script") == "artifact:script:v1"
 
     assert rt.services is not None

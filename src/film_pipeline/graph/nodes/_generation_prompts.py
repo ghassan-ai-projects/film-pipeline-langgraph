@@ -19,12 +19,24 @@ def _load_artifact_data(
     """Load artifact data by ref, trying a list of candidate phases."""
     if not ref or ":" not in ref:
         return None
-    parsed = _parse_ref(ref)
+    try:
+        parsed = _parse_ref(ref)
+    except ValueError:
+        # Non-artifact refs (e.g. the "prompt:<id>" namespace) don't resolve
+        # here; callers fall back to other prompt sources.
+        return None
     project_id = str(state.get("project_id", ""))
     if not project_id:
         return None
     from film_pipeline.schemas._base import FilmPhase
 
+    if parsed.phase is not None:
+        try:
+            return services.artifact_store.load(
+                project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+            )
+        except (FileNotFoundError, ValueError, KeyError):
+            return None
     phases = phase_guesses or ["gen_planning", "shot_bible", "visual_dev", "script"]
     for phase in phases:
         try:
@@ -81,11 +93,14 @@ def _load_visual_dev_bible(
     project_id: str,
     bible_id: str,
 ) -> dict[str, Any] | None:
-    """Load a visual_dev bible, returning None when absent or malformed."""
+    """Load the latest visual_dev bible, returning None when absent or malformed."""
     from film_pipeline.schemas._base import FilmPhase
 
+    version = services.artifact_store.latest_version(project_id, "visual_dev", bible_id)
     try:
-        data = services.artifact_store.load(project_id, FilmPhase("visual_dev"), bible_id, 1)
+        data = services.artifact_store.load(
+            project_id, FilmPhase("visual_dev"), bible_id, max(1, version)
+        )
     except (FileNotFoundError, ValueError, KeyError):
         return None
     return data if isinstance(data, dict) else None

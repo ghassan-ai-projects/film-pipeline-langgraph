@@ -58,12 +58,12 @@ def _save_gen_planning_candidate(
     artifact_type: Any,
     created_by: str,
     content: Any,
-) -> Any:
+) -> str:
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
     from datetime import UTC, datetime
 
     from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
@@ -79,7 +79,8 @@ def _save_gen_planning_candidate(
         created_by=created_by,
         created_at=datetime.now(UTC),
     )
-    return store.save(content, meta)
+    ref: ArtifactRef = store.save(content, meta)
+    return ref.to_string()
 
 
 def _register_active_artifact_ref(
@@ -93,12 +94,13 @@ def _register_active_artifact_ref(
 
 
 def _load_master_matrix(store: Any, project_id: str) -> Any:
-    """Load and validate the MasterFilmMatrix artifact, if it exists."""
+    """Load and validate the latest MasterFilmMatrix artifact, if it exists."""
     try:
         from film_pipeline.schemas._base import FilmPhase
         from film_pipeline.schemas.matrix import MasterFilmMatrix
 
-        raw = store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", 1)
+        version = max(1, store.latest_version(project_id, "shot_bible", "master_film_matrix"))
+        raw = store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", version)
         if isinstance(raw, MasterFilmMatrix):
             return raw
         return MasterFilmMatrix.model_validate(raw)

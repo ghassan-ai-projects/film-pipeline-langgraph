@@ -312,7 +312,8 @@ class GenerationExecutor:
         turn every status refresh into an artifact write.
         """
         return (
-            self._store.next_version(project_id, FilmPhase.GENERATION.value, "generation_ledger")
+            self._store.mutable_exists(project_id, FilmPhase.GENERATION, "generation_ledger")
+            or self._store.next_version(project_id, FilmPhase.GENERATION.value, "generation_ledger")
             > 1
         )
 

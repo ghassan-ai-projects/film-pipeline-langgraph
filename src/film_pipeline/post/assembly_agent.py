@@ -92,7 +92,7 @@ class AssemblyAgent:
         from datetime import UTC, datetime
 
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
         from film_pipeline.schemas.assembly import AssemblyPlanArtifact
 
         artifact_id = "assembly_manifest"
@@ -129,8 +129,8 @@ class AssemblyAgent:
             created_by="assembly-agent",
             created_at=datetime.now(UTC),
         )
-        artifact_store.save(model, meta)
-        return f"artifact:{artifact_id}:v1"
+        ref: ArtifactRef = artifact_store.save(model, meta)
+        return ref.to_string()
 
     def validate_plan(self, plan: AssemblyPlan) -> list[str]:
         """Validate an assembly plan. Returns list of issues (empty = valid)."""

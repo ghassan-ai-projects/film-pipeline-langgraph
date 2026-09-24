@@ -55,7 +55,7 @@ class TestGoldenLayout:
         root = tmp_path / "store"
         store = make_store(root)
         meta = _meta()
-        meta_path = store.save(_constitution(), meta)
+        ref = store.save(_constitution(), meta)
         expected = {
             "p1/artifacts/01-vision/film_constitution/meta.json",
             "p1/artifacts/01-vision/film_constitution/current.md",
@@ -65,7 +65,7 @@ class TestGoldenLayout:
         }
         actual = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
         assert actual == expected
-        assert meta_path == root / "p1/artifacts/01-vision/film_constitution/meta.json"
+        assert ref.to_string() == "artifact:constitution:film_constitution:v1"
 
     def test_json_files_are_deterministic_and_sorted(self, tmp_path: Path) -> None:
         store_a = make_store(tmp_path / "a")
@@ -232,17 +232,37 @@ class TestLegacyReadonly:
         assert store.load("legacy-p", FilmPhase.CONSTITUTION, "film_constitution", 1) == body
         assert store.load_metadata("legacy-p", "constitution", "film_constitution", 1).version == 1
 
-    def test_mutable_kind_rewrites_single_version(self, tmp_path: Path) -> None:
+    def test_mutable_kind_uses_revision_counted_single_file(self, tmp_path: Path) -> None:
         from film_pipeline.generation.ledger import GenerationLedgerManager
 
-        store = make_store(tmp_path / "store")
+        root = tmp_path / "store"
+        store = make_store(root)
         manager = GenerationLedgerManager(store)
         manager.plan_batch("p1", ["S001"], "profile", "model")
         manager.plan_batch("p1", ["S002"], "profile", "model")
-        versions = tmp_path / "store/p1/artifacts/07-generated-assets/generation_ledger/versions"
-        assert sorted(p.name for p in versions.glob("*.json")) == ["v001.json"]
+        artifact_dir = root / "p1/artifacts/07-generated-assets/generation_ledger"
+        assert not (artifact_dir / "versions").exists()
+        ledger_file = artifact_dir / "generation_ledger.json"
+        assert ledger_file.exists()
+        envelope = json.loads(ledger_file.read_text())
+        # create (r1) + first plan_batch persist (r2) + second (r3)
+        assert envelope["revision"] == 3
         rows = manager.list_rows("p1")
         assert {row.shot_id for row in rows} == {"S001", "S002"}
+
+
+def test_save_rejects_mutable_kinds(tmp_path: Path) -> None:
+    """Mutable kinds must go through save_mutable — never the version path."""
+    from film_pipeline.schemas.generation import GenerationLedger
+
+    store = make_store(tmp_path / "store")
+    meta = _meta(
+        artifact_id="generation_ledger",
+        artifact_type=ArtifactType.GENERATION_LEDGER,
+        phase=FilmPhase.GENERATION,
+    )
+    with pytest.raises(ValueError, match="mutable kind"):
+        store.save(GenerationLedger(project_id="p1", rows=[]), meta)
 
 
 def test_meta_json_is_the_only_mutable_file(tmp_path: Path) -> None:
@@ -275,6 +295,8 @@ class TestRegistryRoundTrip:
         for artifact_id in REGISTRY.known_ids():
             if artifact_id == "graph_state":
                 continue  # its payload is validated against CheckpointState in P3
+            if REGISTRY.spec_for(artifact_id).mutable:
+                continue  # mutable kinds round-trip through save_mutable elsewhere
             meta = _meta(
                 artifact_id=artifact_id,
                 artifact_type=ArtifactType.PROJECT_CONFIG,
@@ -382,3 +404,122 @@ class TestRegistryRoundTrip:
 
         store = ArtifactStore(root=root)
         assert [m.artifact_id for m in store.list_artifacts("legacy-p")] == ["film_constitution"]
+
+
+class TestLoadRef:
+    def test_phase_bearing_ref_loads_directly(self, tmp_path: Path) -> None:
+        root = tmp_path / "store"
+        store = make_store(root)
+        store.save(_constitution(), _meta())
+        body = store.load_ref("p1", "artifact:constitution:film_constitution:v1")
+        assert body["theme"] == "connection"
+
+    def test_phase_less_ref_resolves_across_phases(self, tmp_path: Path) -> None:
+        from film_pipeline.schemas.script import Script
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        store.save(
+            Script(project_id="p1", title="T", scenes=[]),
+            _meta(
+                artifact_id="script",
+                artifact_type=ArtifactType.SCRIPT,
+                phase=FilmPhase.SCRIPT,
+            ),
+        )
+        body = store.load_ref("p1", "artifact:script:v1")
+        assert body["title"] == "T"
+
+    def test_phase_less_ref_resolves_legacy_layout(self, tmp_path: Path) -> None:
+        root = tmp_path / "store"
+        root.mkdir(parents=True)
+        old_dir = paths.artifact_dir("p1", "constitution", "film_constitution", root=root)
+        (old_dir / "versions").mkdir(parents=True)
+        (old_dir / "versions" / "v001.json").write_text(json.dumps({"theme": "legacy"}) + "\n")
+        store = ArtifactStore(root=root)
+        assert store.load_ref("p1", "artifact:film_constitution:v1") == {"theme": "legacy"}
+
+    def test_unknown_ref_names_the_ref_in_the_error(self, tmp_path: Path) -> None:
+        store = make_store(tmp_path / "store")
+        with pytest.raises(FileNotFoundError, match="artifact:qc:mystery:v2"):
+            store.load_ref("p1", "artifact:qc:mystery:v2")
+
+
+class TestListOrdering:
+    def test_phase_order_then_id_then_version_desc(self, tmp_path: Path) -> None:
+        from film_pipeline.schemas.script import Script
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        script_meta = _meta(
+            artifact_id="script",
+            artifact_type=ArtifactType.SCRIPT,
+            phase=FilmPhase.SCRIPT,
+        )
+        store.save(Script(project_id="p1", title="T", scenes=[]), script_meta)
+        store.save(Script(project_id="p1", title="T", scenes=[]), script_meta)
+        store.save(
+            _constitution(),
+            _meta(),  # constitution phase precedes script
+        )
+        store.save(
+            Script(project_id="p1", title="T", scenes=[]),
+            _meta(
+                artifact_id="dialogue_pass",
+                artifact_type=ArtifactType.DIALOGUE_PASS,
+                phase=FilmPhase.SCRIPT,
+            ),
+        )
+        listed = store.list_artifacts("p1")
+        # One row per artifact (current version), ids ascending within a phase.
+        assert [(m.phase.value, m.artifact_id, m.version) for m in listed] == [
+            ("constitution", "film_constitution", 1),
+            ("script", "dialogue_pass", 1),
+            ("script", "script", 2),
+        ]
+
+
+class TestLedgerFallback:
+    def test_pre_p3_versioned_ledger_still_loads(self, tmp_path: Path) -> None:
+        """A P2-era ledger (versions/v001.json) loads through the manager."""
+        from film_pipeline.generation.ledger import GenerationLedgerManager
+        from film_pipeline.schemas.generation import GenerationLedger
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        legacy_ledger = GenerationLedger(
+            project_id="p1",
+            rows=[],
+        )
+        # Write the P2-style versioned file directly (save() now rejects mutable kinds).
+        from film_pipeline.artifacts.envelope import payload_checksum
+
+        payload = legacy_ledger.model_dump(mode="json")
+        legacy_dir = root / "p1/artifacts/07-generated-assets/generation_ledger/versions"
+        legacy_dir.mkdir(parents=True)
+        (legacy_dir / "v001.json").write_text(
+            json.dumps(
+                {
+                    "kind": "film.studio/generation-ledger",
+                    "schema_version": 1,
+                    "artifact_id": "generation_ledger",
+                    "artifact_type": "generation_ledger",
+                    "project_id": "p1",
+                    "phase": "generation",
+                    "version": 1,
+                    "created_at": "2026-09-24T00:00:00Z",
+                    "created_by": "legacy",
+                    "checksum": payload_checksum(payload),
+                    "payload": payload,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        manager = GenerationLedgerManager(store)
+        rows = manager.list_rows("p1")
+        assert rows == []
+        # A new persist wins thereafter: the mutable file takes over.
+        manager.plan_batch("p1", ["S001"], "provider", "model")
+        assert store.mutable_exists("p1", FilmPhase.GENERATION, "generation_ledger")

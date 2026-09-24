@@ -17,7 +17,7 @@ from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 
 if TYPE_CHECKING:
     from film_pipeline.graph.services import GraphServices
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
 
 @dataclass(frozen=True)
@@ -67,7 +67,12 @@ def _build_artifact_metadata(
 
     project_id = str(state.get("project_id", ""))
     version = services.artifact_store.next_version(project_id, provenance.phase, artifact_id)
-    parents = [_parse_ref(r) for r in state.get("artifact_refs", [])]
+    parents: list[ArtifactRef] = []
+    for raw_ref in state.get("artifact_refs", []):
+        try:
+            parents.append(_parse_ref(raw_ref))
+        except ValueError:
+            continue  # malformed refs in state must not crash the save
 
     return ArtifactMetadata(
         artifact_id=artifact_id,
@@ -138,8 +143,7 @@ def _save_artifact(
     )
 
     meta = _build_artifact_metadata(state, services, artifact_id, atype, provenance)
-    services.artifact_store.save(artifact, meta)
-    ref = f"artifact:{artifact_id}:v{meta.version}"
+    ref = services.artifact_store.save(artifact, meta).to_string()
 
     _publish_candidate_ref(state, artifact_id, ref)
 

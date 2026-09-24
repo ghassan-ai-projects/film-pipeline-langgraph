@@ -2,18 +2,64 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import Field
 
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 
+_REF_VERSION_PATTERN = re.compile(r"^v(\d+)$")
+
 
 class ArtifactRef(SchemaBase):
-    """A lightweight pointer to a specific artifact version."""
+    """A pointer to a specific artifact version.
+
+    Canonical string form: ``artifact:<phase>:<artifact_id>:v<N>``. The legacy
+    phase-less form ``artifact:<artifact_id>:v<N>`` (and historical ids that
+    embedded colons) still parse — ``phase`` is ``None`` for those and callers
+    resolve the phase through the store's index.
+    """
 
     artifact_id: str
     version: int = Field(ge=1)
+    phase: str | None = None
+
+    def to_string(self) -> str:
+        """Render the canonical ref string."""
+        if self.phase:
+            return f"artifact:{self.phase}:{self.artifact_id}:v{self.version}"
+        return f"artifact:{self.artifact_id}:v{self.version}"
+
+    @classmethod
+    def from_string(cls, ref: str) -> ArtifactRef:
+        """Parse a canonical or legacy ref string."""
+        parts = ref.split(":")
+        if not parts or parts[0] != "artifact" or len(parts) < 3:
+            raise ValueError(
+                f"Invalid artifact ref '{ref}'. Expected "
+                "'artifact:<phase>:<artifact_id>:v<N>' or "
+                "'artifact:<artifact_id>:v<N>'."
+            )
+        version_match = _REF_VERSION_PATTERN.match(parts[-1])
+        if version_match is None:
+            raise ValueError(f"Invalid artifact ref '{ref}': version must be 'v<number>'.")
+        version = int(version_match.group(1))
+        middle = parts[1:-1]
+        if not all(middle):
+            raise ValueError(f"Invalid artifact ref '{ref}': empty artifact id segment.")
+        if len(middle) == 1:
+            return cls(artifact_id=middle[0], version=version)
+        # Four+ segments: either canonical (phase, id) or a legacy id that
+        # itself contained colons. The fixed phase vocabulary disambiguates.
+        candidate_phase, candidate_id = middle[0], ":".join(middle[1:])
+        try:
+            FilmPhase(candidate_phase)
+        except ValueError:
+            pass
+        else:
+            return cls(artifact_id=candidate_id, version=version, phase=candidate_phase)
+        return cls(artifact_id=":".join(middle), version=version)
 
 
 class ArtifactMetadata(SchemaBase):

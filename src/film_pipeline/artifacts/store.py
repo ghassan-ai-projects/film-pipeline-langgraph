@@ -10,10 +10,9 @@ A derived ``<root>/<project>/index/artifacts.json`` is regenerated on every
 write. Legacy (pre-upgrade) layouts are still readable read-only until the
 storage migration moves them forward. See ``documentation/storage-upgrade-plan.md``.
 
-Transitional note (P2): registry kinds flagged ``mutable`` (the generation
-ledger, budget state) still rewrite their single version file in place to
-match their writers; P3 moves them to a revision-counted single file so the
-immutability rule holds for every version file.
+Mutable kinds (generation ledger) are the exception to versioning: they live
+as a single revision-counted ``<id>.json`` written through
+:meth:`save_mutable`; every immutable kind is append-only under ``versions/``.
 """
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ from film_pipeline.artifacts.registry import (
 from film_pipeline.artifacts.serialization import atomic_write_text, dump_json
 from film_pipeline.artifacts.storage import ensure_storage_root
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
 _logger = logging.getLogger(__name__)
 
@@ -87,26 +86,23 @@ class ArtifactStore:
 
     # --- Write path ---------------------------------------------------------
 
-    def save(self, artifact: BaseModel, meta: ArtifactMetadata) -> Path:
-        """Store a new version of an artifact and return its ``meta.json`` path.
+    def save(self, artifact: BaseModel, meta: ArtifactMetadata) -> ArtifactRef:
+        """Store a new version of an artifact and return its canonical ref.
 
-        Mutable kinds (per the registry) write at the caller's ``meta.version``
-        — ledger-style writers pass 1 and rewrite in place, state writers
-        append — while immutable kinds get a store-assigned new version.
+        The store owns version numbering for immutable kinds (``meta.version``
+        is advisory). The registry's ``mutable`` kinds (generation ledger) go
+        through :meth:`save_mutable` instead — their single revision-counted
+        file is the only copy.
         """
         validate_artifact_id(meta.artifact_id)
         spec = REGISTRY.spec_for(meta.artifact_id)
+        if spec.mutable:
+            raise ValueError(
+                f"{meta.artifact_id} is a mutable kind; persist it with "
+                "save_mutable() so its revision-counted file stays the only copy."
+            )
         phase = meta.phase.value
-        # The store owns version numbering for immutable kinds (meta.version
-        # is advisory). Mutable kinds write at the caller's version:
-        # ledger-style writers pass 1 (rewrite in place, transitional P2
-        # stance — P3 moves them to a revision-counted single file) while
-        # state writers pass next_version (append).
-        version = (
-            meta.version
-            if spec.mutable
-            else self.next_version(meta.project_id, phase, meta.artifact_id)
-        )
+        version = self.next_version(meta.project_id, phase, meta.artifact_id)
         now = datetime.now(UTC)
         payload = artifact.model_dump(mode="json")
         envelope = ArtifactEnvelope(
@@ -159,7 +155,140 @@ class ArtifactStore:
             _render_markdown(meta, payload),
         )
         self._write_index(meta.project_id)
-        return meta_path
+        return ArtifactRef(artifact_id=meta.artifact_id, version=version, phase=meta.phase.value)
+
+    # --- Mutable kinds (single revision-counted file) ------------------------
+
+    def _mutable_path(self, project_id: str, phase: str, artifact_id: str) -> Path:
+        return self._artifact_dir(project_id, phase, artifact_id) / f"{artifact_id}.json"
+
+    def save_mutable(
+        self,
+        artifact: BaseModel,
+        meta: ArtifactMetadata,
+        *,
+        change_summary: str = "",
+    ) -> ArtifactRef:
+        """Persist a mutable kind as its single revision-counted file.
+
+        Each write bumps the envelope's ``revision``; the file replaces
+        atomically. The returned ref's ``version`` is the new revision.
+        """
+        validate_artifact_id(meta.artifact_id)
+        spec = REGISTRY.spec_for(meta.artifact_id)
+        if not spec.mutable:
+            raise ValueError(f"{meta.artifact_id} is not a mutable kind; use save() to version it.")
+        phase = meta.phase.value
+        path = self._mutable_path(meta.project_id, phase, meta.artifact_id)
+        revision = 1
+        if path.exists():
+            # Corrupt previous files must fail loudly: the revision chain is
+            # the ledger's audit trail.
+            previous = _read_envelope(path)
+            revision = (previous.revision or 1) + 1
+        now = datetime.now(UTC)
+        payload = artifact.model_dump(mode="json")
+        envelope = ArtifactEnvelope(
+            kind=spec.kind,
+            schema_version=spec.schema_version,
+            artifact_id=meta.artifact_id,
+            artifact_type=meta.artifact_type,
+            project_id=meta.project_id,
+            phase=meta.phase,
+            version=revision,
+            created_at=meta.created_at,
+            created_by=meta.created_by,
+            kb_context_ref=meta.kb_context_ref,
+            parents=meta.parents,
+            built_from=meta.built_from,
+            change_summary=change_summary,
+            checksum=payload_checksum(payload),
+            payload=payload,
+            revision=revision,
+        )
+        atomic_write_text(path, dump_json(_envelope_to_dict(envelope)))
+        self._write_mutable_meta(meta, revision, now, envelope.checksum)
+        self._write_index(meta.project_id)
+        return ArtifactRef(artifact_id=meta.artifact_id, version=revision, phase=meta.phase.value)
+
+    def _write_mutable_meta(
+        self,
+        meta: ArtifactMetadata,
+        revision: int,
+        now: datetime,
+        checksum: str,
+    ) -> None:
+        meta_path = self._meta_path(meta.project_id, meta.phase.value, meta.artifact_id)
+        existing = _read_meta_file(meta_path)
+        first_created = (
+            datetime.fromisoformat(str(existing["created_at"]))
+            if existing and existing.get("created_at")
+            else meta.created_at
+        )
+        current_meta = ArtifactCurrentMeta(
+            artifact_id=meta.artifact_id,
+            artifact_type=meta.artifact_type,
+            project_id=meta.project_id,
+            phase=meta.phase,
+            current_version=revision,
+            status=ArtifactStatus.CANDIDATE,
+            created_at=first_created,
+            updated_at=now,
+            created_by=meta.created_by,
+            checksum=checksum,
+        )
+        atomic_write_text(meta_path, dump_json(_meta_to_dict(current_meta)))
+
+    def load_mutable(self, project_id: str, phase: FilmPhase, artifact_id: str) -> dict[str, Any]:
+        """Load a mutable kind's payload (its single revision-counted file)."""
+        path = self._mutable_path(project_id, phase.value, artifact_id)
+        if not path.exists():
+            raise FileNotFoundError(f"Mutable artifact not found: {path}")
+        return _read_envelope(path).payload
+
+    def load_mutable_envelope(
+        self, project_id: str, phase: FilmPhase, artifact_id: str
+    ) -> ArtifactEnvelope:
+        """Load a mutable kind's full envelope (includes its revision)."""
+        path = self._mutable_path(project_id, phase.value, artifact_id)
+        if not path.exists():
+            raise FileNotFoundError(f"Mutable artifact not found: {path}")
+        return _read_envelope(path)
+
+    def mutable_exists(self, project_id: str, phase: FilmPhase, artifact_id: str) -> bool:
+        """Whether the mutable kind's single file exists."""
+        return self._mutable_path(project_id, phase, artifact_id).exists()
+
+    # --- Ref resolution -------------------------------------------------------
+
+    def load_ref(self, project_id: str, ref: str | ArtifactRef) -> dict[str, Any]:
+        """Resolve an artifact ref to its payload.
+
+        Canonical (phase-bearing) refs load directly; legacy phase-less refs
+        search the project's phase directories in pipeline order.
+        """
+        parsed = ref if isinstance(ref, ArtifactRef) else ArtifactRef.from_string(ref)
+        if parsed.phase is not None:
+            try:
+                return self.load(
+                    project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+                )
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
+                ) from None
+        for phase, _dir in paths.PHASE_DIR_MAP.items():
+            version_path = self._version_path(project_id, phase, parsed.artifact_id, parsed.version)
+            if version_path.exists():
+                return self.load(project_id, FilmPhase(phase), parsed.artifact_id, parsed.version)
+            legacy = self._legacy_load_payload(
+                project_id, phase, parsed.artifact_id, parsed.version
+            )
+            if legacy is not None:
+                return legacy
+        raise FileNotFoundError(
+            f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
+        )
 
     def _write_index(self, project_id: str) -> None:
         """Regenerate the derived artifact index for one project."""
@@ -188,7 +317,13 @@ class ArtifactStore:
     def load(
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> dict[str, Any]:
-        """Load an artifact body (payload) as a raw dict."""
+        """Load an artifact body (payload) as a raw dict.
+
+        Mutable kinds resolve to their single mutable file regardless of the
+        requested version (refs carry the revision they were minted with).
+        """
+        if self._safe_spec(artifact_id).mutable:
+            return self.load_mutable(project_id, phase, artifact_id)
         path = self._version_path(project_id, phase.value, artifact_id, version)
         if not path.exists():
             legacy = self._legacy_load_payload(project_id, phase.value, artifact_id, version)
@@ -229,7 +364,11 @@ class ArtifactStore:
     def list_artifacts(
         self, project_id: str, phase: FilmPhase | None = None
     ) -> list[ArtifactMetadata]:
-        """List artifact metadata for a project, optionally filtered by phase."""
+        """List artifact metadata for a project, optionally filtered by phase.
+
+        Defined ordering: pipeline phase order, then artifact id, then
+        current version descending.
+        """
         results: list[ArtifactMetadata] = []
         base = self._artifacts_base(project_id)
         if base.is_dir():
@@ -247,7 +386,15 @@ class ArtifactStore:
                 r.artifact_id == legacy.artifact_id and r.phase == legacy.phase for r in results
             ):
                 results.append(legacy)
-        return results
+        phase_order = {name: index for index, name in enumerate(paths.PHASE_DIR_MAP)}
+        return sorted(
+            results,
+            key=lambda r: (
+                phase_order.get(r.phase.value, len(phase_order)),
+                r.artifact_id,
+                -r.version,
+            ),
+        )
 
     def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
         """Next version number for an artifact: max(existing) + 1."""

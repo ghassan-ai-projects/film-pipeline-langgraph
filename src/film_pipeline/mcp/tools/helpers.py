@@ -12,6 +12,7 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.schemas.artifact import ArtifactRef
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -197,9 +198,10 @@ def _load_latest_reference_index(
     version = 0
     if state is not None:
         visual_ref = str(state.get("visual_refs", ""))
-        if visual_ref.startswith("artifact:reference_index:v"):
-            with contextlib.suppress(ValueError):
-                version = int(visual_ref.rsplit(":v", 1)[1])
+        with contextlib.suppress(ValueError):
+            parsed = ArtifactRef.from_string(visual_ref)
+            if parsed.artifact_id == "reference_index":
+                version = parsed.version
     if version <= 0:
         version = _latest_artifact_version(
             store, project_id, FilmPhase("visual_dev"), "reference_index"

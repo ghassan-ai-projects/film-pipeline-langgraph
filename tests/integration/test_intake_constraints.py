@@ -52,7 +52,7 @@ class TestIntakeConstraints:
             rt = __import__("film_pipeline.app.runtime", fromlist=["get_runtime"]).get_runtime()
             state = rt.get_project("constraints-01")
             assert state is not None
-            assert state["constraints_ref"].startswith("artifact:project_constraints:")
+            assert state["constraints_ref"] == "artifact:intake:project_constraints:v1"
             constraints = state["constraints"]
             assert constraints["target_runtime_seconds"] == 180
             assert constraints["target_scene_count"] == 6

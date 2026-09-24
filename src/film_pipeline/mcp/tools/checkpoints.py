@@ -40,8 +40,7 @@ def _persist_candidate(
         created_by="rollback_tool",
         created_at=datetime.now(UTC),
     )
-    store.save(payload, meta)
-    return f"artifact:{artifact_id}:v{version}"
+    return store.save(payload, meta).to_string()
 
 
 def _save_rollback_artifacts(

@@ -71,7 +71,7 @@ def _save_reference_index_artifact(
     from datetime import UTC, datetime
 
     from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
     project_id = str(state.get("project_id", ""))
     store = _services(rt).artifact_store
@@ -93,8 +93,8 @@ def _save_reference_index_artifact(
 
     entries = _reference_entries_from_grouped(artifact)
     reference_index = ReferenceIndex(project_id=project_id, entries=entries)
-    store.save(reference_index, meta)
-    return f"artifact:reference_index:v{version}"
+    ref: ArtifactRef = store.save(reference_index, meta)
+    return ref.to_string()
 
 
 def _reference_entries_from_grouped(

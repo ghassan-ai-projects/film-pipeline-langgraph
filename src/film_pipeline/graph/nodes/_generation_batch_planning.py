@@ -5,9 +5,6 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.graph.nodes._agent import (
-    _save_artifact,
-)
 from film_pipeline.graph.nodes._generation_prompts import (
     _load_artifact_data,
     _load_matrix_rows,
@@ -104,18 +101,27 @@ def _persist_planned_ledger(
     mgr: GenerationLedgerManager,
     project_id: str,
 ) -> None:
-    """Save the planned ledger artifact and record its refs on state."""
-    ledger = mgr.load(project_id)
-    ledger_ref = _save_artifact(
-        new_state,
-        ledger,
-        "generation_ledger",
-        "generation",
-        artifact_type="generation_ledger",
+    """Record the planned ledger's mutable-file ref on state.
+
+    The ledger is a mutable kind: it persists through the manager
+    (``save_mutable``), never through versioned artifact saves. ``mgr.load``
+    has already persisted the planned rows, so mint the ref from the stored
+    envelope's revision instead of saving again.
+    """
+    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
+
+    mgr.load(project_id)  # ensures the ledger exists and rows are persisted
+    envelope = mgr.store.load_mutable_envelope(
+        project_id, FilmPhase.GENERATION, "generation_ledger"
     )
-    if ledger_ref:
-        new_state["generation_ledger_ref"] = ledger_ref
-        new_state.setdefault("artifact_refs", []).append(ledger_ref)
+    ledger_ref = ArtifactRef(
+        artifact_id="generation_ledger",
+        version=envelope.revision or 1,
+        phase=FilmPhase.GENERATION.value,
+    ).to_string()
+    new_state["generation_ledger_ref"] = ledger_ref
+    new_state.setdefault("artifact_refs", []).append(ledger_ref)
 
 
 def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices | None) -> None:

@@ -24,7 +24,7 @@ from film_pipeline.config.profile_resolver import (
 )
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
-from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
 from .helpers import (
     _active_project_id,
@@ -359,7 +359,8 @@ def _save_intake_artifact(
 ) -> str:
     """Persist ``body`` as the next version of an intake-phase artifact.
 
-    Returns the ``artifact:<id>:v<version>`` reference used by tool responses.
+    Returns the ``artifact:<phase>:<id>:v<version>`` reference used by tool
+    responses.
     """
     store = _services(rt).artifact_store
     version = store.next_version(project_id, "intake", artifact_id)
@@ -373,8 +374,8 @@ def _save_intake_artifact(
         created_by=created_by,
         created_at=datetime.now(UTC),
     )
-    store.save(body, meta)
-    return f"artifact:{artifact_id}:v{version}"
+    ref: ArtifactRef = store.save(body, meta)
+    return ref.to_string()
 
 
 def _save_proposal_artifact(
@@ -404,7 +405,7 @@ def _load_proposal_artifact(
 ) -> ProfileChangeProposal | None:
     store = _services(rt).artifact_store
     artifact_id = _proposal_artifact_id(proposal_id)
-    version = store.next_version(project_id, "intake", artifact_id) - 1
+    version = store.latest_version(project_id, "intake", artifact_id)
     if version <= 0:
         return None
     try:

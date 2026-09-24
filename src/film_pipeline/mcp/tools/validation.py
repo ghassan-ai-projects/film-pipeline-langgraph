@@ -19,7 +19,6 @@ from .helpers import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from film_pipeline.artifacts.store import ArtifactStore
     from film_pipeline.schemas._base import FilmPhase
@@ -115,6 +114,12 @@ def _delivery_validators() -> tuple[type[Any], ...]:
     return (DeliveryCompletenessValidator,)
 
 
+def _latest_or_first(store: ArtifactStore, project_id: str, fp: FilmPhase, artifact_id: str) -> Any:
+    """Load the artifact's latest version (v1 probe when absent); None on failure."""
+    version = max(1, store.latest_version(project_id, fp.value, artifact_id))
+    return _load_artifact(store, project_id, fp, artifact_id, version)
+
+
 def _live_validator_specs(
     rt: Any, store: ArtifactStore, project_id: str, fp: FilmPhase
 ) -> list[_PhaseSpec]:
@@ -122,7 +127,7 @@ def _live_validator_specs(
     return [
         _PhaseSpec(
             phases=("script",),
-            load=lambda: _load_artifact(store, project_id, fp, "script", 1),
+            load=lambda: _latest_or_first(store, project_id, fp, "script"),
             validators=_script_validators,
         ),
         _PhaseSpec(
@@ -132,22 +137,22 @@ def _live_validator_specs(
         ),
         _PhaseSpec(
             phases=("gen_planning",),
-            load=lambda: _load_artifact(store, project_id, fp, "prompt_registry", 1),
+            load=lambda: _latest_or_first(store, project_id, fp, "prompt_registry"),
             validators=_gen_planning_validators,
         ),
         _PhaseSpec(
             phases=("shot_bible",),
-            load=lambda: _load_artifact(store, project_id, fp, "shot_bible", 1),
+            load=lambda: _latest_or_first(store, project_id, fp, "shot_bible"),
             validators=_shot_bible_validators,
         ),
         _PhaseSpec(
             phases=("post", "assembly"),
-            load=lambda: _load_artifact(store, project_id, fp, "assembly_manifest", 1),
+            load=lambda: _latest_or_first(store, project_id, fp, "assembly_manifest"),
             validators=_assembly_validators,
         ),
         _PhaseSpec(
             phases=("delivery",),
-            load=lambda: _load_artifact(store, project_id, fp, "delivery_package", 1),
+            load=lambda: _latest_or_first(store, project_id, fp, "delivery_package"),
             validators=_delivery_validators,
         ),
     ]
@@ -171,7 +176,7 @@ def _run_live_validators(
 
 def _save_report(
     store: ArtifactStore, report: ValidationReport, project_id: str, fp: FilmPhase
-) -> Path:
+) -> str:
     """Persist a ValidationReport as a candidate artifact and return its ref."""
     from datetime import UTC, datetime
 
@@ -188,7 +193,7 @@ def _save_report(
         created_by="mcp.run_validation",
         created_at=datetime.now(UTC),
     )
-    return store.save(report, meta)
+    return store.save(report, meta).to_string()
 
 
 def _run_validators_saving_reports(
@@ -197,10 +202,10 @@ def _run_validators_saving_reports(
     fp: FilmPhase,
     validators: tuple[type[Any], ...],
     art_data: Any,
-) -> tuple[list[dict[str, object]], list[Path]]:
+) -> tuple[list[dict[str, object]], list[str]]:
     """Run validators over one artifact, returning summaries with saved refs."""
     reports: list[dict[str, object]] = []
-    saved_refs: list[Path] = []
+    saved_refs: list[str] = []
     for vcls in validators:
         report = vcls().run(art_data)
         reports.append(_report_summary(report))
@@ -214,7 +219,7 @@ def _validate_visual_dev(
     project_id: str,
     fp: FilmPhase,
     state: dict[str, object],
-) -> tuple[list[dict[str, object]], list[Path]]:
+) -> tuple[list[dict[str, object]], list[str]]:
     """Validate the latest reference index when one exists."""
     art_data = _load_latest_reference_index(rt, project_id, state)
     if art_data is None:
@@ -224,10 +229,11 @@ def _validate_visual_dev(
 
 def _validate_script(
     store: ArtifactStore, project_id: str, fp: FilmPhase
-) -> tuple[list[dict[str, object]], list[Path]]:
+) -> tuple[list[dict[str, object]], list[str]]:
     """Validate the versioned script when one exists."""
     try:
-        art_data = store.load(project_id, fp, "script", 1)
+        version = max(1, store.latest_version(project_id, fp.value, "script"))
+        art_data = store.load(project_id, fp, "script", version)
     except (FileNotFoundError, ValueError):
         return [], []
     return _run_validators_saving_reports(store, project_id, fp, _script_validators(), art_data)
@@ -262,7 +268,7 @@ def _record_validation_results(
     project_id: str,
     active: dict[str, Any],
     reports: list[dict[str, object]],
-    saved_refs: list[Path],
+    saved_refs: list[str],
 ) -> None:
     """Write validation outcomes into project state and persist them."""
     active["_validation_reports"] = reports
@@ -286,7 +292,7 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
         return _error(f"Unknown phase: {phase_str}")
 
     reports: list[dict[str, object]] = []
-    saved_refs: list[Path] = []
+    saved_refs: list[str] = []
 
     try:
         if phase_str == "visual_dev":

@@ -1245,7 +1245,7 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
     active = rt.get_active()
     assert active is not None
     ref = str(active.get("visual_refs", ""))
-    assert ref.startswith("artifact:reference_index:v")
+    assert ref.startswith("artifact:visual_dev:reference_index:v")
 
     inspect_result = asyncio.run(mcp_tools.inspect_reference({"reference_id": "ref_001"}))
     assert inspect_result["ok"] is True

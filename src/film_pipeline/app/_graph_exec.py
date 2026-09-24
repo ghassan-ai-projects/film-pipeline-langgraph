@@ -109,8 +109,7 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
                 created_at=datetime.now(UTC),
             )
             safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
-            store.save(CheckpointState(state=safe_state), meta)
-            graph_state_ref = f"artifact:graph_state:v{version}"
+            graph_state_ref = store.save(CheckpointState(state=safe_state), meta).to_string()
         except Exception as exc:
             _logger.warning(
                 "Auto-checkpoint could not persist graph state for %s: %s", project_id, exc

@@ -72,7 +72,7 @@ class TestPostNodeArtifactPersistence:
         updates = post_node(state)
 
         ref = updates["assembly_manifest_ref"]
-        assert ref == "artifact:assembly_manifest:v1"
+        assert ref == "artifact:post:assembly_manifest:v1"
         # Reducer channel carries only the newly created ref, not carried-over ones.
         assert updates["artifact_refs"] == [ref]
 
@@ -91,9 +91,9 @@ class TestPostNodeArtifactPersistence:
         first = post_node(_post_state(services))
         second = post_node(_post_state(services))
 
-        assert first["assembly_manifest_ref"] == "artifact:assembly_manifest:v1"
-        assert second["assembly_manifest_ref"] == "artifact:assembly_manifest:v2"
-        assert second["artifact_refs"] == ["artifact:assembly_manifest:v2"]
+        assert first["assembly_manifest_ref"] == "artifact:post:assembly_manifest:v1"
+        assert second["assembly_manifest_ref"] == "artifact:post:assembly_manifest:v2"
+        assert second["artifact_refs"] == ["artifact:post:assembly_manifest:v2"]
         v2 = services.artifact_store.load("p1", FilmPhase("post"), "assembly_manifest", 2)
         assert v2["cut_id"] == "review-cut-v1"
 

@@ -147,7 +147,7 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "generation_ledger": _spec(
             "generation_ledger", payload_model=GenerationLedger, mutable=True
         ),
-        "budget_state": _spec("budget_state", mutable=True),
+        "budget_state": _spec("budget_state"),
         "prompt_package": _spec("prompt_package"),
         "prompt_registry": _spec("prompt_registry"),
         "coverage_group": _spec("coverage_group"),

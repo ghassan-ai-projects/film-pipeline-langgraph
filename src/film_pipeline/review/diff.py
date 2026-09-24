@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from film_pipeline.schemas.artifact import ArtifactRef
+
 
 @dataclass
 class ArtifactDiff:
@@ -61,7 +63,10 @@ def _id_stem(artifact_ref: str) -> str:
 
     Example: 'artifact:script:S001:v3' → 'artifact:script:S001'
     """
-    parts = artifact_ref.rsplit(":", 1)
-    if len(parts) == 2 and parts[1].startswith("v") and parts[1][1:].isdigit():
-        return parts[0]
-    return artifact_ref
+    try:
+        parsed = ArtifactRef.from_string(artifact_ref)
+    except ValueError:
+        return artifact_ref
+    if parsed.phase:
+        return f"artifact:{parsed.phase}:{parsed.artifact_id}"
+    return f"artifact:{parsed.artifact_id}"

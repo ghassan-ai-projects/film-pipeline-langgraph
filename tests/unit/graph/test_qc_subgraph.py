@@ -33,15 +33,20 @@ class FakeValidator:
         return self.report
 
 
+class _FakeMeta:
+    def __init__(self, artifact_id: str, phase: FilmPhase, version: int) -> None:
+        self.artifact_id = artifact_id
+        self.phase = phase
+        self.version = version
+
+
 class FakeArtifactStore:
     def __init__(self) -> None:
         self.calls: list[tuple[str, FilmPhase, str, int]] = []
 
-    def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
+    def list_artifacts(self, project_id: str) -> list[_FakeMeta]:
         _ = project_id
-        if artifact_id == "script" and phase == FilmPhase.SCRIPT.value:
-            return 2
-        return 1
+        return [_FakeMeta("script", FilmPhase.SCRIPT, 2)]
 
     def load(
         self,
@@ -51,7 +56,7 @@ class FakeArtifactStore:
         version: int,
     ) -> dict[str, Any]:
         self.calls.append((project_id, phase, artifact_id, version))
-        if artifact_id == "script" and phase == FilmPhase.SCRIPT:
+        if artifact_id == "script" and phase == FilmPhase.SCRIPT and version == 2:
             return {"project_id": project_id, "title": "Loaded"}
         raise FileNotFoundError(artifact_id)
 
@@ -231,7 +236,7 @@ def test_load_artifact_for_validator_loads_latest_and_returns_copy() -> None:
     loaded["title"] = "Mutated"
     loaded_again = qc._load_artifact_for_validator(state, "script-structure")
     assert loaded_again == {"project_id": "p1", "title": "Loaded"}
-    assert ("p1", FilmPhase.SCRIPT, "script", 1) in store.calls
+    assert ("p1", FilmPhase.SCRIPT, "script", 2) in store.calls
 
 
 def test_load_artifact_for_validator_skips_when_artifact_absent() -> None:

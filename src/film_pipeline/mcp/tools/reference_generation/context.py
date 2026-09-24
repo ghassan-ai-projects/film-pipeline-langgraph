@@ -68,7 +68,8 @@ def _maybe_cache_character_bible(
     try:
         from film_pipeline.schemas._base import FilmPhase
 
-        bible = store.load(project_id, FilmPhase("visual_dev"), "character_bible", 1)
+        version = max(1, store.latest_version(project_id, "visual_dev", "character_bible"))
+        bible = store.load(project_id, FilmPhase("visual_dev"), "character_bible", version)
         if isinstance(bible, dict) and bible.get("character_id") == subject_id:
             char_bibles[subject_id] = bible
     except (FileNotFoundError, ValueError):

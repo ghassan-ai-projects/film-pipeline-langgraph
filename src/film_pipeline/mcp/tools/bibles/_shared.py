@@ -54,14 +54,15 @@ def _extract_script_text(script_data: object | None) -> str:
 
 
 def _load_versioned_artifact(store: Any, project_id: str, phase: str, artifact_id: str) -> Any:
-    """Load version 1 of an artifact from its creation phase."""
+    """Load the latest version of an artifact from its creation phase."""
     from film_pipeline.schemas._base import FilmPhase
 
-    return store.load(project_id, FilmPhase(phase), artifact_id, 1)
+    version = store.latest_version(project_id, phase, artifact_id)
+    return store.load(project_id, FilmPhase(phase), artifact_id, max(1, version))
 
 
 def _load_artifact_if_present(store: Any, project_id: str, phase: str, artifact_id: str) -> Any:
-    """Load version 1 of an artifact; None when missing or unreadable."""
+    """Load the latest version of an artifact; None when missing or unreadable."""
     try:
         return _load_versioned_artifact(store, project_id, phase, artifact_id)
     except (FileNotFoundError, ValueError):
@@ -113,12 +114,12 @@ def _save_visual_dev_candidate(
     artifact_type: Any,
     created_by: str,
     bible: Any,
-) -> Any:
+) -> str:
     """Persist a bible as the next CANDIDATE version in visual_dev."""
     from datetime import UTC, datetime
 
     from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), artifact_id) + 1
@@ -134,7 +135,8 @@ def _save_visual_dev_candidate(
         created_by=created_by,
         created_at=datetime.now(UTC),
     )
-    return store.save(bible, meta)
+    ref: ArtifactRef = store.save(bible, meta)
+    return ref.to_string()
 
 
 def _register_active_artifact_ref(

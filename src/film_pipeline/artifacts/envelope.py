@@ -78,6 +78,10 @@ class ArtifactEnvelope(BaseModel):
     model_profile: str | None = None
     change_summary: str = ""
     checksum: str = ""
+    revision: int | None = Field(
+        default=None,
+        description="Mutable kinds only: monotonically increasing write count.",
+    )
     payload: dict[str, Any]
 
 

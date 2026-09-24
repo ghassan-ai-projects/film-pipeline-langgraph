@@ -160,21 +160,36 @@ def _collect_artifacts(
     services: Any,
     load_phases: list[FilmPhase],
 ) -> dict[str, Any]:
-    """Load artifacts referenced by ``state["artifact_refs"]`` from ``load_phases``."""
+    """Load artifacts referenced by ``state["artifact_refs"]``.
+
+    Phase-bearing refs load directly from their phase; legacy phase-less refs
+    are scanned across ``load_phases`` in order.
+    """
+    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
+
     store = services.artifact_store
     project_id = str(state.get("project_id", ""))
     artifact_data: dict[str, Any] = {}
     for ref_str in state.get("artifact_refs", []):
         ref_str = str(ref_str)
-        if ":" not in ref_str:
+        try:
+            parsed = ArtifactRef.from_string(ref_str)
+        except ValueError:
             continue
-        parts = ref_str.split(":")
-        artifact_id = parts[1] if len(parts) > 1 else ref_str
-        version_str = parts[2] if len(parts) > 2 else "1"
-        version = int(version_str.lstrip("v"))
+        if parsed.phase is not None:
+            try:
+                artifact_data[parsed.artifact_id] = store.load(
+                    project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+                )
+            except (FileNotFoundError, ValueError):
+                continue
+            continue
         for fp in load_phases:
             try:
-                artifact_data[artifact_id] = store.load(project_id, fp, artifact_id, version)
+                artifact_data[parsed.artifact_id] = store.load(
+                    project_id, fp, parsed.artifact_id, parsed.version
+                )
                 break
             except (FileNotFoundError, ValueError):
                 continue

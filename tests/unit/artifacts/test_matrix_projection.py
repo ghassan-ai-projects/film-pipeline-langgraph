@@ -96,7 +96,7 @@ def test_materialize_matrix_defaults_malformed_rows_to_empty_list() -> None:
         }
     )
 
-    matrix = materialize_matrix(store, "p1", "shot_matrix", [])
+    matrix = materialize_matrix(store, "p1", "artifact:shot_matrix:v1", [])
 
     assert matrix["rows"] == []
 

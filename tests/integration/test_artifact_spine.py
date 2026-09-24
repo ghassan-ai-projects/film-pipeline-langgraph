@@ -11,6 +11,7 @@ from typing import Any
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.schemas.script import Script
 from film_pipeline.schemas.story_bible import StoryBible
 
@@ -44,12 +45,12 @@ class TestArtifactSpine:
         constitution_ref = result.get("constitution_ref", "")
         assert constitution_ref
 
-        artifact_id = constitution_ref.split(":")[1]
+        constitution_ref_parsed = ArtifactRef.from_string(constitution_ref)
         raw = rt.services.artifact_store.load(
             "spine-test",
             phase=FilmPhase("constitution"),
-            artifact_id=artifact_id,
-            version=1,
+            artifact_id=constitution_ref_parsed.artifact_id,
+            version=constitution_ref_parsed.version,
         )
         assert raw["theme"]
         assert raw["tone"]
@@ -70,12 +71,12 @@ class TestArtifactSpine:
         treatment_ref = result.get("treatment_ref", "")
         assert treatment_ref
 
-        artifact_id = treatment_ref.split(":")[1]
+        treatment_ref_parsed = ArtifactRef.from_string(treatment_ref)
         raw = rt.services.artifact_store.load(
             "spine-test",
             phase=FilmPhase("development"),
-            artifact_id=artifact_id,
-            version=1,
+            artifact_id=treatment_ref_parsed.artifact_id,
+            version=treatment_ref_parsed.version,
         )
         assert raw["text"]
         assert len(raw["themes"]) >= 1
@@ -97,12 +98,12 @@ class TestArtifactSpine:
         script_ref = result.get("script_ref", "")
         assert script_ref
 
-        artifact_id = script_ref.split(":")[1]
+        script_ref_parsed = ArtifactRef.from_string(script_ref)
         raw = rt.services.artifact_store.load(
             "spine-test",
             phase=FilmPhase("script"),
-            artifact_id=artifact_id,
-            version=1,
+            artifact_id=script_ref_parsed.artifact_id,
+            version=script_ref_parsed.version,
         )
         assert raw["title"]
         assert len(raw["scenes"]) >= 1
@@ -143,7 +144,8 @@ class TestArtifactSpine:
         # Load story bible and construct typed object
         bible_ref = result.get("story_bible_ref", "")
         assert bible_ref
-        bible_id = bible_ref.split(":")[1]
+        bible_parsed = ArtifactRef.from_string(bible_ref)
+        bible_id = bible_parsed.artifact_id
         bible_raw = rt.services.artifact_store.load(
             "spine-test",
             phase=FilmPhase("script"),
@@ -157,7 +159,8 @@ class TestArtifactSpine:
         # Load script and construct typed object
         script_ref = result.get("script_ref", "")
         assert script_ref
-        script_id = script_ref.split(":")[1]
+        script_parsed = ArtifactRef.from_string(script_ref)
+        script_id = script_parsed.artifact_id
         script_raw = rt.services.artifact_store.load(
             "spine-test",
             phase=FilmPhase("script"),
@@ -207,13 +210,12 @@ class TestArtifactSpine:
         assert result["human_approval_required"] is True
 
         visual_refs = result.get("visual_refs", "")
-        assert visual_refs.startswith("artifact:reference_index:v")
+        assert ArtifactRef.from_string(visual_refs).artifact_id == "reference_index"
 
         # Verify artifact was persisted
-        parts = visual_refs.split(":")
-        artifact_id = parts[1]
-        version_str = parts[2]
-        version = int(version_str.lstrip("v"))
+        visual_parsed = ArtifactRef.from_string(visual_refs)
+        artifact_id = visual_parsed.artifact_id
+        version = visual_parsed.version
 
         from film_pipeline.schemas._base import FilmPhase
 

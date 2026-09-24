@@ -10,6 +10,15 @@
 > `current.md` (generated human view), and immutable
 > `versions/vNNN.json` envelopes carrying provenance, payload, and a payload
 > checksum. A derived `index/artifacts.json` is regenerated on every write.
+> **Ref grammar (P3):** artifact references are canonical
+> `artifact:<phase>:<artifact_id>:v<N>` strings, carried by the typed
+> `ArtifactRef` model (`to_string()`/`from_string()`); the legacy phase-less
+> form still parses, and `ArtifactStore.load_ref()` resolves either one.
+> Reads default to the latest version (`ArtifactStore.latest_version()`),
+> so repaired artifacts are visible to their consumers. The generation
+> ledger is stored as a revision-counted single file
+> (`generation_ledger.json`, envelope field `revision`), no longer a
+> rewritten "v1" version.
 > Every artifact id must be lowercase snake_case and registered in
 > `artifacts/registry.py` (kind → payload model, schema version, mutability);
 > unregistered ids are refused at save time. Envelopes carry an int
