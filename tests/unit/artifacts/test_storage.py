@@ -33,45 +33,23 @@ class TestResolveStorageRoot:
         monkeypatch.setenv(STORAGE_ROOT_ENV, str(tmp_path / "env-root"))
         assert resolve_storage_root() == tmp_path / "env-root"
 
-    def test_env_variable_beats_deprecated_alias(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setenv(STORAGE_ROOT_ENV, str(tmp_path / "canonical"))
-        monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(tmp_path / "legacy"))
-        assert resolve_storage_root() == tmp_path / "canonical"
+    def test_unmarked_legacy_tree_is_refused(self, tmp_path: Path) -> None:
+        """Pre-upgrade project trees are refused, not adopted."""
+        from film_pipeline.artifacts.storage import ensure_storage_root
+
+        root = tmp_path / "legacy"
+        project = root / "01-vision" / "film_constitution"
+        project.mkdir(parents=True)
+        (project / "current.meta.json").write_text("{}\n")
+        with pytest.raises(StorageRootError):
+            ensure_storage_root(root)
 
     def test_blank_env_falls_through(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv(STORAGE_ROOT_ENV, "   ")
-        monkeypatch.delenv("FILM_PIPELINE_PERSIST_ROOT", raising=False)
         assert resolve_storage_root() == default_storage_root()
-
-    def test_legacy_persist_root_maps_to_projects_subdir(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.delenv(STORAGE_ROOT_ENV, raising=False)
-        monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(tmp_path / "persist"))
-        assert resolve_storage_root() == tmp_path / "persist" / "projects"
-
-    def test_legacy_alias_logs_deprecation_warning(
-        self,
-        tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch,
-        caplog: pytest.LogCaptureFixture,
-    ) -> None:
-        import logging
-
-        from film_pipeline.artifacts import storage as storage_module
-
-        monkeypatch.delenv(STORAGE_ROOT_ENV, raising=False)
-        monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(tmp_path / "persist"))
-        monkeypatch.setattr(storage_module, "_LEGACY_ALIAS_WARNED", False)
-        with caplog.at_level(logging.WARNING, logger="film_pipeline.artifacts.storage"):
-            resolve_storage_root()
-        assert any("deprecated" in record.message for record in caplog.records)
 
     def test_default_is_under_home(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv(STORAGE_ROOT_ENV, raising=False)
-        monkeypatch.delenv("FILM_PIPELINE_PERSIST_ROOT", raising=False)
         assert resolve_storage_root() == Path.home() / ".film-pipeline" / "projects"
 
     def test_derived_defaults_cohere(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -137,21 +115,6 @@ class TestMarker:
         hostage.write_text("data\n")
         with pytest.raises(StorageRootError, match="not a directory"):
             ensure_storage_root(hostage)
-
-    def test_ensure_adopts_legacy_store_with_marker(self, tmp_path: Path) -> None:
-        root = tmp_path / "legacy"
-        project = root / "whale-song" / "01-vision" / "film_constitution"
-        project.mkdir(parents=True)
-        (project / "current.meta.json").write_text("{}\n")
-        assert ensure_storage_root(root) == root
-        assert read_marker(root) is not None
-
-    def test_ensure_adopts_legacy_state_file_store(self, tmp_path: Path) -> None:
-        root = tmp_path / "legacy-runtime"
-        (root / "whale-song").mkdir(parents=True)
-        (root / "whale-song" / "project-state.json").write_text("{}\n")
-        assert ensure_storage_root(root) == root
-        assert read_marker(root) is not None
 
 
 class TestRequiredRoots:

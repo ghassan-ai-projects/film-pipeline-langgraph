@@ -8,27 +8,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def _load_artifact_metadata(
-    store: Any,
-    project_id: str,
-    artifact_id: str,
-    version: int,
-) -> Any:
-    """Locate the artifact metadata by trying each phase in order.
-
-    A missing file moves on to the next phase; ``None`` means no stored
-    metadata matched.
-    """
-    from film_pipeline.schemas._base import FilmPhase
-
-    for fp in FilmPhase:
-        try:
-            return store.load_metadata(project_id, fp.value, artifact_id, version)
-        except (FileNotFoundError, ValueError):
-            continue
-    return None
-
-
 def _staleness_warnings(
     artifact_id: str,
     artifact_ref: str,
@@ -74,15 +53,10 @@ def check_staleness(
         return []
 
     project_id = str(state.get("project_id", ""))
-    if parsed.phase is not None:
-        try:
-            metadata = store.load_metadata(
-                project_id, parsed.phase, parsed.artifact_id, parsed.version
-            )
-        except (FileNotFoundError, ValueError):
-            return []
-    else:
-        metadata = _load_artifact_metadata(store, project_id, parsed.artifact_id, parsed.version)
+    try:
+        metadata = store.load_metadata(project_id, parsed.phase, parsed.artifact_id, parsed.version)
+    except (FileNotFoundError, ValueError):
+        return []
     if metadata is None:
         return []
 

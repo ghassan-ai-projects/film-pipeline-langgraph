@@ -51,61 +51,20 @@ All project storage resolves through one variable, in priority order:
 
 1. `FILM_PIPELINE_STORAGE_ROOT` — canonical. Points at the directory that
    contains one subdirectory per project (e.g. `~/.film-pipeline/projects`).
-2. `FILM_PIPELINE_PERSIST_ROOT` — **deprecated** alias; projects are derived
-   as `<persist_root>/projects`. A deprecation warning is logged.
-3. Default: `~/.film-pipeline/projects`.
+2. Default: `~/.film-pipeline/projects`.
 
 Related roots are derived from the same base (`~/.film-pipeline` by default):
 `runtime/` (runtime state), `checkpoints/` (LangGraph checkpointer),
 `runs/<name>/` (headless CLI runs), `trash/` (archived deletions).
 
 Storage roots are marker-gated: each root carries a `storage.json` marker.
-A fresh directory is initialized automatically on first use. An existing
-film-pipeline tree from before this upgrade is detected and **marked in
-place** so it keeps working until you run the storage migration. Any other
-directory that was not created by film-pipeline is **refused** with an
+A fresh directory is initialized automatically on first use. Any directory
+that was not created by this version of film-pipeline is **refused** with an
 actionable error instead of being silently adopted. Never point
 `FILM_PIPELINE_STORAGE_ROOT` at an arbitrary directory with unrelated files.
 
 Developer scripts under `scripts/` write to `.scratch/` (never the repo or
 your home directory); `make scratch-clean` removes it.
-
-## Migrating legacy projects (storage upgrade)
-
-Projects created before the storage upgrade keep working read-only, but to
-make them fully current (typed records, envelopes, deliverables, mutable
-ledger) run the migration once:
-
-```bash
-# 1. Plan only — prints what would move, writes nothing:
-uv run python -m film_pipeline.artifacts.migration \
-  --source ~/old-projects-root --target ~/.film-pipeline/projects --dry-run
-
-# 2. Run it for real (--confirm is required):
-uv run python -m film_pipeline.artifacts.migration \
-  --source ~/old-projects-root --target ~/.film-pipeline/projects --confirm
-```
-
-(OpenClaw agents can call the same logic as the `storage_migrate` MCP tool;
-it refuses to run without `confirmed=True`.)
-
-What it does:
-
-- **Copies, never deletes.** Each project is copied into the target root,
-  every copied file re-hashed for verification, and only then is the source
-  renamed to `<name>.migrated-<timestamp>` (recoverable by moving it back).
-- **Converts as it goes:** `project-state.json` becomes the typed
-  `project.json`; legacy artifacts become v2 envelopes under
-  `artifacts/<phase>/<artifact_id>/`; colon-bearing artifact directory ids
-  are sanitized; the rewritten generation ledger becomes the revision-counted
-  `generation_ledger.json`; `.gitignore` gains the `media/` rule;
-  unresolvable path-shaped refs in the record are blanked and logged under
-  `migrated_dead_refs`.
-- **Idempotent:** re-runs skip already-migrated projects; every action is
-  recorded in `migration-log.jsonl` next to the storage root.
-
-Run `storage_verify` (or re-run the dry-run) afterwards if you want a layout
-report.
 
 ### Per-project state files
 
@@ -120,10 +79,6 @@ state (storage upgrade P4):
 | `audit/audit-log.jsonl` | Append-only audit trail (one JSON object per line). |
 | `.storage.lock` | Internal write lock; safe to ignore, never edit. |
 | `artifacts/<phase>/<id>/` | Versioned artifacts: `meta.json` (current), `current.md` (human view), `versions/`. |
-
-Legacy files (`project-state.json`, `checkpoints.json`, `audit-log.json`)
-are still readable but are no longer written; the storage migration moves
-them into the layout above. (`.graph_state.json` has no reader at all.)
 
 ### Browsing a project (what to open)
 

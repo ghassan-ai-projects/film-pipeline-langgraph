@@ -272,7 +272,7 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     state: dict[str, object] = {
         "project_id": "p1",
         "idea": "A memory story.",
-        "constitution_ref": "artifact:film_constitution:v1",
+        "constitution_ref": "artifact:constitution:film_constitution:v1",
         SERVICES_KEY: services,
     }
     result = _run_agent(
@@ -283,7 +283,7 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     )
     assert "treatment" in result
     assert "Memory is a wound." in adapter.prompt
-    assert "artifact:film_constitution:v1" in adapter.prompt
+    assert "artifact:constitution:film_constitution:v1" in adapter.prompt
 
 
 def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) -> None:
@@ -373,7 +373,7 @@ def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) ->
     state: dict[str, object] = {
         "project_id": "p1",
         "idea": "A memory story.",
-        "constitution_ref": "artifact:film_constitution:v1",
+        "constitution_ref": "artifact:constitution:film_constitution:v1",
         "resolved_config": {"context": {"max_chars_per_artifact": 700}},
         SERVICES_KEY: services,
     }

@@ -99,7 +99,7 @@ def _constitution_summary(state: dict[str, Any]) -> str:
         parsed = _parse_ref(str(constitution_ref))
         data = services.artifact_store.load(
             str(state.get("project_id", "")),
-            FilmPhase(parsed.phase or "constitution"),
+            FilmPhase(parsed.phase),
             parsed.artifact_id,
             parsed.version,
         )
@@ -322,12 +322,7 @@ def _infer_artifact_type(artifact: Any) -> _ArtifactType:
 
 
 def _parse_ref(ref_str: str) -> _ArtifactRef:
-    """Parse an artifact ref string into an ArtifactRef.
-
-    Accepts both the canonical ``artifact:<phase>:<id>:v<N>`` form and the
-    legacy phase-less ``artifact:<id>:v<N>`` form; raises ``ValueError`` for
-    anything else.
-    """
+    """Parse the canonical ``artifact:<phase>:<id>:v<N>`` ref string."""
     return _ArtifactRef.from_string(ref_str)
 
 
@@ -353,14 +348,12 @@ def _inject_artifact_context(
     if not project_id:
         return
 
-    for ref_key, (phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
+    for ref_key, (_phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
         ref = str(state.get(ref_key, "") or "").strip()
         if not ref:
             continue
         try:
-            context_vars[content_key] = _compact_upstream_content(
-                state, services, project_id, phase_name, ref
-            )
+            context_vars[content_key] = _compact_upstream_content(state, services, project_id, ref)
         except (FileNotFoundError, ValueError, KeyError) as exc:
             _record_context_load_failure(state, ref_key, ref, exc)
             continue
@@ -370,14 +363,13 @@ def _compact_upstream_content(
     state: dict[str, Any],
     services: GraphServices,
     project_id: str,
-    phase_name: str,
     ref: str,
 ) -> str:
     """Load one upstream artifact and compact it to the configured char budget."""
     parsed = _parse_ref(ref)
     data = services.artifact_store.load(
         project_id,
-        FilmPhase(parsed.phase or phase_name),
+        FilmPhase(parsed.phase),
         parsed.artifact_id,
         parsed.version,
     )

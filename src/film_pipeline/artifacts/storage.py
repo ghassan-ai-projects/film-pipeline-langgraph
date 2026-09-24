@@ -4,14 +4,12 @@ Single authority for where project storage lives:
 
 1. explicit argument,
 2. ``FILM_PIPELINE_STORAGE_ROOT``,
-3. ``FILM_PIPELINE_PERSIST_ROOT`` (deprecated alias, derived as ``<root>/projects``),
-4. the default home location (entry points only).
+3. the default home location (entry points only).
 
 Library constructors never fall back to an implicit root — they require one.
 Opening a root is marker-gated: a fresh directory is initialized with a
-``storage.json`` marker, a legacy-shaped store is marked for upgrade, and any
-other pre-existing directory is refused so stray folders are never silently
-adopted as project storage.
+``storage.json`` marker, and any pre-existing directory without one is
+refused so stray folders are never silently adopted as project storage.
 """
 
 from __future__ import annotations
@@ -23,13 +21,11 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
-from film_pipeline.artifacts.paths import PHASE_DIR_MAP
 from film_pipeline.artifacts.serialization import write_json_atomic
 
 _logger = logging.getLogger(__name__)
 
 STORAGE_ROOT_ENV = "FILM_PIPELINE_STORAGE_ROOT"
-LEGACY_PERSIST_ROOT_ENV = "FILM_PIPELINE_PERSIST_ROOT"
 MARKER_FILENAME = "storage.json"
 
 #: On-disk layout version this build writes. Roots written before the storage
@@ -41,8 +37,6 @@ MARKER_SCHEMA_VERSION = 1
 
 PROFILE_PRODUCTION = "production"
 PROFILE_SANDBOX = "sandbox"
-
-_LEGACY_ALIAS_WARNED = False
 
 
 class StorageRootError(RuntimeError):
@@ -80,27 +74,12 @@ def default_run_root() -> Path:
 
 
 def resolve_storage_root(explicit: Path | str | None = None) -> Path:
-    """Resolve the storage root: argument, then env vars, then the default.
-
-    ``FILM_PIPELINE_PERSIST_ROOT`` is honored as a deprecated alias and maps
-    to ``<persist_root>/projects``.
-    """
-    global _LEGACY_ALIAS_WARNED
+    """Resolve the storage root: argument, then env var, then the default."""
     if explicit is not None:
         return Path(explicit)
     from_env = os.getenv(STORAGE_ROOT_ENV, "").strip()
     if from_env:
         return Path(from_env)
-    legacy = os.getenv(LEGACY_PERSIST_ROOT_ENV, "").strip()
-    if legacy:
-        if not _LEGACY_ALIAS_WARNED:
-            _logger.warning(
-                "%s is deprecated; set %s instead.",
-                LEGACY_PERSIST_ROOT_ENV,
-                STORAGE_ROOT_ENV,
-            )
-            _LEGACY_ALIAS_WARNED = True
-        return Path(legacy) / "projects"
     return default_storage_root()
 
 
@@ -147,8 +126,6 @@ def ensure_storage_root(root: Path, *, profile: str = PROFILE_PRODUCTION) -> Pat
     - A non-existent or empty directory is initialized with a marker.
     - A directory already carrying a marker is returned as-is; a marker from a
       newer layout version is refused.
-    - An unmarked directory that looks like a legacy film-pipeline store is
-      marked for upgrade in place.
     - Anything else is refused: it was not created by this application and must
       not be silently adopted as project storage.
     """
@@ -160,8 +137,6 @@ def ensure_storage_root(root: Path, *, profile: str = PROFILE_PRODUCTION) -> Pat
                 f"(v{existing.layout_version} > v{LAYOUT_VERSION}). "
                 "Upgrade film-pipeline to open it."
             )
-        # Older markers (pre-upgrade trees stamped v1) are accepted; the
-        # artifact engine migrates them forward (storage-upgrade-plan.md P2).
         return root
     if marker_path(root).exists():
         raise StorageRootError(
@@ -176,45 +151,9 @@ def ensure_storage_root(root: Path, *, profile: str = PROFILE_PRODUCTION) -> Pat
     if not any(root.iterdir()):
         init_storage_root(root, profile=profile)
         return root
-    if _looks_like_legacy_store(root):
-        _logger.info("Marking legacy storage root %s (layout v0) for upgrade.", root)
-        init_storage_root(root, profile=profile)
-        return root
     raise StorageRootError(
         f"Refusing to use {root} as project storage: it exists without a "
         f"{MARKER_FILENAME} marker and does not look like a film-pipeline "
         f"store. Set {STORAGE_ROOT_ENV} to your storage root, or remove the "
         "directory if it is not needed."
     )
-
-
-def _looks_like_legacy_store(root: Path) -> bool:
-    """Heuristic: does ``root`` contain pre-upgrade film-pipeline projects?"""
-    legacy_phase_names = set(PHASE_DIR_MAP.values()) | {"intake"}
-    try:
-        children = [p for p in sorted(root.iterdir()) if p.is_dir()]
-    except OSError:
-        return False
-    for child in children[:200]:
-        if child.name in legacy_phase_names:
-            return True
-        if (child / "project-state.json").is_file():
-            return True
-        if (child / "asset-manifest.json").is_file():
-            return True
-        if any(
-            grandchild.is_dir() and grandchild.name in legacy_phase_names
-            for grandchild in child.iterdir()
-        ):
-            return True
-        if _has_legacy_sidecar(child):
-            return True
-    return False
-
-
-def _has_legacy_sidecar(project_dir: Path) -> bool:
-    """Depth-limited search for any legacy metadata sidecar under one project."""
-    for pattern in ("*.meta.json", "*/*.meta.json", "*/*/*.meta.json"):
-        if next(project_dir.glob(pattern), None) is not None:
-            return True
-    return False

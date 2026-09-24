@@ -35,8 +35,8 @@ def _save_script(services: GraphServices, project_id: str, scenes: list[ScriptSc
         created_by="test",
         created_at=datetime.now(UTC),
     )
-    store.save(script, meta)
-    return f"artifact:script:v{version}"
+    ref = store.save(script, meta)
+    return ref.to_string()
 
 
 def test_backfill_adds_missing_scenes_for_dict_matrix(tmp_path: Any) -> None:
@@ -137,6 +137,6 @@ def test_no_op_when_services_missing(tmp_path: Any) -> None:
     matrix: dict[str, Any] = {
         "rows": [{"shot_id": "s_001", "scene_id": "sc_001", "act_id": "act_1"}]
     }
-    state = {"project_id": "p4", "script_ref": "artifact:script:v1"}
+    state = {"project_id": "p4", "script_ref": "artifact:script:script:v1"}
     result = _ensure_matrix_scene_coverage(state, matrix)
     assert result == matrix

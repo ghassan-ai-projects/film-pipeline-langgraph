@@ -186,7 +186,7 @@ def _story_bible_cross_check(
         parsed = _parse_ref(story_bible_ref)
         bible_data = services.artifact_store.load(
             str(state.get("project_id", "")),
-            FilmPhase(parsed.phase or "script"),
+            FilmPhase(parsed.phase),
             parsed.artifact_id,
             parsed.version,
         )

@@ -92,8 +92,6 @@ def _clean_production_state_stores(
 
     os.environ["FILM_PIPELINE_NO_PERSIST"] = "1"
     session_root = tmp_path_factory.mktemp("film-pipeline")
-    # The canonical storage variable carries the session; the deprecated
-    # FILM_PIPELINE_PERSIST_ROOT alias is exercised only by its own test.
     os.environ["FILM_PIPELINE_STORAGE_ROOT"] = str(session_root / "storage")
 
     try:

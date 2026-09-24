@@ -14,9 +14,8 @@ def _load_artifact_data(
     state: dict[str, Any],
     services: GraphServices,
     ref: str,
-    phase_guesses: list[str] | None = None,
 ) -> Any:
-    """Load artifact data by ref, trying a list of candidate phases."""
+    """Load artifact data by ref from its phase, or ``None`` when absent."""
     if not ref or ":" not in ref:
         return None
     try:
@@ -30,22 +29,12 @@ def _load_artifact_data(
         return None
     from film_pipeline.schemas._base import FilmPhase
 
-    if parsed.phase is not None:
-        try:
-            return services.artifact_store.load(
-                project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
-            )
-        except (FileNotFoundError, ValueError, KeyError):
-            return None
-    phases = phase_guesses or ["gen_planning", "shot_bible", "visual_dev", "script"]
-    for phase in phases:
-        try:
-            return services.artifact_store.load(
-                project_id, FilmPhase(phase), parsed.artifact_id, parsed.version
-            )
-        except (FileNotFoundError, ValueError, KeyError):
-            continue
-    return None
+    try:
+        return services.artifact_store.load(
+            project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+        )
+    except (FileNotFoundError, ValueError, KeyError):
+        return None
 
 
 def _load_matrix_rows(
@@ -56,7 +45,7 @@ def _load_matrix_rows(
     shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
     if not shot_matrix_ref:
         return []
-    data = _load_artifact_data(state, services, shot_matrix_ref, ["shot_bible"])
+    data = _load_artifact_data(state, services, shot_matrix_ref)
     if not isinstance(data, dict):
         return []
     rows = data.get("rows", [])
@@ -121,9 +110,7 @@ def _build_prompt_from_matrix_row(
 
     constitution_ref = str(state.get("constitution_ref", "") or "")
     constitution = (
-        _load_artifact_data(state, services, constitution_ref, ["constitution"])
-        if constitution_ref
-        else None
+        _load_artifact_data(state, services, constitution_ref) if constitution_ref else None
     )
     constitution = constitution if isinstance(constitution, dict) else None
 
@@ -172,7 +159,7 @@ def _resolve_prompt_for_request(
     shot_id = str(req.get("shot_id", "") or "")
 
     if prompt_ref and services:
-        data = _load_artifact_data(state, services, prompt_ref, ["gen_planning", "shot_bible"])
+        data = _load_artifact_data(state, services, prompt_ref)
         entries = (data.get("entries") or []) if isinstance(data, dict) else []
         for entry in entries:
             if not isinstance(entry, dict) or str(entry.get("shot_id", "")) != shot_id:

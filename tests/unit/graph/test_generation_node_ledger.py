@@ -50,7 +50,7 @@ def _save_matrix(store: ArtifactStore, project_id: str) -> str:
         created_at=datetime.now(UTC),
     )
     store.save(matrix, meta)
-    return "artifact:shot_matrix:v1"
+    return "artifact:shot_bible:shot_matrix:v1"
 
 
 def _save_constitution(store: ArtifactStore, project_id: str) -> str:
@@ -74,7 +74,7 @@ def _save_constitution(store: ArtifactStore, project_id: str) -> str:
         created_at=datetime.now(UTC),
     )
     store.save(constitution, meta)
-    return "artifact:film_constitution:v1"
+    return "artifact:constitution:film_constitution:v1"
 
 
 def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> None:
@@ -127,7 +127,7 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
 def test_generation_node_falls_back_without_services(tmp_path: Path) -> None:
     state: dict[str, object] = {
         "project_id": "p1",
-        "shot_matrix_ref": "artifact:shot_matrix:v1",
+        "shot_matrix_ref": "artifact:shot_bible:shot_matrix:v1",
         "current_phase": "gen_planning",
         "generation_requests": [{"shot_id": "shot_0001", "provider": "seedance", "model": "2.0"}],
     }

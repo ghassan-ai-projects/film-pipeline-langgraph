@@ -1,9 +1,15 @@
 # Storage Upgrade Plan — Complete Rewrite of Project Information Storage (v2)
 
-Status: approved working plan for the `storage-upgrade` branch. Revised after
+Status: completed plan for the `storage-upgrade` branch. Revised after
 adversarial critique (gap audit + traceability audit). Quality bar and end goal
-(§1) govern every phase. **The branch merges only after P6 (migration) ships** so
-existing projects are never stranded.
+(§1) govern every phase.
+
+> **Owner decision (post-P5):** the migration tooling (D8, P6) and all
+> backward-compatibility surfaces (legacy loaders, file fallbacks, the
+> `FILM_PIPELINE_PERSIST_ROOT` alias, legacy ref forms, legacy-root adoption)
+> were **removed** at the owner's request. Old-layout projects are not
+> readable by this version and no migrator ships. D8/P6 text below is kept
+> as design history only.
 
 ---
 
@@ -17,7 +23,7 @@ output are separated by construction; and the non-standard data structures (raw 
 state dumps, colon-mangled refs, four sidecar conventions) are replaced with boring,
 typed, efficient ones. All consumers — graph, MCP tools, review/validation/checkpoints/kb
 — keep working through a small, stable API, and existing projects have a tested
-migration path.
+  migration path (later removed by owner decision — see note above).
 
 **Quality bar (every phase, no exceptions).**
 
@@ -210,7 +216,8 @@ unmarked root refused; (d) suite-leaves-default-roots-clean; (e) no silent adopt
 Scripts under `scripts/` set `FILM_PIPELINE_STORAGE_ROOT` to a scratch dir (or take a
 flag); `make scratch-clean` removes it.
 
-**D8 — Migration old→new (copy-based, safe, complete).**
+**D8 — Migration old→new.** REMOVED BY OWNER DECISION — see P6 note above.
+    The text below is retained as design history.
 `storage_migrate` MCP tool + CLI sharing one pure module. **Full legacy-shape list:**
 flat CWD `projects/`; `.film-pipeline-run/<run>/` (incl. nested `artifacts/` +
 project dirs); `~/.film-pipeline/artifacts/`; `~/.film-pipeline/runtime/`; CLI run dirs
@@ -281,8 +288,8 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
 - **P1 — Roots, marker, separation.** D2, D7, scripts redirect, all five CI guard
   tests, GraphServices/StudioRuntime/manifest/executor/MCP-tool root sites fixed,
   adoption **write** path removed, conftest rework, deprecated
-  `FILM_PIPELINE_PERSIST_ROOT` alias. Old layout still fully functional (only root
-  resolution changed). Docs: root/env/marker section in operator docs +
+  `FILM_PIPELINE_PERSIST_ROOT` alias (later removed entirely by owner decision).
+  Old layout still fully functional at this phase (only root resolution changed). Docs: root/env/marker section in operator docs +
   `FILM_PIPELINE_STORAGE_ROOT` reference.
   Bar: guard (a) passes; constructing on a foreign unmarked root raises, a legacy-shaped
   root is marked in place (upgrade-on-open), a corrupt marker is refused; the
@@ -306,7 +313,8 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   config snapshots) but owns version numbering for immutable kinds;
   golden-layout test; parent-chain + status-transition tests; N−1 migration mechanism
   test; read-only **legacy loader** so old-layout projects stay listable/loadable
-  (tested) until P6 migrates them. Docs: artifact layout v2 sketch in artifact-store.md.
+  (tested). (Legacy loader later removed by owner decision.) Docs: artifact layout
+  v2 sketch in artifact-store.md.
 - **P3 — Refs, versions, consumers.** D5 across graph/mcp/generation/app; delete the 8
   parsers and 6 phase scanners; fix path-as-ref (save returns `ArtifactRef`); fix v1
   hardcodes; ledger becomes a mutable kind; `store._root` private access replaced by
@@ -344,7 +352,10 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   media still lives in the runtime tree); the asset-manifest filename stays
   `asset-manifest.json` in place (the physical move to `index/assets.json` is
   deferred — P6 shipped without it). Docs: browsing guide.
-- **P6 — Migration.** D8 complete migrator + committed old-layout fixtures (incl. a
+- **P6 — Migration.** OWNER DECISION (post-merge of P1–P5): the migration
+  tooling was removed entirely — old-layout projects are no longer readable,
+  and no migrator ships. D8 below is retained as history only.
+  ~~D8 complete migrator + committed old-layout fixtures (incl. a
   runtime-tree project, colon-id artifacts, path-shaped refs) + round-trip tests
   (dry-run writes nothing; migrate → verify passes; re-run no-op; quarantine; rollback
   documented); `storage_verify` function; operator migration guide.
@@ -371,8 +382,8 @@ Each phase's Done = its bar + quality bar §1 + `make ci-check` + reviewer sign-
   same phase it's replaced).
 - Import-time env constants are load-bearing for test ordering → converted to per-call
   resolution in P1 with the conftest rework in the same phase.
-- Old projects unreachable between P1 and P6 → read-only legacy loader (P2) keeps them
-  loadable; branch merges only after P6.
+- Old projects unreachable between P1 and P6 → read-only legacy loader (P2) kept them
+  loadable; later removed by owner decision (old projects unsupported).
 - `inspect_artifact` raw passthrough means payload-shape drift is externally visible →
   payload models untouched; MCP contract tests pin shapes.
 - Envelope generic + mypy strict → validated early in P2 (Pydantic v2 generics);

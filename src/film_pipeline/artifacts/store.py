@@ -7,8 +7,7 @@ On-disk layout per artifact (``<root>/<project>/artifacts/<NN-phase>/<id>/``):
 - ``versions/vNNN.json`` — immutable envelopes: provenance + payload + checksum
 
 A derived ``<root>/<project>/index/artifacts.json`` is regenerated on every
-write. Legacy (pre-upgrade) layouts are still readable read-only until the
-storage migration moves them forward. See ``documentation/storage-upgrade-plan.md``.
+write. See ``documentation/storage-upgrade-plan.md``.
 
 Mutable kinds (generation ledger) are the exception to versioning: they live
 as a single revision-counted ``<id>.json`` written through
@@ -302,31 +301,17 @@ class ArtifactStore:
     def load_ref(self, project_id: str, ref: str | ArtifactRef) -> dict[str, Any]:
         """Resolve an artifact ref to its payload.
 
-        Canonical (phase-bearing) refs load directly; legacy phase-less refs
-        search the project's phase directories in pipeline order.
+        Phase-bearing refs load directly from their phase.
         """
         parsed = ref if isinstance(ref, ArtifactRef) else ArtifactRef.from_string(ref)
-        if parsed.phase is not None:
-            try:
-                return self.load(
-                    project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
-                )
-            except FileNotFoundError:
-                raise FileNotFoundError(
-                    f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
-                ) from None
-        for phase, _dir in paths.PHASE_DIR_MAP.items():
-            version_path = self._version_path(project_id, phase, parsed.artifact_id, parsed.version)
-            if version_path.exists():
-                return self.load(project_id, FilmPhase(phase), parsed.artifact_id, parsed.version)
-            legacy = self._legacy_load_payload(
-                project_id, phase, parsed.artifact_id, parsed.version
+        try:
+            return self.load(
+                project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
             )
-            if legacy is not None:
-                return legacy
-        raise FileNotFoundError(
-            f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
-        )
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Artifact ref '{parsed.to_string()}' not found in project '{project_id}'."
+            ) from None
 
     def _safe_write_readme(self, project_id: str) -> None:
         """Best-effort README regeneration: a corrupt sibling record must
@@ -434,9 +419,6 @@ class ArtifactStore:
             return self.load_mutable(project_id, phase, artifact_id)
         path = self._version_path(project_id, phase.value, artifact_id, version)
         if not path.exists():
-            legacy = self._legacy_load_payload(project_id, phase.value, artifact_id, version)
-            if legacy is not None:
-                return legacy
             raise FileNotFoundError(f"Artifact version not found: {path}")
         return self._read_checked_envelope(path, artifact_id).payload
 
@@ -489,11 +471,6 @@ class ArtifactStore:
                 meta = _read_meta_file(meta_path)
                 if meta is not None:
                     results.append(_meta_record_to_metadata(meta))
-        for legacy in self._legacy_list(project_id, phase):
-            if not any(
-                r.artifact_id == legacy.artifact_id and r.phase == legacy.phase for r in results
-            ):
-                results.append(legacy)
         phase_order = {name: index for index, name in enumerate(paths.PHASE_DIR_MAP)}
         return sorted(
             results,
@@ -506,30 +483,13 @@ class ArtifactStore:
 
     def next_version(self, project_id: str, phase: str, artifact_id: str) -> int:
         """Next version number for an artifact: max(existing) + 1."""
-        for versions_dir in (
-            self._versions_dir(project_id, phase, artifact_id),
-            self._project_dir(project_id)
-            / paths.PHASE_DIR_MAP.get(phase, phase)
-            / artifact_id
-            / "versions",
-        ):
-            existing = _scan_versions(versions_dir)
-            if existing:
-                return max(existing) + 1
-        return 1
+        existing = _scan_versions(self._versions_dir(project_id, phase, artifact_id))
+        return max(existing) + 1 if existing else 1
 
     def latest_version(self, project_id: str, phase: str, artifact_id: str) -> int:
         """Version number of the current version (0 when the artifact is absent)."""
         meta = _read_meta_file(self._meta_path(project_id, phase, artifact_id))
-        if meta is not None:
-            return int(meta["current_version"])
-        legacy = _scan_versions(
-            self._project_dir(project_id)
-            / paths.PHASE_DIR_MAP.get(phase, phase)
-            / artifact_id
-            / "versions"
-        )
-        return max(legacy) if legacy else 0
+        return int(meta["current_version"]) if meta is not None else 0
 
     def load_metadata(
         self, project_id: str, phase: str, artifact_id: str, version: int
@@ -542,7 +502,9 @@ class ArtifactStore:
         """
         meta = _read_meta_file(self._meta_path(project_id, phase, artifact_id))
         if meta is None:
-            return self._legacy_load_metadata(project_id, phase, artifact_id, version)
+            raise FileNotFoundError(
+                f"Artifact metadata not found: {self._meta_path(project_id, phase, artifact_id)}"
+            )
         current_version = int(meta["current_version"])
         mutable_fields = {
             "approval_ref": meta.get("approval_ref"),
@@ -664,47 +626,6 @@ class ArtifactStore:
             self._record_deliverable(project_id, phase, artifact_id)
         self._safe_write_readme(project_id)
         return _meta_record_to_metadata(raw)
-
-    # --- Legacy (pre-upgrade) read-only support -------------------------------
-
-    def _legacy_load_payload(
-        self, project_id: str, phase: str, artifact_id: str, version: int
-    ) -> dict[str, Any] | None:
-        path = paths.artifact_path(project_id, phase, artifact_id, version, root=self._root)
-        if not path.exists():
-            return None
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-
-    def _legacy_load_metadata(
-        self, project_id: str, phase: str, artifact_id: str, version: int
-    ) -> ArtifactMetadata:
-        path = paths.artifact_path(project_id, phase, artifact_id, version, root=self._root)
-        sidecar = path.with_suffix(".meta.json")
-        if not sidecar.exists():
-            raise ValueError(f"Artifact metadata not found: {sidecar}")
-        return ArtifactMetadata.model_validate_json(sidecar.read_text(encoding="utf-8"))
-
-    def _legacy_list(self, project_id: str, phase: FilmPhase | None) -> list[ArtifactMetadata]:
-        base = self._project_dir(project_id)
-        if not base.is_dir():
-            return []
-        # Legacy sidecars live at <project>/<phase>/<id>/current.meta.json —
-        # two directory levels deep; the phase filter pins the first level.
-        pattern = (
-            "*/*/current.meta.json"
-            if phase is None
-            else f"{paths.PHASE_DIR_MAP.get(phase.value, phase.value)}/*/current.meta.json"
-        )
-        results: list[ArtifactMetadata] = []
-        for sidecar in sorted(base.glob(pattern)):
-            try:
-                results.append(
-                    ArtifactMetadata.model_validate_json(sidecar.read_text(encoding="utf-8"))
-                )
-            except ValueError:
-                continue
-        return results
 
     def _safe_spec(self, artifact_id: str) -> KindSpec:
         try:

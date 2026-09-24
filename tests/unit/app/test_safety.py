@@ -18,7 +18,6 @@ from film_pipeline.app.safety import (
 
 
 def test_persist_root_defaults_to_home_dot_film_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("FILM_PIPELINE_PERSIST_ROOT", raising=False)
     monkeypatch.delenv("FILM_PIPELINE_STORAGE_ROOT", raising=False)
     assert persist_root() == Path.home() / ".film-pipeline"
 
@@ -106,7 +105,6 @@ def test_safe_rmtree_deletes_safe_path(tmp_path: Path) -> None:
 def test_move_to_trash_archives_under_persist_root(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(tmp_path))
     source = tmp_path / "runs" / "project-1"
     source.mkdir(parents=True)
     (source / "state.json").touch()

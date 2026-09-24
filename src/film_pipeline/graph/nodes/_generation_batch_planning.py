@@ -37,7 +37,7 @@ def _approve_spend_with_ceiling(
     max_cost_usd = -1.0
     cost_estimate_ref = str(new_state.get("cost_estimate_ref", "") or "")
     if cost_estimate_ref:
-        ce_data = _load_artifact_data(new_state, services, cost_estimate_ref, ["gen_planning"])
+        ce_data = _load_artifact_data(new_state, services, cost_estimate_ref)
         if isinstance(ce_data, dict):
             raw_cost = ce_data.get("estimated_cost_usd")
             if raw_cost is not None:

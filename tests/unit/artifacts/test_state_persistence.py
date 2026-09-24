@@ -128,24 +128,8 @@ class TestProjectRecord:
         reloaded = json.loads(project_file.read_text())
         assert reloaded["custom_key"] == "kept"
 
-    def test_legacy_project_state_still_restores(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
-
-        runtime_root = tmp_path / "runtime"
-        legacy_dir = runtime_root / "legacy-p"
-        legacy_dir.mkdir(parents=True)
-        (legacy_dir / "project-state.json").write_text(
-            json.dumps({"project_id": "legacy-p", "title": "Legacy", "extra": 1})
-        )
-
-        rt = StudioRuntime(server_mode="mock", runtime_root=runtime_root)
-        assert rt.get_project("legacy-p") is not None
-        # First persistence upgrades the file to the typed record.
-        rt._persist_project_state("legacy-p")
-        assert (legacy_dir / "project.json").exists()
-
-    def test_typed_record_wins_when_both_files_exist(self, tmp_path: Path) -> None:
-        """A stale legacy file must never shadow the newer typed record."""
+    def test_stale_legacy_file_is_ignored(self, tmp_path: Path) -> None:
+        """`project-state.json` is never read; a stale copy cannot leak in."""
         from film_pipeline.app.runtime import StudioRuntime
 
         runtime_root = tmp_path / "runtime"
@@ -162,6 +146,7 @@ class TestProjectRecord:
                 }
             )
         )
+        # A stale legacy file sitting beside the typed record is never read.
         (project_dir / "project-state.json").write_text(
             json.dumps({"project_id": "p1", "title": "Old", "current_phase": "intake"})
         )
@@ -288,37 +273,15 @@ class TestOperatorFreshness:
         svc = OperatorService(runtime=rt)
 
         project_dir = rt.project_roots["p1"]
-        (project_dir / "project-state.json").write_text("{}")
         (project_dir / "project.json").write_text(json.dumps({"project_id": "p1"}))
-        # Both present: the typed record's mtime is the reported freshness,
-        # and a missing file yields "" rather than a fake timestamp.
+        # The typed record's mtime is the reported freshness; a missing file
+        # yields "" rather than a fake timestamp.
         reported = svc._last_updated_at("p1")
         assert reported != ""
         expected = datetime.fromtimestamp(
             (project_dir / "project.json").stat().st_mtime, tz=UTC
         ).isoformat()
         assert reported == expected
-
-    def test_freshness_falls_back_to_legacy_file(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
-        from film_pipeline.app.services.operator import OperatorService
-
-        runtime_root = tmp_path / "runtime"
-        rt = StudioRuntime(server_mode="mock", runtime_root=runtime_root)
-        rt.create_project("p1", title="Fresh")
-        svc = OperatorService(runtime=rt)
-
-        project_dir = rt.project_roots["p1"]
-        (project_dir / "project.json").unlink()
-        (project_dir / "project-state.json").write_text("{}")
-        reported = svc._last_updated_at("p1")
-        assert reported != ""
-        assert (
-            reported
-            == datetime.fromtimestamp(
-                (project_dir / "project-state.json").stat().st_mtime, tz=UTC
-            ).isoformat()
-        )
 
 
 class TestMediaLayout:

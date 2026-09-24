@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 #: Phase name → directory name. Single source of truth, derived from the
-#: pipeline phase vocabulary and shared with legacy-layout detection.
+#: pipeline phase vocabulary.
 PHASE_DIR_MAP: dict[str, str] = {
     "intake": "intake",
     "constitution": "01-vision",

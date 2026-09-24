@@ -155,9 +155,10 @@ def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     rt.create_project("persisted", title="Persisted Project")
     rt._persist_project_state("persisted")
 
-    discovered_root = projects_root / "discovered"
-    (discovered_root / "intake").mkdir(parents=True)
-    (discovered_root / "intake" / "idea.v001.json").write_text("{}")
+    discovered_root = projects_root / "discovered" / "artifacts" / "intake"
+    discovered_root.mkdir(parents=True)
+    (discovered_root / "idea").mkdir()
+    (discovered_root / "idea" / "meta.json").write_text("{}")
 
     fresh = StudioRuntime(
         server_mode="mock",

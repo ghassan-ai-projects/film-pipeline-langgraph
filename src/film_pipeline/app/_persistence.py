@@ -27,19 +27,13 @@ if TYPE_CHECKING:
     from film_pipeline.app.runtime import StudioRuntime
 
 PROJECT_FILENAME = "project.json"
-LEGACY_STATE_FILENAME = "project-state.json"  # read-only fallback
 GRAPH_STATE_RELPATH = "state/graph-state.json"
 CHECKPOINTS_RELPATH = "checkpoints/checkpoints.jsonl"
 AUDIT_RELPATH = "audit/audit-log.jsonl"
-LEGACY_CHECKPOINTS_FILENAME = "checkpoints.json"
-LEGACY_AUDIT_FILENAME = "audit-log.json"
 
-# Keep per-project git checkpoint repos small: media lives in the artifact
-# tree and is tracked by the asset manifest, not by checkpoint commits.
-_PROJECT_GITIGNORE = "media/\n07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
-# Pre-P5 projects carry the old template; it is a generated file, so it is
-# upgraded in place when unchanged.
-_LEGACY_PROJECT_GITIGNORE = "07-generated-assets/\nreferences/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
+# Keep per-project git checkpoint repos small: media lives under media/ and
+# is tracked by the asset manifest, not by checkpoint commits.
+_PROJECT_GITIGNORE = "media/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
 # Phase directories ordered newest-first; the first one holding any JSON
 # artifact decides a discovered project's current phase. Derived from the
@@ -67,20 +61,17 @@ def use_persistent_runtime() -> bool:
 
 
 def looks_like_project_dir(project_dir: Path) -> bool:
-    """Recognize both storage layouts: legacy sidecars and v2 artifact trees."""
-    if any(project_dir.rglob("*.meta.json")) or any(project_dir.rglob("*.v*.json")):
+    """Recognize a v2 project directory (typed record or artifact tree)."""
+    if (project_dir / "project.json").is_file():
         return True
     return any(project_dir.glob("artifacts/*/*/meta.json"))
 
 
 def latest_discovered_phase(project_dir: Path) -> str:
     for dirname, phase in _DISCOVERED_PHASE_ORDER:
-        for candidate in (
-            project_dir / dirname,
-            project_dir / "artifacts" / dirname,
-        ):
-            if candidate.exists() and any(candidate.rglob("*.json")):
-                return phase
+        candidate = project_dir / "artifacts" / dirname
+        if candidate.exists() and any(candidate.rglob("*.json")):
+            return phase
     return ""
 
 
@@ -107,7 +98,7 @@ def project_git_backend(project_root: Path) -> GitBackend:
     already_initialized = (project_root / ".git").exists()
     git = _GIT_BACKEND_TYPE.init_temp(project_root)
     gitignore = project_root / ".gitignore"
-    if not gitignore.exists() or gitignore.read_text(encoding="utf-8") == _LEGACY_PROJECT_GITIGNORE:
+    if not gitignore.exists():
         gitignore.write_text(_PROJECT_GITIGNORE)
     if not already_initialized:
         with contextlib.suppress(RuntimeError):
@@ -125,9 +116,8 @@ def artifact_root(rt: StudioRuntime) -> Path | None:
 def artifact_discovery_roots(rt: StudioRuntime) -> list[Path]:
     """Return artifact roots scanned for existing projects.
 
-    Only the configured storage root is scanned. Legacy CWD-relative
-    ``projects/`` and ``.film-pipeline-run/artifacts`` are never adopted at
-    runtime; old projects come forward through the storage migration command.
+    Only the configured storage root is scanned. Pre-upgrade roots are
+    never adopted at runtime.
     """
     current = artifact_root(rt)
     return [current] if current is not None else []
@@ -146,12 +136,10 @@ def _read_json_file(path: Path) -> Any | None:
 
 
 def _restore_state_project(rt: StudioRuntime, state_path: Path) -> bool:
-    """Load one persisted project record into the registries.
+    """Load one persisted project record (``project.json``) into the registries.
 
-    ``state_path`` is a ``project.json``; the legacy ``project-state.json``
-    name is accepted read-only until the storage migration. Returns whether
-    the project was restored. Projects already loaded in memory and hidden
-    directories are never overwritten.
+    Returns whether the project was restored. Projects already loaded in
+    memory and hidden directories are never overwritten.
     """
     project_root = state_path.parent
     project_id = project_root.name
@@ -259,21 +247,11 @@ def load_persisted_projects(rt: StudioRuntime) -> int:
     if root is None or not root.is_dir():
         return 0
 
-    # 1. Load projects that have a persisted runtime state file.
-    # Typed records win: restore every project.json first, then legacy
-    # project-state.json files only for projects without one (the stale
-    # legacy file must never shadow the newer record).
-    seen: set[Path] = set()
-    restored = 0
-    for state_path in sorted(root.glob(f"*/{PROJECT_FILENAME}")):
-        if _restore_state_project(rt, state_path):
-            restored += 1
-        seen.add(state_path.parent.resolve())
-    for state_path in sorted(root.glob(f"*/{LEGACY_STATE_FILENAME}")):
-        if state_path.parent.resolve() in seen:
-            continue
-        if _restore_state_project(rt, state_path):
-            restored += 1
+    # Load projects that have a persisted typed record.
+    restored = sum(
+        _restore_state_project(rt, state_path)
+        for state_path in sorted(root.glob(f"*/{PROJECT_FILENAME}"))
+    )
 
     # 2. Discover projects that only exist in artifact storage.
     known_ids = set(rt.projects.keys())
@@ -319,10 +297,6 @@ def _append_jsonl(path: Path, lines: list[str]) -> None:
 
 def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) -> None:
     items = _read_jsonl(project_root / CHECKPOINTS_RELPATH)
-    if not items:
-        # Legacy rewritten-array file, read-only until the storage migration.
-        legacy = _read_json_file(project_root / LEGACY_CHECKPOINTS_FILENAME)
-        items = legacy if isinstance(legacy, list) else []
     manager = rt.checkpoint_managers.get(project_id)
     for item in items:
         try:
@@ -336,9 +310,6 @@ def restore_checkpoints(rt: StudioRuntime, project_id: str, project_root: Path) 
 
 def restore_audit_events(rt: StudioRuntime, project_root: Path) -> None:
     events = _read_jsonl(project_root / AUDIT_RELPATH)
-    if not events:
-        legacy = _read_json_file(project_root / LEGACY_AUDIT_FILENAME)
-        events = legacy if isinstance(legacy, list) else []
     known_ids = {event.get("event_id") for event in rt.audit_events}
     for item in events:
         if isinstance(item, dict) and item.get("event_id") not in known_ids:

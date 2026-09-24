@@ -21,15 +21,14 @@ works through one small API (`ArtifactStore`).
 
 ## Storage root
 
-- Resolution: explicit argument > `FILM_PIPELINE_STORAGE_ROOT` > the
-  deprecated `FILM_PIPELINE_PERSIST_ROOT` alias (`<persist>/projects`) >
+- Resolution: explicit argument > `FILM_PIPELINE_STORAGE_ROOT` >
   `~/.film-pipeline/projects` for entry points. Library constructors
   require an explicit root — there is no implicit default.
 - Roots are marker-gated (`storage.json`: `layout_version`, `profile`,
   `schema_version`, `created_at`). Fresh directories auto-initialize;
-  legacy-shaped film-pipeline trees are marked in place (upgrade-on-open);
-  foreign pre-existing directories and corrupt markers are refused with
-  actionable errors.
+  pre-existing directories without a marker — including old
+  film-pipeline trees — and corrupt markers are refused with actionable
+  errors.
 
 ## Per-project layout
 
@@ -51,10 +50,6 @@ works through one small API (`ArtifactStore`).
 ├── .gitignore                      # media/ excluded from checkpoint commits
 └── .git/                           # per-project checkpoint repository
 ```
-
-Legacy (pre-upgrade) projects remain readable read-only; the
-`storage_migrate` tool (`python -m film_pipeline.artifacts.migration` or the
-MCP tool) copies them into this layout with verification and quarantine.
 
 ## The artifact envelope
 
@@ -102,8 +97,7 @@ Rules:
 ## Refs and reads
 
 - Refs are `ArtifactRef` values with canonical string form
-  `artifact:<phase>:<artifact_id>:v<N>`; the legacy phase-less form and
-  historical colon-bearing ids still parse.
+  `artifact:<phase>:<artifact_id>:v<N>`.
 - `store.save()` returns the canonical ref of the stored version.
 - `store.load_ref()` resolves any ref; `store.latest_version()` is the only
   "latest" idiom; unversioned reads return the current version, so repaired

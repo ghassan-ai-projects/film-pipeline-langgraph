@@ -163,8 +163,8 @@ def test_five_scene_film_shot_matrix_conforms_to_three_act_brief(
         # Deliberately conflicting legacy scope hints reproduce the project shape.
         "target_shot_count": 55,
         "constraints": {"target_shot_count": 55, "max_shot_count": 55},
-        "script_ref": "artifact:script:v1",
-        "artifact_refs": ["artifact:script:v1"],
+        "script_ref": "artifact:script:script:v1",
+        "artifact_refs": ["artifact:script:script:v1"],
         "resolved_config": {"studio": {"require_human_approval": False}},
         "_orchestrator__execution_brief": None,
         SERVICES_KEY: services,

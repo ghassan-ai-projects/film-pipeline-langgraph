@@ -58,7 +58,7 @@ def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> 
     from film_pipeline.schemas._base import FilmPhase
 
     parsed = _parse_artifact_ref(matrix_ref)
-    phase = FilmPhase(parsed.phase) if parsed.phase else FilmPhase.SHOT_BIBLE
+    phase = FilmPhase(parsed.phase)
     result: dict[str, Any] = store.load(project_id, phase, parsed.artifact_id, parsed.version)
     return result
 
@@ -69,22 +69,7 @@ def _load_patch(store: _MatrixStore, project_id: str, patch_ref: str) -> MatrixP
     from film_pipeline.schemas.matrix_patch import MatrixPatch
 
     parsed = _parse_artifact_ref(patch_ref)
-    if parsed.phase is not None:
-        data: dict[str, Any] = store.load(
-            project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
-        )
-        return MatrixPatch(**data)
-
-    for phase in (
-        FilmPhase.GEN_PLANNING,
-        FilmPhase.GENERATION,
-        FilmPhase.QC,
-        FilmPhase.POST,
-    ):
-        try:
-            data = store.load(project_id, phase, parsed.artifact_id, parsed.version)
-            return MatrixPatch(**data)
-        except (FileNotFoundError, ValueError, TypeError):
-            continue
-
-    raise FileNotFoundError(f"Patch {patch_ref} not found in any phase")
+    data: dict[str, Any] = store.load(
+        project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+    )
+    return MatrixPatch(**data)

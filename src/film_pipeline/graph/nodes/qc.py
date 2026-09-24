@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from film_pipeline.graph.nodes._agent import (
     _propagate_side_effects,
@@ -20,9 +20,6 @@ from film_pipeline.graph.nodes._shared import (
     _is_new_ref,
     _phase_gate_updates,
 )
-
-if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
 
 _ValidatorRunner = Callable[
     [dict[str, Any], list[dict[str, Any]], dict[str, Any], Any],
@@ -129,24 +126,9 @@ def _run_validators(state: dict[str, Any]) -> None:
     if services is None:
         return
 
-    from film_pipeline.schemas._base import FilmPhase
-
     phase = str(state.get("current_phase", ""))
 
-    if phase == "qc":
-        load_phases: list[FilmPhase] = [
-            FilmPhase("intake"),
-            FilmPhase("constitution"),
-            FilmPhase("development"),
-            FilmPhase("script"),
-            FilmPhase("visual_dev"),
-            FilmPhase("shot_bible"),
-            FilmPhase("gen_planning"),
-        ]
-    else:
-        load_phases = [FilmPhase(phase)]
-
-    artifacts = _collect_artifacts(state, services, load_phases)
+    artifacts = _collect_artifacts(state, services)
 
     issues: list[dict[str, Any]] = list(state.get("issues", []))
     _execute_phase_validators(state, artifacts, issues, services)
@@ -155,16 +137,9 @@ def _run_validators(state: dict[str, Any]) -> None:
     _build_consensus_if_needed(state, phase)
 
 
-def _collect_artifacts(
-    state: dict[str, Any],
-    services: Any,
-    load_phases: list[FilmPhase],
-) -> dict[str, Any]:
-    """Load artifacts referenced by ``state["artifact_refs"]``.
+def _collect_artifacts(state: dict[str, Any], services: Any) -> dict[str, Any]:
+    """Load artifacts referenced by ``state["artifact_refs"]`` from their phases."""
 
-    Phase-bearing refs load directly from their phase; legacy phase-less refs
-    are scanned across ``load_phases`` in order.
-    """
     from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
 
@@ -177,22 +152,12 @@ def _collect_artifacts(
             parsed = ArtifactRef.from_string(ref_str)
         except ValueError:
             continue
-        if parsed.phase is not None:
-            try:
-                artifact_data[parsed.artifact_id] = store.load(
-                    project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
-                )
-            except (FileNotFoundError, ValueError):
-                continue
+        try:
+            artifact_data[parsed.artifact_id] = store.load(
+                project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version
+            )
+        except (FileNotFoundError, ValueError):
             continue
-        for fp in load_phases:
-            try:
-                artifact_data[parsed.artifact_id] = store.load(
-                    project_id, fp, parsed.artifact_id, parsed.version
-                )
-                break
-            except (FileNotFoundError, ValueError):
-                continue
     return artifact_data
 
 

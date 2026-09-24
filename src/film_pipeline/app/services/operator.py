@@ -86,10 +86,7 @@ class OperatorService:
         if root is None:
             return ""
         try:
-            project_file = root / "project.json"
-            if not project_file.exists():
-                project_file = root / "project-state.json"  # legacy fallback
-            mtime = project_file.stat().st_mtime
+            mtime = (root / "project.json").stat().st_mtime
         except OSError:
             return ""
         return datetime.fromtimestamp(mtime, tz=UTC).isoformat()

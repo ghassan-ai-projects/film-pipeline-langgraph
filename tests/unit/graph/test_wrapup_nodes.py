@@ -34,8 +34,8 @@ def _services(tmp_path: Path) -> GraphServices:
 def _post_state(services: GraphServices) -> dict[str, Any]:
     return {
         "project_id": "p1",
-        "constitution_ref": "artifact:film_constitution:v1",
-        "artifact_refs": ["artifact:treatment:v1"],
+        "constitution_ref": "artifact:constitution:film_constitution:v1",
+        "artifact_refs": ["artifact:development:treatment:v1"],
         SERVICES_KEY: services,
     }
 
@@ -83,7 +83,7 @@ class TestPostNodeArtifactPersistence:
 
         # Provenance: built_from captures the upstream refs from the input state.
         meta = services.artifact_store.load_metadata("p1", "post", "assembly_manifest", 1)
-        assert meta.built_from["film_constitution"] == "artifact:film_constitution:v1"
+        assert meta.built_from["film_constitution"] == "artifact:constitution:film_constitution:v1"
 
     def test_rerun_bumps_manifest_version_instead_of_overwriting(self, tmp_path: Path) -> None:
         services = _services(tmp_path)
@@ -142,7 +142,7 @@ class TestPostNodeAgentFailurePropagation:
     def test_without_services_returns_only_gate_updates(self) -> None:
         state: dict[str, Any] = {
             "project_id": "p1",
-            "constitution_ref": "artifact:film_constitution:v1",
+            "constitution_ref": "artifact:constitution:film_constitution:v1",
         }
 
         updates = post_node(state)
@@ -268,7 +268,7 @@ class TestConsistencyCheckNode:
 
         state: dict[str, Any] = {
             "project_id": "p1",
-            "constitution_ref": "artifact:film_constitution:v1",
+            "constitution_ref": "artifact:constitution:film_constitution:v1",
             SERVICES_KEY: services,
         }
         manifest_ref = post_node(state)["assembly_manifest_ref"]
@@ -278,7 +278,9 @@ class TestConsistencyCheckNode:
             "artifact_refs": [manifest_ref],
             SERVICES_KEY: services,
         }
-        set_approved_ref(check_state, "film_constitution", "artifact:film_constitution:v2")
+        set_approved_ref(
+            check_state, "film_constitution", "artifact:constitution:film_constitution:v2"
+        )
 
         updates = consistency_check_node(check_state)
 
@@ -287,8 +289,8 @@ class TestConsistencyCheckNode:
         warning = warnings[0]
         assert warning["artifact_id"] == "assembly_manifest"
         assert warning["dependency_id"] == "film_constitution"
-        assert warning["built_with_version"] == "artifact:film_constitution:v1"
-        assert warning["current_version"] == "artifact:film_constitution:v2"
+        assert warning["built_with_version"] == "artifact:constitution:film_constitution:v1"
+        assert warning["current_version"] == "artifact:constitution:film_constitution:v2"
         assert warning["severity"] == "stale"
 
     def test_silent_when_all_dependencies_current(self, tmp_path: Path) -> None:
@@ -297,7 +299,7 @@ class TestConsistencyCheckNode:
 
         state: dict[str, Any] = {
             "project_id": "p1",
-            "constitution_ref": "artifact:film_constitution:v1",
+            "constitution_ref": "artifact:constitution:film_constitution:v1",
             SERVICES_KEY: services,
         }
         manifest_ref = post_node(state)["assembly_manifest_ref"]
@@ -307,6 +309,8 @@ class TestConsistencyCheckNode:
             "artifact_refs": [manifest_ref],
             SERVICES_KEY: services,
         }
-        set_approved_ref(check_state, "film_constitution", "artifact:film_constitution:v1")
+        set_approved_ref(
+            check_state, "film_constitution", "artifact:constitution:film_constitution:v1"
+        )
 
         assert consistency_check_node(check_state) == {}

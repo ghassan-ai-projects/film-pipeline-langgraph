@@ -67,6 +67,4 @@ def _id_stem(artifact_ref: str) -> str:
         parsed = ArtifactRef.from_string(artifact_ref)
     except ValueError:
         return artifact_ref
-    if parsed.phase:
-        return f"artifact:{parsed.phase}:{parsed.artifact_id}"
-    return f"artifact:{parsed.artifact_id}"
+    return f"artifact:{parsed.phase}:{parsed.artifact_id}"

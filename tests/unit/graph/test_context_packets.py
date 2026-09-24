@@ -58,7 +58,7 @@ def test_development_context_loads_constitution_summary() -> None:
     rendered = cp.build_development_context(
         {
             "project_id": "p1",
-            "constitution_ref": "artifact:constitution:v1",
+            "constitution_ref": "artifact:constitution:constitution:v1",
             "target_runtime_seconds": 240,
             "film_type": "short",
         },
@@ -81,8 +81,8 @@ def test_script_context_summarizes_treatment_and_scene_count() -> None:
     rendered = cp.build_script_context(
         {
             "project_id": "p1",
-            "treatment_ref": "artifact:treatment:v1",
-            "scene_list_ref": "artifact:scene_list:v1",
+            "treatment_ref": "artifact:development:treatment:v1",
+            "scene_list_ref": "artifact:development:scene_list:v1",
         },
         services,
     )
@@ -106,8 +106,8 @@ def test_visual_dev_context_summarizes_style_and_script_count() -> None:
     rendered = cp.build_visual_dev_context(
         {
             "project_id": "p1",
-            "constitution_ref": "artifact:constitution:v1",
-            "script_ref": "artifact:script:v1",
+            "constitution_ref": "artifact:constitution:constitution:v1",
+            "script_ref": "artifact:script:script:v1",
             "target_runtime_seconds": 180,
             "film_type": "micro",
         },
@@ -143,8 +143,8 @@ def test_shot_bible_context_summarizes_execution_brief_and_script() -> None:
     rendered = cp.build_shot_bible_context(
         {
             "project_id": "p1",
-            "execution_brief_ref": "artifact:execution_brief:v1",
-            "script_ref": "artifact:script:v1",
+            "execution_brief_ref": "artifact:shot_bible:execution_brief:v1",
+            "script_ref": "artifact:script:script:v1",
         },
         services,
     )
@@ -171,7 +171,7 @@ def test_gen_planning_context_summarizes_matrix_rows_and_budget() -> None:
     rendered = cp.build_gen_planning_context(
         {
             "project_id": "p1",
-            "shot_matrix_ref": "artifact:shot_matrix:v1",
+            "shot_matrix_ref": "artifact:shot_bible:shot_matrix:v1",
             "budget_snapshot": {"cap_usd": 42},
         },
         services,

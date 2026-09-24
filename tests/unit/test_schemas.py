@@ -576,14 +576,14 @@ def test_assembly_manifest_required() -> None:
 
 def test_artifact_metadata_invariants() -> None:
     m = ArtifactMetadata(
-        artifact_id="artifact:script:S001:v1",
+        artifact_id="script_S001",
         artifact_type=ArtifactType.SCRIPT,
         project_id="p",
         phase=FilmPhase.SCRIPT,
         version=1,
         created_by="screenwriter-agent",
         created_at=_ts(),
-        parents=[ArtifactRef(artifact_id="artifact:scene-intent:S001:v1", version=1)],
+        parents=[ArtifactRef(artifact_id="scene_intent_S001", version=1, phase="script")],
     )
     assert m.status == ArtifactStatus.CANDIDATE
 

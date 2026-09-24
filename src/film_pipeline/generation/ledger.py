@@ -57,12 +57,7 @@ class GenerationLedgerManager:
             data = self._store.load_mutable(project_id, FilmPhase.GENERATION, LEDGER_ARTIFACT_ID)
             return GenerationLedger.model_validate(data)
         except FileNotFoundError:
-            # Pre-P3 ledgers lived as a (rewritten) versioned artifact.
-            try:
-                data = self._store.load(project_id, FilmPhase.GENERATION, LEDGER_ARTIFACT_ID, 1)
-                return GenerationLedger.model_validate(data)
-            except FileNotFoundError:
-                return self.create(project_id)
+            return self.create(project_id)
 
     # ── plan ─────────────────────────────────────────────────────────────
 
