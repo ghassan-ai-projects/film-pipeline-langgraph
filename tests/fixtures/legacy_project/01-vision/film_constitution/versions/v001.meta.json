@@ -1,0 +1,18 @@
+{
+  "approval_ref": null,
+  "artifact_id": "film_constitution",
+  "artifact_type": "film_constitution",
+  "built_from": {},
+  "change_summary": "",
+  "created_at": "2026-06-01T12:00:00Z",
+  "created_by": "constitution-agent",
+  "kb_context_ref": null,
+  "parents": [],
+  "phase": "constitution",
+  "project_id": "legacy-p",
+  "reviewed_by": [],
+  "schema_version": "v1",
+  "status": "candidate",
+  "validation_refs": [],
+  "version": 1
+}

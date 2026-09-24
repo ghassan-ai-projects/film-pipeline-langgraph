@@ -347,7 +347,16 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
 - **P6 — Migration.** D8 complete migrator + committed old-layout fixtures (incl. a
   runtime-tree project, colon-id artifacts, path-shaped refs) + round-trip tests
   (dry-run writes nothing; migrate → verify passes; re-run no-op; quarantine; rollback
-  documented); `storage_verify` function; operator migration guide. **Unblocks merge.**
+  documented); `storage_verify` function; operator migration guide.
+  Amendments: the migrator physically re-layouts legacy artifact trees into
+  `artifacts/<phase>/<id>/` v2 envelopes (the legacy read-path stays for
+  pre-migration use only); legacy `project-state.json` becomes the typed
+  `project.json`; colon-id directories are renamed; P2-era versioned ledgers
+  become revision-counted mutable files; path-shaped refs in records are
+  blanked and recorded under `migrated_dead_refs`; the migration ledger is a
+  sibling of the storage root (`migration-log.jsonl`); the InMemoryGitBackend
+  honors `.gitignore` and `HEAD` (needed by the checkpoint-media test).
+  **Unblocks merge.**
 - **P7 — Dead code removal + docs + version.** Delete `artifacts/versioning.py`,
   `artifacts/index.py`, observability scaffolding, unused path helpers, `.fleet/`
   debris; full rewrite of `documentation/artifact-store.md` + blueprint storage

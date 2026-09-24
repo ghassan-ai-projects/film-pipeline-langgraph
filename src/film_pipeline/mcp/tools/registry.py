@@ -95,6 +95,7 @@ from .state import (
     get_next_actions,
     get_orchestrator_summary,
 )
+from .storage import storage_migrate
 from .validation import get_validation_report, list_validation_issues, run_validation
 
 
@@ -302,6 +303,14 @@ def register_all_tools(registry: ToolRegistry) -> None:
         "rollback_artifact",
         ToolGroup.CHECKPOINT,
         rollback_artifact,
+        mutates=True,
+        confirm=True,
+    )
+    _register(
+        registry,
+        "storage_migrate",
+        ToolGroup.ARTIFACT,
+        storage_migrate,
         mutates=True,
         confirm=True,
     )

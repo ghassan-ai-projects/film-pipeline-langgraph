@@ -70,6 +70,43 @@ actionable error instead of being silently adopted. Never point
 Developer scripts under `scripts/` write to `.scratch/` (never the repo or
 your home directory); `make scratch-clean` removes it.
 
+## Migrating legacy projects (storage upgrade)
+
+Projects created before the storage upgrade keep working read-only, but to
+make them fully current (typed records, envelopes, deliverables, mutable
+ledger) run the migration once:
+
+```bash
+# 1. Plan only — prints what would move, writes nothing:
+uv run python -m film_pipeline.artifacts.migration \
+  --source ~/old-projects-root --target ~/.film-pipeline/projects --dry-run
+
+# 2. Run it for real (--confirm is required):
+uv run python -m film_pipeline.artifacts.migration \
+  --source ~/old-projects-root --target ~/.film-pipeline/projects --confirm
+```
+
+(OpenClaw agents can call the same logic as the `storage_migrate` MCP tool;
+it refuses to run without `confirmed=True`.)
+
+What it does:
+
+- **Copies, never deletes.** Each project is copied into the target root,
+  every copied file re-hashed for verification, and only then is the source
+  renamed to `<name>.migrated-<timestamp>` (recoverable by moving it back).
+- **Converts as it goes:** `project-state.json` becomes the typed
+  `project.json`; legacy artifacts become v2 envelopes under
+  `artifacts/<phase>/<artifact_id>/`; colon-bearing artifact directory ids
+  are sanitized; the rewritten generation ledger becomes the revision-counted
+  `generation_ledger.json`; `.gitignore` gains the `media/` rule;
+  unresolvable path-shaped refs in the record are blanked and logged under
+  `migrated_dead_refs`.
+- **Idempotent:** re-runs skip already-migrated projects; every action is
+  recorded in `migration-log.jsonl` next to the storage root.
+
+Run `storage_verify` (or re-run the dry-run) afterwards if you want a layout
+report.
+
 ### Per-project state files
 
 Each project directory holds one human entry point and quarantined machine
