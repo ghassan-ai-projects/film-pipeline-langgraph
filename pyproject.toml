@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "film-pipeline"
-version = "0.2.0"
+version = "0.3.0"
 description = "LangGraph-based film creation pipeline — a studio operating system with MCP-first control, many expert agents, human review gates, and typed state."
 readme = "README.md"
 requires-python = ">=3.12"
