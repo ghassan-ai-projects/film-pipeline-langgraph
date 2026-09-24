@@ -19,7 +19,6 @@ What this means:
 - every artifact stores a real `kb_context_ref`; checkpoints are persisted
 - rollback requires confirmation and produces invalidation artifacts
 - mid-project profile changes are versioned and require human approval
-- the TUI can run through the MCP-client gateway, sharing the same tool surface as OpenClaw
 - E2E scenarios for idea-to-validated-clips and operator recovery paths pass
 
 The remaining gaps are in live-provider execution, full rendered delivery, and deeper multi-model parallelism — these are outside the current validated-clips acceptance target.
@@ -161,7 +160,6 @@ Current evidence:
 - [x] `documentation/runbook-first-film.md`
 - [x] `documentation/release-process.md`
 - [x] `documentation/demo-guide.md`
-- [x] TUI MCP-client gateway: `MCPStudioGateway`
 
 ### Not Yet Accepted
 

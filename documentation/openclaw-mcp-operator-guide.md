@@ -764,50 +764,6 @@ List comments:
 }
 ```
 
-## TUI As MCP Consumer
-
-The terminal UI can run through the same MCP tool surface as OpenClaw.
-
-- Default: `MCPStudioGateway` spawns the MCP server over stdio JSON-RPC
-- Legacy: set `FILM_PIPELINE_TUI_GATEWAY=inprocess` to use the in-process service gateway
-
-```bash
-# Default — TUI calls MCP tools
-FILM_PIPELINE_TUI_GATEWAY=mcp uv run --python 3.12 --group dev python -m film_pipeline.tui.app
-
-# Legacy — TUI calls services directly
-FILM_PIPELINE_TUI_GATEWAY=inprocess uv run --python 3.12 --group dev python -m film_pipeline.tui.app
-```
-
-When using the MCP gateway, every TUI action (create project, submit idea,
-approve phase, add comment, list checkpoints, etc.) is dispatched through the
-same `tools/call` JSON-RPC endpoint that OpenClaw uses.
-
-### Studio Interface
-
-The TUI is organized around the film pipeline itself:
-
-- **Project gallery** — the home screen lists projects; create a new film or open
-  an existing one.
-- **Studio workspace** — three-pane layout for the active project:
-  - **Pipeline rail**: stages from intake through delivery with status glyphs;
-    the current stage is highlighted and stages with blocking issues show `!`.
-  - **Content tabs**: `Scenes`, `Artifacts`, `Assets`, `Issues` (keys `1`–`4`);
-    the most useful tab is selected automatically for the current stage.
-  - **Reader pane**: the selected scene, artifact, or asset rendered as
-    readable, screenplay-style text — review the film without an external
-    editor.
-- **Action bar**: shows only the actions that are eligible right now (validate,
-  approve phase, request revision, generate) as clickable buttons; no commands
-  need to be memorized.
-- **Command palette** — press `/` to toggle a power-user palette for commands
-  such as `project <id>`, `approve`, `validate`, `revise <note>`, `assets`, and
-  `home`.
-- **Keyboard shortcuts** — `n` creates a project, `a` approves the current
-  phase, `r` requests a revision, `v` runs validation, `g` runs generation,
-  `o` opens the selected asset, `f5` refreshes, `escape` returns home, and `q`
-  quits.
-
 ## What Is Resolved (as of 2026-06-29)
 
 These previously-missing items are now implemented:
@@ -824,7 +780,6 @@ These previously-missing items are now implemented:
 - **Expanded orchestrator summary**: `get_orchestrator_summary` includes route reason, candidate/approved refs, pending revisions, review cycles, provider health, budget, and failure status
 - **Versioned profile changes**: `propose_profile_change` and `approve_profile_change` implement approved mid-project profile changes with configuration diffing and downstream invalidation
 - **Operator comments over MCP**: `add_operator_comment` and `list_operator_comments` persist target-scoped notes through the MCP surface
-- **TUI MCP gateway**: `MCPStudioGateway` lets the terminal UI consume the same MCP tool surface as OpenClaw
 
 ## What Is Still Missing
 

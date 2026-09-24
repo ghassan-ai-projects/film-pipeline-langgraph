@@ -24,10 +24,10 @@ Scores are on a `0-10` scale.
 | Code quality | 9/10 | 10/10 | 9/10 | `make ci-check` green; ruff, mypy, tests, coverage, build, product-gate all pass |
 | Architecture alignment | 8/10 | 9/10 | 10/10 | MCP-first, dynamic routing, human gates, and artifact lineage all implemented |
 | Test coverage (lines) | 9/10 | 10/10 | 9/10 | `90.05%`, above threshold |
-| Test coverage (behavior) | 4/10 | 8/10 | 10/10 | Critical MCP behaviors, rollback, profile changes, and TUI MCP gateway are behavior-tested |
+| Test coverage (behavior) | 4/10 | 8/10 | 10/10 | Critical MCP behaviors, rollback, and profile changes are behavior-tested (TUI MCP gateway removed from product 2026-09) |
 | E2E acceptance | 2/10 | 9/10 | 10/10 | All 10 E2E scenarios pass; happy path and recovery paths are proven |
-| MCP wiring | 3/10 | 9/10 | 10/10 | Critical path tools are real, confirmation-enforced, and share the TUI/OpenClaw surface |
-| Productization | 2/10 | 8/10 | 10/10 | Docs updated, operator tools exist, TUI uses MCP gateway |
+| MCP wiring | 3/10 | 9/10 | 10/10 | Critical path tools are real, confirmation-enforced, and share the OpenClaw surface (TUI removed 2026-09) |
+| Productization | 2/10 | 8/10 | 10/10 | Docs updated, operator tools exist (TUI removed 2026-09) |
 | Agent execution | 3/10 | 7/10 | 10/10 | Agents have implementations, templates, and profiles; real-mode artifact depth remains partial |
 | Validation execution | 3/10 | 8/10 | 10/10 | Four-status contract implemented and governs generation readiness |
 | Provider system | 9/10 | 8/10 | 9/10 | Mock provider is strong; real-provider execution is wired but not fully proven |
@@ -41,7 +41,7 @@ Scores are on a `0-10` scale.
 
 **Final validator target:** `10/10`
 
-**Current summary:** The project is a working, tested, MCP-first implementation for the validated-clips workflow in mock/operator-review mode. Code quality gates are green, all E2E scenarios pass, and the TUI shares the same MCP tool surface as OpenClaw. Remaining work is concentrated in live-provider execution proof and full rendered delivery.
+**Current summary:** The project is a working, tested, MCP-first implementation for the validated-clips workflow in mock/operator-review mode. Code quality gates are green, all E2E scenarios pass, and MCP tools share the same tool surface for OpenClaw clients (the terminal TUI was removed from the product in 2026-09). Remaining work is concentrated in live-provider execution proof and full rendered delivery.
 
 ---
 
@@ -57,7 +57,7 @@ Scores are on a `0-10` scale.
 - Every artifact stores a real `kb_context_ref`
 - Rollback requires confirmation and produces invalidation/rollback artifacts
 - Mid-project profile changes are versioned and approved
-- TUI can run through the MCP-client gateway (`MCPStudioGateway`)
+- TUI MCP-client gateway (`MCPStudioGateway`) — removed from the product (2026-09); the MCP surface remains available to OpenClaw clients
 - Operator comment tools (`add_operator_comment`, `list_operator_comments`) exposed over MCP
 - Profile change tools (`propose_profile_change`, `approve_profile_change`) exposed over MCP
 

@@ -26,18 +26,6 @@ Run the pipeline headlessly from an idea file:
 uv run film-pipeline-run my-idea.txt
 ```
 
-Run the terminal operator console:
-
-```bash
-uv run film-pipeline-tui
-```
-
-Equivalent module entry point:
-
-```bash
-uv run python -m film_pipeline.tui.app
-```
-
 ## Current Status
 
 The repository implements an 8-phase architecture optimization across the full
@@ -98,57 +86,7 @@ pytest -m integration  # integration
 make build
 ```
 
-### Film Studio TUI
-
-`film-pipeline-tui` is the terminal interface for making a film end to end —
-create a project, review every scene, run generation, and reach delivery
-without leaving the terminal.
-
-```bash
-uv run film-pipeline-tui             # start the studio
-uv run film-pipeline-tui --create    # jump straight into project creation
-uv run python -m film_pipeline.tui.app   # equivalent module entry point
-```
-
-The default gateway is **in-process** (shared application service layer). It does
-not require network access or provider keys for mock-mode project creation. To
-use the MCP stdio gateway instead, set `FILM_PIPELINE_TUI_GATEWAY=mcp`.
-
-#### How it works
-
-The studio has two screens:
-
-- **Project gallery** — pick a project or create a new one (`n`).
-- **Studio workspace** — one screen with three panes:
-  - **Pipeline rail** (left): all eleven stages with status glyphs
-    (`✔` done, `▸` current, `·` upcoming, `!` blocking issues). Click a stage
-    to browse its artifacts.
-  - **Content tabs** (center): `Scenes`, `Artifacts`, `Assets`, `Issues`
-    (keys `1`–`4`). The most useful tab is selected automatically for the
-    current stage — scenes during scripting, assets during generation.
-  - **Reader** (right): whatever you select — a scene, an artifact, an asset —
-    renders here as readable, screenplay-style text. Review the whole script
-    scene by scene without an external editor.
-
-An action bar under the workspace shows only the actions that are eligible
-right now (approve, request revision, validate, generate), and a one-line
-status bar reports what happened last.
-
-Typical flow: `n` → fill in id/title/idea → `Create` (or `F2`) → review each
-stage's output in the reader → `a` to approve (or `r` to request a revision
-with a note) → `g` when you reach generation → `o` on an asset to open the
-rendered clip → approve through QC/post/delivery. Done.
-
-Keyboard shortcuts: `n` new project, `a` approve, `r` request revision,
-`v` validate, `g` generate, `1`–`4` switch content tabs, `o` open selected
-asset, `f5` refresh, `escape` home, `q` quit. Press `/` for the command
-palette (`project <id>`, `stage <name>`, `revise <note>`, `assets`, `home`,
-`help`).
-
-State is persisted to `~/.film-pipeline/` (runtime state and graph checkpoints)
-and `projects/` (artifacts), so existing projects are loaded when the TUI starts.
-
-#### Real-provider mode
+### Real-provider mode
 
 Real mode uses Seedance via OpenRouter and Veo/Imagen via Google. Configure keys
 in a local `.env` file or environment:
@@ -180,10 +118,10 @@ model_profiles:
     primary: zai/glm-5.3-flash
 ```
 
-Then launch in real mode:
+Then launch the headless CLI in real mode:
 
 ```bash
-uv run film-pipeline-tui --real
+uv run film-pipeline-run my-idea.md --runtime-mode real --confirm-real
 ```
 
 To verify the optional z.ai adapter without running media generation:

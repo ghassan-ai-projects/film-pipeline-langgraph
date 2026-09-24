@@ -87,7 +87,7 @@ projects/<project_slug>/<phase>/<artifact_id>/
 
 Rules:
 
-- `current.json` is the machine-readable artifact body the TUI and MCP tools inspect by default.
+- `current.json` is the machine-readable artifact body the MCP tools inspect by default.
 - `current.md` is a generated human-readable review view for filesystem inspection.
 - `current.meta.json` contains the active artifact metadata.
 - `versions/` contains immutable historical JSON bodies and metadata.
@@ -111,7 +111,7 @@ projects/<project_slug>/07-generated-assets/scenes/<scene_id>/<shot_id>/
 ```
 
 The root `asset-manifest.json` remains the machine-readable table of assets. Each entry should
-include `scene_id`, `shot_id`, `kind`, `take`, `active`, and `path` so the TUI can show actual
+include `scene_id`, `shot_id`, `kind`, `take`, `active`, and `path` so the MCP tools can show actual
 files available for review.
 
 #### Tests
