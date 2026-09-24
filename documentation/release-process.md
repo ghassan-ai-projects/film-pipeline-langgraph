@@ -6,7 +6,9 @@
 - Bump version before release:
   - Patch: bug fixes, doc updates, internal changes (e.g., `0.2.0` → `0.2.1`)
   - Minor: new features, unstubbed tools, phase completions (e.g., `0.2.0` → `0.3.0`)
-  - Major: breaking API changes, provider contract changes (e.g., `0.x` → `1.0`)
+  - Major: breaking API changes. Pre-1.0 exception: breaking changes may ship
+  in minor bumps (precedent: 0.3.0 TUI removal; 0.4.0 storage layout v2),
+  each documented in the release notes., provider contract changes (e.g., `0.x` → `1.0`)
 - Update `version` in `pyproject.toml` and commit as `chore: bump version to X.Y.Z`
 
 ## Pre-Release Checklist

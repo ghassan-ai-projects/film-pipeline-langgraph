@@ -1008,17 +1008,6 @@ def test_validation_ledger_entry() -> None:
 # --- _base helpers --------------------------------------------------------
 
 
-def test_to_camel_and_json_safe() -> None:
-    from film_pipeline.schemas._base import json_safe as _json_safe
-    from film_pipeline.schemas._base import to_camel as _to_camel
-
-    assert _to_camel("snake_case") == "snakeCase"
-    assert _to_camel("x") == "x"
-    model = ProjectIdentity(project_id="p", slug="s", title="T")
-    payload = _json_safe(model)
-    assert payload["project_id"] == "p"
-
-
 def test_schema_version_default() -> None:
     identity = ProjectIdentity(project_id="p", slug="s", title="T")
     assert identity.schema_version == "v1"

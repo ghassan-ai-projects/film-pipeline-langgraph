@@ -30,9 +30,6 @@ class AssetManifest(BaseModel):
     project_id: str
     entries: list[AssetEntry] = Field(default_factory=list)
 
-    def add(self, entry: AssetEntry) -> None:
-        self.entries.append(entry)
-
     def add_take(self, entry: AssetEntry) -> None:
         """Add a take and enforce the invariant: one active clip per shot.
 

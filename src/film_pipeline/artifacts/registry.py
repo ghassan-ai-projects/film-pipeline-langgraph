@@ -74,7 +74,6 @@ class KindSpec:
     schema_version: int = 1
     payload_model: type[BaseModel] | None = None  # None: payload stays a plain dict
     mutable: bool = False  # mutable kinds rewrite a single file instead of versioning
-    renderer: Callable[[dict[str, Any]], str] | None = None  # typed view; P5
 
 
 class ArtifactKindRegistry:

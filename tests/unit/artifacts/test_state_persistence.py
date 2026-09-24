@@ -426,7 +426,7 @@ class TestMediaLayout:
             shot_id="shot_0001",
             take=1,
         )
-        manifest.add(first)
+        manifest.add_take(first)
         second = AssetEntry(
             asset_id="shot_0001:generated_clip:take2",
             path="media/b.mp4",

@@ -456,7 +456,7 @@ class TestOperatorService:
         service.create_project(ProjectCreateRequest(project_id="assets", title="Assets"))
         assert service.runtime.services is not None
         manifest = AssetManifest(project_id="assets")
-        manifest.add(
+        manifest.add_take(
             AssetEntry(
                 asset_id="clip_SC_001_shot_001_take_001",
                 path="07-generated-assets/scenes/SC_001/shot_001/take_001.mp4",

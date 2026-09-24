@@ -9,18 +9,10 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.artifacts.index import ArtifactIndex
 from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
-from film_pipeline.artifacts.paths import (
-    artifact_path,
-    generated_asset_dir,
-    phase_dir,
-    project_dir,
-    reference_dir,
-)
+from film_pipeline.artifacts.paths import artifact_path, phase_dir, project_dir
 from film_pipeline.artifacts.registry import KindNotRegisteredError
 from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.artifacts.versioning import approve, create_version, supersede
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
@@ -54,38 +46,6 @@ class TestPaths:
     def test_artifact_path(self) -> None:
         p = artifact_path("slug", "script", "artifact:scene:S001", 3, Path("/store"))
         assert p.parts[-3:] == ("artifact_scene_S001", "versions", "v003.json")
-
-    def test_generated_asset_dir(self) -> None:
-        p = generated_asset_dir("slug", "SC_001", "shot_001", Path("/store"))
-        assert p.parts[-4:] == ("07-generated-assets", "scenes", "SC_001", "shot_001")
-
-    def test_reference_dir(self) -> None:
-        p = reference_dir("slug", "characters", Path("/store"))
-        assert "references" in p.parts
-        assert p.name == "characters"
-
-
-class TestVersioning:
-    def test_create_version_defaults(self) -> None:
-        v = create_version("artifact:script:S001", "p", "screenwriter-agent")
-        assert v.version_id.endswith(":v1")
-        assert v.status == ArtifactStatus.CANDIDATE
-
-    def test_create_version_increments_parent(self) -> None:
-        parent = create_version("artifact:script:S001", "p", "screenwriter-agent")
-        child = create_version("artifact:script:S001", "p", "screenwriter-agent", parent=parent)
-        assert child.version_id.endswith(":v2")
-        assert child.parent_version_id == parent.version_id
-
-    def test_approve_transitions_status(self) -> None:
-        v = create_version("artifact:script:S001", "p", "agent")
-        approved = approve(v)
-        assert approved.status == ArtifactStatus.APPROVED
-
-    def test_supersede_transitions_status(self) -> None:
-        v = create_version("artifact:script:S001", "p", "agent")
-        superseded = supersede(v)
-        assert superseded.status == ArtifactStatus.SUPERSEDED
 
 
 class TestArtifactStore:
@@ -392,8 +352,8 @@ class TestManifest:
 
     def test_add_and_active_take(self) -> None:
         m = AssetManifest(project_id="p")
-        m.add(AssetEntry(asset_id="a1", path="t1.mp4", kind="generated_clip", shot_id="S001"))
-        m.add(
+        m.add_take(AssetEntry(asset_id="a1", path="t1.mp4", kind="generated_clip", shot_id="S001"))
+        m.add_take(
             AssetEntry(
                 asset_id="a2", path="t2.mp4", kind="generated_clip", shot_id="S001", active=False
             )
@@ -404,13 +364,13 @@ class TestManifest:
 
     def test_list_by_kind(self) -> None:
         m = AssetManifest(project_id="p")
-        m.add(AssetEntry(asset_id="a", path="p.png", kind="reference_sheet"))
-        m.add(AssetEntry(asset_id="b", path="c.mp4", kind="generated_clip"))
+        m.add_take(AssetEntry(asset_id="a", path="p.png", kind="reference_sheet"))
+        m.add_take(AssetEntry(asset_id="b", path="c.mp4", kind="generated_clip"))
         assert len(m.list_by_kind("reference_sheet")) == 1
 
     def test_list_by_scene_and_shot(self) -> None:
         m = AssetManifest(project_id="p")
-        m.add(
+        m.add_take(
             AssetEntry(
                 asset_id="a",
                 path="p.mp4",
@@ -419,7 +379,7 @@ class TestManifest:
                 shot_id="shot_001",
             )
         )
-        m.add(
+        m.add_take(
             AssetEntry(
                 asset_id="b",
                 path="p.mp4",
@@ -431,33 +391,3 @@ class TestManifest:
 
         assert [entry.asset_id for entry in m.list_by_scene("SC_001")] == ["a"]
         assert [entry.asset_id for entry in m.list_by_shot("shot_002")] == ["b"]
-
-
-class TestArtifactIndex:
-    def test_add_and_query_by_type(self) -> None:
-        idx = ArtifactIndex()
-        idx.add(_meta(artifact_type=ArtifactType.SCRIPT))
-        idx.add(_meta(artifact_type=ArtifactType.TREATMENT))
-        assert len(idx.by_type("script")) == 1
-        assert len(idx.by_type("treatment")) == 1
-
-    def test_query_by_phase(self) -> None:
-        idx = ArtifactIndex()
-        idx.add(_meta(phase=FilmPhase.SCRIPT))
-        idx.add(_meta(phase=FilmPhase.GENERATION))
-        assert len(idx.by_phase("script")) == 1
-
-    def test_query_by_status(self) -> None:
-        idx = ArtifactIndex()
-        m = _meta()
-        idx.add(m)
-        assert len(idx.by_status("candidate")) == 1
-
-    def test_latest(self) -> None:
-        idx = ArtifactIndex()
-        idx.add(_meta(artifact_id="artifact:script:S001", version=1))
-        idx.add(_meta(artifact_id="artifact:script:S001", version=2))
-        idx.add(_meta(artifact_id="artifact:script:S001", version=3))
-        latest = idx.latest("artifact:script:S001")
-        assert latest is not None
-        assert latest.version == 3

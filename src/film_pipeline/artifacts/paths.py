@@ -45,30 +45,6 @@ def artifact_path(
     return artifact_dir(project_slug, phase, artifact_id, root) / "versions" / f"v{version:03}.json"
 
 
-def current_artifact_path(project_slug: str, phase: str, artifact_id: str, root: Path) -> Path:
-    return artifact_dir(project_slug, phase, artifact_id, root) / "current.json"
-
-
 def media_scene_dir(project_slug: str, scene_id: str, shot_id: str, root: Path) -> Path:
     """A shot's media directory: ``<project>/media/scenes/<scene>/<shot>``."""
     return project_dir(project_slug, root) / "media" / "scenes" / scene_id / shot_id
-
-
-def generated_asset_dir(project_slug: str, scene_id: str, shot_id: str, root: Path) -> Path:
-    return phase_dir(project_slug, "generation", root) / "scenes" / scene_id / shot_id
-
-
-def reference_dir(project_slug: str, ref_type: str, root: Path) -> Path:
-    return project_dir(project_slug, root) / "references" / ref_type
-
-
-def version_dir(project_slug: str, root: Path) -> Path:
-    return project_dir(project_slug, root) / "versions"
-
-
-def checkpoint_dir(project_slug: str, root: Path) -> Path:
-    return version_dir(project_slug, root) / "checkpoints"
-
-
-def state_dir(project_slug: str, root: Path) -> Path:
-    return project_dir(project_slug, root) / "state"

@@ -137,8 +137,10 @@ them into the layout above. (`.graph_state.json` has no reader at all.)
 - `media/scenes/<scene>/<shot>/` — generated clips and frames with a
   `take-NNN.json` sidecar (kind, take, sha256 per file).
 - `index/artifacts.json` — derived machine index, regenerated on every
-  write, always safe to delete. (`asset-manifest.json` moves here as
-  `index/assets.json` in the storage migration.)
+  write, always safe to delete.
+- `asset-manifest.json` — machine table of every generated asset
+  (project-relative paths, sha256). Moving it under `index/assets.json` is
+  deferred; it has not moved yet.
 
 Media and asset-manifest paths are relative to the project directory, so a
 project folder can be moved or archived whole.

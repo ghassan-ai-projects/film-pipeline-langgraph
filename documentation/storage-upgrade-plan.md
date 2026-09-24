@@ -340,10 +340,10 @@ atomic `graph-state.json` snapshot per mutation plus append-only JSONL audit.
   Amendments: provider filenames are kept (renaming to `take-NNN.<ext>` is
   deferred to P6 where legacy media moves anyway — downstream consumers parse
   delivered names); reference media still lives in the runtime tree via
-  `reference_generation` (a known P6-merge item, since P6 is what unifies the
-  runtime/artifact roots); the asset-manifest filename stays
-  `asset-manifest.json` in place (physical move to `index/assets.json` lands
-  with the P6 migrator to avoid a dual-read window). Docs: browsing guide.
+  `reference_generation` (a known open item — P6 shipped without it; reference
+  media still lives in the runtime tree); the asset-manifest filename stays
+  `asset-manifest.json` in place (the physical move to `index/assets.json` is
+  deferred — P6 shipped without it). Docs: browsing guide.
 - **P6 — Migration.** D8 complete migrator + committed old-layout fixtures (incl. a
   runtime-tree project, colon-id artifacts, path-shaped refs) + round-trip tests
   (dry-run writes nothing; migrate → verify passes; re-run no-op; quarantine; rollback
