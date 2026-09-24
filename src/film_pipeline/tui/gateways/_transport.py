@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 from pathlib import Path
 from typing import IO, Any
@@ -21,17 +22,14 @@ class MCPProcessTransport:
 
     @staticmethod
     def _default_command() -> list[str]:
-        return [
-            "uv",
-            "run",
-            "--python",
-            "3.12",
-            "--group",
-            "dev",
-            "python",
-            "-m",
-            "film_pipeline.mcp.server",
-        ]
+        """Launch the in-package MCP server with the running interpreter.
+
+        Re-entering the environment through ``uv run`` made the gateway depend
+        on an external ``uv`` binary and a writable uv cache just to start a
+        module that ships with this package. The server has no dependency on
+        the ``mcp`` extra, so the current interpreter can run it directly.
+        """
+        return [sys.executable, "-m", "film_pipeline.mcp.server"]
 
     def _ensure_started(self) -> None:
         if self._proc is not None and self._proc.poll() is None:
