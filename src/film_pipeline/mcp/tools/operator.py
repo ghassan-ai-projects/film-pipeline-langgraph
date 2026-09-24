@@ -18,7 +18,7 @@ async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
     target_id = str(args.get("target_id", "")).strip()
     body = str(args.get("body", "")).strip()
     phase = str(args.get("phase", "")).strip()
-    source = str(args.get("source", "tui")).strip() or "tui"
+    source = str(args.get("source", "mcp")).strip() or "mcp"
 
     if not target_type:
         return _error("target_type is required.")

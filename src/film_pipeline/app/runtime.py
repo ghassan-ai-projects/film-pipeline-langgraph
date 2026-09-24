@@ -316,7 +316,7 @@ class StudioRuntime:
         target_id: str,
         body: str,
         phase: str = "",
-        source: str = "tui",
+        source: str = "operator",
     ) -> dict[str, Any]:
         """Persist an operator comment on a project target."""
         project = self.projects.get(project_id)

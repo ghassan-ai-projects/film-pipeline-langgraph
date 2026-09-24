@@ -45,7 +45,7 @@ from film_pipeline.graph.router import (
 
 
 class OperatorService:
-    """Shared service for TUI and future thin MCP adapters."""
+    """Shared service for the MCP tools and the CLI operator surfaces."""
 
     def __init__(self, runtime: StudioRuntime | None = None) -> None:
         self._runtime = runtime

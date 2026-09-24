@@ -123,7 +123,7 @@ class OperatorCommentRequest:
     target_id: str
     body: str
     phase: str = ""
-    source: str = "tui"
+    source: str = "operator"
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class OperatorComment:
 
 @dataclass(frozen=True)
 class ArtifactDetail:
-    """Artifact detail shown by the TUI."""
+    """Artifact detail shown by operator surfaces."""
 
     artifact_id: str
     artifact_type: str
