@@ -15,7 +15,65 @@ disagreed, it has been rewritten rather than annotated.
 Versioned, typed, human-readable artifact persistence. One storage root
 holds one directory per project; a human can open a project folder and read
 its state and deliverables without tooling, while every machine consumer
-works through one small API (`ArtifactStore`).
+works through one small API.
+
+---
+
+## One owner for storage
+
+**`film_pipeline.artifacts` is the only component that knows the on-disk
+layout.** Everything else consumes it; nothing else builds project paths or
+writes project files itself.
+
+```
+film_pipeline.artifacts/
+├── project_storage.py   ← ProjectStorage: THE gateway every consumer uses
+├── _layout.py           ← private: the only place filenames/relpaths exist
+├── store.py             ← ArtifactStore: versioned artifact envelopes
+├── registry.py          ← kind → (payload model, schema version, renderer)
+├── rendering.py         ← typed markdown views (current.md)
+├── serialization.py     ← atomic + durable writes; non-finite rejection
+├── storage.py           ← storage-root resolution + marker gate
+├── envelope.py          ← envelope/meta/index models + storage errors
+├── manifest.py          ← asset manifest model
+├── paths.py             ← canonical phase→directory map
+└── matrix_projection.py
+```
+
+Two APIs, split by concern:
+
+| API | Use it for |
+|---|---|
+| `ArtifactStore` | versioned artifacts: `save`, `load`, `list_artifacts`, `approve`, `supersede` |
+| `ProjectStorage` | everything else in a project folder: `project.json`, `state/graph-state.json`, checkpoint/audit JSONL, media dirs, asset manifest, the per-project git repo |
+
+Consumers depend on storage; storage depends on nothing but `schemas/`. So:
+
+- **`ProjectStorage` returns typed values and locations, never a layout
+  contract.** Callers pass a project id and a model in, and get a model or a
+  directory back. They never assemble `media/scenes/...` themselves and never
+  import a relpath constant.
+- **The checkpoint backend is injected**, not imported. `project_storage.py`
+  declares a structural `CheckpointRepo` protocol and the application wires the
+  real backend via `set_git_backend_type()`. This keeps `artifacts/` free of a
+  `checkpoints/` dependency.
+- **`app/_persistence.py` holds policy, not I/O.** It decides which projects to
+  load and how the runtime's registries are updated; every byte goes through
+  `ProjectStorage`.
+
+`tests/unit/artifacts/test_storage_boundary.py` enforces this. It fails if a
+module outside `artifacts/` imports `_layout`, `serialization`, or `paths`,
+hardcodes a layout constant, or if the core imports any other component.
+
+Construction:
+
+```python
+storage = ProjectStorage.from_store(artifact_store)   # inside the application
+storage = ProjectStorage.for_root(resolved_root)      # media/sidecar writers
+```
+
+Note that `checkpoints/` and `runs/` sit under the storage root but **outside**
+the per-project tree, because they are machine-global rather than per-project.
 
 ---
 
