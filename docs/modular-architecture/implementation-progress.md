@@ -20,6 +20,39 @@ it is not a passing result. Enola currently checks cycle deltas only because no
 layer intent is declared. Package ownership is reviewed against the approved
 direction and tested at consumer boundaries.
 
+## Migration-first directive and Enola burndown
+
+The current priority is to complete the evidenced module-boundary migrations
+before repairing the known behavior divergences. R-01b through R-01e remain
+deferred until the migration exit bar is met.
+
+The reviewed Enola receipt at `fb85baa` contains 115 insights: 5 directory-level
+cycle findings (C1–C5) and 110 heuristic insights. The migration target is zero
+cycle findings, matching §5 Step 4 of the approved decision. The current layer
+count of zero is not evidence of a boundary pass because no layer intent is
+declared. Heuristic insight counts are recorded separately from architecture
+gate findings; Enola filters or thresholds must not be changed just to lower
+the displayed count.
+
+| Enola measure | Baseline | Migration target | Current status |
+|---|---:|---:|---|
+| Directory-level cycle findings | 5 (C1–C5) | 0 | 5 remain; each is a separately reviewed migration slice |
+| Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | 109 in the live V-01 check; pinned receipt remains at baseline 110 |
+
+V-01 removed the measured `config → providers` import edge. The live Enola
+report resolved one dependency-depth insight (115 to 114 total insights,
+including 109 current heuristic insights) and introduced no finding. The check
+ran at 20:07 UTC with:
+
+```sh
+enola check --json --baseline=docs/modular-architecture/enola-out docs/modular-architecture/enola-config.yaml
+```
+
+The checked-in receipt remains the pinned 115-insight baseline. V-01 did not
+touch C1–C5, so five cycle findings remain; cycle progress begins only when a
+cycle is actually removed.
+
 ## Progress ledger
 
 | Slice | Scope | Review | Focused proof | Full gate / coverage | Enola | Commit | Status |
@@ -27,13 +60,85 @@ direction and tested at consumer boundaries.
 | G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | `62b3eea` | Complete |
 | O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Three independent lenses complete; all findings resolved | PASS — 14 passed / 11 strict xfailed; `--runxfail` confirms all 11 fail at their intended divergences | PASS — `make ci-check`; 2,022 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — clean against comparable baseline; no cycle findings changed | `8900416` | Complete |
 | R-01a | Migration only: move checkpoint rollback manager orchestration and bookkeeping from MCP tools into `OperatorService` / app services while preserving active-project selection, confirmation, errors, and response projection | Three independent final reviews pass; first-round findings addressed | PASS — 63 passed / 10 strict xfailed across checkpoint service, MCP checkpoint, and O-01 divergence suites | PASS — `make ci-check`; 2,023 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — docs-local snapshot baseline; clean, no cycle delta | `e5a74dc` | Complete |
-| R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Queued | Pending | Pending | Pending | Pending | Queued |
-| R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Queued | Pending | Pending | Pending | Pending | Queued |
-| R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Queued | Pending | Pending | Pending | Pending | Queued |
-| R-01e | Make graph/checkpointer bootstrap explicit and unify persistence root/mode selection while preserving `langgraph.json` loading | Queued | Pending | Pending | Pending | Pending | Queued |
-| V-01 | Consolidate other high-value vocabularies and provider registration ownership where tests prove a seam | Not started | Not started | Pending | Pending | Pending | Queued |
-| B-01 | Tighten only measured import boundaries after behavior fixes | Not started | Not started | Pending | Pending | Pending | Queued |
+| V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
+| C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-02 | Break C4: `providers` ↔ `providers/adapters`, preserving adapter exports and factory behavior | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-03 | Break C5: `schemas` ↔ `schemas/registries`, preserving schema and registry exports | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
+| R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
+| R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
+| R-01e | Make graph/checkpointer bootstrap explicit and unify persistence root/mode selection while preserving `langgraph.json` loading | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
+| B-01 | Review and migrate the remaining measured import-boundary debt against `AGENTS.md` and the approved ownership map; make no package-count-driven moves | Pending boundary inventory and three lenses per seam | Pending | Pending | Pending | Pending | Queued after cycle burndown |
 | D-01 | Align product documentation with exercised operator behavior | Not started | Not started | Pending | Pending | Pending | Queued |
+
+The C-01 through C-05 rows are a measured cycle burndown, not authorization for
+the superseded 20-module proposal. Each row requires its own boundary-preserving
+plan, three independent reviews, validation, Enola count, and commit.
+Behavior repairs resume only after cycle burndown reaches zero and the measured
+ownership seams selected under B-01 have a code owner and a consumer-boundary
+guard. D-01 remains after the relevant behavior work because it must describe
+exercised behavior.
+
+## V-01 plan
+
+- **Owner and consumers:** `config.profile_resolver` keeps profile loading,
+  stack canonicalization, project-config resolution, and provider-spec
+  normalization. App composition owns creating/registering adapters and deriving
+  the required provider IDs for a credential check. `providers.credentials`
+  owns provider-to-environment-variable mapping and env/`.env` lookup.
+  `OperatorService` exposes the app operations to MCP without giving MCP direct
+  dependencies on provider implementations.
+- **Planned code and tests:** move profile adapter registration and
+  profile-aware credential checks out of config into a private app composition
+  helper at `app/_provider_profiles.py`; keep `_provider_seeds.py` focused on
+  default runtime providers. Replace the three registration call sites in
+  `OperatorService`, MCP project creation, and profile-change approval, plus the project-creation
+  credential call. Keep the real-mode gate, ordering, error DTO, empty-spec
+  no-op, global runtime mutation, and approval flow unchanged. Retain existing
+  provider-spec normalization tests; move credential-policy tests to the
+  provider/app owner. Strengthen the existing service-create, MCP-create, and
+  profile-approval tests to assert registration and health at their consumers;
+  add only the missing app-composition and import-direction proofs in the
+  existing config/provider/app/MCP test files. Keep the pre-resolution mock-ID
+  scan separate because changing its parser or timing would expand this
+  migration into an input-validation behavior change.
+- **Files:** `config/profile_resolver.py`, `providers/credentials.py`,
+  `app/_provider_profiles.py` (new), `app/services/operator.py`,
+  `mcp/tools/projects.py`, `mcp/tools/_profile_change.py`,
+  `tests/unit/config/test_profile_resolver.py`,
+  `tests/unit/providers/test_credentials.py`,
+  `tests/unit/app/test_provider_profiles.py` (new),
+  `tests/unit/app/services/test_operator_service.py`,
+  `tests/unit/mcp/tools/test_config.py`, and the existing project-creation
+  contract cases in `tests/unit/test_mcp.py`.
+- **Validation:** PASS — focused changed tests ran serially and passed;
+  `UV_CACHE_DIR=.uv-cache make ci-check` passed (2,027 passed, 8 skipped,
+  11 xfailed, 91.71% coverage, source/wheel builds, product gate); Enola's
+  live check reported 114 total / 109 heuristic insights, five unchanged
+  cycles, and zero new findings; `git diff --check` passed.
+- **Migration exit bar:** config imports no app/provider modules; app owns the
+  adapter and profile credential composition; providers owns credential
+  lookup/mapping; all three call paths preserve their current registration,
+  health, preflight, and response contracts; three final review lenses pass;
+  full CI remains above 90%; Enola shows the `config → providers` package edge
+  at zero and no new cycle. The overall cycle target remains zero and is tracked
+  by C-01 through C-05, not claimed by V-01.
+
+## V-01 review record
+
+The boundary review found the first AST import guard missed relative imports
+and imports re-exported through `film_pipeline`; the guard now resolves relative
+levels and imported aliases, with regression cases for both forms. The behavior
+review found the missing-key fixture needed to configure Seedance while
+asserting both Google-key providers in profile order; project, provider, and
+health state remain unchanged when preflight rejects creation. The quality
+review confirmed the added coverage extends existing consumer tests without
+duplication. All three final reviews passed. The focused changed suites and
+full gate passed. The live Enola check exited clean at 20:07 UTC with no new
+finding and one dependency-depth insight resolved; the checked-in receipt is
+still the pinned baseline at `fb85baa`. The code is committed as `8fa6890`.
 
 ## R-01a plan
 
