@@ -125,6 +125,31 @@ Enola filter or threshold changed.
 | R2-05 | Make weak assertions prove the behavior they name: two assertion-free git tests, an assertion-free import smoke test, a checkpointer test that never inspected the checkpointer, and a node test that never called the node; cover the three untested defensive branches in `graph/consistency.py` | Full-suite audit of assertion quality; each change verified against real behavior rather than assumed | PASS — checkpoints, graph, smoke, and new consistency suites; `graph/consistency.py` reaches 100% | PASS — `make ci-check`; 2,162 passed / 8 skipped / 11 xfailed; 91.95% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `d726df1` | Complete |
 | D-02 | Correct `05-enforcement-and-guard-tests.md`: state that the guard suite was never implemented, and fix the false "exactly four `ast.parse` test files" measurement | Verified every claim against the tree: `tests/architecture/` absent, `architecture.py` absent, zero `ModuleContract` occurrences, 15 of 16 guards missing, measured count 8 not 4 | Documentation only; no test run required | N/A — docs-only change | N/A | `ef2fa73` | Complete |
 | P-02 | Move project classification policy (folder-name kind rule, explicit-kind validation, derived title) from `app/services/_project_discovery.py` into `projects.classification`; keep the runtime-coupled discovery helpers in app | Verified the pure half has no runtime dependency and that removing it deletes one of the four FES #3 blockers | PASS — new classification suite covering the substring rule, canonicalization, actionable error, precedence, and owner re-export | PASS — `make ci-check`; 2,187 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `018babb` | Complete |
+| OP-02a | Break FES #3 without moving `OperatorService`: declare `operations.ports.RuntimePort` structurally, widen `_persistence.storage_for`/`artifact_root` to the port, and guard that no `operations` module imports `film_pipeline.app` | Plan review found the move as originally briefed would materialize a forbidden edge; verified the remaining coupling is only `runtime.services.artifact_store` | PASS — new runtime-port suite: protocol conformance for the real runtime and a fake, store/absent-services branches, and a source-level FES #3 guard with mutation cases | PASS — `make ci-check`; 2,200 passed / 8 skipped / 11 xfailed; 92.00% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `ea0df4e` | Complete |
+
+### OP-02 — why the round was rescoped
+
+The ledger previously listed "move `OperatorService` and its helper operations
+out of `app/services` into `operations`" as a single round. Planning it found
+that the move as briefed **cannot be done legally**: `03` §4.6.1 names
+`operations → studio` as forbidden edge #3, and the four imports the move would
+carry are exactly the four sites that section lists under "Removed by".
+
+Because the edge law has no mechanical enforcement (`tests/architecture/` does
+not exist), that violation would have landed silently. The round was therefore
+split:
+
+- **OP-02a (done, `ea0df4e`)** removes the runtime coupling structurally
+  instead of relocating it. `operations.ports.RuntimePort` declares what the
+  operator surface needs; `StudioRuntime` conforms without subclassing; the two
+  persistence helpers accept the port. A source-level guard now fails if any
+  `operations` module imports `film_pipeline.app`.
+- **OP-02b (remaining)** is the physical file move. It is now unblocked for
+  `_browse_ops`, `_checkpoint_ops`, and `_generation_ops`, but `operator.py`
+  still imports `film_pipeline.app._provider_profiles` and the runtime
+  accessors `get_runtime` / `reset_runtime`, which the port does not yet cover.
+  Those need the same treatment before the move, and the `_project_discovery`
+  helpers must reach `projects` rather than `operations`.
 
 ### R2-01 — the gate was broken, not merely unverified
 
