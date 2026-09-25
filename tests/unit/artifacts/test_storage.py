@@ -161,7 +161,7 @@ class TestRequiredRoots:
 
 class TestSandboxHelper:
     def test_sandbox_store_root_marks_profile(self, tmp_path: Path) -> None:
-        from film_pipeline.testing.storage import sandbox_store_root
+        from film_pipeline.devharness.storage import sandbox_store_root
 
         root = sandbox_store_root(tmp_path / "sandbox")
         marker = read_marker(root)

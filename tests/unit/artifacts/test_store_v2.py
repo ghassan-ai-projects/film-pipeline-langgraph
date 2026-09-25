@@ -20,11 +20,11 @@ from film_pipeline.artifacts.registry import (
     REGISTRY,
     register_migration,
 )
+from film_pipeline.devharness.storage import make_store
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.script import Script, ScriptScene
-from film_pipeline.testing.storage import make_store
 
 
 def _meta(**kw: object) -> ArtifactMetadata:

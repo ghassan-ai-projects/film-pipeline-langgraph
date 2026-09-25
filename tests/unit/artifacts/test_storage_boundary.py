@@ -166,7 +166,7 @@ class TestProjectStorageIsTheOnlyWriter:
     def test_construction_from_root_and_store_agree(self, tmp_path: Path) -> None:
         """Both construction paths must resolve to the same project directory."""
         from film_pipeline.artifacts.project_storage import ProjectStorage
-        from film_pipeline.testing.storage import make_store
+        from film_pipeline.devharness.storage import make_store
 
         root = tmp_path / "store"
         store = make_store(root)

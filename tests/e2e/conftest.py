@@ -16,6 +16,8 @@ from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
+from film_pipeline.devharness.mock_human import DecisionProfile, MockHumanActor
+from film_pipeline.devharness.mock_model import MockModelAdapter
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.packets import KBContextPacketBuilder
@@ -27,8 +29,6 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
-from film_pipeline.testing.mock_human import DecisionProfile, MockHumanActor
-from film_pipeline.testing.mock_model import MockModelAdapter
 from film_pipeline.validation.registry import ValidatorRegistry
 from film_pipeline.validation.validators import MVP_VALIDATORS
 

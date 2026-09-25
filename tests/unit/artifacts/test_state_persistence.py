@@ -11,7 +11,7 @@ from typing import cast
 import pytest
 
 from film_pipeline.artifacts.project_storage import ProjectStorage
-from film_pipeline.testing.storage import make_store
+from film_pipeline.devharness.storage import make_store
 
 
 class TestConcurrentWrites:

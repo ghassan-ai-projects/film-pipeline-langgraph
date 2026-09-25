@@ -3,10 +3,10 @@
 Locks in the repair that removed fixture data from the production default
 startup path:
 
-1. No module under ``graph/`` may import ``film_pipeline.testing`` (test
+1. No module under ``graph/`` may import ``film_pipeline.devharness`` (test
    fixtures) or ``film_pipeline.app`` (composition root) — in any import
    statement, module-level or function-body.
-2. Constructing mock-mode services pulls in no ``film_pipeline.testing``
+2. Constructing mock-mode services pulls in no ``film_pipeline.devharness``
    modules; canned responses are injected from the composition root.
 """
 
@@ -22,7 +22,7 @@ import pytest
 
 _GRAPH_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "graph"
 
-_FORBIDDEN_ROOTS = ("film_pipeline.testing", "film_pipeline.app")
+_FORBIDDEN_ROOTS = ("film_pipeline.devharness", "film_pipeline.app")
 
 
 def _imported_modules(tree: ast.Module, current_package: str) -> set[str]:
@@ -155,8 +155,8 @@ def test_mock_service_construction_imports_no_testing_modules() -> None:
         "GraphServices.for_mock_runtime(\n"
         "    artifacts_root=str(root), mock_responses=default_mock_responses()\n"
         ")\n"
-        "loaded = sorted(m for m in sys.modules if m.startswith('film_pipeline.testing'))\n"
-        "assert not loaded, f'testing modules leaked into mock startup: {loaded}'\n"
+        "loaded = sorted(m for m in sys.modules if m.startswith('film_pipeline.devharness'))\n"
+        "assert not loaded, f'devharness modules leaked into mock startup: {loaded}'\n"
         "print('CLEAN')\n"
     )
     result = subprocess.run(

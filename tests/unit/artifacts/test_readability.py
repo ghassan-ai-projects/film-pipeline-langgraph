@@ -12,8 +12,8 @@ from film_pipeline.artifacts.rendering import (
     render_script,
     render_validation_report,
 )
+from film_pipeline.devharness.storage import make_store
 from film_pipeline.schemas.artifact import ArtifactMetadata
-from film_pipeline.testing.storage import make_store
 
 
 def _meta(artifact_id: str, artifact_type: Any, phase: Any) -> ArtifactMetadata:

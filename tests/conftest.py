@@ -36,7 +36,7 @@ def _isolated_runtime_root(
     # fail order-dependently ("No active project", mock/real mismatches).
     monkeypatch.delenv("FILM_PIPELINE_MCP_MODE", raising=False)
     from film_pipeline.app.runtime import reset_runtime
-    from film_pipeline.testing.in_memory_git import reset_in_memory_git
+    from film_pipeline.devharness.in_memory_git import reset_in_memory_git
 
     # Each test starts with an empty in-memory checkpoint history (see the
     # ``_fast_checkpoint_backend`` session fixture for why real git is bypassed).
@@ -54,7 +54,7 @@ def _isolated_runtime_root(
 @pytest.fixture
 def store_root(tmp_path: Path) -> Path:
     """A marked sandbox storage root for direct store construction."""
-    from film_pipeline.testing.storage import sandbox_store_root
+    from film_pipeline.devharness.storage import sandbox_store_root
 
     return sandbox_store_root(tmp_path / "storage-root")
 
@@ -72,7 +72,7 @@ def _fast_checkpoint_backend() -> Iterator[None]:
         get_git_backend_type,
         set_git_backend_type,
     )
-    from film_pipeline.testing.in_memory_git import InMemoryGitBackend
+    from film_pipeline.devharness.in_memory_git import InMemoryGitBackend
 
     previous = get_git_backend_type()
     set_git_backend_type(InMemoryGitBackend)
