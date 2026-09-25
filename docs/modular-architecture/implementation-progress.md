@@ -26,10 +26,36 @@ direction and tested at consumer boundaries.
 |---|---|---|---|---|---|---|---|
 | G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | `62b3eea` | Complete |
 | O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Three independent lenses complete; all findings resolved | PASS — 14 passed / 11 strict xfailed; `--runxfail` confirms all 11 fail at their intended divergences | PASS — `make ci-check`; 2,022 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — clean against comparable baseline; no cycle findings changed | `8900416` | Complete |
-| R-01 | Repair proven runtime, validation handoff, and persistence defects from O-01 evidence | Not started | Not started | Pending | Pending | Pending | Queued |
+| R-01a | Honor resolved project IDs for approval, revision, validation, and checkpoint rollback without changing runtime active selection | Three lenses complete; boundary path and negative checkpoint case identified | Pending | Pending | Pending | Pending | Ready to implement |
+| R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Queued | Pending | Pending | Pending | Pending | Queued |
+| R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Queued | Pending | Pending | Pending | Pending | Queued |
+| R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Queued | Pending | Pending | Pending | Pending | Queued |
+| R-01e | Make graph/checkpointer bootstrap explicit and unify persistence root/mode selection while preserving `langgraph.json` loading | Queued | Pending | Pending | Pending | Pending | Queued |
 | V-01 | Consolidate other high-value vocabularies and provider registration ownership where tests prove a seam | Not started | Not started | Pending | Pending | Pending | Queued |
 | B-01 | Tighten only measured import boundaries after behavior fixes | Not started | Not started | Pending | Pending | Pending | Queued |
 | D-01 | Align product documentation with exercised operator behavior | Not started | Not started | Pending | Pending | Pending | Queued |
+
+## R-01a plan
+
+- **Owner and consumers:** MCP resolves the public `project_ref`; app/runtime
+  executes approval and revision against explicit project state; MCP validation
+  keeps its frozen response projection while selecting the resolved project's
+  state; checkpoint rollback verifies checkpoint ownership before using that
+  project's manager. Calls without a project reference keep their current active
+  project fallback.
+- **Planned code and tests:** pass optional `project_id` through
+  `StudioRuntime.approve_phase` and `request_revision` into graph execution;
+  remove active-project switching from the matching `OperatorService` methods;
+  use `_require_project` in MCP validation; scope rollback and reject a
+  cross-project checkpoint; strengthen the existing two-project probes to use
+  the real revision path, assert active-project isolation, and cover mismatch
+  refusal. Keep MCP response keys stable.
+- **Validation:** focused R-01a tests with `--no-cov -n 0`, full
+  `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at least 90%), Enola against
+  `docs/modular-architecture/enola-out`, and `git diff --check` before commit.
+- **Risks:** never route an explicit request by mutating the runtime's global
+  active-project pointer; an explicit target that is missing or does not own a
+  checkpoint must fail without falling back to another project's data.
 
 ## G-01 review record
 
