@@ -104,20 +104,23 @@ def test_delete_project_archives_to_trash(tmp_path: Path, monkeypatch: pytest.Mo
     assert rt.services is not None
     rt.create_project("p-trash", title="Trash Me")
     rt.set_active("p-trash")
+    # One folder holds state AND artifacts (plan §1/D3), so the project root
+    # and the artifact directory are the same path.
     project_root = rt.project_roots["p-trash"]
     artifact_dir = rt.services.artifact_store.root / "p-trash"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    (project_root / "state.json").write_text("{}")
-    (artifact_dir / "idea.json").write_text("{}")
+    assert project_root == artifact_dir
+    (project_root / "index").mkdir(parents=True, exist_ok=True)
+    (project_root / "index" / "artifacts.json").write_text("{}")
 
     deleted = rt.delete_project("p-trash")
 
     assert deleted is True
     assert not project_root.exists()
-    assert not artifact_dir.exists()
+    # Exactly one archive, because the project was exactly one directory.
     trash_root = persist / "trash"
-    assert any(trash_root.glob("runtime-p-trash-*"))
-    assert any(trash_root.glob("artifacts-p-trash-*"))
+    archived = list(trash_root.glob("project-p-trash-*"))
+    assert len(archived) == 1
+    assert (archived[0] / "index" / "artifacts.json").exists()
 
 
 def test_delete_project_blocks_production_by_default(tmp_path: Path) -> None:

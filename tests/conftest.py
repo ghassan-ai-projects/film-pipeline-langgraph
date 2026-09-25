@@ -68,14 +68,19 @@ def _fast_checkpoint_backend() -> Iterator[None]:
     projects without asserting git semantics. The genuine ``GitBackend``
     contract tests construct ``GitBackend`` directly and are unaffected.
     """
-    from film_pipeline.app._persistence import reset_git_backend_type, set_git_backend_type
+    from film_pipeline.artifacts.project_storage import (
+        get_git_backend_type,
+        set_git_backend_type,
+    )
     from film_pipeline.testing.in_memory_git import InMemoryGitBackend
 
+    previous = get_git_backend_type()
     set_git_backend_type(InMemoryGitBackend)
     try:
         yield
     finally:
-        reset_git_backend_type()
+        if previous is not None:
+            set_git_backend_type(previous)
 
 
 @pytest.fixture(scope="session", autouse=True)

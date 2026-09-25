@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.app import _persistence
@@ -21,7 +20,7 @@ from film_pipeline.app._resume import (
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.project_storage import graph_state_location
 from film_pipeline.graph.router import PHASE_ORDER
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
@@ -96,7 +95,7 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
         save_graph_state(rt, dict(state), project_id)
     except Exception as exc:
         _logger.warning("Auto-checkpoint could not persist graph state for %s: %s", project_id, exc)
-    graph_state_ref = _persistence.GRAPH_STATE_RELPATH
+    graph_state_ref = graph_state_location()
 
     from film_pipeline.graph.orchestrator_state import get_candidate_refs
 
@@ -127,22 +126,19 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
 def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) -> None:
     """Persist one machine state snapshot for crash recovery (atomic).
 
-    Values the typed snapshot cannot serialize degrade through
-    ``str()`` — crash recovery must never fail on state content.
+    Values the typed snapshot cannot serialize degrade through ``str()`` —
+    crash recovery must never fail on state content. The write itself belongs
+    to the storage core; this function only shapes the snapshot.
     """
-    root = rt.project_roots.get(project_id)
-    if root is None:
+    storage = _persistence.storage_for(rt)
+    if storage is None or project_id not in rt.project_roots:
         return
     safe = {k: v for k, v in state.items() if not k.startswith("_services")}
     try:
-        payload: dict[str, Any] = GraphStateSnapshot(state=safe).model_dump(mode="json")
+        snapshot = GraphStateSnapshot(state=safe)
     except ValueError:
-        payload = {
-            "schema_version": 1,
-            "saved_at": datetime.now(UTC).isoformat(),
-            "state": json.loads(json.dumps(safe, default=str)),
-        }
-    write_json_atomic(root / _persistence.GRAPH_STATE_RELPATH, payload)
+        snapshot = GraphStateSnapshot(state=json.loads(json.dumps(safe, default=str)))
+    storage.write_graph_state(project_id, snapshot)
 
 
 def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_phase: str) -> bool:

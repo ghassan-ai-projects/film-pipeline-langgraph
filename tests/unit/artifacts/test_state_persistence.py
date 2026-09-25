@@ -10,6 +10,7 @@ from typing import cast
 
 import pytest
 
+from film_pipeline.artifacts.project_storage import ProjectStorage
 from film_pipeline.testing.storage import make_store
 
 
@@ -184,13 +185,13 @@ class TestJsonlLogs:
         """A log from a newer layout must fail loudly, not be misread."""
         import json as _json
 
-        from film_pipeline.app._persistence import _read_jsonl
+        from film_pipeline.artifacts._layout import read_jsonl
         from film_pipeline.artifacts.envelope import SchemaTooNewError
 
         log = tmp_path / "audit-log.jsonl"
         log.write_text(_json.dumps({"storage_schema_version": 99, "event_id": "e1"}) + "\n")
         with pytest.raises(SchemaTooNewError, match="99"):
-            _read_jsonl(log)
+            read_jsonl(log)
 
     def test_checkpoint_jsonl_appends_without_duplicates(self, tmp_path: Path) -> None:
         from film_pipeline.app.runtime import StudioRuntime
@@ -440,14 +441,19 @@ class TestMediaLayout:
 
     def test_checkpoint_never_tracks_media(self, tmp_path: Path) -> None:
         """A project checkpoint commit must not include media files."""
-        from film_pipeline.app._persistence import project_git_backend
+        from film_pipeline.artifacts.store import ArtifactStore
+        from film_pipeline.schemas.runtime_state import ProjectRecord
 
-        project_root = tmp_path / "p1"
+        root = tmp_path / "store"
+        storage = ProjectStorage(ArtifactStore(root=root))
+        project_root = storage.project_dir("p1")
+        storage.ensure_project_dir("p1")
+        storage.write_project_record("p1", ProjectRecord(project_id="p1", title="Media"))
         (project_root / "media" / "scenes").mkdir(parents=True)
         (project_root / "media" / "scenes" / "clip.mp4").write_bytes(b"x" * 32)
-        (project_root / "project.json").write_text("{}")
-        git = project_git_backend(project_root)
+        git = storage.git_backend("p1")
         git.commit("checkpoint: with media present")
         tracked = git.list_files("HEAD")
-        assert all(not path.startswith("media/") for path in tracked)
+        # State IS tracked; media is NOT (it lives in the asset manifest).
         assert "project.json" in tracked
+        assert all(not path.startswith("media/") for path in tracked)

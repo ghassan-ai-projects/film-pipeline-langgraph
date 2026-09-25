@@ -18,13 +18,12 @@ from uuid import uuid4
 
 from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
-    PROJECT_FILENAME,
     configured_runtime_root,
-    project_git_backend,
     use_persistent_runtime,
 )
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
 from film_pipeline.artifacts.storage import default_runtime_root, resolve_storage_root
+from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
@@ -103,8 +102,13 @@ class StudioRuntime:
         if project_id in self.projects:
             raise ValueError(f"Project '{project_id}' already exists.")
         assert self.runtime_root is not None
-        project_root = self.runtime_root / project_id
-        git = project_git_backend(project_root)
+        storage = _persistence.storage_for(self)
+        if storage is None:
+            raise ValueError("Cannot create a project: no artifact store is configured.")
+        # The storage core owns the layout: it creates the single project
+        # directory, its .gitignore, and the checkpoint repository.
+        storage.ensure_project_dir(project_id)
+        git = cast(GitBackend, storage.git_backend(project_id))
         state: dict[str, Any] = {
             "project_id": project_id,
             "title": title,
@@ -118,10 +122,10 @@ class StudioRuntime:
             "issues": [],
         }
         self.projects[project_id] = state
-        self.project_roots[project_id] = project_root
+        self.project_roots[project_id] = storage.project_dir(project_id)
         self.checkpoint_managers[project_id] = CheckpointManager(git)
         self._persist_project_state(project_id)
-        git.commit("project: initialize runtime state", [PROJECT_FILENAME])
+        git.commit("project: initialize runtime state", [storage.project_record_name()])
         self._record_audit("system", "create_project", project_id=project_id)
         return state
 
@@ -144,12 +148,13 @@ class StudioRuntime:
         if project_id not in self.projects:
             return False
         self._require_deletable_project(project_id, force=force)
+        # One folder holds the project's state AND its artifacts, so a single
+        # archive removes the whole project.
         project_root = self._detach_project_state(project_id)
         if project_root is not None:
             self._archive_directory(
-                project_root, trash_prefix=f"runtime-{project_id}-", force=force
+                project_root, trash_prefix=f"project-{project_id}-", force=force
             )
-        self._archive_project_artifacts(project_id, force=force)
         self._drop_project_checkpoints(project_id)
         return True
 
@@ -181,15 +186,6 @@ class StudioRuntime:
             if not force:
                 raise
             shutil.rmtree(path, ignore_errors=True)
-
-    def _archive_project_artifacts(self, project_id: str, *, force: bool) -> None:
-        """Move the project's stored artifacts to the trash."""
-        project_artifact_dir = self._artifact_root() / project_id
-        if not project_artifact_dir.exists():
-            return
-        self._archive_directory(
-            project_artifact_dir, trash_prefix=f"artifacts-{project_id}-", force=force
-        )
 
     def _artifact_root(self) -> Path:
         """Resolve the directory where the artifact store keeps project artifacts."""
