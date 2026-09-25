@@ -1440,6 +1440,23 @@ The committed-tree Enola check at 21:08 UTC was clean and reduced the current
 cycle count from four to three; no cycle was added. The pinned baseline remains
 unchanged. See `implementation-progress.md` for review and validation evidence.
 
+#### C5 implementation status correction (2026-09-25)
+
+C-03 is implemented. The root `schemas` package no longer imports or
+re-exports the ten agent, model, provider, and validator registry schemas;
+`schemas.registries` remains their canonical export surface. The registry
+modules continue to import `schemas._base`, leaving a one-way dependency from
+the nested registry package into its owning schema package. The target row's
+additional move away from `_base` was unnecessary to remove the measured
+cycle and was not included. The `PromptRegistry` and `PromptRegistryEntry`
+exports remain at the root. No in-repository consumer used the removed root
+aliases.
+
+The committed-tree Enola check at 21:26 UTC was clean and reduced the current
+cycle count from three to two; no cycle was added. One dependency-depth
+advisory also resolved. See `implementation-progress.md` for review and
+validation evidence.
+
 C1, C4, C5 are cheap: each member pair maps to one target module, so the enola
 cycle vanishes as soon as the module catalog is applied; the concrete source
 edge is additionally deleted to keep the file-level import graph clean.

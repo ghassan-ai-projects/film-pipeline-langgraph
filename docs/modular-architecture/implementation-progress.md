@@ -36,9 +36,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 3 remain (C2, C3, C5); C1 was removed by C-01 and C4 by C-02 |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | 2 remain (C2, C3); C1, C4, and C5 were removed by C-01, C-02, and C-03 |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 111 in the latest C-02 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | 110 in the latest C-03 check; pinned receipt remains at baseline 110 |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -61,6 +61,12 @@ current cycle insights and 114 total insights (111 heuristic insights). The
 live cycle count fell from four to three, with no new finding; the pinned
 receipt remains unchanged and no Enola filter or threshold changed.
 
+C-03 removed C5. Its committed-tree check at 21:26 UTC was clean with two
+current cycle insights and 112 total insights (110 heuristic insights). The
+live cycle count fell from three to two, and one dependency-depth advisory
+resolved; no finding was added. The pinned receipt remains unchanged and no
+Enola filter or threshold changed.
+
 ## Progress ledger
 
 | Slice | Scope | Review | Focused proof | Full gate / coverage | Enola | Commit | Status |
@@ -71,7 +77,7 @@ receipt remains unchanged and no Enola filter or threshold changed.
 | V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
-| C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three independent plan reviews pass; evidence wording corrected; no code started | Planned | Pending | Target: 1 cycle → 0 | Pending | Ready |
+| C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -328,8 +334,27 @@ that those registry cases were JSON round-trips; no duplicate serialization
 tests are needed for unchanged model behavior. Quality review confirmed that
 one direct-module AST guard plus the existing model tests is sufficient and
 that moving the base or adding a package would expand scope without helping
-the measured cycle. All three plan reviews pass; implementation has not
-started.
+the measured cycle. All three plan reviews passed before implementation began.
+
+## C-03 implementation review record
+
+The boundary review confirmed the root-to-registry edge is gone while the
+registry modules retain their one-way dependency on the shared schema base.
+The import-direction guard covers absolute module imports, package
+re-exports, and relative imports; it scans every direct module in `schemas`.
+The behavior review confirmed the ten moved root aliases have no in-repository
+consumers and the canonical registry package exports and current model tests
+remain intact. It caught and corrected docstring wording that could have
+implied `PromptRegistry` and `PromptRegistryEntry` also moved. The quality
+review caught a stale plan-state row and that was updated before completion.
+All three final reviews passed with no remaining finding.
+
+The focused schema/import-boundary suites passed. `make ci-check` passed with
+2,043 passed, 8 skipped, 11 xfailed, 91.73% coverage, source and wheel builds,
+and the product gate. The committed-tree Enola check at 21:26 UTC was clean:
+current cycles fell from three to two, one dependency-depth advisory resolved,
+and no new finding appeared. It reported 112 total insights (110 heuristics)
+against the pinned 115-insight baseline. Code commit: `efd451e`.
 
 ## R-01a plan
 
