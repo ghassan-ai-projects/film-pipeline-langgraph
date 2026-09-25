@@ -1,15 +1,5 @@
-"""Application service exceptions."""
+"""Compatibility aliases for operator errors."""
 
-from __future__ import annotations
-
-
-class ServiceError(Exception):
-    """Base class for actionable service-layer errors."""
-
-
-class ProjectNotFoundError(ServiceError):
-    """Raised when a project reference cannot be resolved."""
-
-
-class BackendOperationError(ServiceError):
-    """Raised when a runtime operation returns an unsuccessful result."""
+from film_pipeline.operations.errors import BackendOperationError as BackendOperationError
+from film_pipeline.operations.errors import ProjectNotFoundError as ProjectNotFoundError
+from film_pipeline.operations.errors import ServiceError as ServiceError

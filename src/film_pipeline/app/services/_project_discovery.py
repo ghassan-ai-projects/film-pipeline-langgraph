@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.app._persistence import storage_for
-from film_pipeline.app.services.errors import BackendOperationError
-from film_pipeline.app.services.models import ProjectListItem
+from film_pipeline.operations.errors import BackendOperationError
+from film_pipeline.operations.models import ProjectListItem
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService
