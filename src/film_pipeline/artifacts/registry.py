@@ -13,10 +13,7 @@ cannot silently drift; prefix entries cover dynamic ids such as
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Any
-
-from pydantic import BaseModel
 
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.checkpoint import CheckpointState, InvalidationReport, RollbackRecord
@@ -24,11 +21,12 @@ from film_pipeline.schemas.generation import GenerationLedger
 from film_pipeline.schemas.matrix_patch import MatrixPatch
 from film_pipeline.schemas.validation import ConsensusReport, ValidationReport
 from film_pipeline.storage.contract import ARTIFACT_ID_PATTERN as ARTIFACT_ID_PATTERN
+from film_pipeline.storage.contract import KindSpec as KindSpec
+from film_pipeline.storage.contract import Renderer as Renderer
 from film_pipeline.storage.contract import sanitize_artifact_id as sanitize_artifact_id
 from film_pipeline.storage.contract import validate_artifact_id as validate_artifact_id
 
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
-Renderer = Callable[[dict[str, Any]], str]
 
 
 class KindNotRegisteredError(RuntimeError):
@@ -40,21 +38,6 @@ class KindNotRegisteredError(RuntimeError):
             f"Artifact id '{artifact_id}' has no registered kind. Register it in "
             "film_pipeline.artifacts.registry before saving."
         )
-
-
-@dataclass(frozen=True)
-class KindSpec:
-    """Storage contract for one artifact kind."""
-
-    artifact_id: str
-    kind: str  # stable registry key, e.g. "film.studio/script"
-    schema_version: int = 1
-    payload_model: type[BaseModel] | None = None  # None: payload stays a plain dict
-    mutable: bool = False  # mutable kinds rewrite a single file instead of versioning
-    #: Typed markdown view for ``current.md``; ``None`` falls back to the
-    #: generic key-value renderer. Owned here so the registry stays the single
-    #: map from artifact id to storage contract (plan D4/D9).
-    renderer: Renderer | None = None
 
 
 class ArtifactKindRegistry:

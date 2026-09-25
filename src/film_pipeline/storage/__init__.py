@@ -2,6 +2,8 @@
 
 from film_pipeline.storage.contract import (
     ARTIFACT_ID_PATTERN,
+    KindSpec,
+    Renderer,
     sanitize_artifact_id,
     validate_artifact_id,
 )
@@ -15,6 +17,8 @@ from film_pipeline.storage.paths import (
 __all__ = [
     "ARTIFACT_ID_PATTERN",
     "PHASE_DIR_MAP",
+    "KindSpec",
+    "Renderer",
     "media_scene_dir",
     "phase_dir",
     "project_dir",

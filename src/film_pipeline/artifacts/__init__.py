@@ -20,10 +20,10 @@ from film_pipeline.artifacts.registry import (
     REGISTRY,
     ArtifactKindRegistry,
     KindNotRegisteredError,
-    KindSpec,
 )
 from film_pipeline.artifacts.serialization import NonFiniteNumberError
 from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.storage.contract import KindSpec
 from film_pipeline.storage.paths import (
     media_scene_dir,
     phase_dir,
