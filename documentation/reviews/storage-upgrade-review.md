@@ -87,3 +87,43 @@ P4 to merge the two trees; the merge never happened.
 Fixed by making the runtime root the storage root. One project folder now holds
 everything, verified by an end-to-end tree dump and pinned by a new guard test
 (`test_runtime_and_artifact_roots_coincide`).
+
+## Fix commits
+
+| Commit | Scope |
+|---|---|
+| `e9e34d7` | Public `store.root` in tests; `list_assets` row contract tightened; incident recorded |
+| `fa8903a` | **BLOCKING** non-finite rejection at all three boundaries; renderer map moved into `KindSpec` |
+| `266f04f` | **BLOCKING** single-folder project layout (runtime root = storage root) |
+| `dfa6cb1` | MAJOR: `save()` refuses `SUPERSEDED`; mutable refs raise instead of substituting current |
+| `c107521` | D6: every storage write atomic; parent-directory fsync for rename durability |
+| `3d09675` | Dead `paths.artifact_dir`/`artifact_path` (legacy colon-mangling) and dead `ArtifactMetadata.schema_version` removed |
+| `dac022e` | JSONL storage version enforced on read; §5 `list_artifacts`/`list_checkpoints` row contracts pinned |
+
+## Verification of the end goal
+
+Running four real pipeline phases through `StudioRuntime` produces exactly one
+project folder containing everything the D3 diagram specifies:
+
+```
+<root>/p1/
+├── project.json          ← typed record (human + MCP entry point)
+├── README.md             ← generated index with working relative links
+├── artifacts/<NN-phase>/<id>/{meta.json, current.md, versions/vNNN.json}
+├── index/artifacts.json
+├── audit/audit-log.jsonl
+├── .gitignore
+└── .storage.lock
+```
+
+`<root>` itself contains only `p1/` and `storage.json` — no second tree. The
+generated README renders a browsable artifact index, and `current.md` for the
+script artifact renders a screenplay-style document (scene headings, dialogue)
+rather than a key-value dump, confirming the D9 renderers work through the real
+pipeline. §1's first clause ("a human can open any project folder and read its
+state and final results") is therefore met.
+
+Test evidence is behavior-based, not coverage-based: every behavior-asserting
+regression test added here was run against the pre-fix code and confirmed to
+fail (non-finite ×6, status/mutable-ref ×3), and the production-roots guard was
+re-verified to trip by canary injection after each structural change.
