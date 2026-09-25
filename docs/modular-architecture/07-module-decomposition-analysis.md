@@ -148,19 +148,44 @@ optimised for:
    construction if the facade keeps its signatures. Highest value, medium risk.
 2. **`agents/model_adapter` transport split** (§4). Real seam, already named in
    the target architecture, contained interface. Medium value, low risk.
-3. **`storage/store.py`** (832 lines). Largest file. Not yet analysed in depth
-   here; a candidate for a follow-up measurement before any split.
+3. **`storage/store.py`** — analysed in §7; **do not split**.
 4. **Narrow `orchestrator_state`'s 97% public surface** (§3) and
    **`schemas/base.py`'s** (§5). Surface reductions, no file moves.
 5. **Do not split** `schemas` (§5) or `orchestration` (§3).
 
-## 7. What this analysis does not establish
+## 7. `storage/store.py` — large but low-surface, do not split
+
+`store.py` is the largest file in the repository at 832 lines, and `ArtifactStore`
+inside it is 605 lines with 36 methods — larger than `StudioRuntime` by both
+measures. It is nevertheless the *opposite* case, and comparing the two makes the
+distinction concrete:
+
+| Class | Lines | Methods | **Public** | Private helpers | Concerns |
+|---|---:|---:|---:|---:|---:|
+| `StudioRuntime` | 370 | 39 | **27** | 12 | 5 |
+| `ArtifactStore` | 605 | 36 | **15** | 21 | 1 |
+
+The discriminating number is the public surface, not the line count. Two thirds
+of `ArtifactStore`'s methods are private helpers (`_project_dir`,
+`_version_path`, `_meta_path`, `_project_lock`, `_read_meta_file`, …) serving a
+single concern: reading and writing one artifact store. Its public methods group
+coherently — core read/write (8), mutable-path variants (4), status transitions
+(2). There is one reason to change.
+
+**Recommendation.** Do not split `ArtifactStore` by file. If the file's length is
+itself the complaint, the honest move is to extract its module-level helpers
+(`_scan_versions`, `_read_envelope`, `_read_meta_file`, `_render_markdown`, …)
+into a sibling module — a mechanical relocation that changes no interface. That
+reduces the line count without pretending the class has seams it does not have.
+
+## 8. What this analysis does not establish
 
 - `mcp` (7,288 LOC, the largest module) is not analysed in depth here. It already
   decomposes into `tools/<domain>/`, so its size is breadth rather than
   concentration, but that is an impression from the file listing, not a
   measurement of its internal coupling.
-- `storage/store.py`'s 832 lines were counted, not read for seams.
+- The §7 reading of `ArtifactStore` is a structural scan, not a full read of
+  all 605 lines.
 - The method clustering in §2 is a heuristic over field references, not a
   dependency analysis; the four groups are indicative, and a decomposition plan
   should re-derive them.
