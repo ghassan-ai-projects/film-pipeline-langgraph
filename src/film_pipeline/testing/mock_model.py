@@ -1,6 +1,9 @@
-"""Compatibility aliases for devharness mock_model."""
+"""Compatibility aliases for devharness mock model adapter.
 
-from film_pipeline.devharness.mock_model import Any as Any
+Re-exports from the canonical owner. Only symbols with real consumers are
+kept, so strict mypy sees an explicit export surface.
+"""
+
 from film_pipeline.devharness.mock_model import MockModelAdapter as MockModelAdapter
-from film_pipeline.devharness.mock_model import dataclass as dataclass
-from film_pipeline.devharness.mock_model import field as field
+
+__all__ = ["MockModelAdapter"]

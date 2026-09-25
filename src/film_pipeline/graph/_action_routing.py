@@ -16,10 +16,14 @@ from film_pipeline.filmspec import (
     GENERATION_DEPENDENT_PHASES as _GENERATION_DEPENDENT_PHASES,
 )
 from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHASES
-from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
+from film_pipeline.filmspec import PHASE_GATES as _APPROVAL_GATES
 from film_pipeline.filmspec import next_phase
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.schemas.base import ValidationStatus
+
+#: Public alias consumed by ``graph.router``. Explicitly re-exported so strict
+#: mypy sees it as part of this module's surface.
+APPROVAL_GATES = _APPROVAL_GATES
 
 
 @dataclass

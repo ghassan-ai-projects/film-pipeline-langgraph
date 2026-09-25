@@ -1,4 +1,8 @@
-"""Compatibility aliases for devharness scenarios."""
+"""Compatibility aliases for devharness scenarios.
+
+Re-exports from the canonical owner. Strict mypy requires an explicit export
+surface, so each name is re-exported as itself.
+"""
 
 from film_pipeline.devharness.scenarios import ALL_SCENARIOS as ALL_SCENARIOS
 from film_pipeline.devharness.scenarios import AUTH_FAILURE as AUTH_FAILURE
@@ -24,4 +28,20 @@ from film_pipeline.devharness.scenarios import TIMEOUT_THEN_RESUME as TIMEOUT_TH
 from film_pipeline.devharness.scenarios import (
     VALIDATOR_FAILURE_AFTER_GENERATION as VALIDATOR_FAILURE_AFTER_GENERATION,
 )
-from film_pipeline.devharness.scenarios import ScenarioStep as ScenarioStep
+
+__all__ = [
+    "ALL_SCENARIOS",
+    "AUTH_FAILURE",
+    "CORRUPT_ASSET",
+    "DOWNLOAD_FAILURE_THEN_SUCCESS",
+    "FRAME_EXTRACTION_FAILURE",
+    "HAPPY_PATH_SEQUENTIAL_CHAIN",
+    "MODERATION_BLOCK",
+    "NETWORK_ERROR_AFTER_JOB_ID",
+    "PROVIDER_OUTAGE",
+    "QUOTA_EXHAUSTED",
+    "SLOW_POLL_THEN_COMPLETE",
+    "SUBMIT_ERROR_BEFORE_JOB_ID",
+    "TIMEOUT_THEN_RESUME",
+    "VALIDATOR_FAILURE_AFTER_GENERATION",
+]

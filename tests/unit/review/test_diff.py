@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from film_pipeline.review.diff import ArtifactDiff, _id_stem, compute_artifact_diff
+from film_pipeline.governance.diff import _id_stem
+from film_pipeline.review.diff import ArtifactDiff, compute_artifact_diff
 
 
 class TestIdStem:
