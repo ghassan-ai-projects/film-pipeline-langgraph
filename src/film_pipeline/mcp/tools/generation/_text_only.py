@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.filmspec import is_stale_generation_request_issue, text_only_generation_requests
+from film_pipeline.filmspec import text_only_generation_requests
 
 from ..helpers import _ok, _services
 
@@ -27,11 +27,10 @@ def _apply_text_only_state(active: dict[str, Any], requests: list[dict[str, obje
     """Record requests, flag completion, and drop stale blocking issues."""
     active["generation_requests"] = requests
     active["_text_only_generation_completed"] = True
-    issues = active.get("issues", [])
-    if isinstance(issues, list):
-        active["issues"] = [
-            issue for issue in issues if not is_stale_generation_request_issue(issue)
-        ]
+    from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
+    from film_pipeline.orchestration.state_schema import remove_issues_by_code
+
+    remove_issues_by_code(active, STALE_GENERATION_REQUEST_CODES)
 
 
 def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:

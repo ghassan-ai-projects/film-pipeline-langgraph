@@ -67,14 +67,9 @@ def _strip_stale_generation_request_blockers(state: dict[str, Any]) -> None:
     """Remove generated request-missing blockers after requests are restored."""
     if not state.get("generation_requests"):
         return
-    issues = state.get("issues", [])
-    if not isinstance(issues, list):
-        return
-    state["issues"] = [
-        issue
-        for issue in issues
-        if not (isinstance(issue, dict) and issue.get("code") in _STALE_REQUEST_CODES)
-    ]
+    from film_pipeline.orchestration.state_schema import remove_issues_by_code
+
+    remove_issues_by_code(state, _STALE_REQUEST_CODES)
 
 
 def _build_resume_payload(

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from film_pipeline.filmspec import (
     STALE_GENERATION_REQUEST_CODES,
-    is_stale_generation_request_issue,
     text_only_generation_request,
     text_only_generation_requests,
 )
@@ -27,30 +26,34 @@ class TestStaleGenerationRequestCodes:
         )
 
     def test_recognises_codes_the_planning_gate_raises(self) -> None:
-        """Every code the gate emits must be recognised as stale here."""
+        """Every code the gate emits must be removable by the shared helper."""
         from film_pipeline.governance.validators.planning_gates import (
             validate_dispatch_readiness,
         )
+        from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
         issues = validate_dispatch_readiness({}, None)
         assert issues, "expected the no-requests gate to raise an issue"
-        for issue in issues:
-            assert is_stale_generation_request_issue(issue)
+        state = {"issues": list(issues)}
+        remove_issues_by_code(state, STALE_GENERATION_REQUEST_CODES)
+        assert state["issues"] == []
 
-    def test_empty_request_list_is_also_recognised(self) -> None:
+    def test_empty_request_list_is_also_removable(self) -> None:
         from film_pipeline.governance.validators.planning_gates import (
             validate_dispatch_readiness,
         )
+        from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
-        for issue in validate_dispatch_readiness({}, []):
-            assert is_stale_generation_request_issue(issue)
+        state = {"issues": list(validate_dispatch_readiness({}, []))}
+        remove_issues_by_code(state, STALE_GENERATION_REQUEST_CODES)
+        assert state["issues"] == []
 
-    def test_ignores_unrelated_issue_codes(self) -> None:
-        assert not is_stale_generation_request_issue({"code": "matrix_incomplete"})
+    def test_unrelated_issue_codes_survive(self) -> None:
+        from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
-    def test_ignores_non_mapping_issues(self) -> None:
-        assert not is_stale_generation_request_issue("not-an-issue")
-        assert not is_stale_generation_request_issue(None)
+        state = {"issues": [{"code": "matrix_incomplete"}]}
+        remove_issues_by_code(state, STALE_GENERATION_REQUEST_CODES)
+        assert state["issues"] == [{"code": "matrix_incomplete"}]
 
 
 class TestTextOnlyRequestBuilder:

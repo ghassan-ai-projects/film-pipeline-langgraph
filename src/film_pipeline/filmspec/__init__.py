@@ -179,17 +179,6 @@ STALE_GENERATION_REQUEST_CODES: frozenset[str] = frozenset(
 )
 
 
-def is_stale_generation_request_issue(issue: object) -> bool:
-    """Return whether ``issue`` is a no-requests blocker that is now stale.
-
-    ``issue`` is arbitrary state content, so this only reports ``True`` for a
-    mapping whose ``code`` is one of :data:`STALE_GENERATION_REQUEST_CODES`.
-    """
-    if not isinstance(issue, dict):
-        return False
-    return issue.get("code") in STALE_GENERATION_REQUEST_CODES
-
-
 def text_only_generation_request(
     project_id: str,
     shot_id: str,

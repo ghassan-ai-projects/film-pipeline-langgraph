@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.filmspec import is_stale_generation_request_issue, text_only_generation_requests
+from film_pipeline.filmspec import text_only_generation_requests
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import GenerationWorkspace
 from film_pipeline.storage.manifest import read_manifest
@@ -167,11 +167,10 @@ def _store_project_state(svc: OperatorService, state: dict[str, Any], project_id
 
 
 def _strip_stale_request_issues(state: dict[str, Any]) -> None:
-    issues = state.get("issues", [])
-    if isinstance(issues, list):
-        state["issues"] = [
-            issue for issue in issues if not is_stale_generation_request_issue(issue)
-        ]
+    from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
+    from film_pipeline.orchestration.state_schema import remove_issues_by_code
+
+    remove_issues_by_code(state, STALE_GENERATION_REQUEST_CODES)
 
 
 def _count_rows_by_status(rows: list[dict[str, Any]]) -> dict[str, int]:

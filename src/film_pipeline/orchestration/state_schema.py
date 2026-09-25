@@ -7,8 +7,9 @@ with ``Annotated[T, add]`` accumulate across nodes.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from operator import add
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, TypedDict, cast
 
 from film_pipeline.orchestration.services import GraphServices as GraphServices
 
@@ -27,6 +28,31 @@ def merge_unique(left: list[str] | None, right: list[str] | None) -> list[str]:
             merged.append(item)
             seen.add(item)
     return merged
+
+
+def remove_issues_by_code(state: dict[str, Any], codes: Iterable[str]) -> None:
+    """Drop issues with any of ``codes`` from a state mapping, in place.
+
+    `merge_issues` owns the removal rule, but it is a *reducer*: it applies when
+    LangGraph merges a node's partial update. Callers outside the graph — the
+    resume path, the operator service, the text-only policy — write state
+    directly and cannot use a reducer, so three of them had each reimplemented
+    the same list comprehension.
+
+    This applies the reducer's own semantics to a plain mapping, so the removal
+    rule has one implementation. ``codes`` accepts the closed vocabulary from
+    `filmspec`, which is what the callers were matching against.
+    """
+    codes_set = {str(code) for code in codes}
+    if not codes_set:
+        return
+    existing = state.get("issues")
+    if not isinstance(existing, list):
+        return
+    state["issues"] = merge_issues(
+        cast(list[dict[str, object]], existing),
+        [{"__remove_codes__": sorted(codes_set)}],
+    )
 
 
 def merge_generation_requests(
