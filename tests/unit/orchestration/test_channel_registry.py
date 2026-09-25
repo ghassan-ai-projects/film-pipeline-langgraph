@@ -21,10 +21,10 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.orchestration.nodes._agent_handoff import _propagate_side_effects
 from film_pipeline.orchestration.orchestrator_state import ORCH_CHANNELS, OrchChannelSpec
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _ORCH_STATE_PATH = _REPO_ROOT / "src" / "film_pipeline" / "orchestration" / "orchestrator_state.py"

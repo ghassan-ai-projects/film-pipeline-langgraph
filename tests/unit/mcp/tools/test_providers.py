@@ -30,7 +30,7 @@ def test_resolve_provider_block_requires_provider_id() -> None:
 
 
 def test_resolve_provider_block_sets_healthy() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.set_provider_health("test-provider-block", "blocked_quota", "rate limited")
@@ -43,7 +43,7 @@ def test_resolve_provider_block_sets_healthy() -> None:
 
 
 def test_list_providers_returns_mock_fallback_when_empty_in_mock_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     if rt.server_mode == "mock":
@@ -54,7 +54,7 @@ def test_list_providers_returns_mock_fallback_when_empty_in_mock_mode() -> None:
 
 
 def test_list_providers_includes_real_chat_provider_health() -> None:
-    from film_pipeline.app.runtime import reset_runtime
+    from film_pipeline.studio.runtime import reset_runtime
 
     rt = reset_runtime("real")
     rt.seed_default_provider_health()

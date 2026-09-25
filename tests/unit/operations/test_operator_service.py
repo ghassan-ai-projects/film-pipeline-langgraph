@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.runtime import create_runtime
 from film_pipeline.operations.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.operations.models import OperatorCommentRequest, ProjectCreateRequest
 from film_pipeline.operations.operator import OperatorService
@@ -17,6 +16,7 @@ from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.story_bible import SceneList
 from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio.runtime import create_runtime
 
 
 def _service(tmp_path: Path) -> OperatorService:

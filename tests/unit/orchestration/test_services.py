@@ -9,7 +9,6 @@ from typing import Any, cast
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.orchestration.nodes import _run_agent, _save_artifact, script_node
 from film_pipeline.orchestration.services import (
     _SERVICES_CTX,
@@ -30,6 +29,7 @@ from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 from film_pipeline.schemas.script import Script
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 
 def test_get_services_prefers_state_then_uses_context_fallback() -> None:

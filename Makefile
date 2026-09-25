@@ -73,7 +73,7 @@ run-mcp-headless: ## Start MCP server in real mode (use auto-approve profile for
 	FILM_PIPELINE_MCP_MODE=real $(UV_RUN) python -m film_pipeline.mcp.server
 
 demo-project: ## Create and run a demo project in mock mode
-	$(UV_RUN) python -m film_pipeline.app.smoke
+	$(UV_RUN) python -m film_pipeline.studio.smoke
 	@echo "Demo project created and smoke test passed."
 
 release-check: ## Run release validation (ci-check + smoke + docs)
@@ -90,7 +90,7 @@ release-check: ## Run release validation (ci-check + smoke + docs)
 	@test -f documentation/release-process.md || (echo "Missing documentation/release-process.md" && exit 1)
 	@test -f documentation/demo-guide.md || (echo "Missing documentation/demo-guide.md" && exit 1)
 	@echo "Checking app smoke test..."
-	@$(UV_RUN) python -m film_pipeline.app.smoke
+	@$(UV_RUN) python -m film_pipeline.studio.smoke
 	@echo "Checking pytest smoke tests..."
 	@$(UV_RUN) pytest tests/smoke/ -q --no-cov
 	@echo "  Release check passed"

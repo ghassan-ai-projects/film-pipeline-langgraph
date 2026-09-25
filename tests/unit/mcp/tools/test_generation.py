@@ -19,8 +19,6 @@ import pytest
 from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
-from film_pipeline.app._provider_factory import build_provider_adapter
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     approve_generation_spend,
     cancel_generation_request,
@@ -35,6 +33,8 @@ from film_pipeline.mcp.tools import (
 from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas._base import SchemaBase
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio._provider_factory import build_provider_adapter
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 @pytest.fixture
@@ -122,7 +122,7 @@ def test_start_generation_batch_skips_already_submitted(rt: StudioRuntime) -> No
 def test_promote_test_to_production_no_active_project() -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -143,7 +143,7 @@ def test_promote_test_to_production_no_eligible_rows(rt: StudioRuntime) -> None:
 def test_plan_generation_batch_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -222,7 +222,7 @@ def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
 def test_approve_generation_spend_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -266,7 +266,7 @@ def test_get_generation_status_missing_id() -> None:
 def test_get_generation_status_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -300,7 +300,7 @@ def test_get_generation_status_success(rt: StudioRuntime) -> None:
 def test_list_active_generations_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -372,7 +372,7 @@ def test_resume_generation_polling_missing_id() -> None:
 def test_resume_generation_polling_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -495,7 +495,7 @@ def test_cancel_generation_request_missing_id() -> None:
 def test_cancel_generation_request_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""
@@ -619,7 +619,7 @@ def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> N
 def test_preview_generation_prompts_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt2 = gr()
     rt2.active_project_id = ""

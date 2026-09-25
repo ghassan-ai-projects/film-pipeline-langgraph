@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
 
     request = _build_run_request(args, stack)
 
-    from film_pipeline.app.logging_setup import configure_logging
+    from film_pipeline.studio.logging_setup import configure_logging
 
     # The headless runner persists state under the explicit request root, so
     # retain INFO+ logs there as well as the WARNING-capped stderr stream.

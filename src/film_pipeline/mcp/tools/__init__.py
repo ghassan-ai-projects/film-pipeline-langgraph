@@ -10,7 +10,7 @@ from __future__ import annotations
 from importlib import import_module
 from typing import Any
 
-from film_pipeline.app.runtime import get_runtime as get_runtime
+from film_pipeline.studio.runtime import get_runtime as get_runtime
 
 _TOOL_MODULES: dict[str, str] = {
     "add_operator_comment": "film_pipeline.mcp.tools.operator",

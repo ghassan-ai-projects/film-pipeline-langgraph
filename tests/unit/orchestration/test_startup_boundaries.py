@@ -22,7 +22,7 @@ import pytest
 
 _GRAPH_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "graph"
 
-_FORBIDDEN_ROOTS = ("film_pipeline.devharness", "film_pipeline.app")
+_FORBIDDEN_ROOTS = ("film_pipeline.devharness", "film_pipeline.studio")
 
 
 def _imported_modules(tree: ast.Module, current_package: str) -> set[str]:
@@ -115,7 +115,7 @@ def test_graph_composition_imports_remain_one_way() -> None:
         ),
         (
             "from film_pipeline.orchestration import nodes as node_package",
-            "film_pipeline.app",
+            "film_pipeline.studio",
             {"film_pipeline.orchestration", "film_pipeline.orchestration.nodes"},
         ),
         (
@@ -152,7 +152,7 @@ def test_mock_service_construction_imports_no_testing_modules() -> None:
         "import sys\n"
         "import tempfile\n"
         "from pathlib import Path\n"
-        "from film_pipeline.app.mock_responses import default_mock_responses\n"
+        "from film_pipeline.studio.mock_responses import default_mock_responses\n"
         "from film_pipeline.orchestration.services import GraphServices\n"
         "root = Path(tempfile.mkdtemp())\n"
         "GraphServices.for_mock_runtime(\n"
@@ -171,7 +171,7 @@ def test_mock_service_construction_imports_no_testing_modules() -> None:
 
 def test_default_runtime_mode_builds_services_from_composition_root(tmp_path: Any) -> None:
     """The production default wiring passes injected canned responses."""
-    from film_pipeline.app.runtime import StudioRuntime
+    from film_pipeline.studio.runtime import StudioRuntime
 
     rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
     assert rt.services is not None

@@ -8,8 +8,8 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import generate_plan, generate_shot_bible, initialize_budget
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
@@ -36,7 +36,7 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
 
 
 def test_initialize_budget_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -163,7 +163,7 @@ def test_initialize_budget_save_failure(tmp_path: Path, monkeypatch: pytest.Monk
 
 
 def test_generate_plan_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""

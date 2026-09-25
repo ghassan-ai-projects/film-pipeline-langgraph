@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import reset_runtime
 from film_pipeline.mcp.tools import (
     approve_profile_change,
     create_film_project,
@@ -18,6 +17,7 @@ from film_pipeline.mcp.tools import (
     propose_profile_change,
     set_active_project,
 )
+from film_pipeline.studio.runtime import reset_runtime
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +57,7 @@ def test_get_runtime_mode_default_mock() -> None:
 
 
 def test_get_runtime_mode_no_active_project_uses_server_mode() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -94,7 +94,7 @@ def _create_active_project(project_id: str) -> None:
 
 
 def test_propose_profile_change_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -163,7 +163,7 @@ def test_approve_profile_change_updates_config_and_registers_profile_providers()
     )
     proposal_id = cast(str, proposed["proposal_id"])
 
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     runtime = gr()
     project_state = runtime.get_project("profile-change-approve")

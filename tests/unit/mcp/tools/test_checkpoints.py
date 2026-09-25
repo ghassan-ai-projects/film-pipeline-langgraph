@@ -27,7 +27,7 @@ def _make_active_project(project_id: str) -> None:
 
 
 def test_create_checkpoint_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -162,7 +162,7 @@ def test_rollback_artifact_requires_artifact_id() -> None:
 
 
 def test_rollback_artifact_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -186,7 +186,7 @@ def test_rollback_artifact_checkpoint_without_git_commit(
 ) -> None:
     _make_active_project("proj-cp-8")
     created = asyncio.run(create_checkpoint({"reason": "no git ref"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     cp = rt.get_checkpoint(cast(str, created["checkpoint_id"]))
@@ -215,7 +215,7 @@ def test_rollback_artifact_no_checkpoint_contains_artifact() -> None:
 
 def test_create_checkpoint_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
     _make_active_project("proj-cp-ve")
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     def _raise(**_kwargs: object) -> None:
         raise ValueError("bad checkpoint")
@@ -239,7 +239,7 @@ def test_rollback_artifact_specific_checkpoint_git_restore_fails(
 ) -> None:
     _make_active_project("proj-cp-restore-fail")
     created = asyncio.run(create_checkpoint({"reason": "restore fail"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     cp = rt.get_checkpoint(cast(str, created["checkpoint_id"]))
@@ -266,7 +266,7 @@ def test_rollback_artifact_specific_checkpoint_git_restore_fails(
 def test_rollback_artifact_fallback_loop_success(monkeypatch: pytest.MonkeyPatch) -> None:
     _make_active_project("proj-cp-fallback")
     asyncio.run(create_checkpoint({"reason": "fallback"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     project_id = "proj-cp-fallback"
@@ -300,7 +300,7 @@ def test_rollback_artifact_specific_checkpoint_success(
 ) -> None:
     _make_active_project("proj-cp-restore-ok")
     created = asyncio.run(create_checkpoint({"reason": "restore ok"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     cp = rt.get_checkpoint(cast(str, created["checkpoint_id"]))
@@ -342,7 +342,7 @@ def test_rollback_artifact_specific_checkpoint_no_manager(
 ) -> None:
     _make_active_project("proj-cp-no-manager")
     created = asyncio.run(create_checkpoint({"reason": "no manager"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     monkeypatch.setattr(rt, "checkpoint_managers", {})
@@ -358,7 +358,7 @@ def test_rollback_artifact_specific_checkpoint_no_manager(
 def test_rollback_artifact_fallback_no_manager(monkeypatch: pytest.MonkeyPatch) -> None:
     _make_active_project("proj-cp-fallback-no-manager")
     asyncio.run(create_checkpoint({"reason": "fallback no manager"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     project_id = "proj-cp-fallback-no-manager"
@@ -377,7 +377,7 @@ def test_rollback_artifact_fallback_no_manager(monkeypatch: pytest.MonkeyPatch) 
 def test_rollback_artifact_fallback_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     _make_active_project("proj-cp-fallback-exc")
     asyncio.run(create_checkpoint({"reason": "fallback exc"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     project_id = "proj-cp-fallback-exc"

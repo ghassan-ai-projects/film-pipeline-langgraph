@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.app import _provider_factory as provider_factory
-from film_pipeline.app._provider_profiles import (
+from film_pipeline.providers.credentials import MissingProviderCredential
+from film_pipeline.studio import _provider_factory as provider_factory
+from film_pipeline.studio._provider_profiles import (
     missing_profile_credentials,
     register_profile_providers,
 )
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.providers.credentials import MissingProviderCredential
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_register_profile_providers_builds_ordered_adapters_and_health(

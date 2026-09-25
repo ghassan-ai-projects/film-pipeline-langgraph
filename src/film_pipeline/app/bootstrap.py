@@ -1,78 +1,24 @@
-"""Bootstrap validation — fails fast if the environment is misconfigured."""
+"""Compatibility aliases for :mod:`film_pipeline.studio.bootstrap`."""
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+# Private helpers still reached through this path during migration.
+from film_pipeline.studio.bootstrap import (
+    _missing_kb_manifest_issues as _missing_kb_manifest_issues,
+)
+from film_pipeline.studio.bootstrap import (
+    _missing_profiles_dir_issues as _missing_profiles_dir_issues,
+)
+from film_pipeline.studio.bootstrap import (
+    _missing_real_mode_credentials_issues as _missing_real_mode_credentials_issues,
+)
+from film_pipeline.studio.bootstrap import (
+    _unusable_artifacts_dir_issues as _unusable_artifacts_dir_issues,
+)
+from film_pipeline.studio.bootstrap import bootstrap_ok as bootstrap_ok
+from film_pipeline.studio.bootstrap import validate_environment as validate_environment
 
-from film_pipeline.kb.paths import kb_manifest_path
-from film_pipeline.providers import credentials
-
-
-def validate_environment() -> list[str]:
-    """Check required directories and configuration exist.
-
-    Returns a list of actionable error messages. Empty list = ready.
-    """
-    return [
-        *_missing_profiles_dir_issues(),
-        *_missing_kb_manifest_issues(),
-        *_unusable_artifacts_dir_issues(),
-        *_missing_real_mode_credentials_issues(),
-    ]
-
-
-def bootstrap_ok() -> bool:
-    """Return True if the environment passes bootstrap checks."""
-    return len(validate_environment()) == 0
-
-
-def _missing_profiles_dir_issues() -> list[str]:
-    """Report absence of the profiles directory."""
-    if Path("profiles").is_dir():
-        return []
-    return ["profiles/ directory not found. Create it with at least one profile YAML."]
-
-
-def _missing_kb_manifest_issues() -> list[str]:
-    """Report absence of the KB manifest."""
-    if kb_manifest_path().exists():
-        return []
-    return [
-        "film-knowledge-base/index/kb-manifest.yaml not found. "
-        "The KB manifest is required for context packets."
-    ]
-
-
-def _unusable_artifacts_dir_issues() -> list[str]:
-    """Report an artifacts path that exists but cannot hold written artifacts."""
-    artifacts_dir = Path("artifacts")
-    if not artifacts_dir.exists():
-        return []
-    issues: list[str] = []
-    if not artifacts_dir.is_dir():
-        issues.append("artifacts exists but is not a directory.")
-    try:
-        probe = artifacts_dir / ".write_test"
-        probe.touch()
-        probe.unlink()
-    except OSError:
-        issues.append("Cannot write to artifacts/ directory.")
-    return issues
-
-
-def _missing_real_mode_credentials_issues() -> list[str]:
-    """Report a real-mode configuration missing required provider keys.
-
-    Real-mode generation defaults use the configured OpenRouter/Google lanes.
-    The z.ai adapter is opt-in through an explicit ``zai/<model>`` profile.
-    OpenRouter readiness goes through the same env-then-.env resolution the
-    adapter uses at call time.
-    """
-    mcp_mode = os.getenv("FILM_PIPELINE_MCP_MODE", "mock").strip().lower()
-    if mcp_mode != "real":
-        return []
-    issues: list[str] = []
-    if not credentials.is_configured("seedance-openrouter"):
-        issues.append("OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real.")
-    return issues
+__all__ = [
+    "bootstrap_ok",
+    "validate_environment",
+]

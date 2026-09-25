@@ -25,7 +25,7 @@ class TestMCPFlow:
     @classmethod
     def setup_class(cls) -> None:
         """Reset runtime between test runs."""
-        from film_pipeline.app.runtime import get_runtime, reset_runtime
+        from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
         reset_runtime("mock")
         rt = get_runtime()
@@ -34,7 +34,7 @@ class TestMCPFlow:
 
     def setup_method(self) -> None:
         """Reset runtime before each test."""
-        from film_pipeline.app.runtime import get_runtime, reset_runtime
+        from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
         reset_runtime("mock")
         rt = get_runtime()

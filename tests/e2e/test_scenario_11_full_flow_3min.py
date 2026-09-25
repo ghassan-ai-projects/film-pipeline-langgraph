@@ -16,11 +16,11 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio.runtime import StudioRuntime
 
 # A concrete 3-minute short with 12 scenes so every phase has material to work on.
 THE_LAST_SIGNAL_IDEA = """
@@ -168,7 +168,7 @@ class TestFull3MinuteFlowReal:
 
     def test_real_flow_to_shot_bible_matrix(self, tmp_path: Path) -> None:
         """Run the same 3-minute idea through real LLM providers."""
-        import film_pipeline.app.runtime as rt_mod
+        import film_pipeline.studio.runtime as rt_mod
 
         previous_override = rt_mod._RUNTIME_MODE_OVERRIDE
         rt_mod._RUNTIME_MODE_OVERRIDE = "real"

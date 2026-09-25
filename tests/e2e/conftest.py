@@ -12,7 +12,6 @@ import pytest
 from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.devharness.mock_human import DecisionProfile, MockHumanActor
@@ -29,6 +28,7 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderRegistryEntry,
 )
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio.runtime import StudioRuntime
 from film_pipeline.validation.registry import ValidatorRegistry
 from film_pipeline.validation.validators import MVP_VALIDATORS
 
@@ -127,7 +127,7 @@ def graph_services(
     tmp_path: Path,
 ) -> GraphServices:
     """GraphServices wired with mock model and in-memory registries."""
-    from film_pipeline.app.mock_responses import default_mock_responses
+    from film_pipeline.studio.mock_responses import default_mock_responses
 
     runner = PromptRunner(mock_responses=default_mock_responses())
     return GraphServices(
@@ -150,7 +150,7 @@ def studio_runtime(
     runtime, and restores the previous value on teardown so tests do not
     bleed into each other.
     """
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     rt = StudioRuntime(runtime_root=tmp_path / "e2e-runtime")
     rt.services = graph_services
@@ -181,7 +181,7 @@ def invoke_tool(
     import importlib
 
     # Set the runtime singleton for MCP tools
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     rt_mod._RUNTIME = rt
 

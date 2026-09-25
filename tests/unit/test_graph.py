@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from film_pipeline.app.graph_factory import build_graph
 from film_pipeline.orchestration import orchestrator_state as ostate
 from film_pipeline.orchestration.edges import after_approval, after_phase
 from film_pipeline.orchestration.nodes import (
@@ -11,6 +10,7 @@ from film_pipeline.orchestration.nodes import (
     request_revision_node,
 )
 from film_pipeline.orchestration.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
+from film_pipeline.studio.graph_factory import build_graph
 
 
 class TestRouter:

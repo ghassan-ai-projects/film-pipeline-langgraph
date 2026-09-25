@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.app.smoke import (
+from film_pipeline.studio.smoke import (
     check_agent_registry,
     check_graph_compiles,
     check_kb_manifest,

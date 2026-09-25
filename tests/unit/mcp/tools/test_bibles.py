@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     generate_camera_bible,
     generate_character_bible,
@@ -17,6 +16,7 @@ from film_pipeline.mcp.tools import (
     generate_style_bible,
 )
 from film_pipeline.mcp.tools.bibles import _extract_script_text
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_extract_script_text_none_returns_empty() -> None:
@@ -60,7 +60,7 @@ def _build_runtime_through_script(tmp_path: Path, project_id: str) -> StudioRunt
 
 
 def test_generate_character_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -69,7 +69,7 @@ def test_generate_character_bible_requires_active_project() -> None:
 
 
 def test_generate_environment_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -120,7 +120,7 @@ def test_generate_environment_bible_missing_constitution(
 
 
 def test_generate_camera_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -129,7 +129,7 @@ def test_generate_camera_bible_requires_active_project() -> None:
 
 
 def test_generate_style_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -151,7 +151,7 @@ def test_generate_style_bible_missing_constitution(
 
 
 def test_generate_shot_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""

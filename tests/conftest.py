@@ -35,8 +35,8 @@ def _isolated_runtime_root(
     # same xdist worker recreates the singleton in the leaked mode — tests then
     # fail order-dependently ("No active project", mock/real mismatches).
     monkeypatch.delenv("FILM_PIPELINE_MCP_MODE", raising=False)
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.devharness.in_memory_git import reset_in_memory_git
+    from film_pipeline.studio.runtime import reset_runtime
 
     # Each test starts with an empty in-memory checkpoint history (see the
     # ``_fast_checkpoint_backend`` session fixture for why real git is bypassed).

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.safety import (
+from film_pipeline.studio.safety import (
     ProductionDataError,
     can_delete_project,
     is_safe_to_delete,

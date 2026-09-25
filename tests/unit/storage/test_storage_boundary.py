@@ -109,7 +109,7 @@ class TestStorageCoreBoundary:
         forbidden = (
             "film_pipeline.orchestration",
             "film_pipeline.mcp",
-            "film_pipeline.app",
+            "film_pipeline.studio",
             "film_pipeline.generation",
             "film_pipeline.checkpoints",
             "film_pipeline.review",

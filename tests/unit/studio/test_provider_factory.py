@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.app._provider_factory import build_provider_adapter
 from film_pipeline.providers import MockImageProvider, MockVideoProvider
 from film_pipeline.providers.adapters import (
     Imagen4GeminiProvider,
@@ -15,6 +14,7 @@ from film_pipeline.providers.adapters import (
 )
 from film_pipeline.providers.base import BaseProviderAdapter
 from film_pipeline.schemas.registries.provider_registry import ProviderCapabilities
+from film_pipeline.studio._provider_factory import build_provider_adapter
 
 
 @pytest.fixture(autouse=True)

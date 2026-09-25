@@ -9,13 +9,6 @@ from unittest.mock import Mock
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from film_pipeline.app import _graph_exec
-from film_pipeline.app.graph_factory import (
-    _APPROVAL_DESTINATIONS,
-    _route_current_phase,
-    build_graph,
-)
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.filmspec import PHASE_SEQUENCE as CANONICAL_PHASE_SEQUENCE
 from film_pipeline.filmspec import FilmPhase as CanonicalFilmPhase
 from film_pipeline.filmspec import next_phase as canonical_next_phase
@@ -29,6 +22,13 @@ from film_pipeline.orchestration.phase_sequence import (
 )
 from film_pipeline.orchestration.router import PHASE_ORDER as PUBLIC_PHASE_ORDER
 from film_pipeline.schemas import FilmPhase
+from film_pipeline.studio import _graph_exec
+from film_pipeline.studio.graph_factory import (
+    _APPROVAL_DESTINATIONS,
+    _route_current_phase,
+    build_graph,
+)
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_phase_order_preserves_the_serialized_workflow() -> None:

@@ -9,7 +9,7 @@ This file replaces the nine separate alias-identity test modules that each
 asserted a hand-written handful of names. The cases below are derived from the
 alias module's own export list, so a newly added re-export is covered the moment
 it is written — previously eleven names re-exported by
-``film_pipeline.app.services.models`` were asserted nowhere.
+``film_pipeline.studio.services.models`` were asserted nowhere.
 
 A pair is described by the alias module to inspect and the canonical module that
 owns the objects. Two shapes are supported:

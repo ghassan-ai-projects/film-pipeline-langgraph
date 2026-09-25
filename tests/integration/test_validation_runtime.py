@@ -10,8 +10,8 @@ import asyncio
 from pathlib import Path
 from typing import Any, cast
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import get_validation_report
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 class TestValidationRuntimeControl:
@@ -101,12 +101,12 @@ class TestValidationRuntimeControl:
         active["_validation_reports"] = test_reports
         rt.projects["mcp-val"] = active
 
-        from film_pipeline.app.runtime import _RUNTIME
+        from film_pipeline.studio.runtime import _RUNTIME
 
         original = _RUNTIME
         try:
             # Monkeypatch global runtime for this test
-            import film_pipeline.app.runtime as rt_mod
+            import film_pipeline.studio.runtime as rt_mod
 
             rt_mod._RUNTIME = rt
             result = asyncio.run(get_validation_report({}))
@@ -145,7 +145,7 @@ class TestValidationRuntimeControl:
         active["issues"] = test_issues
         rt.projects["mcp-issues"] = active
 
-        import film_pipeline.app.runtime as rt_mod
+        import film_pipeline.studio.runtime as rt_mod
 
         original = rt_mod._RUNTIME
         try:

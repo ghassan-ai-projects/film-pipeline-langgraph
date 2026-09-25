@@ -12,7 +12,6 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.orchestration import nodes
 from film_pipeline.orchestration.nodes import approve_phase_node
 from film_pipeline.orchestration.nodes._agent_handoff import _propagate_side_effects
@@ -21,6 +20,7 @@ from film_pipeline.orchestration.orchestrator_state import (
     get_candidate_refs,
 )
 from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 
 @pytest.fixture(autouse=True)

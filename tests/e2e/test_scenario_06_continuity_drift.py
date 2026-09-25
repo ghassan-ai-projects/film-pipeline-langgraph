@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.orchestration.router import compute_actions
 from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.studio.runtime import StudioRuntime
 from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
 

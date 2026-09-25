@@ -33,7 +33,7 @@ from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.storage.store import ArtifactStore
 
 _OPERATIONS_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "operations"
-_FORBIDDEN_ROOT = "film_pipeline.app"
+_FORBIDDEN_ROOT = "film_pipeline.studio"
 
 
 class _NoServicesRuntime:
@@ -46,18 +46,18 @@ class _NoServicesRuntime:
 class TestProtocolConformance:
     def test_real_runtime_satisfies_the_port(self, tmp_path: Path) -> None:
         """The production runtime conforms structurally, with no subclass."""
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         assert isinstance(runtime, RuntimePort)
 
     def test_runtime_provider_is_satisfied_by_the_studio_binding(self, tmp_path: Path) -> None:
-        from film_pipeline.app._operator_runtime import StudioRuntimeProvider
+        from film_pipeline.studio._operator_runtime import StudioRuntimeProvider
 
         assert isinstance(StudioRuntimeProvider(), RuntimeProvider)
 
     def test_provider_composition_is_satisfied_by_the_studio_binding(self) -> None:
-        from film_pipeline.app._operator_runtime import profile_provider_composition
+        from film_pipeline.studio._operator_runtime import profile_provider_composition
 
         assert isinstance(profile_provider_composition(), ProviderComposition)
 
@@ -69,7 +69,7 @@ class TestProtocolConformance:
 
 class TestArtifactStoreOf:
     def test_returns_the_store_when_services_exist(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         assert runtime.services is not None
@@ -80,8 +80,8 @@ class TestArtifactStoreOf:
 
     def test_persistence_helpers_accept_the_real_runtime(self, tmp_path: Path) -> None:
         """`storage_for` and `artifact_root` take the port, not a runtime import."""
-        from film_pipeline.app._persistence import artifact_root, storage_for
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio._persistence import artifact_root, storage_for
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         storage = storage_for(runtime)
@@ -91,7 +91,7 @@ class TestArtifactStoreOf:
             assert storage.root == artifact_root(runtime)
 
     def test_persistence_helpers_tolerate_absent_services(self) -> None:
-        from film_pipeline.app._persistence import artifact_root, storage_for
+        from film_pipeline.studio._persistence import artifact_root, storage_for
 
         runtime = _NoServicesRuntime()
         assert artifact_root(runtime) is None  # type: ignore[arg-type]
@@ -103,7 +103,7 @@ class TestOperationsDoesNotImportTheCompositionRoot:
         """FES #3 (`operations → studio`) must not be introduced.
 
         Module-level imports only: a *nested* import of
-        `film_pipeline.app._operator_runtime` is the deliberate lazy default
+        `film_pipeline.studio._operator_runtime` is the deliberate lazy default
         that keeps zero-arg `OperatorService()` working, and it is asserted
         separately below.
         """
@@ -134,7 +134,7 @@ class TestOperationsDoesNotImportTheCompositionRoot:
                     _FORBIDDEN_ROOT
                 ):
                     nested.append(f"{path.name}: {node.module}")
-        assert nested == ["operator.py: film_pipeline.app._operator_runtime"], (
+        assert nested == ["operator.py: film_pipeline.studio._operator_runtime"], (
             f"unexpected nested composition-root imports: {nested}"
         )
 
@@ -150,9 +150,9 @@ class TestOperationsDoesNotImportTheCompositionRoot:
         source = _OPERATIONS_DIR / "operator.py"
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         forbidden = (
-            "film_pipeline.app.runtime",
-            "film_pipeline.app._provider_profiles",
-            "film_pipeline.app._persistence",
+            "film_pipeline.studio.runtime",
+            "film_pipeline.studio._provider_profiles",
+            "film_pipeline.studio._persistence",
         )
         module_level: list[str] = []
         for node in tree.body:
@@ -169,7 +169,7 @@ class TestOperationsDoesNotImportTheCompositionRoot:
             node
             for node in ast.walk(tree)
             if isinstance(node, ast.ImportFrom)
-            and (node.module or "") == "film_pipeline.app._operator_runtime"
+            and (node.module or "") == "film_pipeline.studio._operator_runtime"
         ]
         assert nested, "expected the lazy composition-root binding to still exist"
         top_level_linenos = {id(node) for node in tree.body}
@@ -180,9 +180,9 @@ class TestOperationsDoesNotImportTheCompositionRoot:
     @pytest.mark.parametrize(
         ("source", "expected"),
         [
-            ("import film_pipeline.app.runtime", True),
-            ("from film_pipeline.app import runtime", True),
-            ("from film_pipeline.app.runtime import StudioRuntime", True),
+            ("import film_pipeline.studio.runtime", True),
+            ("from film_pipeline.studio import runtime", True),
+            ("from film_pipeline.studio.runtime import StudioRuntime", True),
             ("from film_pipeline.storage import store", False),
             ("from film_pipeline.schemas import artifact", False),
         ],

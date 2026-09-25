@@ -9,7 +9,7 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from film_pipeline.app.graph_factory import _default_checkpointer, build_graph
+from film_pipeline.studio.graph_factory import _default_checkpointer, build_graph
 
 
 def test_default_checkpointer_returns_memory_saver_without_env() -> None:
@@ -22,7 +22,7 @@ def test_default_checkpointer_returns_sqlite_when_persist_enabled(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app import graph_factory as graph_module
+    from film_pipeline.studio import graph_factory as graph_module
 
     monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
     monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")

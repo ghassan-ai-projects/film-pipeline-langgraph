@@ -108,8 +108,8 @@ class TestTextOnlyRequestBuilder:
 
     def test_module_exposes_one_code_set(self) -> None:
         """No consumer module may re-declare the codes for itself."""
-        import film_pipeline.app._resume as resume
         import film_pipeline.operations._generation_ops as generation_ops
+        import film_pipeline.studio._resume as resume
 
         assert resume.__dict__["_STALE_REQUEST_CODES"] is STALE_GENERATION_REQUEST_CODES
         assert "_STALE_REQUEST_CODES" not in vars(generation_ops)

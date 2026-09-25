@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.orchestration._agent_routing import route_agent
 from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 
 @pytest.fixture()

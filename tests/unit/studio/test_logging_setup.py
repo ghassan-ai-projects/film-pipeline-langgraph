@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.logging_setup import _MARKER_ATTR, configure_logging
+from film_pipeline.studio.logging_setup import _MARKER_ATTR, configure_logging
 
 
 @pytest.fixture()
@@ -99,7 +99,7 @@ def test_no_file_handler_without_persistence(
 def test_no_file_handler_without_runtime_root(
     _clean_root_logger: logging.Logger, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("film_pipeline.app._persistence.use_persistent_runtime", lambda: True)
+    monkeypatch.setattr("film_pipeline.studio._persistence.use_persistent_runtime", lambda: True)
     configure_logging(None)  # e.g. MCP stdio server: no root to write into
     assert not any(isinstance(h, logging.FileHandler) for h in _clean_root_logger.handlers)
 
@@ -120,7 +120,7 @@ def test_persistence_env_var_honored(
 ) -> None:
     """Default branch defers to FILM_PIPELINE_PERSIST_STATE via persistence_enabled()."""
     monkeypatch.setattr(
-        "film_pipeline.app._persistence.use_persistent_runtime",
+        "film_pipeline.studio._persistence.use_persistent_runtime",
         lambda: bool(__import__("os").getenv("FILM_PIPELINE_PERSIST_STATE")),
     )
     monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
@@ -161,8 +161,8 @@ def test_no_persist_wins_for_runtime_checkpointer(
 ) -> None:
     from langgraph.checkpoint.memory import MemorySaver
 
-    from film_pipeline.app._persistence import use_persistent_runtime
-    from film_pipeline.app.graph_factory import _default_checkpointer
+    from film_pipeline.studio._persistence import use_persistent_runtime
+    from film_pipeline.studio.graph_factory import _default_checkpointer
 
     monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
     monkeypatch.setenv("FILM_PIPELINE_NO_PERSIST", "1")

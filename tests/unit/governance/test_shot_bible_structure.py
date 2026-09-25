@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.governance.validators import validate_shot_structure
 from film_pipeline.orchestration.nodes import shot_bible_node
 from film_pipeline.orchestration.nodes.visual import _reconcile_shot_matrix_to_brief
@@ -17,6 +16,7 @@ from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.script import Script, ScriptScene
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 
 def _script() -> Script:

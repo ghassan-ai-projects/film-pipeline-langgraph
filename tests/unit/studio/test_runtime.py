@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.app.safety import ProductionDataError
 from film_pipeline.orchestration.orchestrator_state import set_candidate_ref
 from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio.runtime import StudioRuntime
+from film_pipeline.studio.safety import ProductionDataError
 
 
 def test_auto_checkpoint_references_state_snapshot_and_appends_jsonl() -> None:

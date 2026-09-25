@@ -10,7 +10,7 @@ from pathlib import Path
 class TestStudioGraphState:
     def test_state_compiles_with_graph(self) -> None:
         """StateGraph(StudioGraphState) compiles successfully."""
-        from film_pipeline.app.graph_factory import build_graph
+        from film_pipeline.studio.graph_factory import build_graph
 
         graph = build_graph()
         assert graph is not None

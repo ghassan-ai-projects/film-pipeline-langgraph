@@ -8,7 +8,7 @@ from typing import Any, cast
 class TestGraphWithCheckpointer:
     def test_graph_compiles_with_checkpointer(self) -> None:
         """Graph compiles with MemorySaver checkpointer."""
-        from film_pipeline.app.graph_factory import build_graph
+        from film_pipeline.studio.graph_factory import build_graph
 
         graph = build_graph()
         assert graph.checkpointer is not None
@@ -355,7 +355,7 @@ class TestExternalStateReplay:
         assert updates == {}
 
     def test_build_resume_payload_carries_generation_requests(self) -> None:
-        from film_pipeline.app._resume import _build_resume_payload
+        from film_pipeline.studio._resume import _build_resume_payload
 
         active: dict[str, Any] = {"generation_requests": [{"generation_request_id": "r1"}]}
         payload = _build_resume_payload("approve", active)
@@ -363,7 +363,7 @@ class TestExternalStateReplay:
         assert payload["_external_state"]["generation_requests"] == active["generation_requests"]
 
     def test_build_resume_payload_omits_external_state_when_empty(self) -> None:
-        from film_pipeline.app._resume import _build_resume_payload
+        from film_pipeline.studio._resume import _build_resume_payload
 
         active: dict[str, Any] = {}
         payload = _build_resume_payload("approve", active)

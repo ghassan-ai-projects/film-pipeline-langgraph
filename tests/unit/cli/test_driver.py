@@ -15,7 +15,7 @@ def test_setup_runtime_rejects_invalid_mode(tmp_path: Path) -> None:
 
 
 def test_unknown_target_phase(tmp_path: Path) -> None:
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
     previous_override = rt_mod._RUNTIME_MODE_OVERRIDE
@@ -36,7 +36,7 @@ def test_unknown_target_phase(tmp_path: Path) -> None:
 
 
 def test_call_tool_unknown_tool() -> None:
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
     previous_override = rt_mod._RUNTIME_MODE_OVERRIDE
@@ -54,7 +54,7 @@ def test_call_tool_unknown_tool() -> None:
 
 def test_target_met_state_reports_target_phase_approved(tmp_path: Path) -> None:
     """When the graph has advanced past the target, report target as approved."""
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
     previous_override = rt_mod._RUNTIME_MODE_OVERRIDE

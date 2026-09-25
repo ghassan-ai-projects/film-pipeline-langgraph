@@ -60,7 +60,7 @@ class OperatorService:
     The runtime may be supplied directly or resolved lazily through an injected
     :class:`~film_pipeline.operations.ports.RuntimeProvider`. Resolution policy
     belongs to the composition root, so `operations` declares the capability and
-    the app supplies it (see ``film_pipeline.app._operator_runtime``).
+    the app supplies it (see ``film_pipeline.studio._operator_runtime``).
     """
 
     def __init__(
@@ -71,7 +71,7 @@ class OperatorService:
     ) -> None:
         self._runtime = runtime
         if provider is None or composition is None:
-            from film_pipeline.app._operator_runtime import (
+            from film_pipeline.studio._operator_runtime import (
                 StudioRuntimeProvider,
                 profile_provider_composition,
             )

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 @pytest.mark.smoke

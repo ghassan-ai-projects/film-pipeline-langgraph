@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     create_film_project,
     get_blockers,
@@ -15,6 +14,7 @@ from film_pipeline.mcp.tools import (
     get_orchestrator_summary,
     set_active_project,
 )
+from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def _make_active_project(project_id: str) -> None:

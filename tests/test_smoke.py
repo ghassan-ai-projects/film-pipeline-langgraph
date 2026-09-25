@@ -25,7 +25,7 @@ def test_subpackages_importable() -> None:
     """
     expected = [
         "film_pipeline.agents",
-        "film_pipeline.app",
+        "film_pipeline.studio",
         "film_pipeline.artifacts",
         "film_pipeline.checkpoints",
         "film_pipeline.cli",

@@ -8,8 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     create_film_project,
     inspect_artifact,
@@ -21,6 +19,8 @@ from film_pipeline.mcp.tools import (
     list_shots,
     set_active_project,
 )
+from film_pipeline.studio.runtime import StudioRuntime
+from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:

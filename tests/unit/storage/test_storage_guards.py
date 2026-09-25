@@ -62,7 +62,7 @@ class TestNoSilentAdoption:
         monkeypatch.delenv("FILM_PIPELINE_RUNTIME_ROOT", raising=False)
         monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
 
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime = StudioRuntime()
 

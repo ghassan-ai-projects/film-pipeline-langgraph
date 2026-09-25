@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.cli.io import read_idea_file
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 class HeadlessDriverError(RuntimeError):
@@ -59,7 +59,7 @@ class HeadlessDriver:
         runtime_root: Path,
     ) -> StudioRuntime:
         """Create and globally install a runtime for the requested mode."""
-        import film_pipeline.app.runtime as rt_mod
+        import film_pipeline.studio.runtime as rt_mod
         from film_pipeline.graph.services import GraphServices
 
         mode = mode.lower().strip()
@@ -70,7 +70,7 @@ class HeadlessDriver:
         if mode == "real":
             services = GraphServices.for_real_runtime(artifacts_root=artifacts_root)
         else:
-            from film_pipeline.app.mock_responses import default_mock_responses
+            from film_pipeline.studio.mock_responses import default_mock_responses
 
             services = GraphServices.for_mock_runtime(
                 artifacts_root=artifacts_root,

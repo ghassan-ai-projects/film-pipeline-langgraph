@@ -39,7 +39,7 @@ def _import_targets(node: ast.AST, package_parts: tuple[str, ...]) -> list[str]:
 def _is_app_or_provider_import(module: str) -> bool:
     return any(
         module == forbidden or module.startswith(f"{forbidden}.")
-        for forbidden in ("film_pipeline.app", "film_pipeline.providers")
+        for forbidden in ("film_pipeline.studio", "film_pipeline.providers")
     )
 
 

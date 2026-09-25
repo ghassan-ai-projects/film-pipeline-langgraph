@@ -1,13 +1,12 @@
-"""Runtime version and build metadata."""
+"""Compatibility aliases for :mod:`film_pipeline.studio.version`."""
 
 from __future__ import annotations
 
-__version__ = "0.4.0"
-BUILD_LABEL = "dev"
+# Private helpers still reached through this path during migration.
+from film_pipeline.studio.version import _VERSION_INFO as _VERSION_INFO
+from film_pipeline.studio.version import BUILD_LABEL as BUILD_LABEL
+from film_pipeline.studio.version import __version__ as __version__
 
-_VERSION_INFO = {
-    "version": __version__,
-    "build_label": BUILD_LABEL,
-    "python": ">=3.12",
-    "langgraph": ">=0.2,<0.3",
-}
+__all__ = [
+    "BUILD_LABEL",
+]

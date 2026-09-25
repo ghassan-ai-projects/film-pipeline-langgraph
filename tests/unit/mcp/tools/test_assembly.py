@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     approve_coverage_generation,
     assemble_final_cut,
@@ -18,6 +17,7 @@ from film_pipeline.mcp.tools import (
     list_coverage_groups,
     plan_coverage_group,
 )
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _stub_check(result: dict[str, object], handler: str) -> None:
@@ -45,7 +45,7 @@ def test_approve_coverage_generation_stub() -> None:
 
 
 def test_assemble_review_cut_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -74,7 +74,7 @@ def test_assemble_final_cut_stub() -> None:
 
 
 def test_export_delivery_package_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""

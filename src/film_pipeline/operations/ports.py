@@ -41,7 +41,7 @@ class RuntimePort(Protocol):
 
     A conforming object is any runtime that can report its services, hold a
     mutable project registry, drive the graph, and manage providers.
-    `film_pipeline.app.runtime.StudioRuntime` satisfies this without
+    `film_pipeline.studio.runtime.StudioRuntime` satisfies this without
     modification or subclassing.
 
     The protocol is intentionally the *measured* surface: every member below is
@@ -195,7 +195,7 @@ class RuntimeProvider(Protocol):
     The operator service may be constructed with an explicit runtime or resolve
     the process singleton lazily. That *resolution policy* is the composition
     root's business, so it is injected rather than imported: `operations` must
-    not import `film_pipeline.app`.
+    not import `film_pipeline.studio`.
     """
 
     def current(self) -> RuntimePort:
@@ -214,7 +214,7 @@ class ProviderComposition(Protocol):
     `operations` owns the *policy* that a profile stack selects providers and
     that a credential check precedes project creation, but building adapters is
     composition-root work. This port carries that capability across the boundary
-    so `operations` never imports `film_pipeline.app`.
+    so `operations` never imports `film_pipeline.studio`.
     """
 
     def register_profile_providers(

@@ -8,8 +8,8 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import reset_runtime
 from film_pipeline.mcp.tools import add_operator_comment, list_operator_comments
+from film_pipeline.studio.runtime import reset_runtime
 
 
 @pytest.fixture(autouse=True)
@@ -20,7 +20,7 @@ def _reset_to_mock_mode() -> Generator[None, None, None]:
 
 
 def test_add_operator_comment_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""

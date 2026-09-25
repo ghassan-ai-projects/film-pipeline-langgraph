@@ -36,7 +36,7 @@ def test_kb_get_item_not_found() -> None:
 
 
 def test_kb_get_context_packet_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""

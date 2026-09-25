@@ -146,12 +146,12 @@ class TestDeliverablesOnApprove:
         self, tmp_path: Path
     ) -> None:
         """D9's named test: the human gate fills deliverables/ and approves."""
-        from film_pipeline.app.runtime import StudioRuntime
         from film_pipeline.orchestration.services import GraphServices
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.script import Script
         from film_pipeline.storage.store import ArtifactStore
+        from film_pipeline.studio.runtime import StudioRuntime
 
         projects_root = tmp_path / "projects"
         rt = StudioRuntime(
@@ -179,7 +179,7 @@ class TestDeliverablesOnApprove:
         state["current_phase"] = "script"
         rt.projects["p1"] = state
 
-        from film_pipeline.app._graph_exec import _approve_phase_artifacts
+        from film_pipeline.studio._graph_exec import _approve_phase_artifacts
 
         _approve_phase_artifacts(rt, "p1", "script")
 

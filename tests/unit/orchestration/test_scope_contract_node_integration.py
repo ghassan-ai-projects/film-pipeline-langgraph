@@ -12,10 +12,10 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.orchestration import nodes
 from film_pipeline.orchestration.nodes import _attach_scope_contract, _development_scene_count
 from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
+from film_pipeline.studio.mock_responses import default_mock_responses
 
 _AUTO_CFG = {"studio": {"require_human_approval": False}}
 

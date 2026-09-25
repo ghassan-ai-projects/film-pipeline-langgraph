@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-_APP_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "app"
+_APP_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "studio"
 _FORBIDDEN_IMPORT = "film_pipeline.mcp"
 
 
@@ -71,23 +71,23 @@ def test_app_package_does_not_import_mcp() -> None:
     [
         (
             "import film_pipeline.mcp.contract as contract",
-            "film_pipeline.app",
+            "film_pipeline.studio",
             {"film_pipeline.mcp.contract"},
         ),
         (
             "from film_pipeline.mcp import contract",
-            "film_pipeline.app",
+            "film_pipeline.studio",
             {"film_pipeline.mcp", "film_pipeline.mcp.contract"},
         ),
         (
             "from film_pipeline import mcp as module",
-            "film_pipeline.app",
+            "film_pipeline.studio",
             {"film_pipeline.mcp"},
         ),
-        ("from .. import mcp", "film_pipeline.app", {"film_pipeline.mcp"}),
+        ("from .. import mcp", "film_pipeline.studio", {"film_pipeline.mcp"}),
         (
-            "from ... import mcp",
-            "film_pipeline.app.services",
+            "from .. import mcp",
+            "film_pipeline.operations",
             {"film_pipeline.mcp"},
         ),
     ],
@@ -102,9 +102,13 @@ def test_app_boundary_resolves_absolute_relative_and_reexport_imports(
 
 
 def test_nested_app_scan_resolves_relative_import_to_mcp() -> None:
-    """The filesystem-derived package path feeds nested relative resolution."""
-    path = _APP_DIR / "services" / "__init__.py"
+    """The filesystem-derived package path feeds nested relative resolution.
+
+    The nested case now lives under `studio` itself: the operator surface moved
+    to `operations`, so `app/services` is only a compatibility shim.
+    """
+    path = _APP_DIR / "bootstrap.py"
     _module, package = _source_module(path)
-    tree = ast.parse("from ... import mcp")
-    assert package == "film_pipeline.app.services"
+    tree = ast.parse("from .. import mcp")
+    assert package == "film_pipeline.studio"
     assert _forbidden_targets(_import_targets(tree, package)) == ["film_pipeline.mcp"]

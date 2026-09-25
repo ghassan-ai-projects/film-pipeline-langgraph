@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 @pytest.mark.e2e

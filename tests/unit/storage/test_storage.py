@@ -73,7 +73,7 @@ class TestResolveStorageRoot:
         ever drift apart again, a human can no longer read a project folder as a
         single document set.
         """
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         monkeypatch.setenv(STORAGE_ROOT_ENV, str(tmp_path / "store"))
         rt = StudioRuntime(server_mode="mock")

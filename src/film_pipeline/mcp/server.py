@@ -161,7 +161,7 @@ class MCPServer:
         """Register a runtime-known project missing here; None when unknown everywhere."""
         if not project_ref:
             return None
-        from film_pipeline.app.runtime import get_runtime
+        from film_pipeline.studio.runtime import get_runtime
 
         rt = get_runtime()
         rt_project = rt.get_project(project_ref)
@@ -238,15 +238,15 @@ def main() -> int:
     server from starting — individual tool calls will fail with actionable
     errors if their required resources are missing.
     """
-    from film_pipeline.app.bootstrap import validate_environment
+    from film_pipeline.studio.bootstrap import validate_environment
 
     if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
 
     # Stdio transport owns stderr's cleanliness; persistent runs also retain a
     # file log under the same runtime root used by StudioRuntime.
-    from film_pipeline.app._persistence import configured_runtime_root
-    from film_pipeline.app.logging_setup import configure_logging
+    from film_pipeline.studio._persistence import configured_runtime_root
+    from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(configured_runtime_root())
 

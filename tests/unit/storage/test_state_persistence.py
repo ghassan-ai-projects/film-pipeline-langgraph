@@ -109,7 +109,7 @@ class TestConcurrentWrites:
 
 class TestProjectRecord:
     def test_project_json_round_trips_typed_and_extra_fields(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(
             server_mode="mock",
@@ -133,8 +133,8 @@ class TestProjectRecord:
 
     def test_stale_legacy_file_is_ignored(self, tmp_path: Path) -> None:
         """`project-state.json` is never read; a stale copy cannot leak in."""
-        from film_pipeline.app.runtime import StudioRuntime
         from film_pipeline.storage.storage import ensure_storage_root
+        from film_pipeline.studio.runtime import StudioRuntime
 
         # The runtime root is the storage root, so it must carry the marker
         # before a project directory is created inside it.
@@ -170,7 +170,7 @@ class TestJsonlLogs:
         """§1.3: every mutable state file is versioned, JSONL logs included."""
         import json as _json
 
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         rt.create_project("p1", title="Versioned")
@@ -194,7 +194,7 @@ class TestJsonlLogs:
             read_jsonl(log)
 
     def test_checkpoint_jsonl_appends_without_duplicates(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(
             server_mode="mock",
@@ -213,7 +213,7 @@ class TestJsonlLogs:
         assert len(ids) == len(set(ids)) == 2
 
     def test_audit_jsonl_appends(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(
             server_mode="mock",
@@ -234,7 +234,7 @@ class TestJsonlLogs:
 
 class TestStateSnapshot:
     def test_graph_state_snapshot_written_per_mutation(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(
             server_mode="mock",
@@ -263,7 +263,7 @@ class TestResumeAcrossRestart:
         restart must fully restore the runtime, and the documented manual
         advance must take over from the lost in-memory checkpointer thread.
         """
-        from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime_root = tmp_path / "runtime"
 
@@ -297,8 +297,8 @@ class TestResumeAcrossRestart:
 
 class TestOperatorFreshness:
     def test_freshness_prefers_typed_record(self, tmp_path: Path) -> None:
-        from film_pipeline.app.runtime import StudioRuntime
         from film_pipeline.operations.operator import OperatorService
+        from film_pipeline.studio.runtime import StudioRuntime
 
         runtime_root = tmp_path / "runtime"
         rt = StudioRuntime(server_mode="mock", runtime_root=runtime_root)

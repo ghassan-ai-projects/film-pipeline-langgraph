@@ -12,10 +12,10 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.errors import MCPErrorCode, MCPResponse
 from film_pipeline.mcp.resolution import ProjectRecord
 from film_pipeline.mcp.server import MCPServer, handle_jsonrpc
+from film_pipeline.studio.runtime import StudioRuntime
 
 _OPERATOR_ACTIONS = (
     "approve_phase",

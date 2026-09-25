@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.studio.runtime import StudioRuntime
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_REAL_E2E") != "1" or not credentials.is_configured("seedance-openrouter"),

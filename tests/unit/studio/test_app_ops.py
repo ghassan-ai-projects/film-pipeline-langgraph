@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.bootstrap import bootstrap_ok, validate_environment
-from film_pipeline.app.health import HealthStatus, check_readiness
-from film_pipeline.app.version import _VERSION_INFO, BUILD_LABEL, __version__
+from film_pipeline.studio.bootstrap import bootstrap_ok, validate_environment
+from film_pipeline.studio.health import HealthStatus, check_readiness
+from film_pipeline.studio.version import _VERSION_INFO, BUILD_LABEL, __version__
 
 
 class TestBootstrap:
@@ -153,9 +153,9 @@ class TestHealth:
     def test_check_readiness_reports_degraded_provider(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import film_pipeline.app.bootstrap as bootstrap
-        import film_pipeline.app.runtime as runtime
         import film_pipeline.kb.paths as kb_paths
+        import film_pipeline.studio.bootstrap as bootstrap
+        import film_pipeline.studio.runtime as runtime
 
         class FakeRuntime:
             def list_providers(self) -> list[str]:
@@ -181,9 +181,9 @@ class TestHealth:
     def test_check_readiness_with_no_providers_and_existing_kb(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import film_pipeline.app.bootstrap as bootstrap
-        import film_pipeline.app.runtime as runtime
         import film_pipeline.kb.paths as kb_paths
+        import film_pipeline.studio.bootstrap as bootstrap
+        import film_pipeline.studio.runtime as runtime
 
         class FakeRuntime:
             def list_providers(self) -> list[str]:
@@ -204,9 +204,9 @@ class TestHealth:
     def test_check_readiness_includes_bootstrap_and_kb_messages(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import film_pipeline.app.bootstrap as bootstrap
-        import film_pipeline.app.runtime as runtime
         import film_pipeline.kb.paths as kb_paths
+        import film_pipeline.studio.bootstrap as bootstrap
+        import film_pipeline.studio.runtime as runtime
 
         class FakeRuntime:
             def list_providers(self) -> list[str]:
