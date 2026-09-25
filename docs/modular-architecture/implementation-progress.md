@@ -71,7 +71,7 @@ receipt remains unchanged and no Enola filter or threshold changed.
 | V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
-| C-03 | Break C5: `schemas` ↔ `schemas/registries`, preserving schema and registry exports | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three independent plan reviews pass; evidence wording corrected; no code started | Planned | Pending | Target: 1 cycle → 0 | Pending | Ready |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -272,6 +272,64 @@ passed. `make ci-check` passed with 2,041 passed, 8 skipped, 11 xfailed,
 committed-tree Enola check at 21:08 UTC was clean: current cycles fell from
 four to three, with 114 total insights (111 heuristics) against the pinned
 115-insight baseline. Code commit: `d02e439`.
+
+## C-03 plan
+
+- **Owner and consumers:** `schemas` continues to own and root-export its
+  nonregistry contract models. `schemas.registries` owns and exports the ten
+  registry models and records; its existing package export surface remains
+  canonical. No production consumer imports those ten names from the root
+  `schemas` package.
+- **Measured cycle:** `schemas/__init__.py` imports
+  `schemas.registries` to re-export the registry models, while registry
+  modules import the shared `schemas._base` definitions. Remove the root-to-
+  subpackage imports and aliases so the internal registry-to-schema-base
+  dependency is one-way. Keep `_base.py` in place: moving a shared schema base
+  or adding a package is not needed to break this measured cycle.
+- **Planned code and tests:** remove the ten registry names from
+  `schemas/__init__.py` and its `__all__`, and state the two export surfaces in
+  its module docstring. Leave registry model definitions, subpackage exports,
+  validation behavior, and existing `schemas.registries` consumers unchanged.
+  Add an AST guard that scans direct `schemas` modules and rejects imports from
+  `schemas.registries`; test its resolver against absolute module imports,
+  `from schemas import registries` re-exports, `from . import registries`, and
+  `from .registries import ...`. Retain the existing registry model tests,
+  which import and instantiate all ten registry exports from the canonical
+  subpackage. Do not add duplicate serialization coverage for unchanged model
+  behavior.
+- **Deliberate import-path migration:** the root aliases
+  `film_pipeline.schemas.AgentRegistryEntry`, `CostProfile`, `ModelRegistry`,
+  `ModelRegistryEntry`, `ProviderCapabilities`, `ProviderRegistry`,
+  `ProviderRegistryEntry`, `ValidatorRegistry`, `ValidatorRegistryEntry`, and
+  `ValidatorThresholds` are removed. Their direct exports remain available
+  from `film_pipeline.schemas.registries`. Repository search found no source
+  consumer of the removed aliases; no forwarding or lazy-attribute shim is
+  planned because it would recreate the measured parent-to-child dependency.
+- **Files:** `src/film_pipeline/schemas/__init__.py` and a focused
+  `tests/unit/schemas/test_import_boundaries.py`; existing registry
+  constructor/export coverage stays in `tests/unit/test_schemas.py` without
+  changes unless review or test execution demonstrates a real gap.
+- **Validation:** focused schema and import-boundary suites with
+  `--no-cov -n 0`, full `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at
+  least 90%), Enola against the docs-local receipt, and `git diff --check`.
+  Close C-03 only when Enola lowers the current cycle count from three to two,
+  adds no cycle, the canonical registry exports remain exercised, and the
+  complete build/product/coverage gates pass.
+
+## C-03 plan review record
+
+The boundary review confirmed the root facade is the only `schemas` to
+`schemas/registries` source edge; the registry modules can retain their shared
+`schemas._base` imports because they become a one-way dependency. Behavior
+review confirmed no in-repository consumer uses the removed root aliases, the
+canonical registry package exports all ten names, and the existing schema
+tests import and instantiate those names. It corrected an initial plan claim
+that those registry cases were JSON round-trips; no duplicate serialization
+tests are needed for unchanged model behavior. Quality review confirmed that
+one direct-module AST guard plus the existing model tests is sufficient and
+that moving the base or adding a package would expand scope without helping
+the measured cycle. All three plan reviews pass; implementation has not
+started.
 
 ## R-01a plan
 
