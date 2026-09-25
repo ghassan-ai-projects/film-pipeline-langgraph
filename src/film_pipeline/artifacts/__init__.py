@@ -16,11 +16,6 @@ from film_pipeline.artifacts.manifest import (
     read_manifest,
     write_manifest,
 )
-from film_pipeline.artifacts.paths import (
-    media_scene_dir,
-    phase_dir,
-    project_dir,
-)
 from film_pipeline.artifacts.registry import (
     REGISTRY,
     ArtifactKindRegistry,
@@ -29,6 +24,11 @@ from film_pipeline.artifacts.registry import (
 )
 from film_pipeline.artifacts.serialization import NonFiniteNumberError
 from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.storage.paths import (
+    media_scene_dir,
+    phase_dir,
+    project_dir,
+)
 
 __all__ = [
     "REGISTRY",

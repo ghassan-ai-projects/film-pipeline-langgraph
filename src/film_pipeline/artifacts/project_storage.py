@@ -130,7 +130,7 @@ class ProjectStorage:
         Derived from the canonical phase map, so discovery cannot drift from
         the write side.
         """
-        from film_pipeline.artifacts.paths import PHASE_DIR_MAP
+        from film_pipeline.storage.paths import PHASE_DIR_MAP
 
         base = self.project_dir(project_id) / _layout.ARTIFACTS_DIRNAME
         for phase, dirname in reversed(PHASE_DIR_MAP.items()):

@@ -27,7 +27,6 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from film_pipeline.artifacts import paths
 from film_pipeline.artifacts.envelope import (
     ArtifactCurrentMeta,
     ArtifactEnvelope,
@@ -50,6 +49,7 @@ from film_pipeline.artifacts.serialization import atomic_write_text, dump_json
 from film_pipeline.artifacts.storage import ensure_storage_root
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.storage import paths
 
 _logger = logging.getLogger(__name__)
 
