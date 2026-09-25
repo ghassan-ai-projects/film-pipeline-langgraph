@@ -1,22 +1,8 @@
-"""Test helpers for isolated storage roots.
+"""Compatibility aliases for devharness storage."""
 
-Tests must never touch real storage. These helpers create marked sandbox
-roots so a test cannot confuse a throwaway directory with production storage.
-"""
-
-from __future__ import annotations
-
-from pathlib import Path
-
-from film_pipeline.artifacts.storage import PROFILE_SANDBOX, init_storage_root
-from film_pipeline.artifacts.store import ArtifactStore
-
-
-def sandbox_store_root(path: Path) -> Path:
-    """Create and mark ``path`` as a sandbox storage root; return it."""
-    return init_storage_root(path, profile=PROFILE_SANDBOX)
-
-
-def make_store(path: Path) -> ArtifactStore:
-    """Create a marked sandbox storage root at ``path`` and a store over it."""
-    return ArtifactStore(root=sandbox_store_root(path))
+from film_pipeline.devharness.storage import PROFILE_SANDBOX as PROFILE_SANDBOX
+from film_pipeline.devharness.storage import ArtifactStore as ArtifactStore
+from film_pipeline.devharness.storage import Path as Path
+from film_pipeline.devharness.storage import init_storage_root as init_storage_root
+from film_pipeline.devharness.storage import make_store as make_store
+from film_pipeline.devharness.storage import sandbox_store_root as sandbox_store_root

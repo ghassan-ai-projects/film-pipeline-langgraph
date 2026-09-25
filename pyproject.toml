@@ -93,6 +93,7 @@ markers = [
 branch = true
 source = ["film_pipeline"]
 omit = [
+  "*/devharness/*",
   "*/testing/*",
   "src/film_pipeline/mcp/tools/__init__.py",
 ]
@@ -101,6 +102,7 @@ omit = [
 show_missing = true
 skip_covered = false
 omit = [
+  "*/devharness/*",
   "*/testing/*",
 ]
 
