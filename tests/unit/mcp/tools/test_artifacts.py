@@ -147,7 +147,16 @@ def test_list_artifacts_with_phase_filter(tmp_path: Path, monkeypatch: pytest.Mo
 
     result = asyncio.run(list_artifacts({"phase": "script"}))
     assert result["ok"] is True
-    assert len(cast(list[object], result["artifacts"])) >= 1
+    rows = cast(list[dict[str, object]], result["artifacts"])
+    assert rows
+    # Contract (§5): every documented row field is present, and nothing else
+    # leaks — a rename or removal must fail here rather than pass silently.
+    assert all(
+        set(row) == {"artifact_id", "artifact_type", "phase", "version", "status"} for row in rows
+    )
+    assert all(row["phase"] == "script" for row in rows)
+    assert all(isinstance(row["version"], int) and row["version"] >= 1 for row in rows)
+    assert all(row["status"] == "candidate" for row in rows)
 
 
 def test_inspect_scene_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

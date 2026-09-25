@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 from film_pipeline.testing.storage import make_store
 
 
@@ -163,6 +165,33 @@ class TestProjectRecord:
 
 
 class TestJsonlLogs:
+    def test_jsonl_records_carry_storage_version(self, tmp_path: Path) -> None:
+        """§1.3: every mutable state file is versioned, JSONL logs included."""
+        import json as _json
+
+        from film_pipeline.app.runtime import StudioRuntime
+
+        rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+        rt.create_project("p1", title="Versioned")
+        path = rt.project_roots["p1"] / "audit" / "audit-log.jsonl"
+        if not path.exists():
+            rt._persist_audit_events("p1")
+        records = [_json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+        assert records
+        assert all(r.get("storage_schema_version") == 1 for r in records)
+
+    def test_newer_jsonl_storage_version_is_refused(self, tmp_path: Path) -> None:
+        """A log from a newer layout must fail loudly, not be misread."""
+        import json as _json
+
+        from film_pipeline.app._persistence import _read_jsonl
+        from film_pipeline.artifacts.envelope import SchemaTooNewError
+
+        log = tmp_path / "audit-log.jsonl"
+        log.write_text(_json.dumps({"storage_schema_version": 99, "event_id": "e1"}) + "\n")
+        with pytest.raises(SchemaTooNewError, match="99"):
+            _read_jsonl(log)
+
     def test_checkpoint_jsonl_appends_without_duplicates(self, tmp_path: Path) -> None:
         from film_pipeline.app.runtime import StudioRuntime
 

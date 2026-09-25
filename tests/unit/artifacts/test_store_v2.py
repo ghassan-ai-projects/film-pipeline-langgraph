@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -595,7 +596,7 @@ class TestAtomicDurability:
     """
 
     def test_atomic_write_fsyncs_file_and_parent_directory(
-        self, tmp_path: Path, monkeypatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import os
 
@@ -603,7 +604,12 @@ class TestAtomicDurability:
 
         synced: list[int] = []
         real_fsync = os.fsync
-        monkeypatch.setattr(os, "fsync", lambda fd: (synced.append(fd), real_fsync(fd))[1])
+
+        def spy_fsync(fd: int) -> None:
+            synced.append(fd)
+            real_fsync(fd)
+
+        monkeypatch.setattr(os, "fsync", spy_fsync)
 
         target = tmp_path / "nested" / "file.json"
         serialization.write_json_atomic(target, {"a": 1})
@@ -618,15 +624,21 @@ class TestAtomicDurability:
         write_json_atomic(target, {"a": 1})
         assert [p.name for p in target.parent.iterdir()] == ["file.json"]
 
-    def test_manifest_write_is_atomic(self, tmp_path: Path, monkeypatch) -> None:
+    def test_manifest_write_is_atomic(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """The asset manifest must not be written with a bare write_text."""
         from film_pipeline.artifacts import manifest as manifest_mod
         from film_pipeline.artifacts.manifest import AssetManifest, write_manifest
 
         calls: list[str] = []
-        real = manifest_mod.write_json_atomic
-        monkeypatch.setattr(
-            manifest_mod, "write_json_atomic", lambda p, o: (calls.append(str(p)), real(p, o))[1]
-        )
+        # Patch the name as ``manifest`` bound it, so the spy sees the call.
+        real: Callable[[Path, object], None] = manifest_mod.write_json_atomic  # type: ignore[attr-defined]
+
+        def spy(path: Path, obj: object) -> None:
+            calls.append(str(path))
+            real(path, obj)
+
+        monkeypatch.setattr(manifest_mod, "write_json_atomic", spy)
         write_manifest(AssetManifest(project_id="p1"), tmp_path)
         assert calls and calls[0].endswith("asset-manifest.json")

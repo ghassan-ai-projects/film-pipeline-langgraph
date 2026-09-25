@@ -44,8 +44,21 @@ def test_create_and_list_checkpoints() -> None:
 
     listed = asyncio.run(list_checkpoints({"project_id": "proj-cp-1"}))
     assert listed["ok"] is True
-    ids = [c["checkpoint_id"] for c in cast(list[dict[str, object]], listed["checkpoints"])]
+    rows = cast(list[dict[str, object]], listed["checkpoints"])
+    ids = [c["checkpoint_id"] for c in rows]
     assert checkpoint_id in ids
+    # Contract (§5): the documented checkpoint row fields are all present.
+    # The git short hash is embedded in checkpoint_id rather than a separate key.
+    row = next(c for c in rows if c["checkpoint_id"] == checkpoint_id)
+    assert set(row) == {
+        "checkpoint_id",
+        "project_id",
+        "phase",
+        "created_at",
+        "reason",
+    }
+    assert row["project_id"] == "proj-cp-1"
+    assert row["reason"] == "unit test checkpoint"
 
 
 def test_get_checkpoint_found_and_missing() -> None:

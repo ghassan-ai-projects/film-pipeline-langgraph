@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.artifacts.envelope import SchemaTooNewError
 from film_pipeline.artifacts.paths import PHASE_DIR_MAP
 from film_pipeline.artifacts.serialization import atomic_write_text, write_json_atomic
 from film_pipeline.artifacts.storage import default_runtime_root
@@ -30,6 +31,13 @@ PROJECT_FILENAME = "project.json"
 GRAPH_STATE_RELPATH = "state/graph-state.json"
 CHECKPOINTS_RELPATH = "checkpoints/checkpoints.jsonl"
 AUDIT_RELPATH = "audit/audit-log.jsonl"
+
+#: Storage-layout version stamped on every append-only JSONL record (§1.3: all
+#: mutable state files are versioned so a newer writer is detected rather than
+#: misread). Deliberately a distinct key: ``schema_version`` inside a record is
+#: the per-model string version from ``SchemaBase`` and means something else.
+JSONL_STORAGE_VERSION = 1
+JSONL_STORAGE_VERSION_KEY = "storage_schema_version"
 
 # Keep per-project git checkpoint repos small: media lives under media/ and
 # is tracked by the asset manifest, not by checkpoint commits.
@@ -261,6 +269,13 @@ def load_persisted_projects(rt: StudioRuntime) -> int:
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    """Read an append-only JSONL log, skipping torn lines with a warning.
+
+    Each record carries an explicit ``schema_version`` (§1.3: every mutable
+    state file is versioned). A record written by a NEWER layout is refused
+    loudly rather than being silently misread; an absent version means v1,
+    which is what pre-versioning records are.
+    """
     if not path.exists():
         return []
     items: list[dict[str, Any]] = []
@@ -277,8 +292,21 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
                 path,
             )
             continue
-        if isinstance(item, dict):
-            items.append(item)
+        if not isinstance(item, dict):
+            continue
+        try:
+            found = int(item.get(JSONL_STORAGE_VERSION_KEY, 1))
+        except (TypeError, ValueError):
+            _logger.warning("Skipping line %d in %s: malformed storage version.", number, path)
+            continue
+        if found > JSONL_STORAGE_VERSION:
+            raise SchemaTooNewError(
+                kind=path.name,
+                found=found,
+                max_supported=JSONL_STORAGE_VERSION,
+                path=str(path),
+            )
+        items.append(item)
     return items
 
 
@@ -328,7 +356,8 @@ def persist_checkpoints(rt: StudioRuntime, project_id: str) -> None:
     for meta in rt.checkpoints.values():
         if meta.project_id != project_id or meta.checkpoint_id in known:
             continue
-        lines.append(json.dumps(meta.model_dump(mode="json"), sort_keys=True))
+        record = {JSONL_STORAGE_VERSION_KEY: JSONL_STORAGE_VERSION, **meta.model_dump(mode="json")}
+        lines.append(json.dumps(record, sort_keys=True))
     if lines:
         _append_jsonl(log_path, lines)
 
@@ -346,7 +375,13 @@ def persist_audit_events(rt: StudioRuntime, project_id: str) -> None:
             continue
         if event.get("event_id") in known:
             continue
-        lines.append(json.dumps(event, sort_keys=True, default=str))
+        lines.append(
+            json.dumps(
+                {JSONL_STORAGE_VERSION_KEY: JSONL_STORAGE_VERSION, **event},
+                sort_keys=True,
+                default=str,
+            )
+        )
     if lines:
         _append_jsonl(log_path, lines)
 
