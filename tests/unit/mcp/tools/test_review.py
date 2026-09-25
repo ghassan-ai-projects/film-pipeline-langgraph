@@ -122,7 +122,7 @@ def test_review_phase_artifacts_generator_fallback(
     rt.set_active("review-fallback")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.review.generator import ReviewPackageGenerator
+    from film_pipeline.governance.generator import ReviewPackageGenerator
 
     def _raise(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("boom")

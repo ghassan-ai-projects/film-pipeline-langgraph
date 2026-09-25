@@ -18,7 +18,7 @@ from uuid import uuid4
 
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.storage.storage import default_runtime_root, resolve_storage_root

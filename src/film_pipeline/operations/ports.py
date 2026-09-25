@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.storage.store import ArtifactStore
 

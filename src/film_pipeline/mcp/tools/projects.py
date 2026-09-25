@@ -281,7 +281,7 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     if state is None:
         return _error("No active project.")
     project_id = str(state["project_id"])
-    from film_pipeline.graph.router import get_blockers_for_state
+    from film_pipeline.orchestration.router import get_blockers_for_state
 
     artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])

@@ -91,8 +91,8 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     artifact_list = _collect_phase_artifacts(store, project_id, fp)
 
     # Build a review package using the ReviewPackageGenerator
-    from film_pipeline.graph import orchestrator_state as ostate
-    from film_pipeline.graph.router import compute_actions, public_blocked_actions
+    from film_pipeline.orchestration import orchestrator_state as ostate
+    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)

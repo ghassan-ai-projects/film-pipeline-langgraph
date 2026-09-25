@@ -4,7 +4,7 @@ Locks in the repair that removed fixture data from the production default
 startup path:
 
 1. No module under ``graph/`` may import ``film_pipeline.devharness`` (test
-   fixtures) or ``film_pipeline.app`` (composition root) — in any import
+   fixtures) or ``film_pipeline.studio`` (composition root) — in any import
    statement, module-level or function-body.
 2. Constructing mock-mode services pulls in no ``film_pipeline.devharness``
    modules; canned responses are injected from the composition root.

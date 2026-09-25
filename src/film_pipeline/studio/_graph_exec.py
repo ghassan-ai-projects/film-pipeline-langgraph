@@ -13,7 +13,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
-from film_pipeline.graph.services import _SERVICES_CTX
+from film_pipeline.orchestration.services import _SERVICES_CTX
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 from film_pipeline.storage.project_storage import graph_state_location
@@ -96,7 +96,7 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
         _logger.warning("Auto-checkpoint could not persist graph state for %s: %s", project_id, exc)
     graph_state_ref = graph_state_location()
 
-    from film_pipeline.graph.orchestrator_state import get_candidate_refs
+    from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
 
     candidate_refs = get_candidate_refs(state)
     artifact_versions = dict(candidate_refs)
@@ -313,8 +313,8 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
     ``validator_id``) while non-validator blockers are preserved, then the
     refreshed issues and validation reports are merged back and persisted.
     """
-    from film_pipeline.graph.nodes import _run_validators
-    from film_pipeline.graph.services import SERVICES_KEY
+    from film_pipeline.orchestration.nodes import _run_validators
+    from film_pipeline.orchestration.services import SERVICES_KEY
 
     active = rt.get_project(project_id) if project_id else rt.get_active()
     if active is None:
@@ -440,8 +440,8 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
 
 
 def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict[str, Any]:
-    from film_pipeline.graph.nodes.approval import _PHASE_NODES
-    from film_pipeline.graph.services import SERVICES_KEY
+    from film_pipeline.orchestration.nodes.approval import _PHASE_NODES
+    from film_pipeline.orchestration.services import SERVICES_KEY
 
     node = _PHASE_NODES[phase]
     # Inject graph services so nodes can invoke agents and persist artifacts
@@ -450,7 +450,7 @@ def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict
     node_result = node(state)
     # Merge node result back into state using the same reducer semantics
     # the graph applies (direct node calls bypass channel accumulation).
-    from film_pipeline.graph.state_schema import (
+    from film_pipeline.orchestration.state_schema import (
         merge_generation_requests,
         merge_issues,
         merge_unique,

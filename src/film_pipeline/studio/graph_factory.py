@@ -15,8 +15,8 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.filmspec import PHASE_SEQUENCE
-from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.nodes import (
+from film_pipeline.orchestration.edges import after_approval, after_phase
+from film_pipeline.orchestration.nodes import (
     approve_phase_node,
     await_approval_node,
     consistency_check_node,
@@ -33,9 +33,9 @@ from film_pipeline.graph.nodes import (
     shot_bible_node,
     visual_dev_node,
 )
-from film_pipeline.graph.phase_sequence import PHASE_NODES
-from film_pipeline.graph.state_schema import StudioGraphState
-from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
+from film_pipeline.orchestration.phase_sequence import PHASE_NODES
+from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.orchestration.subgraphs.qc import build_qc_subgraph
 from film_pipeline.storage.storage import default_checkpoints_root
 
 

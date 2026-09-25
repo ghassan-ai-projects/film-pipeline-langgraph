@@ -13,6 +13,7 @@ from typing import Any
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -60,7 +61,7 @@ def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     ``film_pipeline.mcp.tools.get_runtime`` by attribute, and only lazy
     binding sees the patch.
     """
-    rt = tools_pkg.get_runtime()
+    rt: StudioRuntime = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
         return None

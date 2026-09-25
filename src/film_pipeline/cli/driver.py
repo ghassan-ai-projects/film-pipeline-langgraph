@@ -60,7 +60,7 @@ class HeadlessDriver:
     ) -> StudioRuntime:
         """Create and globally install a runtime for the requested mode."""
         import film_pipeline.studio.runtime as rt_mod
-        from film_pipeline.graph.services import GraphServices
+        from film_pipeline.orchestration.services import GraphServices
 
         mode = mode.lower().strip()
         if mode not in {"mock", "real"}:

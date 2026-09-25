@@ -26,7 +26,6 @@ def test_subpackages_importable() -> None:
     expected = [
         "film_pipeline.agents",
         "film_pipeline.studio",
-        "film_pipeline.artifacts",
         "film_pipeline.checkpoints",
         "film_pipeline.cli",
         "film_pipeline.config",
@@ -42,7 +41,6 @@ def test_subpackages_importable() -> None:
         "film_pipeline.post",
         "film_pipeline.projects",
         "film_pipeline.providers",
-        "film_pipeline.review",
         "film_pipeline.schemas",
         "film_pipeline.storage",
         "film_pipeline.validation",

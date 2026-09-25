@@ -141,7 +141,7 @@ class TestOperationsDoesNotImportTheCompositionRoot:
     def test_operator_service_resolves_the_ports_lazily(self) -> None:
         """The service may bind the composition root only inside a call.
 
-        `operations` must not import `film_pipeline.app` at module level. The
+        `operations` must not import `film_pipeline.studio` at module level. The
         one permitted exception is a function-local default that keeps the
         zero-arg `OperatorService()` construction working; that import must not
         be reachable at import time, so it is asserted to be nested inside a

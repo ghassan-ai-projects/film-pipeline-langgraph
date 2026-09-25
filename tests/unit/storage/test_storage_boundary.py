@@ -112,7 +112,7 @@ class TestStorageCoreBoundary:
             "film_pipeline.studio",
             "film_pipeline.generation",
             "film_pipeline.checkpoints",
-            "film_pipeline.review",
+            "film_pipeline.governance",
             "film_pipeline.validation",
             "film_pipeline.post",
             "film_pipeline.providers",

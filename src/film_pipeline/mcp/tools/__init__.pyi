@@ -1,6 +1,5 @@
 """Static types for the lazy MCP tool facade."""
 
-from film_pipeline.app.runtime import get_runtime as get_runtime
 from film_pipeline.mcp.registry import register_all_tools as register_all_tools
 from film_pipeline.mcp.tools.artifacts import inspect_artifact as inspect_artifact
 from film_pipeline.mcp.tools.artifacts import inspect_reference as inspect_reference
@@ -91,3 +90,4 @@ from film_pipeline.mcp.tools.state import get_orchestrator_summary as get_orches
 from film_pipeline.mcp.tools.validation import get_validation_report as get_validation_report
 from film_pipeline.mcp.tools.validation import list_validation_issues as list_validation_issues
 from film_pipeline.mcp.tools.validation import run_validation as run_validation
+from film_pipeline.studio.runtime import get_runtime as get_runtime

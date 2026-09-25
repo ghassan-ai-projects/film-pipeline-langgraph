@@ -30,9 +30,6 @@ import pytest
 
 #: ``(alias, owner)`` where the alias re-exports the owner's names one-for-one.
 _DIRECT_PAIRS: tuple[tuple[str, str], ...] = (
-    ("film_pipeline.review.actions", "film_pipeline.governance.actions"),
-    ("film_pipeline.review.generator", "film_pipeline.governance.generator"),
-    ("film_pipeline.review.diff", "film_pipeline.governance.diff"),
     ("film_pipeline.operations.errors", "film_pipeline.operations.errors"),
     ("film_pipeline.operations.models", "film_pipeline.operations.models"),
     ("film_pipeline.schemas.base", "film_pipeline.schemas.base"),
@@ -52,52 +49,6 @@ _SUBSET_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "film_pipeline.storage.registry",
         "film_pipeline.storage.contract",
         ("ARTIFACT_ID_PATTERN", "validate_artifact_id", "sanitize_artifact_id", "KindSpec"),
-    ),
-    (
-        "film_pipeline.app.services",
-        "film_pipeline.operations",
-        ("OperatorService",),
-    ),
-    (
-        "film_pipeline.app.services.operator",
-        "film_pipeline.operations.operator",
-        ("OperatorService",),
-    ),
-    (
-        "film_pipeline.app.services.errors",
-        "film_pipeline.operations.errors",
-        ("BackendOperationError", "ProjectNotFoundError", "ServiceError"),
-    ),
-    (
-        "film_pipeline.app.services.models",
-        "film_pipeline.operations.models",
-        (
-            "ArtifactDetail",
-            "ArtifactRollbackResult",
-            "AuditEvent",
-            "CheckpointRollbackResult",
-            "DashboardSummary",
-            "GenerationWorkspace",
-            "MutationResult",
-            "OperatorComment",
-            "OperatorCommentRequest",
-            "ProjectCreateRequest",
-            "ProjectListItem",
-            "ReviewWorkspace",
-            "ValidationWorkspace",
-        ),
-    ),
-    (
-        "film_pipeline.review",
-        "film_pipeline.governance",
-        (
-            "REVIEW_TYPE_MAP",
-            "ArtifactDiff",
-            "AvailableActions",
-            "ReviewPackageGenerator",
-            "compute_artifact_diff",
-            "compute_available_actions",
-        ),
     ),
     (
         "film_pipeline.schemas._base",
@@ -179,8 +130,13 @@ def test_alias_resolves_to_owner_object(alias_name: str, owner_name: str, name: 
 
 
 def test_alias_case_corpus_is_not_empty() -> None:
-    """Guard against the parametrization silently collapsing to zero cases."""
-    assert len(_alias_cases()) >= 40
+    """Guard against the parametrization silently collapsing to zero cases.
+
+    The floor tracks the remaining compatibility shims. It is deliberately
+    well below the current count so ordinary shim removal does not fail the
+    suite, while a parametrization that silently resolves to nothing does.
+    """
+    assert len(_alias_cases()) >= 20
 
 
 @pytest.mark.parametrize(
