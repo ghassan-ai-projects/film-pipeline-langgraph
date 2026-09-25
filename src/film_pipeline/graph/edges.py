@@ -7,11 +7,10 @@ translate actions into concrete graph routing.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from types import MappingProxyType
 from typing import Any
 
 from film_pipeline.graph.orchestrator_state import is_stalled
+from film_pipeline.graph.phase_sequence import next_phase
 from film_pipeline.graph.router import compute_actions
 
 
@@ -35,23 +34,6 @@ _HUMAN_GATE_ACTIONS = (
 
 # Actions that route to automatic repair
 _REPAIR_ACTIONS = ("handle_blockers",)
-
-# Approved-phase → next phase node, keyed by current_phase.
-_NEXT_PHASE_AFTER_APPROVAL: Mapping[str, str] = MappingProxyType(
-    {
-        "intake": "constitution",
-        "constitution": "development",
-        "development": "script",
-        "script": "visual_dev",
-        "visual_dev": "shot_bible",
-        "shot_bible": "gen_planning",
-        "gen_planning": "generation",
-        "generation": "qc",
-        "qc": "post",
-        "post": "delivery",
-        "delivery": "end",
-    }
-)
 
 
 def after_phase(state: dict[str, Any]) -> str:
@@ -116,7 +98,7 @@ def after_approval(state: dict[str, Any]) -> str:
     """
     if state.get("approved"):
         phase = str(state.get("current_phase", "intake"))
-        return _NEXT_PHASE_AFTER_APPROVAL.get(phase, "end")
+        return next_phase(phase) or "end"
 
     # Prevent infinite repair loop when stalled
     phase = str(state.get("current_phase", ""))

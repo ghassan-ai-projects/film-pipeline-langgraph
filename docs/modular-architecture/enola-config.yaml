@@ -1,0 +1,47 @@
+# enola configuration for film-pipeline-langgraph (Python).
+#
+# Without this file enola runs with built-in defaults, whose ignore list does
+# not name this repo's non-standard vendored/scratch dirs (.uv-cache, .fleet,
+# projects/, profiles/). Those dominated the fact store (~80% of facts) and
+# drowned the real source signal in src/film_pipeline. This config scopes the
+# snapshot to the tracked application code + tests.
+repo: "."
+ignore:
+  # VCS / enola output
+  - ".git/**"
+  - "**/.git/**"
+  - ".enola/**"
+  - "**/.enola/**"
+  # Python envs, installed deps, tool caches
+  - ".venv/**"
+  - "**/.venv/**"
+  - "**/site-packages/**"
+  - ".uv-cache/**"
+  - "**/__pycache__/**"
+  - "**/.mypy_cache/**"
+  - "**/.pytest_cache/**"
+  - "**/.ruff_cache/**"
+  # Agent-fleet scratch + per-run outputs (gitignored, not application code)
+  - ".fleet/**"
+  - "projects/**"
+  - "profiles/**"
+  - "dist/**"
+  - "build/**"
+  - "**/*.egg-info/**"
+  # Editor / assistant caches
+  - ".qwen/**"
+  - ".claude/**"
+  # Reference/knowledge-base scripts — craft docs and standalone provider demos,
+  # not the application under change; they otherwise shadow src/film_pipeline.
+  - "film-knowledge-base/**"
+  # Dev/diagnostic scripts (test-real-pipeline, diagnose-agent-output, e2e
+  # helpers) and their test doubles are tooling, not the application; they were
+  # otherwise ranked as top entry points (e.g. a `_fake_contract` stub).
+  - "scripts/**"
+  # This program's own docs (gitignored; excluded from the architecture map)
+  - "docs/**"
+extractors:
+  - python
+output:
+  dir: "docs/modular-architecture/enola-out"
+  max_context_tokens: 16000

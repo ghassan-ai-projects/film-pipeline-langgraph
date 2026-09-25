@@ -1,5 +1,8 @@
 .film-pipeline-run/
-docs/
+/docs/*
+!/docs/modular-architecture/
+/docs/modular-architecture/enola-out/
+/docs/modular-architecture/design/prototype-enforcement/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -33,7 +33,7 @@ from film_pipeline.graph.nodes import (
     shot_bible_node,
     visual_dev_node,
 )
-from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.graph.phase_sequence import PHASE_NODES, PHASE_SEQUENCE
 from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
 
@@ -51,48 +51,24 @@ def _default_checkpointer(runtime_root: Path | None = None) -> BaseCheckpointSav
     return SqliteSaver(conn=conn)
 
 
-# Phase key → phase node name, in pipeline order.
-_PHASE_TO_NODE: dict[str, str] = {
-    "intake": "intake_node",
-    "constitution": "constitution_node",
-    "development": "development_node",
-    "script": "script_node",
-    "visual_dev": "visual_dev_node",
-    "shot_bible": "shot_bible_node",
-    "gen_planning": "gen_planning_node",
-    "generation": "generation_node",
-    "qc": "qc_node",
-    "post": "post_node",
-    "delivery": "delivery_node",
-}
-
 # Destinations reachable from any phase node via after_phase().
 _AFTER_PHASE_DESTINATIONS: dict[str, str] = {
     "consistency_check": "consistency_check",
     "await_approval": "await_approval",
     "repair": "repair",
     "end": "end",
-    **_PHASE_TO_NODE,
+    **PHASE_NODES,
 }
 
 # phase_router dispatches straight into the current phase's node.
 _ROUTER_DESTINATIONS: dict[Hashable, str] = {
-    node_name: node_name for node_name in _PHASE_TO_NODE.values()
+    node_name: node_name for node_name in PHASE_NODES.values()
 }
 _ROUTER_DESTINATIONS["repair"] = "repair"
 
 # Approval gate outcomes.
 _APPROVAL_DESTINATIONS: dict[Hashable, str] = {
-    "constitution": "constitution_node",
-    "development": "development_node",
-    "script": "script_node",
-    "visual_dev": "visual_dev_node",
-    "shot_bible": "shot_bible_node",
-    "gen_planning": "gen_planning_node",
-    "generation": "generation_node",
-    "qc": "qc_node",
-    "post": "post_node",
-    "delivery": "delivery_node",
+    **{phase: PHASE_NODES[phase] for phase in PHASE_SEQUENCE[1:]},
     "end": "end",
     "repair": "repair",
     "await_approval": "await_approval",
@@ -138,7 +114,7 @@ def _wire_entry_router(builder: StateGraph) -> None:
 def _wire_phase_transitions(builder: StateGraph) -> None:
     """Route every phase node through after_phase() for dynamic next-step routing."""
     after_phase_destinations = cast(dict[Hashable, str], _AFTER_PHASE_DESTINATIONS)
-    for phase_node in _PHASE_TO_NODE.values():
+    for phase_node in PHASE_NODES.values():
         builder.add_conditional_edges(
             phase_node,
             after_phase,
@@ -193,9 +169,7 @@ def _route_current_phase(state: dict[str, Any]) -> str:
     if state.get("_resume_to_repair"):
         return "repair"
     phase = str(state.get("current_phase", ""))
-    if phase in PHASE_ORDER:
-        return f"{phase}_node"
-    return "intake_node"
+    return PHASE_NODES.get(phase, PHASE_NODES[PHASE_SEQUENCE[0]])
 
 
 graph: CompiledStateGraph = build_graph()

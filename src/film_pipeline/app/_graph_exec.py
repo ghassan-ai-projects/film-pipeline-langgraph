@@ -21,7 +21,7 @@ from film_pipeline.app._resume import (
     _strip_stale_generation_request_blockers,
 )
 from film_pipeline.artifacts.project_storage import graph_state_location
-from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE, next_phase
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 
@@ -424,13 +424,13 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
 
 def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
     current_phase = str(state.get("current_phase", ""))
-    if current_phase not in PHASE_ORDER:
+    if current_phase not in PHASE_SEQUENCE:
         rt.projects[state["project_id"]] = state
         rt._persist_project_state(state["project_id"])
         return state
 
-    current_index = PHASE_ORDER.index(current_phase)
-    if current_index == len(PHASE_ORDER) - 1:
+    successor = next_phase(current_phase)
+    if successor is None:
         final_state = dict(state)
         final_state["completed"] = True
         final_state["human_approval_phase"] = ""
@@ -438,8 +438,7 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
         rt._persist_project_state(state["project_id"])
         return final_state
 
-    next_phase = PHASE_ORDER[current_index + 1]
-    advanced_state = run_phase_node(rt, state, next_phase)
+    advanced_state = run_phase_node(rt, state, successor)
     rt.projects[state["project_id"]] = advanced_state
     rt._persist_project_state(state["project_id"])
     return advanced_state

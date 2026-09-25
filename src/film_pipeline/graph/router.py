@@ -19,7 +19,6 @@ from typing import Any
 
 from film_pipeline.graph._action_routing import (
     APPROVAL_GATES,
-    PHASE_ORDER,
     RouterResult,
     compute_actions,
 )
@@ -27,6 +26,7 @@ from film_pipeline.graph._agent_routing import (
     AgentRouteResult,
     route_agent,
 )
+from film_pipeline.graph.phase_sequence import PHASE_ORDER
 
 __all__ = [
     "APPROVAL_GATES",
