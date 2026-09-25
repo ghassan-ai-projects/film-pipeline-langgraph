@@ -31,6 +31,8 @@ from film_pipeline.artifacts import paths
 from film_pipeline.artifacts.envelope import (
     ArtifactCurrentMeta,
     ArtifactEnvelope,
+    ArtifactIndex,
+    ArtifactIndexEntry,
     ChecksumMismatchError,
     MutableRevisionMismatchError,
     SchemaTooNewError,
@@ -185,8 +187,8 @@ class ArtifactStore:
 
         version_path = self._version_path(meta.project_id, phase, meta.artifact_id, version)
         meta_path = self._meta_path(meta.project_id, phase, meta.artifact_id)
-        atomic_write_text(version_path, dump_json(_envelope_to_dict(envelope)))
-        atomic_write_text(meta_path, dump_json(_meta_to_dict(current_meta)))
+        atomic_write_text(version_path, dump_json(envelope.model_dump(mode="json")))
+        atomic_write_text(meta_path, dump_json(current_meta.model_dump(mode="json")))
         atomic_write_text(
             meta_path.parent / "current.md",
             _render_markdown(spec.kind, meta, payload),
@@ -254,7 +256,7 @@ class ArtifactStore:
             payload=payload,
             revision=revision,
         )
-        atomic_write_text(path, dump_json(_envelope_to_dict(envelope)))
+        atomic_write_text(path, dump_json(envelope.model_dump(mode="json")))
         self._write_mutable_meta(meta, revision, now, envelope.checksum)
         self._write_index(meta.project_id)
         self._safe_write_readme(meta.project_id)
@@ -286,7 +288,7 @@ class ArtifactStore:
             created_by=meta.created_by,
             checksum=checksum,
         )
-        atomic_write_text(meta_path, dump_json(_meta_to_dict(current_meta)))
+        atomic_write_text(meta_path, dump_json(current_meta.model_dump(mode="json")))
 
     def load_mutable(self, project_id: str, phase: FilmPhase, artifact_id: str) -> dict[str, Any]:
         """Load a mutable kind's payload (its single revision-counted file)."""
@@ -400,25 +402,16 @@ class ArtifactStore:
 
     def _write_index(self, project_id: str) -> None:
         """Regenerate the derived artifact index for one project."""
-        entry_fields = (
-            "artifact_id",
-            "artifact_type",
-            "phase",
-            "current_version",
-            "status",
-            "created_at",
-            "updated_at",
-        )
-        entries: list[dict[str, Any]] = []
+        entries: list[ArtifactIndexEntry] = []
         base = self._artifacts_base(project_id)
         if base.is_dir():
             for meta_file in sorted(base.glob("*/*/meta.json")):
                 meta = _read_meta_file(meta_file)
                 if meta is None:
                     continue
-                entries.append({field: meta.get(field) for field in entry_fields})
-        payload = {"schema_version": 1, "artifacts": entries}
-        atomic_write_text(self._index_path(project_id), dump_json(payload))
+                entries.append(ArtifactIndexEntry.model_validate(meta))
+        index = ArtifactIndex(artifacts=entries)
+        atomic_write_text(self._index_path(project_id), dump_json(index.model_dump(mode="json")))
 
     # --- Read path ----------------------------------------------------------
 
@@ -756,14 +749,6 @@ def _meta_record_to_metadata(raw: dict[str, Any]) -> ArtifactMetadata:
         built_from={},
         change_summary="",
     )
-
-
-def _envelope_to_dict(envelope: ArtifactEnvelope) -> dict[str, Any]:
-    return envelope.model_dump(mode="json")
-
-
-def _meta_to_dict(meta: ArtifactCurrentMeta) -> dict[str, Any]:
-    return meta.model_dump(mode="json")
 
 
 def _render_markdown(kind: str, meta: ArtifactMetadata, payload: dict[str, Any]) -> str:

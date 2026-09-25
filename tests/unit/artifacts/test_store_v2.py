@@ -642,3 +642,46 @@ class TestAtomicDurability:
         monkeypatch.setattr(manifest_mod, "write_json_atomic", spy)
         write_manifest(AssetManifest(project_id="p1"), tmp_path)
         assert calls and calls[0].endswith("asset-manifest.json")
+
+
+class TestTypedArtifactIndex:
+    """The derived index is a persisted boundary, so it validates both ways."""
+
+    def test_index_rows_round_trip_through_the_model(self, tmp_path: Path) -> None:
+        import json as _json
+
+        from film_pipeline.artifacts.envelope import ArtifactIndex
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        store.save(_constitution(), _meta())
+
+        raw = _json.loads((root / "p1" / "index" / "artifacts.json").read_text())
+        index = ArtifactIndex.model_validate(raw)
+        assert index.schema_version == 1
+        assert [e.artifact_id for e in index.artifacts] == ["film_constitution"]
+        entry = index.artifacts[0]
+        assert entry.current_version == 1
+        assert entry.status is ArtifactStatus.CANDIDATE
+        assert entry.phase is FilmPhase.CONSTITUTION
+
+    def test_index_stays_in_sync_with_list_artifacts(self, tmp_path: Path) -> None:
+        """The derived cache must not drift from the authoritative read path."""
+        import json as _json
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        store.save(_constitution(), _meta())
+        store.save(
+            Script(project_id="p1", title="T", scenes=[]),
+            _meta(
+                artifact_id="script",
+                artifact_type=ArtifactType.SCRIPT,
+                phase=FilmPhase.SCRIPT,
+            ),
+        )
+
+        raw = _json.loads((root / "p1" / "index" / "artifacts.json").read_text())
+        indexed = [(r["artifact_id"], r["current_version"]) for r in raw["artifacts"]]
+        listed = [(m.artifact_id, m.version) for m in store.list_artifacts("p1")]
+        assert indexed == listed

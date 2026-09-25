@@ -146,3 +146,31 @@ class ArtifactCurrentMeta(BaseModel):
     approval_ref: str | None = None
     kb_context_ref: str | None = None
     checksum: str = ""
+
+
+class ArtifactIndexEntry(BaseModel):
+    """One row of the derived ``index/artifacts.json`` cache.
+
+    Typed so the one persisted boundary that used raw dicts now validates on
+    both write and read (AGENTS.md: no raw dicts across boundaries). The index
+    is derived and rebuildable, so it carries no schema version of its own.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    artifact_id: str
+    artifact_type: ArtifactType
+    phase: FilmPhase
+    current_version: int = Field(ge=1)
+    status: ArtifactStatus = ArtifactStatus.CANDIDATE
+    created_at: datetime
+    updated_at: datetime
+
+
+class ArtifactIndex(BaseModel):
+    """The derived per-project artifact index (``index/artifacts.json``)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    schema_version: int = Field(default=1, ge=1, description="Index format version.")
+    artifacts: list[ArtifactIndexEntry] = Field(default_factory=list)
