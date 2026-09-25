@@ -21,7 +21,7 @@ make ci-check
 make product-gate
 
 # 3. No unexpected stubs in critical paths
-uv run --python 3.12 --group dev pytest tests/unit/app/test_product_gate.py -v
+uv run --python 3.12 --group dev pytest tests/unit/cli/test_product_gate.py -v
 
 # 4. All 10 E2E scenarios pass with meaningful assertions
 make test-e2e

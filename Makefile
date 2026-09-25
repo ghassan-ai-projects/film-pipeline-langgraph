@@ -97,7 +97,7 @@ release-check: ## Run release validation (ci-check + smoke + docs)
 
 product-gate: ## Enforce the working-product acceptance gate
 	@echo "Running working-product gate..."
-	@$(UV_RUN) python -m film_pipeline.app.product_gate
+	@$(UV_RUN) python -m film_pipeline.cli.product_gate
 
 precommit: ## Run all pre-commit hooks
 	$(UV_RUN) pre-commit run --all-files
