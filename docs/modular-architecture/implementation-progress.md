@@ -24,7 +24,7 @@ direction and tested at consumer boundaries.
 
 | Slice | Scope | Review | Focused proof | Full gate / coverage | Enola | Commit | Status |
 |---|---|---|---|---|---|---|---|
-| G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | Pending | Ready to commit |
+| G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | `62b3eea` | Complete |
 | O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Not started | Not started | Pending | Pending | Pending | Queued |
 | R-01 | Repair proven runtime, validation handoff, and persistence defects from O-01 evidence | Not started | Not started | Pending | Pending | Pending | Queued |
 | V-01 | Consolidate other high-value vocabularies and provider registration ownership where tests prove a seam | Not started | Not started | Pending | Pending | Pending | Queued |

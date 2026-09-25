@@ -1,6 +1,6 @@
 # Reference migration 01: phase sequence
 
-**Status:** implemented and validated; commit pending. This is a deliberately small example of moving one rule to one owner while preserving the existing public and persisted contracts. It is not the whole phase-policy migration.
+**Status:** implemented, validated, and committed in `62b3eea`. This is a deliberately small example of moving one rule to one owner while preserving the existing public and persisted contracts. It is not the whole phase-policy migration.
 
 ## Problem and root cause
 
