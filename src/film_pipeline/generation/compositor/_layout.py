@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.project_storage import ProjectStorage
 
 # ── Layout constants ─────────────────────────────────────────────────────
 
@@ -232,7 +232,9 @@ def _write_sheet_manifest(
         placeholder_tiles=placeholders,
     )
     manifest_path = Path(str(sheet_path) + ".sheet.json")
-    write_json_atomic(manifest_path, manifest.model_dump(mode="json"))
+    ProjectStorage.for_root(manifest_path.parent).write_json_document(
+        manifest_path, manifest.model_dump(mode="json")
+    )
 
 
 def _parse_palette(hex_strings: list[str]) -> list[tuple[int, int, int]]:

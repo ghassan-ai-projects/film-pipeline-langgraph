@@ -15,10 +15,8 @@ from film_pipeline.artifacts.manifest import (
     AssetEntry,
     AssetManifest,
     read_manifest,
-    write_manifest,
 )
-from film_pipeline.artifacts.paths import media_scene_dir
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.project_storage import ProjectStorage
 
 if TYPE_CHECKING:
     from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
@@ -49,10 +47,12 @@ def _scene_id_of(shot_row: dict[str, Any]) -> str:
 
 
 def _prepare_output_dir(root: Path, project_id: str, scene_id: str, shot_id: str) -> Path:
-    """Create and return the directory for a shot's generated media."""
-    output_dir = media_scene_dir(project_id, scene_id, shot_id, root=root)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
+    """Create and return the directory for a shot's generated media.
+
+    Path ownership belongs to the storage core; this only asks it where to put
+    the media.
+    """
+    return ProjectStorage.for_root(root).media_dir(project_id, scene_id, shot_id)
 
 
 def _produced_files(output_dir: Path) -> list[Path]:
@@ -115,10 +115,10 @@ def _record_assets(
                 sha256=digest,
             )
         )
-    write_manifest(manifest, root=root)
-    sidecar_path = produced[0].parent / f"take-{take:03d}.json" if produced else None
-    if sidecar_path is not None:
-        write_json_atomic(sidecar_path, sidecar)
+    storage = ProjectStorage.for_root(root)
+    storage.write_manifest(project_id, manifest)
+    if produced:
+        storage.write_media_sidecar(produced[0].parent / f"take-{take:03d}.json", sidecar)
 
 
 def _next_take(root: Path, project_id: str, shot_id: str) -> int:

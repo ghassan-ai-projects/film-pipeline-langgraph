@@ -57,7 +57,7 @@ def storage_for(rt: StudioRuntime) -> ProjectStorage | None:
     """The project-storage gateway for a runtime, or ``None`` without services."""
     if rt.services is None:
         return None
-    return ProjectStorage(rt.services.artifact_store)
+    return ProjectStorage.from_store(rt.services.artifact_store)
 
 
 def artifact_root(rt: StudioRuntime) -> Path | None:

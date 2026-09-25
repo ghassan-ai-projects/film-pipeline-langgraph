@@ -39,6 +39,7 @@ PROJECT_FILENAME = "project.json"
 GRAPH_STATE_RELPATH = "state/graph-state.json"
 CHECKPOINTS_RELPATH = "checkpoints/checkpoints.jsonl"
 AUDIT_RELPATH = "audit/audit-log.jsonl"
+ASSET_MANIFEST_FILENAME = "asset-manifest.json"
 ARTIFACTS_DIRNAME = "artifacts"
 INDEX_DIRNAME = "index"
 MEDIA_DIRNAME = "media"
@@ -84,6 +85,13 @@ def read_json_file(path: Path) -> Any | None:
         _logger.warning("Could not read %s: %s", path, exc)
         return None
     return raw
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Write a JSON document atomically at ``path``."""
+    from film_pipeline.artifacts.serialization import write_json_atomic
+
+    write_json_atomic(path, payload)
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:

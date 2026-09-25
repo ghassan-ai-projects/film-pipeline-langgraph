@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.project_storage import ProjectStorage
 
 from ..helpers import _latest_artifact_version, _services
 
@@ -38,7 +38,9 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
             for e in entries
         ],
     }
-    write_json_atomic(idx_dir / "reference-index.json", index_data)
+    ProjectStorage.for_root(idx_dir).write_json_document(
+        idx_dir / "reference-index.json", index_data
+    )
 
     # reference-validation-summary.json
     scores = [
@@ -52,7 +54,9 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
         "failed": sum(1 for e in entries if e.get("generation_status") == "failed"),
         "average_score": sum(scores) / len(scores) if scores else 0.0,
     }
-    write_json_atomic(idx_dir / "reference-validation-summary.json", summary)
+    ProjectStorage.for_root(idx_dir).write_json_document(
+        idx_dir / "reference-validation-summary.json", summary
+    )
 
 
 def _select_image_provider(rt: Any) -> Any | None:

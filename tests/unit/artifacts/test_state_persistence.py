@@ -441,11 +441,10 @@ class TestMediaLayout:
 
     def test_checkpoint_never_tracks_media(self, tmp_path: Path) -> None:
         """A project checkpoint commit must not include media files."""
-        from film_pipeline.artifacts.store import ArtifactStore
         from film_pipeline.schemas.runtime_state import ProjectRecord
 
         root = tmp_path / "store"
-        storage = ProjectStorage(ArtifactStore(root=root))
+        storage = ProjectStorage.for_root(root)
         project_root = storage.project_dir("p1")
         storage.ensure_project_dir("p1")
         storage.write_project_record("p1", ProjectRecord(project_id="p1", title="Media"))

@@ -64,24 +64,40 @@ _BACKEND_TYPE: type[Any] | None = None
 class ProjectStorage:
     """Reads and writes every file inside a project folder.
 
-    Construct with the :class:`~film_pipeline.artifacts.store.ArtifactStore`
-    that owns the storage root, so both the artifact tree and the state files
-    resolve to the same single project directory.
+    Construct from the :class:`~film_pipeline.artifacts.store.ArtifactStore`
+    that owns the storage root, so the artifact tree and the state files resolve
+    to the same single project directory. Callers that only have a root path
+    (media delivery, sidecars) use :meth:`for_root`.
     """
 
-    def __init__(self, store: ArtifactStore) -> None:
-        self._store = store
+    def __init__(self, root: Path) -> None:
+        self._root = root
+
+    @classmethod
+    def from_store(cls, store: ArtifactStore) -> ProjectStorage:
+        """A gateway over the root owned by an ``ArtifactStore``."""
+        return cls(store.root)
+
+    @classmethod
+    def for_root(cls, root: Path) -> ProjectStorage:
+        """A gateway over a bare storage root.
+
+        For callers that already hold a resolved root (media delivery, sidecar
+        writers) rather than a store. No marker check happens here: whoever
+        produced the root has already opened it.
+        """
+        return cls(root)
 
     # --- Location (project-relative facts, not paths) -----------------------
 
     @property
     def root(self) -> Path:
         """The storage root every project directory lives under."""
-        return self._store.root
+        return self._root
 
     def project_dir(self, project_id: str) -> Path:
         """The one directory holding everything for ``project_id``."""
-        return self._store.root / project_id
+        return self._root / project_id
 
     def project_exists(self, project_id: str) -> bool:
         return self.project_dir(project_id).is_dir()
@@ -92,7 +108,7 @@ class ProjectStorage:
 
     def list_project_ids(self) -> list[str]:
         """Project ids present on disk (hidden directories excluded)."""
-        root = self._store.root
+        root = self._root
         if not root.is_dir():
             return []
         return sorted(
@@ -194,6 +210,38 @@ class ProjectStorage:
         )
         directory.mkdir(parents=True, exist_ok=True)
         return directory
+
+    def write_media_sidecar(self, path: Path, payload: dict[str, Any]) -> None:
+        """Write a media sidecar next to its binary, atomically."""
+        _layout.write_json(path, payload)
+
+    def write_json_document(self, path: Path, payload: dict[str, Any]) -> None:
+        """Write any JSON document that lives under the storage root, atomically.
+
+        For generated content that sits beside media (frame and sheet sidecars,
+        reference index files). Keeps the serialization primitives private to
+        the storage core instead of having providers import them directly.
+        """
+        _layout.write_json(path, payload)
+
+    def read_manifest(self, project_id: str) -> Any:
+        """The project's asset manifest, or ``None`` when absent."""
+        from film_pipeline.artifacts.manifest import AssetManifest
+
+        path = self.project_dir(project_id) / _layout.ASSET_MANIFEST_FILENAME
+        raw = _layout.read_json_file(path)
+        if not isinstance(raw, dict):
+            return None
+        try:
+            return AssetManifest.model_validate(raw)
+        except ValueError as exc:
+            _logger.warning("Skipping unreadable asset manifest %s: %s", path, exc)
+            return None
+
+    def write_manifest(self, project_id: str, manifest: Any) -> None:
+        """Persist the project's asset manifest atomically."""
+        path = self.project_dir(project_id) / _layout.ASSET_MANIFEST_FILENAME
+        _layout.write_json(path, manifest.model_dump(mode="json"))
 
     # --- Per-project checkpoint repository ----------------------------------
 

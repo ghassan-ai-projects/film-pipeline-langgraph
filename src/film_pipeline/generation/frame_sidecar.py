@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.project_storage import ProjectStorage
 from film_pipeline.schemas.reference import ReferenceFrame
 
 
@@ -19,7 +19,9 @@ def write_frame_sidecar(frame_path: Path, metadata: ReferenceFrame) -> Path:
     Returns the sidecar path.
     """
     sidecar_path = _sidecar_path_for(frame_path)
-    write_json_atomic(sidecar_path, metadata.model_dump(mode="json"))
+    ProjectStorage.for_root(sidecar_path.parent).write_json_document(
+        sidecar_path, metadata.model_dump(mode="json")
+    )
     return sidecar_path
 
 
