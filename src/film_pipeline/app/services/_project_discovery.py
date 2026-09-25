@@ -1,16 +1,43 @@
-"""Discovery and classification of projects found in artifact storage."""
+"""Discovery of projects found in artifact storage but absent from runtime memory.
+
+Only the two helpers that need a live runtime live here: scanning the storage
+root and promoting a discovered folder into a runtime project. The pure
+classification rules they rely on — project kind, title, and name policy — are
+owned by :mod:`film_pipeline.projects.classification`.
+
+The former names remain importable from this module while its consumers migrate.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.app._persistence import storage_for
-from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import ProjectListItem
+from film_pipeline.projects.classification import (
+    normalize_project_kind as normalize_project_kind,
+)
+from film_pipeline.projects.classification import (
+    project_kind_for_name as project_kind_for_name,
+)
+from film_pipeline.projects.classification import (
+    project_kind_for_state as project_kind_for_state,
+)
+from film_pipeline.projects.classification import (
+    project_title_from_id as project_title_from_id,
+)
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService
+
+__all__ = [
+    "discover_project_folders",
+    "load_discovered_project",
+    "normalize_project_kind",
+    "project_kind_for_name",
+    "project_kind_for_state",
+    "project_title_from_id",
+]
 
 
 def discover_project_folders(svc: OperatorService, known_ids: set[str]) -> list[ProjectListItem]:
@@ -56,30 +83,3 @@ def load_discovered_project(svc: OperatorService, project_id: str) -> dict[str, 
     state["human_approval_required"] = False
     svc.runtime.projects[project_id] = state
     return state
-
-
-def project_kind_for_state(state: Mapping[str, Any], project_id: str) -> str:
-    explicit = str(state.get("project_kind", "")).strip().lower()
-    if explicit:
-        return normalize_project_kind(explicit)
-    return project_kind_for_name(project_id)
-
-
-def project_kind_for_name(name: str) -> str:
-    lowered = name.lower()
-    test_markers = ("test", "fixture", "sample", "tmp", "demo")
-    return "test" if any(marker in lowered for marker in test_markers) else "production"
-
-
-def normalize_project_kind(project_kind: str) -> str:
-    kind = project_kind.strip().lower()
-    if kind not in {"production", "test"}:
-        raise BackendOperationError(
-            f"project_kind must be 'production' or 'test', got '{project_kind}'."
-        )
-    return kind
-
-
-def project_title_from_id(project_id: str) -> str:
-    """Derive a human-readable title from a project folder name."""
-    return project_id.replace("-", " ").replace("_", " ").title()

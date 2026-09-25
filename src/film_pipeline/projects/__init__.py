@@ -1,5 +1,12 @@
-"""Project identity and reference resolution contracts."""
+"""Project identity, classification, and reference resolution contracts."""
 
+from film_pipeline.projects.classification import (
+    VALID_PROJECT_KINDS,
+    normalize_project_kind,
+    project_kind_for_name,
+    project_kind_for_state,
+    project_title_from_id,
+)
 from film_pipeline.projects.resolution import (
     AmbiguousProjectError,
     ProjectRecord,
@@ -8,8 +15,13 @@ from film_pipeline.projects.resolution import (
 )
 
 __all__ = [
+    "VALID_PROJECT_KINDS",
     "AmbiguousProjectError",
     "ProjectRecord",
     "ProjectRegistry",
     "ResolutionResult",
+    "normalize_project_kind",
+    "project_kind_for_name",
+    "project_kind_for_state",
+    "project_title_from_id",
 ]
