@@ -128,24 +128,16 @@ Enola filter or threshold changed.
 | OP-02a | Break FES #3 without moving `OperatorService`: declare `operations.ports.RuntimePort` structurally, widen `_persistence.storage_for`/`artifact_root` to the port, and guard that no `operations` module imports `film_pipeline.app` | Plan review found the move as originally briefed would materialize a forbidden edge; verified the remaining coupling is only `runtime.services.artifact_store` | PASS — new runtime-port suite: protocol conformance for the real runtime and a fake, store/absent-services branches, and a source-level FES #3 guard with mutation cases | PASS — `make ci-check`; 2,200 passed / 8 skipped / 11 xfailed; 92.00% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `ea0df4e` | Complete |
 | OP-02b | Remove the remaining forbidden `app.services → app.*` imports: extend `RuntimePort` to the measured surface, add `ProviderComposition`, supply the concrete bindings from `app/_operator_runtime.py`, and move the runtime-to-storage gateway into `storage.runtime_gateway` | Type checker caught two real protocol errors (settable `services`, mapping-typed `project_roots`/`provider_adapters`); `_persist_project_state` reach-in recorded as O7 debt rather than renamed | PASS — updated runtime-port suite proving the real runtime conforms, both injected collaborators conform, the service module has no module-level composition-root import, and the guard detects its claimed forms | PASS — `make ci-check`; 2,202 passed / 8 skipped / 11 xfailed; 91.99% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `157387a` | Complete |
 
+| OP-02c | Physical move: `operator.py`, `_browse_ops.py`, `_checkpoint_ops.py`, `_generation_ops.py` -> `operations`; `_project_discovery.py` -> `projects/discovery.py`; `app/services` becomes a facade | Found and fixed a real import cycle (`projects.classification` -> `operations.errors` -> eager facade -> `operations.operator` -> `projects`) by resolving the service lazily through module `__getattr__` | PASS — full suite, MCP server and `langgraph.json` entrypoints import, facade identity probes | PASS — `make ci-check`; 2,205 passed / 8 skipped / 11 xfailed; 91.96% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycle findings; non-gating advisories 35 -> 39, mostly rename churn, with one real cost: `mcp` depth 14 -> 15 | `6b0cd34` | Complete |
+
 ### OP-02c — the remaining physical move
 
-OP-02a and OP-02b removed the *coupling*; the files themselves have not moved.
-`app/services/` now contains no cross-package `app` import (only intra-package
-`app.services.*` references), so the module is clean enough to relocate. What
-remains is the physical move of `operator.py`, `_browse_ops.py`,
-`_checkpoint_ops.py`, and `_generation_ops.py` into `operations`, plus
-retargeting the four MCP consumers, the app-service alias modules, and the
-test imports and boundary-guard fixture strings.
-
-`_project_discovery.py` should go to `projects`, not `operations`: it is
-project discovery, and roadmap item 1 already assigns it there.
-
-This is deliberately a separate round. The move changes import paths for
-`OperatorService`, which the MCP tool facade re-exports and which 71 test sites
-reach through `film_pipeline.mcp.tools.get_runtime`. Those seams are verified
-intact after OP-02b, but they need their own round with their own review rather
-than being folded into a coupling change.
+**Done in OP-02c (`6b0cd34`).** The four operator modules now live in
+`operations`, `_project_discovery.py` lives in `projects/discovery.py`, and
+`app/services` is a compatibility facade. The move required breaking one real
+cycle: `projects.classification` imports `operations.errors`, so an eager
+`OperatorService` import in the `operations` facade made `film_pipeline.mcp.server`
+unimportable; the facade now resolves it through a module `__getattr__`.
 
 ### OP-02 — why the round was rescoped
 
