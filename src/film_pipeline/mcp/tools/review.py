@@ -39,7 +39,7 @@ def _build_review_package(
     blocking_issues: list[dict[str, Any]],
 ) -> ReviewPackage | None:
     """Build the structured review package; None when generation fails."""
-    from film_pipeline.review.generator import ReviewPackageGenerator
+    from film_pipeline.governance.generator import ReviewPackageGenerator
 
     try:
         generator = ReviewPackageGenerator()
