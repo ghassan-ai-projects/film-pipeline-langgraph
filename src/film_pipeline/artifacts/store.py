@@ -43,13 +43,13 @@ from film_pipeline.artifacts.registry import (
     KindSpec,
     Renderer,
     migrate_payload,
-    validate_artifact_id,
 )
 from film_pipeline.artifacts.serialization import atomic_write_text, dump_json
 from film_pipeline.artifacts.storage import ensure_storage_root
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage import paths
+from film_pipeline.storage.contract import validate_artifact_id
 
 _logger = logging.getLogger(__name__)
 
