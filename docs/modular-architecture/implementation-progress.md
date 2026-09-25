@@ -138,6 +138,8 @@ Enola filter or threshold changed.
 
 | O-01 | Rename `graph` -> `orchestration` as a package move; delete the four in-package shims already owned by `governance`; bind `compute_actions` to the concrete `GATE_FACTS` in `router`; add a `graph` compatibility package; retarget 51 test files and three source-sweeping guards | Chose a package rename over a 28-file piecewise move because the files import each other heavily and a partial move leaves both packages holding real code | PASS — full suite; MCP server and `langgraph.json` entrypoints import | PASS — `make ci-check`; 2,233 passed / 8 skipped / 11 xfailed; 91.81% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycles; advisories 41 -> 56 (mostly re-keyed paths), with two real increases: `mcp` depth 15 -> 16 and `app/services` 13 -> 14 from the compatibility shim | `b893936` | Complete |
 
+| S-01b | Rename `app` -> `studio`; delete the moved-package `services/` (the operator surface already lives in `operations`); migrate the `langgraph.json` graph entry in the same change; add an `app` compatibility package; retarget 83 test files, the Makefile/README smoke paths, and three guards | Chose rename-over-move for the same reason as O-01; the entry-point migration is roadmap-scoped (W11) and must land with the rename so no commit leaves the configured graph unresolvable | PASS — full suite; `langgraph.json` entry resolves and carries a `graph` object; MCP server imports; shim identity probe | PASS — `make ci-check`; 2,233 passed / 8 skipped / 11 xfailed; 91.14% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `8c28bba` | Complete |
+
 ### OP-02c — the remaining physical move
 
 **Done in OP-02c (`6b0cd34`).** The four operator modules now live in
@@ -146,6 +148,13 @@ Enola filter or threshold changed.
 cycle: `projects.classification` imports `operations.errors`, so an eager
 `OperatorService` import in the `operations` facade made `film_pipeline.mcp.server`
 unimportable; the facade now resolves it through a module `__getattr__`.
+
+**All eight target modules now exist.** `storage` (ST-04), `projects` (P-02),
+`operations` (OP-02c), `governance` (G-04/G-05), `orchestration` (O-01),
+`studio` (S-01b), `budget` (B-02), and `devharness` (DH-01). What remains is
+removing the compatibility shims (`artifacts`, `graph`, `review`, `app`,
+`app/services`) once their consumers migrate, the `schemas._base` retarget, the
+`devharness` wheel exclusion, and the deferred R-01 behavior repairs.
 
 **`governance` is now complete (G-04 `81adc8f`, G-05 `ec178ad`).** It holds the
 human-gate law, the review action/diff/generator policy, scope contracts,
