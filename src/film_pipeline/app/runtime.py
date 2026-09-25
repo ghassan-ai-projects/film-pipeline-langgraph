@@ -22,12 +22,12 @@ from film_pipeline.app._persistence import (
     use_persistent_runtime,
 )
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
-from film_pipeline.artifacts.storage import default_runtime_root, resolve_storage_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
+from film_pipeline.storage.storage import default_runtime_root, resolve_storage_root
 
 _logger = logging.getLogger(__name__)
 

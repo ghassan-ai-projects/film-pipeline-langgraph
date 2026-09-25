@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import _ensure_matrix_scene_coverage
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.script import ScriptScene
+from film_pipeline.storage.store import ArtifactStore
 
 
 def _make_services(tmp_path: Any) -> GraphServices:

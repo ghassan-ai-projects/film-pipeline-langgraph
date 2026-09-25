@@ -11,7 +11,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import (
     ArtifactStatus,
@@ -24,6 +23,7 @@ from film_pipeline.schemas.generation import (
     GenerationLedger,
     GenerationLedgerRow,
 )
+from film_pipeline.storage.store import ArtifactStore
 
 LEDGER_ARTIFACT_ID = "generation_ledger"
 

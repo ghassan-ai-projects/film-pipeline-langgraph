@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.storage import resolve_storage_root
+from film_pipeline.storage.storage import resolve_storage_root
 
 
 class ProductionDataError(RuntimeError):

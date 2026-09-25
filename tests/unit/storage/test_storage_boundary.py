@@ -3,7 +3,7 @@
 Storage ownership must stay in one place: ``film_pipeline.artifacts``. These
 tests fail if a component starts building project paths or writing project
 files itself instead of going through
-:class:`~film_pipeline.artifacts.project_storage.ProjectStorage`.
+:class:`~film_pipeline.storage.project_storage.ProjectStorage`.
 
 They are deliberately source-level checks. A structural rule that is only
 described in a docstring drifts; a rule with a failing test does not.
@@ -17,7 +17,10 @@ from pathlib import Path
 import pytest
 
 SRC = Path(__file__).resolve().parents[3] / "src" / "film_pipeline"
-STORAGE_PACKAGE = SRC / "artifacts"
+STORAGE_PACKAGE = SRC / "storage"
+#: The legacy `artifacts` package is now a compatibility facade over `storage`,
+#: so it is allowed to name storage internals while consumers migrate.
+SHIM_PACKAGE = SRC / "artifacts"
 
 #: Layout facts and write primitives that only the storage package may touch.
 CORE_PRIVATE_NAMES = (
@@ -46,7 +49,10 @@ def _outside_storage() -> list[Path]:
     return [
         path
         for path in _python_files(SRC)
-        if STORAGE_PACKAGE not in path.parents and path.parent != STORAGE_PACKAGE
+        if STORAGE_PACKAGE not in path.parents
+        and path.parent != STORAGE_PACKAGE
+        and SHIM_PACKAGE not in path.parents
+        and path.parent != SHIM_PACKAGE
     ]
 
 
@@ -59,7 +65,7 @@ class TestStorageCoreBoundary:
             path
             for path in _outside_storage()
             if any(
-                module.endswith(("artifacts._layout", "artifacts.serialization"))
+                module.endswith(("storage._layout", "storage.serialization"))
                 for module in _imported_modules(path)
             )
         ]
@@ -74,7 +80,7 @@ class TestStorageCoreBoundary:
         offenders = [
             path
             for path in _outside_storage()
-            if any(module.endswith("artifacts.paths") for module in _imported_modules(path))
+            if any(module.endswith("storage.paths") for module in _imported_modules(path))
         ]
         assert offenders == [], (
             f"These modules build project paths themselves: {[str(p) for p in offenders]}. "
@@ -143,7 +149,7 @@ class TestProjectStorageIsTheOnlyWriter:
 
     def test_project_storage_exposes_no_public_path_assembly(self) -> None:
         """The façade returns locations, but callers do not re-derive them."""
-        from film_pipeline.artifacts.project_storage import ProjectStorage
+        from film_pipeline.storage.project_storage import ProjectStorage
 
         # The gateway must offer typed accessors for every owned concern.
         for method in (
@@ -165,8 +171,8 @@ class TestProjectStorageIsTheOnlyWriter:
 
     def test_construction_from_root_and_store_agree(self, tmp_path: Path) -> None:
         """Both construction paths must resolve to the same project directory."""
-        from film_pipeline.artifacts.project_storage import ProjectStorage
         from film_pipeline.devharness.storage import make_store
+        from film_pipeline.storage.project_storage import ProjectStorage
 
         root = tmp_path / "store"
         store = make_store(root)
@@ -176,7 +182,7 @@ class TestProjectStorageIsTheOnlyWriter:
 
     def test_unconfigured_backend_reports_actionably(self, tmp_path: Path) -> None:
         """Asking for git without an injected backend must not fail cryptically."""
-        from film_pipeline.artifacts import project_storage
+        from film_pipeline.storage import project_storage
 
         saved = project_storage.get_git_backend_type()
         project_storage.set_git_backend_type(None)  # type: ignore[arg-type]

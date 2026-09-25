@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.executor import GenerationExecutor, GenerationStepResult
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.providers.mock_provider import MockVideoProvider
@@ -20,6 +19,7 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
+from film_pipeline.storage.store import ArtifactStore
 
 
 class ShotMatrix(BaseModel):

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.artifacts.manifest import read_manifest
+from film_pipeline.storage.manifest import read_manifest
 
 from .helpers import (
     _active_project_id,

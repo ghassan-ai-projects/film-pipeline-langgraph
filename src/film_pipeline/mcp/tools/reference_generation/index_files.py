@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from film_pipeline.artifacts.project_storage import ProjectStorage
+from film_pipeline.storage.project_storage import ProjectStorage
 
 from ..helpers import _latest_artifact_version, _services
 

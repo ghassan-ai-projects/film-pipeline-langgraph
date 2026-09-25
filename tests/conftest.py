@@ -1,7 +1,7 @@
 """Root test configuration — keeps production data safe from test runs.
 
 Storage roots are separated from production by construction (see
-``film_pipeline.artifacts.storage``): every test runs with
+``film_pipeline.storage.storage``): every test runs with
 ``FILM_PIPELINE_STORAGE_ROOT`` pointed at a per-test temp directory, and a
 session guard asserts the run leaves the user's real roots untouched.
 """
@@ -68,11 +68,11 @@ def _fast_checkpoint_backend() -> Iterator[None]:
     projects without asserting git semantics. The genuine ``GitBackend``
     contract tests construct ``GitBackend`` directly and are unaffected.
     """
-    from film_pipeline.artifacts.project_storage import (
+    from film_pipeline.devharness.in_memory_git import InMemoryGitBackend
+    from film_pipeline.storage.project_storage import (
         get_git_backend_type,
         set_git_backend_type,
     )
-    from film_pipeline.devharness.in_memory_git import InMemoryGitBackend
 
     previous = get_git_backend_type()
     set_git_backend_type(InMemoryGitBackend)

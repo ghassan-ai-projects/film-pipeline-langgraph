@@ -294,7 +294,7 @@ def test_list_assets_returns_entries(tmp_path: Path, monkeypatch: pytest.MonkeyP
     rt.set_active("proj-assets-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
+    from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
 
     assert rt.services is not None
     write_manifest(

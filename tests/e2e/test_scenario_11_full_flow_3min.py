@@ -17,10 +17,10 @@ from typing import Any
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.storage.store import ArtifactStore
 
 # A concrete 3-minute short with 12 scenes so every phase has material to work on.
 THE_LAST_SIGNAL_IDEA = """

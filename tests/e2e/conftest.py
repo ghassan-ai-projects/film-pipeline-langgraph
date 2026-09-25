@@ -13,7 +13,6 @@ from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.devharness.mock_human import DecisionProfile, MockHumanActor
@@ -29,6 +28,7 @@ from film_pipeline.schemas.registries.provider_registry import (
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
+from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.validation.registry import ValidatorRegistry
 from film_pipeline.validation.validators import MVP_VALIDATORS
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.project_storage import ProjectStorage
 from film_pipeline.schemas.reference import ReferenceFrame
+from film_pipeline.storage.project_storage import ProjectStorage
 
 
 def _sidecar_path_for(frame_path: Path) -> Path:

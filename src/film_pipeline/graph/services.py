@@ -14,14 +14,14 @@ from film_pipeline.agents.model_adapter import ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
-from film_pipeline.artifacts.storage import (
+from film_pipeline.schemas.kb import KBContextPacket
+from film_pipeline.storage.storage import (
     PROFILE_PRODUCTION,
     PROFILE_SANDBOX,
     ensure_storage_root,
     resolve_storage_root,
 )
-from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.schemas.kb import KBContextPacket
+from film_pipeline.storage.store import ArtifactStore
 
 if TYPE_CHECKING:
     from film_pipeline.kb.packets import KBContextPacketBuilder

@@ -11,20 +11,20 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import BaseModel
 
-from film_pipeline.artifacts.envelope import SchemaTooNewError, payload_checksum
+from film_pipeline.storage.envelope import SchemaTooNewError, payload_checksum
 
 if TYPE_CHECKING:
-    from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.artifacts.registry import (
-    MIGRATIONS,
-    REGISTRY,
-    register_migration,
-)
+    from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.devharness.storage import make_store
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.script import Script, ScriptScene
+from film_pipeline.storage.registry import (
+    MIGRATIONS,
+    REGISTRY,
+    register_migration,
+)
 
 
 def _meta(**kw: object) -> ArtifactMetadata:
@@ -181,7 +181,7 @@ class TestMigrations:
             MIGRATIONS.update(saved_migrations)
 
     def test_missing_migration_is_actionable(self) -> None:
-        from film_pipeline.artifacts.registry import migrate_payload
+        from film_pipeline.storage.registry import migrate_payload
 
         with pytest.raises(KeyError, match="No migration registered"):
             migrate_payload("film.studio/logline", {}, 7, 8)
@@ -338,7 +338,7 @@ class TestRegistryRoundTrip:
         assert envelope.created_at == datetime(2026, 9, 24, 12, 0, 0, tzinfo=UTC)
 
     def test_tampered_payload_fails_integrity_check(self, tmp_path: Path) -> None:
-        from film_pipeline.artifacts.envelope import ChecksumMismatchError
+        from film_pipeline.storage.envelope import ChecksumMismatchError
 
         root = tmp_path / "store"
         store = make_store(root)
@@ -433,8 +433,8 @@ class TestNonFinitePayloads:
 
     @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
     def test_save_rejects_non_finite_payload(self, tmp_path: Path, bad: float) -> None:
-        from film_pipeline.artifacts.serialization import NonFiniteNumberError
         from film_pipeline.schemas.budget import BudgetState
+        from film_pipeline.storage.serialization import NonFiniteNumberError
 
         store = make_store(tmp_path / "store")
         budget = BudgetState(project_id="p1", per_phase_caps_usd={"script": bad})
@@ -445,8 +445,8 @@ class TestNonFinitePayloads:
 
     def test_rejected_write_leaves_no_artifact_behind(self, tmp_path: Path) -> None:
         """A failed save must not leave a half-written, unreadable version."""
-        from film_pipeline.artifacts.serialization import NonFiniteNumberError
         from film_pipeline.schemas.budget import BudgetState
+        from film_pipeline.storage.serialization import NonFiniteNumberError
 
         root = tmp_path / "store"
         store = make_store(root)
@@ -470,14 +470,14 @@ class TestNonFinitePayloads:
 
     def test_dump_json_rejects_nested_non_finite(self) -> None:
         """The guard is recursive, so nesting cannot smuggle a bad float in."""
-        from film_pipeline.artifacts.serialization import NonFiniteNumberError, dump_json
+        from film_pipeline.storage.serialization import NonFiniteNumberError, dump_json
 
         with pytest.raises(NonFiniteNumberError):
             dump_json({"a": [{"b": float("nan")}]})
 
     def test_checksum_rejects_non_finite(self) -> None:
-        from film_pipeline.artifacts.envelope import payload_checksum
-        from film_pipeline.artifacts.serialization import NonFiniteNumberError
+        from film_pipeline.storage.envelope import payload_checksum
+        from film_pipeline.storage.serialization import NonFiniteNumberError
 
         with pytest.raises(NonFiniteNumberError):
             payload_checksum({"x": float("inf")})
@@ -492,8 +492,8 @@ class TestRendererRegistryOwnership:
     """
 
     def test_registry_owns_renderer_lookup(self) -> None:
-        from film_pipeline.artifacts.registry import REGISTRY
-        from film_pipeline.artifacts.rendering import render_script
+        from film_pipeline.storage.registry import REGISTRY
+        from film_pipeline.storage.rendering import render_script
 
         spec = REGISTRY.spec_for("script")
         assert spec.renderer is render_script
@@ -501,14 +501,14 @@ class TestRendererRegistryOwnership:
 
     def test_every_kind_is_looked_up_by_its_registry_key(self) -> None:
         """Each kind resolves through its own key, with no slug re-derivation."""
-        from film_pipeline.artifacts.registry import REGISTRY
+        from film_pipeline.storage.registry import REGISTRY
 
         for artifact_id in REGISTRY.known_ids():
             spec = REGISTRY.spec_for(artifact_id)
             assert REGISTRY.renderer_for(spec.kind) is spec.renderer
 
     def test_unregistered_renderer_key_falls_back(self) -> None:
-        from film_pipeline.artifacts.registry import REGISTRY
+        from film_pipeline.storage.registry import REGISTRY
 
         assert REGISTRY.renderer_for("film.studio/not-a-kind") is None
 
@@ -571,7 +571,7 @@ class TestMutableRefRevisions:
         )
 
     def test_stale_revision_raises_instead_of_substituting(self, tmp_path: Path) -> None:
-        from film_pipeline.artifacts.envelope import MutableRevisionMismatchError
+        from film_pipeline.storage.envelope import MutableRevisionMismatchError
 
         store, _ = self._ledger_store(tmp_path)
         with pytest.raises(MutableRevisionMismatchError, match="revision 2"):
@@ -579,7 +579,7 @@ class TestMutableRefRevisions:
 
     def test_load_envelope_agrees_with_load_ref(self, tmp_path: Path) -> None:
         """The two public read paths must not disagree about a mutable ref."""
-        from film_pipeline.artifacts.envelope import MutableRevisionMismatchError
+        from film_pipeline.storage.envelope import MutableRevisionMismatchError
 
         store, _ = self._ledger_store(tmp_path)
         current = store.load_envelope("p1", FilmPhase.GEN_PLANNING, "generation_ledger", 2)
@@ -600,7 +600,7 @@ class TestAtomicDurability:
     ) -> None:
         import os
 
-        from film_pipeline.artifacts import serialization
+        from film_pipeline.storage import serialization
 
         synced: list[int] = []
         real_fsync = os.fsync
@@ -618,7 +618,7 @@ class TestAtomicDurability:
         assert len(synced) == 2
 
     def test_atomic_write_leaves_no_temp_files(self, tmp_path: Path) -> None:
-        from film_pipeline.artifacts.serialization import write_json_atomic
+        from film_pipeline.storage.serialization import write_json_atomic
 
         target = tmp_path / "out" / "file.json"
         write_json_atomic(target, {"a": 1})
@@ -628,8 +628,8 @@ class TestAtomicDurability:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The asset manifest must not be written with a bare write_text."""
-        from film_pipeline.artifacts import manifest as manifest_mod
-        from film_pipeline.artifacts.manifest import AssetManifest, write_manifest
+        from film_pipeline.storage import manifest as manifest_mod
+        from film_pipeline.storage.manifest import AssetManifest, write_manifest
 
         calls: list[str] = []
         # Patch the name as ``manifest`` bound it, so the spy sees the call.
@@ -650,7 +650,7 @@ class TestTypedArtifactIndex:
     def test_index_rows_round_trip_through_the_model(self, tmp_path: Path) -> None:
         import json as _json
 
-        from film_pipeline.artifacts.envelope import ArtifactIndex
+        from film_pipeline.storage.envelope import ArtifactIndex
 
         root = tmp_path / "store"
         store = make_store(root)

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from film_pipeline.artifacts.store import ArtifactStore
+    from film_pipeline.storage.store import ArtifactStore
 
 _logger = logging.getLogger(__name__)
 

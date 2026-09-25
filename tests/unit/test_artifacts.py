@@ -9,12 +9,12 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
-from film_pipeline.artifacts.paths import phase_dir, project_dir
-from film_pipeline.artifacts.registry import KindNotRegisteredError
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.storage.manifest import AssetEntry, AssetManifest
+from film_pipeline.storage.paths import phase_dir, project_dir
+from film_pipeline.storage.registry import KindNotRegisteredError
+from film_pipeline.storage.store import ArtifactStore
 
 
 def _meta(**kw: object) -> ArtifactMetadata:

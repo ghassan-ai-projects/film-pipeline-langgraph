@@ -6,14 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.rendering import (
+from film_pipeline.devharness.storage import make_store
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.storage.rendering import (
     render_bible,
     render_scene_list,
     render_script,
     render_validation_report,
 )
-from film_pipeline.devharness.storage import make_store
-from film_pipeline.schemas.artifact import ArtifactMetadata
 
 
 def _meta(artifact_id: str, artifact_type: Any, phase: Any) -> ArtifactMetadata:
@@ -147,11 +147,11 @@ class TestDeliverablesOnApprove:
     ) -> None:
         """D9's named test: the human gate fills deliverables/ and approves."""
         from film_pipeline.app.runtime import StudioRuntime
-        from film_pipeline.artifacts.store import ArtifactStore
         from film_pipeline.graph.services import GraphServices
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.script import Script
+        from film_pipeline.storage.store import ArtifactStore
 
         projects_root = tmp_path / "projects"
         rt = StudioRuntime(

@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.app._persistence import artifact_root
-from film_pipeline.artifacts.manifest import read_manifest
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import (
     ArtifactDetail,
@@ -15,6 +14,7 @@ from film_pipeline.operations.models import (
     OperatorCommentRequest,
 )
 from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.storage.manifest import read_manifest
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService

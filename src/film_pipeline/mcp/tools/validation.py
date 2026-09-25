@@ -20,9 +20,9 @@ from .helpers import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from film_pipeline.artifacts.store import ArtifactStore
     from film_pipeline.schemas.base import FilmPhase
     from film_pipeline.schemas.validation import ValidationReport
+    from film_pipeline.storage.store import ArtifactStore
 
 
 def _parse_phase(phase_str: str) -> FilmPhase | None:

@@ -20,11 +20,11 @@ from film_pipeline.app._resume import (
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
-from film_pipeline.artifacts.project_storage import graph_state_location
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
 from film_pipeline.graph.services import _SERVICES_CTX
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
+from film_pipeline.storage.project_storage import graph_state_location
 
 if TYPE_CHECKING:
     from film_pipeline.app.runtime import StudioRuntime

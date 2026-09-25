@@ -11,12 +11,12 @@ from film_pipeline.app.runtime import create_runtime
 from film_pipeline.app.services.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.app.services.models import OperatorCommentRequest, ProjectCreateRequest
 from film_pipeline.app.services.operator import OperatorService
-from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.story_bible import SceneList
+from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
+from film_pipeline.storage.store import ArtifactStore
 
 
 def _service(tmp_path: Path) -> OperatorService:

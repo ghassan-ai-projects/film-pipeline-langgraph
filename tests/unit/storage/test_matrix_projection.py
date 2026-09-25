@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.artifacts.matrix_projection import materialize_matrix
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.storage.matrix_projection import materialize_matrix
 
 
 class FakeStore:

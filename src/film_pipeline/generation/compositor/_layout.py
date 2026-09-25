@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-from film_pipeline.artifacts.project_storage import ProjectStorage
+from film_pipeline.storage.project_storage import ProjectStorage
 
 # ── Layout constants ─────────────────────────────────────────────────────
 

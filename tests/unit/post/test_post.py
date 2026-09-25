@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.post.assembly_agent import AssemblyAgent
 from film_pipeline.post.audio_design_agent import AudioDesignAgent
 from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 from film_pipeline.post.subtitle_agent import SubtitleAgent
 from film_pipeline.post.transition_agent import TransitionAgent
 from film_pipeline.post.validators import PostValidator
+from film_pipeline.storage.store import ArtifactStore
 
 
 class TestAssembly:

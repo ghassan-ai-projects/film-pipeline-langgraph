@@ -16,13 +16,13 @@ import pytest
 
 import film_pipeline.graph.nodes.wrapup as wrapup_module
 from film_pipeline.app.mock_responses import default_mock_responses
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import consistency_check_node, delivery_node, post_node
 from film_pipeline.graph.orchestrator_state import set_approved_ref
 from film_pipeline.graph.services import SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.film_constitution import FilmConstitution
+from film_pipeline.storage.store import ArtifactStore
 
 
 def _services(tmp_path: Path) -> GraphServices:

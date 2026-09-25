@@ -3,7 +3,7 @@
 This module holds **policy only** — which projects to load, how discovered
 projects are adopted, and how the runtime's in-memory registries are updated.
 It performs no path construction and no file I/O of its own: every read and
-write goes through :class:`~film_pipeline.artifacts.project_storage.ProjectStorage`,
+write goes through :class:`~film_pipeline.storage.project_storage.ProjectStorage`,
 the single owner of the on-disk layout.
 
 That separation is deliberate. Storage decides *where and how* bytes land;
@@ -17,15 +17,15 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from film_pipeline.artifacts.project_storage import (
-    ProjectStorage,
-    set_git_backend_type,
-)
-from film_pipeline.artifacts.storage import default_runtime_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.schemas.runtime_state import ProjectRecord
+from film_pipeline.storage.project_storage import (
+    ProjectStorage,
+    set_git_backend_type,
+)
+from film_pipeline.storage.storage import default_runtime_root
 
 _logger = logging.getLogger(__name__)
 

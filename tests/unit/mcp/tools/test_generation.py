@@ -21,7 +21,6 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.app._provider_factory import build_provider_adapter
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.mcp.tools import (
     approve_generation_spend,
@@ -35,6 +34,7 @@ from film_pipeline.mcp.tools import (
     start_generation_batch,
 )
 from film_pipeline.schemas._base import SchemaBase
+from film_pipeline.storage.store import ArtifactStore
 
 
 @pytest.fixture

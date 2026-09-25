@@ -44,12 +44,12 @@ _DIRECT_PAIRS: tuple[tuple[str, str], ...] = (
 #: ``(alias, owner, names)`` where only the listed names are cross-checked.
 _SUBSET_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
-        "film_pipeline.artifacts.paths",
+        "film_pipeline.storage.paths",
         "film_pipeline.storage.paths",
         ("PHASE_DIR_MAP", "project_dir", "phase_dir", "media_scene_dir"),
     ),
     (
-        "film_pipeline.artifacts.registry",
+        "film_pipeline.storage.registry",
         "film_pipeline.storage.contract",
         ("ARTIFACT_ID_PATTERN", "validate_artifact_id", "sanitize_artifact_id", "KindSpec"),
     ),

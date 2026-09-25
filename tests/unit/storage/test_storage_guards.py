@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.artifacts.storage import STORAGE_ROOT_ENV, resolve_storage_root
+from film_pipeline.storage.storage import STORAGE_ROOT_ENV, resolve_storage_root
 
 SRC_ROOT = Path(__file__).parents[3] / "src" / "film_pipeline"
-_STORAGE_MODULE = SRC_ROOT / "artifacts" / "storage.py"
+_STORAGE_MODULE = SRC_ROOT / "storage" / "storage.py"
 
 
 def _python_sources() -> list[Path]:

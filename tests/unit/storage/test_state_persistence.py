@@ -10,8 +10,8 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.artifacts.project_storage import ProjectStorage
 from film_pipeline.devharness.storage import make_store
+from film_pipeline.storage.project_storage import ProjectStorage
 
 
 class TestConcurrentWrites:
@@ -134,7 +134,7 @@ class TestProjectRecord:
     def test_stale_legacy_file_is_ignored(self, tmp_path: Path) -> None:
         """`project-state.json` is never read; a stale copy cannot leak in."""
         from film_pipeline.app.runtime import StudioRuntime
-        from film_pipeline.artifacts.storage import ensure_storage_root
+        from film_pipeline.storage.storage import ensure_storage_root
 
         # The runtime root is the storage root, so it must carry the marker
         # before a project directory is created inside it.
@@ -185,8 +185,8 @@ class TestJsonlLogs:
         """A log from a newer layout must fail loudly, not be misread."""
         import json as _json
 
-        from film_pipeline.artifacts._layout import read_jsonl
-        from film_pipeline.artifacts.envelope import SchemaTooNewError
+        from film_pipeline.storage._layout import read_jsonl
+        from film_pipeline.storage.envelope import SchemaTooNewError
 
         log = tmp_path / "audit-log.jsonl"
         log.write_text(_json.dumps({"storage_schema_version": 99, "event_id": "e1"}) + "\n")
@@ -361,7 +361,7 @@ class TestMediaLayout:
         assert sidecar["files"][0]["sha256"].startswith("sha256:") is False
         assert len(sidecar["files"][0]["sha256"]) == 64
 
-        from film_pipeline.artifacts.manifest import read_manifest
+        from film_pipeline.storage.manifest import read_manifest
 
         manifest = read_manifest("p1", root=tmp_path / "store")
         assert manifest is not None
@@ -373,13 +373,13 @@ class TestMediaLayout:
 
     def test_second_delivery_does_not_re_record_sidecars(self, tmp_path: Path) -> None:
         """Re-delivery must not record the previous take's sidecar as media."""
-        from film_pipeline.artifacts.manifest import read_manifest
         from film_pipeline.generation.executor_delivery import deliver_completed_job
         from film_pipeline.providers.base import (
             BaseProviderAdapter,
             ProviderJob,
             ProviderJobStatus,
         )
+        from film_pipeline.storage.manifest import read_manifest
 
         store_root = make_store(tmp_path / "store").root
 
@@ -412,7 +412,7 @@ class TestMediaLayout:
         assert active[0].take == 2
 
     def test_active_take_invariant(self) -> None:
-        from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
+        from film_pipeline.storage.manifest import AssetEntry, AssetManifest
 
         manifest = AssetManifest(project_id="p1")
         first = AssetEntry(

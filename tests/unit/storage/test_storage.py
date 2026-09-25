@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.artifacts.paths import phase_dir, project_dir
-from film_pipeline.artifacts.storage import (
+from film_pipeline.storage.paths import phase_dir, project_dir
+from film_pipeline.storage.storage import (
     LAYOUT_VERSION,
     MARKER_FILENAME,
     STORAGE_ROOT_ENV,
@@ -35,7 +35,7 @@ class TestResolveStorageRoot:
 
     def test_unmarked_legacy_tree_is_refused(self, tmp_path: Path) -> None:
         """Pre-upgrade project trees are refused, not adopted."""
-        from film_pipeline.artifacts.storage import ensure_storage_root
+        from film_pipeline.storage.storage import ensure_storage_root
 
         root = tmp_path / "legacy"
         project = root / "01-vision" / "film_constitution"
@@ -142,7 +142,7 @@ class TestMarker:
 
 class TestRequiredRoots:
     def test_store_requires_root(self) -> None:
-        from film_pipeline.artifacts.store import ArtifactStore
+        from film_pipeline.storage.store import ArtifactStore
 
         with pytest.raises(TypeError):
             ArtifactStore()  # type: ignore[call-arg]
@@ -154,7 +154,7 @@ class TestRequiredRoots:
             phase_dir("slug", "script")  # type: ignore[call-arg]
 
     def test_store_exposes_root(self, store_root: Path) -> None:
-        from film_pipeline.artifacts.store import ArtifactStore
+        from film_pipeline.storage.store import ArtifactStore
 
         assert ArtifactStore(root=store_root).root == store_root
 

@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.storage import default_run_root
 from film_pipeline.cli.driver import HeadlessDriverError, HeadlessRunSpec, run_headless
 from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
+from film_pipeline.storage.storage import default_run_root
 
 
 @dataclass(frozen=True)

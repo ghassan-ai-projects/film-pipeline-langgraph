@@ -8,7 +8,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.rollback import RollbackManager
 from film_pipeline.schemas import ArtifactStatus, ArtifactType, FilmPhase
@@ -18,6 +17,7 @@ from film_pipeline.schemas.checkpoint import (
     RollbackOutcome,
     RollbackRecord,
 )
+from film_pipeline.storage.store import ArtifactStore
 
 from .errors import BackendOperationError
 from .models import ArtifactRollbackResult, CheckpointRollbackResult

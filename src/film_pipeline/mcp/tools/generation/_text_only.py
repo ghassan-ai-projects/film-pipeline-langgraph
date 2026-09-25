@@ -36,7 +36,7 @@ def _apply_text_only_state(active: dict[str, Any], requests: list[dict[str, obje
 
 def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:
     """Add the text-only-delivery entry to the asset manifest once."""
-    from film_pipeline.artifacts.manifest import (
+    from film_pipeline.storage.manifest import (
         AssetEntry,
         AssetManifest,
         read_manifest,

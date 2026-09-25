@@ -9,10 +9,10 @@ import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.safety import ProductionDataError
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.storage.store import ArtifactStore
 
 
 def test_auto_checkpoint_references_state_snapshot_and_appends_jsonl() -> None:
@@ -146,7 +146,7 @@ def test_delete_project_allows_production_with_force(tmp_path: Path) -> None:
 def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     tmp_path: Path,
 ) -> None:
-    from film_pipeline.artifacts.store import ArtifactStore
+    from film_pipeline.storage.store import ArtifactStore
 
     projects_root = tmp_path / "projects"
     rt = StudioRuntime(

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.storage import PROFILE_SANDBOX, init_storage_root
-from film_pipeline.artifacts.store import ArtifactStore
+from film_pipeline.storage.storage import PROFILE_SANDBOX, init_storage_root
+from film_pipeline.storage.store import ArtifactStore
 
 
 def sandbox_store_root(path: Path) -> Path:

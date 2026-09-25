@@ -14,7 +14,6 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from film_pipeline.artifacts.storage import default_checkpoints_root
 from film_pipeline.filmspec import PHASE_SEQUENCE
 from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.nodes import (
@@ -37,6 +36,7 @@ from film_pipeline.graph.nodes import (
 from film_pipeline.graph.phase_sequence import PHASE_NODES
 from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
+from film_pipeline.storage.storage import default_checkpoints_root
 
 
 def _default_checkpointer(runtime_root: Path | None = None) -> BaseCheckpointSaver[Any]:
