@@ -26,6 +26,7 @@ from film_pipeline.schemas.matrix_patch import MatrixPatch
 from film_pipeline.schemas.validation import ConsensusReport, ValidationReport
 
 Migration = Callable[[dict[str, Any]], dict[str, Any]]
+Renderer = Callable[[dict[str, Any]], str]
 
 #: Artifact ids must be lowercase snake_case so directory names stay clean
 #: and unambiguous on case-insensitive filesystems.
@@ -74,6 +75,10 @@ class KindSpec:
     schema_version: int = 1
     payload_model: type[BaseModel] | None = None  # None: payload stays a plain dict
     mutable: bool = False  # mutable kinds rewrite a single file instead of versioning
+    #: Typed markdown view for ``current.md``; ``None`` falls back to the
+    #: generic key-value renderer. Owned here so the registry stays the single
+    #: map from artifact id to storage contract (plan D4/D9).
+    renderer: Renderer | None = None
 
 
 class ArtifactKindRegistry:
@@ -82,12 +87,15 @@ class ArtifactKindRegistry:
     def __init__(self) -> None:
         self._exact: dict[str, KindSpec] = {}
         self._prefixes: dict[str, KindSpec] = {}
+        self._by_kind: dict[str, KindSpec] = {}
 
     def register(self, spec: KindSpec) -> None:
         self._exact[spec.artifact_id] = spec
+        self._by_kind[spec.kind] = spec
 
     def register_prefix(self, prefix: str, spec: KindSpec) -> None:
         self._prefixes[prefix] = spec
+        self._by_kind[spec.kind] = spec
 
     def spec_for(self, artifact_id: str) -> KindSpec:
         spec = self._exact.get(artifact_id)
@@ -101,6 +109,11 @@ class ArtifactKindRegistry:
     def known_ids(self) -> list[str]:
         return sorted(self._exact)
 
+    def renderer_for(self, kind: str) -> Renderer | None:
+        """Typed markdown renderer for a kind key, or ``None`` for the fallback."""
+        spec = self._by_kind.get(kind)
+        return spec.renderer if spec is not None else None
+
 
 def _kind_slug(artifact_id: str) -> str:
     return f"film.studio/{artifact_id.replace('_', '-')}"
@@ -111,6 +124,10 @@ def _spec(artifact_id: str, **kw: Any) -> KindSpec:
 
 
 def _register_defaults(registry: ArtifactKindRegistry) -> None:
+    # Imported here (not at module scope) to keep the import graph acyclic:
+    # rendering is a leaf module with no film_pipeline imports of its own.
+    from film_pipeline.artifacts import rendering
+
     exact: dict[str, KindSpec] = {
         # intake
         "project_profile": _spec("project_profile"),
@@ -119,25 +136,25 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "intake_analysis": _spec("intake_analysis"),
         "project_config": _spec("project_config"),
         # vision / development / script
-        "film_constitution": _spec("film_constitution"),
-        "logline": _spec("logline"),
-        "premise": _spec("premise"),
-        "treatment": _spec("treatment"),
+        "film_constitution": _spec("film_constitution", renderer=rendering.render_prose),
+        "logline": _spec("logline", renderer=rendering.render_prose),
+        "premise": _spec("premise", renderer=rendering.render_prose),
+        "treatment": _spec("treatment", renderer=rendering.render_prose),
         "act_map": _spec("act_map"),
-        "scene_list": _spec("scene_list"),
-        "story_bible": _spec("story_bible"),
-        "script": _spec("script"),
+        "scene_list": _spec("scene_list", renderer=rendering.render_scene_list),
+        "story_bible": _spec("story_bible", renderer=rendering.render_bible),
+        "script": _spec("script", renderer=rendering.render_script),
         "dialogue_pass": _spec("dialogue_pass"),
         "scene_intent": _spec("scene_intent"),
         # visual dev / shot bible
         "reference_index": _spec("reference_index"),
         "reference_sheet": _spec("reference_sheet"),
-        "character_bible": _spec("character_bible"),
-        "environment_bible": _spec("environment_bible"),
-        "camera_language_bible": _spec("camera_language_bible"),
-        "style_bible": _spec("style_bible"),
+        "character_bible": _spec("character_bible", renderer=rendering.render_bible),
+        "environment_bible": _spec("environment_bible", renderer=rendering.render_bible),
+        "camera_language_bible": _spec("camera_language_bible", renderer=rendering.render_bible),
+        "style_bible": _spec("style_bible", renderer=rendering.render_bible),
         "execution_brief": _spec("execution_brief"),
-        "shot_matrix": _spec("shot_matrix"),
+        "shot_matrix": _spec("shot_matrix", renderer=rendering.render_shot_matrix),
         "shot_bible": _spec("shot_bible"),
         # planning / generation
         "cost_estimate": _spec("cost_estimate"),
@@ -151,10 +168,18 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "coverage_group": _spec("coverage_group"),
         "continuity_ledger": _spec("continuity_ledger"),
         # qc / post / delivery
-        "consensus_report": _spec("consensus_report", payload_model=ConsensusReport),
-        "validation_report": _spec("validation_report", payload_model=ValidationReport),
+        "consensus_report": _spec(
+            "consensus_report",
+            payload_model=ConsensusReport,
+            renderer=rendering.render_consensus_report,
+        ),
+        "validation_report": _spec(
+            "validation_report",
+            payload_model=ValidationReport,
+            renderer=rendering.render_validation_report,
+        ),
         "issue_record": _spec("issue_record"),
-        "review_package": _spec("review_package"),
+        "review_package": _spec("review_package", renderer=rendering.render_review_package),
         "approval_record": _spec("approval_record"),
         "revision_request": _spec("revision_request"),
         "kb_context_packet": _spec("kb_context_packet"),
@@ -164,7 +189,7 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "delivery_package": _spec("delivery_package"),
         "subtitle": _spec("subtitle"),
         "subtitles": _spec("subtitles"),
-        "master_film_matrix": _spec("master_film_matrix"),
+        "master_film_matrix": _spec("master_film_matrix", renderer=rendering.render_shot_matrix),
         "matrix_row": _spec("matrix_row"),
     }
     for spec in exact.values():

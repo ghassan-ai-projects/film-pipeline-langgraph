@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from film_pipeline.artifacts.serialization import NonFiniteNumberError
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
 
@@ -39,8 +40,25 @@ class ChecksumMismatchError(RuntimeError):
 
 
 def payload_checksum(payload: dict[str, Any]) -> str:
-    """Content checksum over the canonical payload form (stable across runs)."""
-    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    """Content checksum over the canonical payload form (stable across runs).
+
+    ``allow_nan=False`` keeps the canonical form legal JSON: Python's default
+    emits bare ``NaN``/``Infinity``, which a reader normalizes, so the
+    recomputed checksum would differ and the artifact would be unreadable.
+    """
+    try:
+        canonical = json.dumps(
+            payload,
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+    except ValueError as exc:
+        raise NonFiniteNumberError(
+            f"Artifact payload contains a non-finite number and cannot be "
+            f"checksummed or stored: {exc}"
+        ) from exc
     return f"sha256:{hashlib.sha256(canonical.encode('utf-8')).hexdigest()}"
 
 

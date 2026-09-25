@@ -19,7 +19,7 @@ from __future__ import annotations
 import fcntl
 import json
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +39,7 @@ from film_pipeline.artifacts.registry import (
     REGISTRY,
     KindNotRegisteredError,
     KindSpec,
+    Renderer,
     migrate_payload,
     validate_artifact_id,
 )
@@ -732,38 +733,6 @@ def _meta_to_dict(meta: ArtifactCurrentMeta) -> dict[str, Any]:
     return meta.model_dump(mode="json")
 
 
-_RENDERER_BY_SLUG: dict[str, Any] = {}
-
-
-def _renderer_for(kind: str) -> Callable[[dict[str, Any]], str] | None:
-    """Renderer for a kind slug, resolved once from the rendering module."""
-    if not _RENDERER_BY_SLUG:
-        import importlib
-
-        rendering = importlib.import_module("film_pipeline.artifacts.rendering")
-        _RENDERER_BY_SLUG.update(
-            {
-                "script": rendering.render_script,
-                "scene-list": rendering.render_scene_list,
-                "shot-matrix": rendering.render_shot_matrix,
-                "master-film-matrix": rendering.render_shot_matrix,
-                "validation-report": rendering.render_validation_report,
-                "consensus-report": rendering.render_consensus_report,
-                "review-package": rendering.render_review_package,
-                "treatment": rendering.render_prose,
-                "logline": rendering.render_prose,
-                "premise": rendering.render_prose,
-                "film-constitution": rendering.render_prose,
-                "character-bible": rendering.render_bible,
-                "environment-bible": rendering.render_bible,
-                "camera-language-bible": rendering.render_bible,
-                "style-bible": rendering.render_bible,
-                "story-bible": rendering.render_bible,
-            }
-        )
-    return _RENDERER_BY_SLUG.get(kind.rsplit("/", 1)[-1])
-
-
 def _render_markdown(kind: str, meta: ArtifactMetadata, payload: dict[str, Any]) -> str:
     title = f"# {meta.artifact_id}\n\n"
     details = [
@@ -772,10 +741,17 @@ def _render_markdown(kind: str, meta: ArtifactMetadata, payload: dict[str, Any])
         f"- version: {meta.version}",
         f"- status: {meta.status.value}",
     ]
+    # The registry owns which renderer a kind uses (plan D4/D9), so there is no
+    # second table here to drift out of sync with the kind slugs.
     renderer = _renderer_for(kind)
     body = renderer(payload) if renderer is not None else _markdown_body(payload)
     detail_text = "\n".join(details)
     return f"{title}{detail_text}\n\n{body}\n"
+
+
+def _renderer_for(kind: str) -> Renderer | None:
+    """Renderer registered for ``kind``, or ``None`` for the generic fallback."""
+    return REGISTRY.renderer_for(kind)
 
 
 def _markdown_body(payload: dict[str, Any]) -> str:

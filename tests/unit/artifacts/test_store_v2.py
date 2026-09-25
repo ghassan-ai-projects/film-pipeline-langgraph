@@ -415,3 +415,94 @@ class TestListOrdering:
             ("script", "dialogue_pass", 1),
             ("script", "script", 2),
         ]
+
+
+class TestNonFinitePayloads:
+    """A stored artifact must always be readable by the store that wrote it.
+
+    Non-finite floats serialize as bare ``Infinity``/``NaN`` (not legal JSON),
+    and a reader normalizes them, so the recomputed checksum would differ and
+    the artifact would fail its own integrity check forever. These tests pin
+    that such a write fails loudly instead of poisoning storage.
+    """
+
+    @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
+    def test_save_rejects_non_finite_payload(self, tmp_path: Path, bad: float) -> None:
+        from film_pipeline.artifacts.serialization import NonFiniteNumberError
+        from film_pipeline.schemas.budget import BudgetState
+
+        store = make_store(tmp_path / "store")
+        budget = BudgetState(project_id="p1", per_phase_caps_usd={"script": bad})
+        with pytest.raises(NonFiniteNumberError):
+            store.save(
+                budget, _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE)
+            )
+
+    def test_rejected_write_leaves_no_artifact_behind(self, tmp_path: Path) -> None:
+        """A failed save must not leave a half-written, unreadable version."""
+        from film_pipeline.artifacts.serialization import NonFiniteNumberError
+        from film_pipeline.schemas.budget import BudgetState
+
+        root = tmp_path / "store"
+        store = make_store(root)
+        with pytest.raises(NonFiniteNumberError):
+            store.save(
+                BudgetState(project_id="p1", per_phase_caps_usd={"script": float("inf")}),
+                _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE),
+            )
+        assert store.list_artifacts("p1") == []
+
+    def test_finite_payload_round_trips(self, tmp_path: Path) -> None:
+        """The guard must not reject ordinary finite floats."""
+        from film_pipeline.schemas.budget import BudgetState
+
+        store = make_store(tmp_path / "store")
+        ref = store.save(
+            BudgetState(project_id="p1", per_phase_caps_usd={"script": 12.5}),
+            _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE),
+        )
+        assert store.load_ref("p1", ref)["per_phase_caps_usd"] == {"script": 12.5}
+
+    def test_dump_json_rejects_nested_non_finite(self) -> None:
+        """The guard is recursive, so nesting cannot smuggle a bad float in."""
+        from film_pipeline.artifacts.serialization import NonFiniteNumberError, dump_json
+
+        with pytest.raises(NonFiniteNumberError):
+            dump_json({"a": [{"b": float("nan")}]})
+
+    def test_checksum_rejects_non_finite(self) -> None:
+        from film_pipeline.artifacts.envelope import payload_checksum
+        from film_pipeline.artifacts.serialization import NonFiniteNumberError
+
+        with pytest.raises(NonFiniteNumberError):
+            payload_checksum({"x": float("inf")})
+
+
+class TestRendererRegistryOwnership:
+    """The registry is the single map from kind to storage contract (plan D4/D9).
+
+    The renderer table used to live in ``store.py`` keyed by a re-derived slug,
+    duplicating registry knowledge and allowing the two to drift. These tests
+    pin that the registry owns the mapping.
+    """
+
+    def test_registry_owns_renderer_lookup(self) -> None:
+        from film_pipeline.artifacts.registry import REGISTRY
+        from film_pipeline.artifacts.rendering import render_script
+
+        spec = REGISTRY.spec_for("script")
+        assert spec.renderer is render_script
+        assert REGISTRY.renderer_for(spec.kind) is render_script
+
+    def test_every_kind_is_looked_up_by_its_registry_key(self) -> None:
+        """Each kind resolves through its own key, with no slug re-derivation."""
+        from film_pipeline.artifacts.registry import REGISTRY
+
+        for artifact_id in REGISTRY.known_ids():
+            spec = REGISTRY.spec_for(artifact_id)
+            assert REGISTRY.renderer_for(spec.kind) is spec.renderer
+
+    def test_unregistered_renderer_key_falls_back(self) -> None:
+        from film_pipeline.artifacts.registry import REGISTRY
+
+        assert REGISTRY.renderer_for("film.studio/not-a-kind") is None

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
@@ -17,7 +18,12 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    cap = float(cast(float, args.get("cap_usd", 100.0)))
+    try:
+        cap = float(cast(float, args.get("cap_usd", 100.0)))
+    except (TypeError, ValueError):
+        return _error("cap_usd must be a number.")
+    if not math.isfinite(cap) or cap < 0:
+        return _error("cap_usd must be a finite, non-negative number.")
     store = _services(rt).artifact_store
 
     try:
