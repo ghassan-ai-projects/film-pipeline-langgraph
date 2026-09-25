@@ -73,7 +73,7 @@ Fixed failing closed at the write boundary (`serialization.dump_json`),
 independently in `payload_checksum` (`allow_nan=False`), and at the MCP input.
 The 6 new regression tests were verified to fail against the pre-fix code.
 
-### B2 — Projects were split across two directories (fixed in `d9f6f18`)
+### B2 — Projects were split across two directories (fixed in `266f04f`)
 
 Found by the completeness lens and independently reproduced. `project.json`,
 `state/`, `checkpoints/`, and `audit/` were written to
@@ -99,6 +99,8 @@ everything, verified by an end-to-end tree dump and pinned by a new guard test
 | `c107521` | D6: every storage write atomic; parent-directory fsync for rename durability |
 | `3d09675` | Dead `paths.artifact_dir`/`artifact_path` (legacy colon-mangling) and dead `ArtifactMetadata.schema_version` removed |
 | `dac022e` | JSONL storage version enforced on read; §5 `list_artifacts`/`list_checkpoints` row contracts pinned |
+| `bb4a5e4` | Review record: fix commits + end-goal evidence |
+| `1cbf7ed` | Typed the derived index boundary (`ArtifactIndex`/`ArtifactIndexEntry`); inlined pass-through wrappers |
 
 ## Verification of the end goal
 
@@ -127,3 +129,41 @@ Test evidence is behavior-based, not coverage-based: every behavior-asserting
 regression test added here was run against the pre-fix code and confirmed to
 fail (non-finite ×6, status/mutable-ref ×3), and the production-roots guard was
 re-verified to trip by canary injection after each structural change.
+
+### Regression safety of the stricter mutable-ref rule
+
+The mutable-ref change (`dfa6cb1`) is the one fix that can reject input that
+previously succeeded, so it was audited for real callers:
+
+- `generation_ledger` is the **only** mutable kind.
+- All 32 `store.load(...)` / `load_ref(...)` call sites in `src/` target
+  non-mutable kinds (script, matrices, bibles, reports).
+- The ledger is read exclusively through `load_mutable` (ledger manager) and
+  `load_mutable_envelope` (generation batch planning), neither of which applies
+  the version check — so no real caller can hit the new error.
+
+Other invariants re-verified after the layout merge:
+
+- **Non-persistent runs stay in temp**: resolved root is under `tempfile.gettempdir()`,
+  never `~/.film-pipeline` and never the CWD, and the throwaway runtime now gets
+  a matching throwaway store root.
+- **Marker gate + restart on a populated root**: a marked root that now contains
+  project directories reopens cleanly, restores the project, and resolves the
+  correct single-folder path with its phase intact.
+- **E2E and integration suites pass** at the tip.
+
+### CI note: one-off coverage-collection flake (not a code defect)
+
+One `make ci-check` invocation during this work reported **1995 passed / 8 skipped
+with coverage 40.33%** — a partial data-collection signature, since the same test
+count at that percentage is impossible for a full run. It was not reproducible:
+the exact CI target (`pytest --cov-report=term-missing`) was then run seven
+times, including three back-to-back and two concurrent invocations, and every
+run reported an identical, deterministic **91.72%** with exit 0.
+
+Attribution: a rare `pytest-cov` + `pytest-xdist` (`-n auto`) worker-data
+combination race, an environment/tooling artifact rather than a storage defect.
+`pyproject.toml` sets `-n auto` for the suite but does not declare
+`[tool.coverage.run] parallel = true`; making that pairing explicit (or dropping
+`-n auto` for the coverage gate) would remove the race. Not changed here, since
+it is outside the storage scope and the gate is currently green and reproducible.
