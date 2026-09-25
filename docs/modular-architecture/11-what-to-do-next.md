@@ -107,7 +107,37 @@ versus other modules' concerns. Guessing cost time once already.
    identified in `08` §7 as the first concrete slice, since they need a
    project-state accessor rather than the runtime.
 
-## 5. Why I am not recommending more analysis
+## 5b. Re-measured after the boundary rounds
+
+The `issues` consolidation landed (`dcb4914`), so the recommendations above are
+partly spent. Re-measuring rather than trusting the earlier notes:
+
+| Claim | Status |
+|---|---|
+| `issues` writers | 13 -> 11; the two removed were the duplicated removal sites. The remaining three non-graph writes are a manifest entry (`outcomes.py`) and validator freshness replacement (`_graph_exec.py`) — both correct as-is. |
+| State-only MCP handlers (`08` §7) | **Still 16**, unchanged. |
+| Capability-needing handlers | Still 25. |
+
+So the next concrete slice is the one `08` §7 identified and the boundary work
+has since made cheaper. Measured on the current tree:
+
+- **25 handlers inline `rt.get_active()`; 12 already call the existing
+  `helpers._active_project_state`.**
+- The "no active project" error string appears **48 times**, in three variants:
+  45 x `"No active project."`, 1 x `"No active project. Create one first with
+  create_film_project."`, 1 x `"No active project set"`.
+
+That is the same shape as the `issues` finding: one policy, many
+reimplementations, small divergences. It needs no new abstraction — the helper
+already exists and does exactly what the inline sites re-derive. Retargeting the
+16 state-only handlers to it is mechanical and testable, and it is the safest
+possible first step toward the `StudioRuntime` question, because it moves
+*consumers* rather than structure.
+
+**Not recommended:** inventing a new accessor type first. The helper already
+returns what they need; a new type would be the facade mistake again.
+
+## 6. Why I am not recommending more analysis
 
 Four design documents have been written on this (`07`–`10`). The last three
 rounds produced more value per unit of effort than all of them, because they
