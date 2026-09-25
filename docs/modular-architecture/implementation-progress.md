@@ -134,6 +134,8 @@ Enola filter or threshold changed.
 
 | G-04 | Move `scope_contract.py` and `consistency.py` from `graph` to `governance`; make the approved-ref registry an injected parameter so `governance` (L8) stops reaching up into `orchestration` (L9); retarget consumers, add shims, move behavior tests to their owner | Found an upward dependency the (nonexistent) guard suite could not catch: `check_staleness` imported `graph.orchestrator_state` lazily | PASS — governance consistency and scope-contract suites, plus the full run | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `81adc8f` | Complete |
 
+| G-05 | Complete `governance`: move `_action_routing.py` and `orchestrator_validators/` out of `graph`; supply the seven orchestrator reads through a new `GateFacts` port; inject the artifact store into `brief.py`; point `router` at `filmspec` for `APPROVAL_GATES` | Found and fixed a **silent** regression the suite caught: a storeless `load_execution_brief` stops using the store-backed fallback rather than failing loudly. Also corrected a guard whose sibling-package rule a blanket rewrite had pointed outside `graph` | PASS — full suite including the shot-bible structure test that surfaced the regression | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings; the one new advisory is pre-existing complexity re-keyed to the new path | `ec178ad` | Complete |
+
 ### OP-02c — the remaining physical move
 
 **Done in OP-02c (`6b0cd34`).** The four operator modules now live in
@@ -142,6 +144,13 @@ Enola filter or threshold changed.
 cycle: `projects.classification` imports `operations.errors`, so an eager
 `OperatorService` import in the `operations` facade made `film_pipeline.mcp.server`
 unimportable; the facade now resolves it through a module `__getattr__`.
+
+**`governance` is now complete (G-04 `81adc8f`, G-05 `ec178ad`).** It holds the
+human-gate law, the review action/diff/generator policy, scope contracts,
+consistency checks, and the gate validators — with **zero** references back into
+`graph`. The orchestrator reads the law needs arrive through two narrow ports
+(`GateFacts`, plus the structural reads in `governance.orchestrator_reads`), and
+the artifact store is injected into the validators rather than imported.
 
 ### OP-02 — why the round was rescoped
 
