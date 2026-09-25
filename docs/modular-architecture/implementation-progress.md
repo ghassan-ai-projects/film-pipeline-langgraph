@@ -36,9 +36,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 2 remain (C2, C3); C1, C4, and C5 were removed by C-01, C-02, and C-03 |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | 1 remains (C2); C1, C3, C4, and C5 were removed by C-01 through C-04 |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 110 in the latest C-03 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | 112 in the latest C-04 check; pinned receipt remains at baseline 110 |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -78,8 +78,8 @@ Enola filter or threshold changed.
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
-| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | PASS — committed-tree check at 22:06 UTC; clean, C3 removed (2→1 cycles), no new findings; pinned receipt unchanged | `1e3bf33` | Complete |
-| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target after slice: 0 total cycle findings | Pending | Queued after C-04 |
+| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | PASS — committed-tree check at 22:06 UTC; clean, C3 removed (2→1 cycles), no new findings; 113 total / 112 heuristic vs. pinned 115 / 110 | `1e3bf33` | Complete |
+| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Three plan lenses pending | Pending | Pending | Current: 1 cycle finding (C2); target after slice: 0 | Pending | Plan review |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -185,6 +185,48 @@ follow C-04; completing the graph slice alone is not migration completion.
   and exact restoration of a prior context value after failure. Quality review
   required package re-export and alias cases in the AST guard. All findings were
   resolved before implementation.
+
+## C-05 plan — move the repository product gate out of app
+
+- **Measured cycle:** the remaining cycle is Enola C2, the seven-member path
+  `app → app/services → mcp → mcp/tools → mcp/tools/bibles →
+  mcp/tools/generation → mcp/tools/reference_generation → app`, documented in
+  `enola-architecture-facts.md` and audit 14. C-04 removed C3; the committed
+  Enola check now reports one current cycle insight. A source census found the
+  only app-to-MCP import in `app/product_gate.py`: it imports
+  `mcp.contract.make_registry`. That repository-evidence checker is run by the
+  Makefile and tested from `tests/unit/app/test_product_gate.py`; it is not
+  part of app runtime or the operator service.
+- **Owner and consumers:** move the complete checker to
+  `cli/product_gate.py`, an outer command invoked by CI. The CLI layer may
+  compose MCP's registry for the repo-level product check; app modules will
+  have no MCP dependency. Preserve the checker and its current dependencies,
+  manifest paths, return values, output, and stub detection. Retarget the
+  Makefile command and move the existing product-gate tests to
+  `tests/unit/cli/test_product_gate.py`, updating only import and monkeypatch
+  paths. Remove `app/product_gate.py` without a forwarding shim, which would
+  restore the cycle.
+- **Boundary guard:** add an app-package AST guard that forbids imports from
+  `film_pipeline.mcp` anywhere under `src/film_pipeline/app`. Resolve absolute,
+  relative, and package-re-export forms, including `from film_pipeline import
+  mcp as ...` and `from .. import mcp` in a nested app package. Exercise these
+  forms in focused resolver cases. This pins the single dependency direction
+  needed to close C2; it does not add a general architecture framework.
+- **Scope discipline:** do not alter MCP startup, tool schemas, runtime
+  creation, operator service behavior, or the current test-visible injection
+  hooks. The existing imports from MCP into app remain the established
+  operator-to-service delegation path. No behavior repair is included.
+- **Validation:** run the product-gate and app-boundary suites, all directly
+  affected CLI/MCP startup and registry suites with `--no-cov -n 0`, then
+  `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at least 90%, strict typing,
+  build and product gate), run `python -m film_pipeline.cli.product_gate`,
+  Enola against `docs/modular-architecture/enola-out`, and `git diff --check`.
+  Close C-05 only when all six reviews pass, no in-repository consumer uses the
+  old path, the full gate passes, and committed-tree Enola is clean with zero
+  total cycle findings. Keep the pinned receipt, filters, and thresholds
+  unchanged.
+- **Plan review:** pending three independent lenses. No production changes have
+  started.
 
 ## V-01 plan
 
