@@ -18,8 +18,10 @@ into `storage`, `projects`, `operations`, `studio`, `governance`, and
 (`schemas`, `config`, `kb`, `constraints`, `providers`, `checkpoints`, `agents`,
 `validation`, `generation`, `post`, and `mcp`) and add `budget` and
 `devharness` only when their current responsibilities are ready to move.
-Each round names the source and consumers, proves compatibility, runs the full
-gate and Enola, records the finding delta, and gets its own commit. The
+Each round names the source and consumers and gets its own commit. From F-02
+onward, tests and Enola have not been run by user direction; compatibility
+checks were added but their results are pending. The last measured Enola
+result applies only to commit `d86db22`. The
 R-01b through R-01e behavior repairs remain deferred.
 
 This log tracks implementation slices from the reviewed direction in
@@ -57,9 +59,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 0 remain; C-05 removed the final C2 cycle |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | Last measured: 0 at `d86db22`; current tree unmeasured |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 112 in the latest C-05 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | Last measured: 112 at `d86db22`; current tree unmeasured |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -100,19 +102,51 @@ Enola filter or threshold changed.
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | PASS — committed-tree check at 22:06 UTC; clean, C3 removed (2→1 cycles), no new findings; 113 total / 112 heuristic vs. pinned 115 / 110 | `1e3bf33` | Complete |
-| C-05 | Break C2: move product gate to CLI, then move MCP registry assembly out of the eager tool facade | First cut reviewed; final self-review below | PASS — 430 MCP/CLI/graph tests with 1 skip and 11 expected failures; facade identity checked | PASS — `make ci-check` with offline build; 2,058 passed / 8 skipped / 11 xfailed; 91.72% coverage | PASS — clean against pinned baseline; 0 current cycle findings, 112 current insights versus 115 pinned and 113 before this round | This commit | Complete |
-| F-01 | Establish `filmspec` ownership of `FilmPhase`, immutable phase order, and successor; preserve schema/graph aliases | Self-review below | PASS — 5 phase tests, including identity and all successor edges | Same full gate as C-05 | Included in C-05 Enola check; no new cycle | This commit | Complete |
-| F-02 | Move pure artifact, agent, generation, validation, and issue enum vocabularies into `filmspec`; preserve schema aliases | Source owner and aliases inspected | Compatibility alias cases added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| F-03 | Move phase gate, provider-dependence, and transition vocabularies into `filmspec`; preserve graph and schema aliases | Source tables and consumers inspected | Compatibility and phase-set cases added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| S-01 | Move `schemas._base` to public `schemas.base`, retarget production imports, and keep explicit old-path aliases | Mechanical source import inventory; no old-path source import remains | Alias cases added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| P-01 | Move project reference resolution from MCP to `projects`; keep MCP aliases and retarget server | Pure resolution module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| G-02 | Move pure review action policy into `governance`; keep review aliases and retarget package generation | Pure policy module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| ST-01 | Move canonical project/phase/media path layout into `storage`; keep artifact path aliases and retarget store consumers | Pure path owner and direct consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| ST-02 | Move artifact ID validation and sanitization into `storage.contract`; preserve registry aliases and retarget store/MCP consumers | Identifier helpers and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| G-03 | Move review package generation and artifact diff into `governance`; keep review aliases and retarget MCP | Review modules and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| OP-01 | Move operator view models and service errors into `operations`; preserve app-service aliases and retarget consumers | Leaf contracts and imports inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| ST-03 | Move immutable `KindSpec` and renderer type into `storage.contract`; preserve registry aliases and retarget store | Registry value object and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; verification deferred |
-| DH-01 | Move mock actors, in-memory Git, storage fixtures, and scenarios into `devharness`; keep `testing` aliases and wheel content during behavior freeze | Harness source modules inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | This commit | Migrated; packaging seal deferred |
+| C-05 | Break C2: move product gate to CLI, then move MCP registry assembly out of the eager tool facade | First cut reviewed; final self-review below | PASS — 430 MCP/CLI/graph tests with 1 skip and 11 expected failures; facade identity checked | PASS — `make ci-check` with offline build; 2,058 passed / 8 skipped / 11 xfailed; 91.72% coverage | PASS — clean against pinned baseline; 0 current cycle findings, 112 current insights versus 115 pinned and 113 before this round | `d86db22` | Complete |
+| F-01 | Establish `filmspec` ownership of `FilmPhase`, immutable phase order, and successor; preserve schema/graph aliases | Self-review below | PASS — 5 phase tests, including identity and all successor edges | Same full gate as C-05 | Included in C-05 Enola check; no new cycle | `d86db22` | Complete |
+| F-02 | Move pure artifact, agent, generation, validation, and issue enum vocabularies into `filmspec`; preserve schema aliases | Source owner and aliases inspected | Compatibility alias cases added, not run by user direction | Not run by user direction | Not run by user direction | `8085f3b` | Migrated; verification deferred |
+| F-03 | Move phase gate, provider-dependence, and transition vocabularies into `filmspec`; preserve graph and schema aliases | Source tables and consumers inspected | Compatibility and phase-set cases added, not run by user direction | Not run by user direction | Not run by user direction | `0f7ba2a` | Migrated; verification deferred |
+| S-01 | Move `schemas._base` to public `schemas.base`, retarget production imports, and keep explicit old-path aliases | Mechanical source import inventory; no old-path source import remains | Alias cases added, not run by user direction | Not run by user direction | Not run by user direction | `227eccc` | Migrated; verification deferred |
+| P-01 | Move project reference resolution from MCP to `projects`; keep MCP aliases and retarget server | Pure resolution module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `15124c9` | Migrated; verification deferred |
+| G-02 | Move pure review action policy into `governance`; keep review aliases and retarget package generation | Pure policy module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `224a6cc` | Migrated; verification deferred |
+| ST-01 | Move canonical project/phase/media path layout into `storage`; keep artifact path aliases and retarget store consumers | Pure path owner and direct consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `9e94779` | Migrated; verification deferred |
+| ST-02 | Move artifact ID validation and sanitization into `storage.contract`; preserve registry aliases and retarget store/MCP consumers | Identifier helpers and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `e3c9c93` | Migrated; verification deferred |
+| G-03 | Move review package generation and artifact diff into `governance`; keep review aliases and retarget MCP | Review modules and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `d1344d5` | Migrated; verification deferred |
+| OP-01 | Move operator view models and service errors into `operations`; preserve app-service aliases and retarget consumers | Leaf contracts and imports inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `42b9aa5` | Migrated; verification deferred |
+| ST-03 | Move immutable `KindSpec` and renderer type into `storage.contract`; preserve registry aliases and retarget store | Registry value object and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `d10c18b` | Migrated; verification deferred |
+| DH-01 | Move mock actors, in-memory Git, storage fixtures, and scenarios into `devharness`; keep `testing` aliases and wheel content during behavior freeze | Harness source modules inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `0167bd9` | Migrated; packaging seal deferred |
+
+## Remaining migration work
+
+The target module names now exist except `budget`, `orchestration`, and
+`studio`. Presence is not completion: several newly created packages own only
+their pure contracts while stateful code still lives at the old path. The next
+rounds should keep existing behavior and use the lowest-risk dependency order:
+
+1. Move the remaining artifact registry, envelope, store, manifest, and project
+   storage implementation into `storage`, retaining read/write format and old
+   import aliases. Then move project discovery and the active-project authority
+   into `projects`.
+2. Move `OperatorService` and its helper operations out of `app/services` into
+   `operations`, with MCP consumers retargeted and the existing runtime lookup
+   behavior preserved during the move.
+3. Move graph execution/composition into `orchestration`, and runtime,
+   bootstrap, logging, and entry-point composition into `studio`. This requires
+   a deliberate `langgraph.json` path migration and compatibility review for
+   import-time checkpointer creation and persisted state.
+4. Establish `budget` as the owner of the existing spend rules without
+   changing ceilings or approval behavior. Complete the outstanding governance
+   routing and generation/validation ownership moves after their callers use
+   the new package boundaries.
+5. Retarget test harness consumers to `devharness`, remove obsolete aliases
+   after consumers are migrated, make the requested wheel exclusion, and align
+   `AGENTS.md`, operator docs, and boundary guards with the delivered tree.
+
+The production code still has compatibility modules under `artifacts`,
+`app/services`, `graph`, `review`, `mcp.resolution`, `schemas._base`, and
+`testing`. They are intentional migration shims for now; deleting them before
+their consumers move would change imports. R-01b through R-01e remain behavior
+repairs for after the migration.
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
