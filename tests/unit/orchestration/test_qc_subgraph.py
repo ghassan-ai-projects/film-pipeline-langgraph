@@ -7,7 +7,7 @@ from typing import Any
 
 from film_pipeline.orchestration.services import SERVICES_KEY
 from film_pipeline.orchestration.subgraphs import qc
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 
 @dataclass

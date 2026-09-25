@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.schemas._base import ValidationStatus
+from film_pipeline.schemas.base import ValidationStatus
 from film_pipeline.schemas.registries.validator_registry import ValidatorThresholds
 from film_pipeline.validation.thresholds import (
     is_blocking,

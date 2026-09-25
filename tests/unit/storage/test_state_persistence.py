@@ -21,8 +21,8 @@ class TestConcurrentWrites:
         """Two threads saving one artifact cannot collide or tear files."""
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas._base import ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.base import ArtifactType, FilmPhase
         from film_pipeline.schemas.project import ProjectIdentity
 
         store = make_store(tmp_path / "store")
@@ -65,8 +65,8 @@ class TestConcurrentWrites:
     ) -> None:
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas._base import ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.base import ArtifactType, FilmPhase
         from film_pipeline.schemas.generation import GenerationLedger
 
         store = make_store(tmp_path / "store")

@@ -92,8 +92,8 @@ def test_generate_environment_bible_missing_constitution(
     # branch rather than the "Script artifact not found" branch.
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.script import Script
 
     assert rt.services is not None

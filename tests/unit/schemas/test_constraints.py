@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.schemas._base import FilmType
+from film_pipeline.schemas.base import FilmType
 from film_pipeline.schemas.constraints import ProjectConstraints, render_constraints
 
 

@@ -51,7 +51,7 @@ _SUBSET_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("ARTIFACT_ID_PATTERN", "validate_artifact_id", "sanitize_artifact_id", "KindSpec"),
     ),
     (
-        "film_pipeline.schemas._base",
+        "film_pipeline.schemas.base",
         "film_pipeline.filmspec",
         (
             "ArtifactType",
@@ -64,7 +64,7 @@ _SUBSET_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "film_pipeline.schemas._base",
+        "film_pipeline.schemas.base",
         "film_pipeline.schemas.base",
         (
             "SchemaBase",

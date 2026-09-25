@@ -12,13 +12,13 @@ from pydantic import BaseModel
 from film_pipeline.generation.executor import GenerationExecutor
 from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import (
     ArtifactStatus,
     ArtifactType,
     FilmPhase,
     GenerationStatus,
 )
-from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.registries.provider_registry import (
     CostProfile,
     ProviderCapabilities,

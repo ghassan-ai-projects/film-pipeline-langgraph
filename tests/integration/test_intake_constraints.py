@@ -11,7 +11,7 @@ from film_pipeline.mcp.tools import (
     set_active_project,
     submit_idea,
 )
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 
 @pytest.mark.integration

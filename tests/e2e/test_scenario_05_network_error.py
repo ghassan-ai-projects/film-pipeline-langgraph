@@ -8,7 +8,7 @@ import pytest
 
 from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.orchestration.services import GraphServices
-from film_pipeline.schemas._base import GenerationMode, GenerationStatus
+from film_pipeline.schemas.base import GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import (
     GenerationLedger,
     GenerationLedgerRow,

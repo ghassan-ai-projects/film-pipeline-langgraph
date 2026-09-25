@@ -16,8 +16,8 @@ from film_pipeline.storage.envelope import SchemaTooNewError, payload_checksum
 if TYPE_CHECKING:
     from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.devharness.storage import make_store
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.script import Script, ScriptScene
 from film_pipeline.storage.registry import (

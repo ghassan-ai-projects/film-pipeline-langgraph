@@ -11,8 +11,8 @@ from film_pipeline.governance.validators import validate_shot_structure
 from film_pipeline.orchestration.nodes import shot_bible_node
 from film_pipeline.orchestration.nodes.visual import _reconcile_shot_matrix_to_brief
 from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.script import Script, ScriptScene

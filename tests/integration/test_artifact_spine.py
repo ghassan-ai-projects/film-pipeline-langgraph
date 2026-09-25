@@ -9,8 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.script import Script
 from film_pipeline.schemas.story_bible import StoryBible
 from film_pipeline.studio.runtime import StudioRuntime
@@ -217,7 +217,7 @@ class TestArtifactSpine:
         artifact_id = visual_parsed.artifact_id
         version = visual_parsed.version
 
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         raw = rt.services.artifact_store.load(
             "spine-test",

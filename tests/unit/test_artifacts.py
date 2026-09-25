@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.storage.manifest import AssetEntry, AssetManifest
 from film_pipeline.storage.paths import phase_dir, project_dir
 from film_pipeline.storage.registry import KindNotRegisteredError

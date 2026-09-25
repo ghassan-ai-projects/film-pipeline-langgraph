@@ -5,7 +5,7 @@ from __future__ import annotations
 from film_pipeline.providers.health import ProviderHealth, ProviderHealthTracker
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.providers.registry import ProviderRegistry
-from film_pipeline.schemas._base import ProviderStatus
+from film_pipeline.schemas.base import ProviderStatus
 from film_pipeline.schemas.registries.provider_registry import (
     ProviderRegistryEntry,
 )

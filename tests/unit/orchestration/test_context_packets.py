@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.orchestration import context_packets as cp
-from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 
 
 class FakeArtifactStore:

@@ -8,7 +8,7 @@ from pytest import MonkeyPatch
 
 from film_pipeline.orchestration.nodes import _run_agent, intake_node
 from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.studio.mock_responses import default_mock_responses
 
 

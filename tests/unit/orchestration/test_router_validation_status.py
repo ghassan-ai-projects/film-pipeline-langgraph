@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from film_pipeline.orchestration.router import compute_actions
-from film_pipeline.schemas._base import ValidationModality, ValidationScope, ValidationStatus
+from film_pipeline.schemas.base import ValidationModality, ValidationScope, ValidationStatus
 from film_pipeline.schemas.validation import ValidationReport
 
 

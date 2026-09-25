@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from film_pipeline.post.transition_agent import TRANSITION_TYPES
-from film_pipeline.schemas._base import LEGACY_TRANSITION_ALIASES
+from film_pipeline.schemas.base import LEGACY_TRANSITION_ALIASES
 from film_pipeline.schemas.validation import ValidationIssue, ValidationReport
 from film_pipeline.validation.impl.assembly import AssemblyValidator
 

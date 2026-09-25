@@ -107,7 +107,7 @@ class TestRenderers:
 
 class TestReadmeContent:
     def test_readme_lists_phase_and_links(self, tmp_path: Path) -> None:
-        from film_pipeline.schemas._base import ArtifactType, FilmPhase
+        from film_pipeline.schemas.base import ArtifactType, FilmPhase
         from film_pipeline.schemas.script import Script
 
         root = tmp_path / "store"
@@ -122,7 +122,7 @@ class TestReadmeContent:
         assert "v1" in readme
 
     def test_readme_regen_records_deliverables_on_approve(self, tmp_path: Path) -> None:
-        from film_pipeline.schemas._base import ArtifactType, FilmPhase
+        from film_pipeline.schemas.base import ArtifactType, FilmPhase
         from film_pipeline.schemas.script import Script
 
         root = tmp_path / "store"
@@ -147,8 +147,8 @@ class TestDeliverablesOnApprove:
     ) -> None:
         """D9's named test: the human gate fills deliverables/ and approves."""
         from film_pipeline.orchestration.services import GraphServices
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.script import Script
         from film_pipeline.storage.store import ArtifactStore
         from film_pipeline.studio.runtime import StudioRuntime

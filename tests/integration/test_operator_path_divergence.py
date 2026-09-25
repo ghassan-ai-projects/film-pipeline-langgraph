@@ -15,7 +15,8 @@ from film_pipeline.mcp.server import MCPServer
 from film_pipeline.orchestration.router import compute_actions
 from film_pipeline.orchestration.services import SERVICES_KEY
 from film_pipeline.orchestration.state_schema import StudioGraphState
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import (
     ArtifactStatus,
     ArtifactType,
     FilmPhase,
@@ -24,7 +25,6 @@ from film_pipeline.schemas._base import (
     ValidationScope,
     ValidationStatus,
 )
-from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 from film_pipeline.schemas.validation import ValidationIssue, ValidationReport

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from film_pipeline.constraints.extractor import extract_constraints
-from film_pipeline.schemas._base import FilmType
+from film_pipeline.schemas.base import FilmType
 
 
 def test_extract_runtime_minutes() -> None:

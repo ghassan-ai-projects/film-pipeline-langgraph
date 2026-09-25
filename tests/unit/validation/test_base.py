@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
+from film_pipeline.schemas.base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import ValidatorRegistryEntry
 from film_pipeline.schemas.validation import ValidationIssue
 from film_pipeline.validation.base import BaseValidator

@@ -133,7 +133,7 @@ def test_generate_plan_validates_raw_persisted_matrix(
     assert result["ok"] is True
     assert cast(int, result["shot_count"]) > 0
     assert rt.services is not None
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     stored = rt.services.artifact_store.load(
         "plan-success-1", FilmPhase("gen_planning"), "generation_plan", 1
@@ -251,7 +251,7 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     assert result["ok"] is True
     assert cast(float, result["total_estimated_cost"]) > 0.0
     assert rt.services is not None
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     stored = rt.services.artifact_store.load(
         "plan-seedance-1", FilmPhase("gen_planning"), "generation_plan", 1

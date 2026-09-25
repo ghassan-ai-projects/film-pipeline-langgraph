@@ -31,7 +31,7 @@ from film_pipeline.mcp.tools import (
     start_generation_batch,
 )
 from film_pipeline.orchestration.services import GraphServices
-from film_pipeline.schemas._base import SchemaBase
+from film_pipeline.schemas.base import SchemaBase
 from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.studio._provider_factory import build_provider_adapter
 from film_pipeline.studio.runtime import StudioRuntime
@@ -156,8 +156,8 @@ def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
     import asyncio
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
     assert rt.services is not None
     store = rt.services.artifact_store
@@ -328,7 +328,7 @@ def test_start_generation_batch_skips_already_submitted_with_job_id(rt: StudioRu
     asyncio.run(_plan_and_approve(["S001"]))
     # Manually set provider_job_id on the SUBMITTED row to exercise the skip branch.
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -429,7 +429,7 @@ def test_resume_generation_polling_poll_exception(rt: StudioRuntime) -> None:
     asyncio.run(_plan_and_approve(["S001"]))
     asyncio.run(start_generation_batch({}))
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -455,7 +455,7 @@ def test_resume_generation_polling_status_mapping(rt: StudioRuntime, provider_st
     asyncio.run(start_generation_batch({}))
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -553,7 +553,7 @@ def test_cancel_generation_request_with_provider(rt: StudioRuntime) -> None:
     asyncio.run(_plan_and_approve(["S001"]))
     asyncio.run(start_generation_batch({}))
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -571,7 +571,7 @@ def test_cancel_generation_request_provider_returns_false(rt: StudioRuntime) -> 
     asyncio.run(_plan_and_approve(["S001"]))
     asyncio.run(start_generation_batch({}))
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -594,7 +594,7 @@ def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> N
     import asyncio
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationMode, GenerationStatus
+    from film_pipeline.schemas.base import GenerationMode, GenerationStatus
 
     asyncio.run(
         plan_generation_batch(
@@ -633,8 +633,8 @@ def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime)
     import asyncio
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 
     assert rt.services is not None

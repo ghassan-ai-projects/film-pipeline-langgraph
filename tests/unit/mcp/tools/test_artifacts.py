@@ -170,7 +170,7 @@ def test_inspect_scene_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     rt.projects["proj-artifacts-19"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     assert rt.services is not None
     script_data = rt.services.artifact_store.load(
@@ -241,7 +241,7 @@ def test_inspect_reference_success(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     rt.projects["proj-artifacts-15"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     assert rt.services is not None
     data = rt.services.artifact_store.load(

@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 
 from film_pipeline.providers import credentials
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.studio.runtime import StudioRuntime
 
 pytestmark = pytest.mark.skipif(

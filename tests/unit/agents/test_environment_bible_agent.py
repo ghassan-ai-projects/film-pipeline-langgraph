@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.environment import EnvironmentBible
 from film_pipeline.schemas.handoff import AgentRegistration
 

@@ -12,8 +12,8 @@ from pydantic import BaseModel
 from film_pipeline.generation.executor import GenerationExecutor, GenerationStepResult
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.providers.mock_provider import MockVideoProvider
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.registries.provider_registry import (
     CostProfile,
     ProviderCapabilities,

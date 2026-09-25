@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.character import CharacterBible
 from film_pipeline.schemas.handoff import AgentRegistration
 

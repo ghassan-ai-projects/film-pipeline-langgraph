@@ -23,8 +23,8 @@ from pydantic import Field
 
 from film_pipeline.mcp.tools.reference_generation import generate_reference_images
 from film_pipeline.orchestration.services import GraphServices
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 from film_pipeline.schemas.reference import ReferenceIndex, ReferenceIndexEntry
 from film_pipeline.studio.mock_responses import default_mock_responses
 from film_pipeline.studio.runtime import StudioRuntime

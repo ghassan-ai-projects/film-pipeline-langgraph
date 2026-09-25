@@ -6,7 +6,7 @@ from typing import Any
 
 from film_pipeline.orchestration.nodes import _ensure_matrix_scene_coverage
 from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.script import ScriptScene
 from film_pipeline.storage.store import ArtifactStore

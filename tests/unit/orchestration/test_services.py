@@ -16,14 +16,14 @@ from film_pipeline.orchestration.services import (
     GraphServices,
     _get_services,
 )
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import (
     AgentFamily,
     AgentRole,
     ArtifactStatus,
     ArtifactType,
     FilmPhase,
 )
-from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket

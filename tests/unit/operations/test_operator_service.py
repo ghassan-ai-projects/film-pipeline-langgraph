@@ -10,8 +10,8 @@ import pytest
 from film_pipeline.operations.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.operations.models import OperatorCommentRequest, ProjectCreateRequest
 from film_pipeline.operations.operator import OperatorService
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.story_bible import SceneList
 from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
@@ -536,8 +536,8 @@ class TestOperatorService:
             service.set_runtime_mode("real")
 
     def test_preview_generation_prompts_resolves_from_shot_matrix(self, tmp_path: Path) -> None:
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 
         service = _service(tmp_path)

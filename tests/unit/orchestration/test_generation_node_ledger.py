@@ -7,8 +7,8 @@ from pathlib import Path
 
 from film_pipeline.orchestration.nodes import generation_node
 from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.storage.store import ArtifactStore

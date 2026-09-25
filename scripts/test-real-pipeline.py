@@ -33,7 +33,8 @@ print(f"   OPENROUTER_API_KEY: set={bool(os.environ.get('OPENROUTER_API_KEY'))}"
 print(f"   GOOGLE_API_KEY: set={bool(os.environ.get('GOOGLE_API_KEY'))}")
 
 from film_pipeline.app.runtime import get_runtime
-from film_pipeline.schemas._base import FilmPhase
+
+from film_pipeline.schemas.base import FilmPhase
 
 rt = get_runtime()
 rt.server_mode = "real"  # Force real mode on the runtime

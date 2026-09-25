@@ -13,7 +13,7 @@ from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.checkpoints.resume import ResumeManager
 from film_pipeline.checkpoints.rollback import RollbackManager
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 
 class TestGitBackend:
