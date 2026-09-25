@@ -107,7 +107,7 @@ class TestStorageCoreBoundary:
     def test_storage_core_does_not_import_other_components(self) -> None:
         """The core must not depend on graph, mcp, app, generation, or checkpoints."""
         forbidden = (
-            "film_pipeline.graph",
+            "film_pipeline.orchestration",
             "film_pipeline.mcp",
             "film_pipeline.app",
             "film_pipeline.generation",

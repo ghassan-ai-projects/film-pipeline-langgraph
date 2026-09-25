@@ -21,7 +21,6 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.graph.services import GraphServices
 from film_pipeline.operations.ports import (
     ArtifactStorePort,
     ProviderComposition,
@@ -30,6 +29,7 @@ from film_pipeline.operations.ports import (
     ServicesPort,
     artifact_store_of,
 )
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.storage.store import ArtifactStore
 
 _OPERATIONS_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "operations"

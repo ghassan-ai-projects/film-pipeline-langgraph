@@ -11,11 +11,11 @@ from typing import Any, cast
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.router import compute_actions
-from film_pipeline.graph.services import SERVICES_KEY
-from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.mcp.resolution import ProjectRecord
 from film_pipeline.mcp.server import MCPServer
+from film_pipeline.orchestration.router import compute_actions
+from film_pipeline.orchestration.services import SERVICES_KEY
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas._base import (
     ArtifactStatus,
     ArtifactType,
@@ -481,7 +481,7 @@ def _compiled_qc_result(
     shot_matrix_ref: str,
 ) -> dict[str, Any]:
     """Run the production QC subgraph with one deterministic validator worker."""
-    qc_module = importlib.import_module("film_pipeline.graph.subgraphs.qc")
+    qc_module = importlib.import_module("film_pipeline.orchestration.subgraphs.qc")
     monkeypatch.setattr(
         qc_module,
         "_resolve_validator_instance",
@@ -550,7 +550,7 @@ def test_app_validation_materializes_qc_row_patch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import film_pipeline.graph.nodes as nodes
+    import film_pipeline.orchestration.nodes as nodes
 
     runtime = _make_runtime(tmp_path)
     shot_matrix_ref = _save_shot_matrix(runtime, "operator-path")

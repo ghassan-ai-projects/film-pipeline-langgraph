@@ -71,7 +71,7 @@ def test_target_met_state_reports_target_phase_approved(tmp_path: Path) -> None:
             }
         )
         driver = HeadlessDriver(rt, "p1", target_phase="shot_bible")
-        from film_pipeline.graph.router import PHASE_ORDER
+        from film_pipeline.orchestration.router import PHASE_ORDER
 
         state = driver._target_met_state(PHASE_ORDER.index("shot_bible"))
         assert state["current_phase"] == "shot_bible"

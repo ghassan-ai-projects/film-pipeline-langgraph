@@ -1,7 +1,7 @@
-"""Phase subgraphs — internal graphs wired into the supervisor graph.
+"""Compatibility aliases for :mod:`film_pipeline.orchestration.subgraphs`."""
 
-Currently only QC has a real subgraph (parallel validator fan-out); the
-other phases run as plain nodes in film_pipeline.graph.nodes.
-"""
+from film_pipeline.orchestration.subgraphs.qc import (
+    build_qc_subgraph as build_qc_subgraph,
+)
 
-from __future__ import annotations
+__all__ = ["build_qc_subgraph"]

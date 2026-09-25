@@ -23,7 +23,7 @@ from film_pipeline.app._resume import (
     _strip_stale_generation_request_blockers,
 )
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.services import _SERVICES_CTX, GraphServices, _get_services
+from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices, _get_services
 
 
 class _FakeSnapshot:

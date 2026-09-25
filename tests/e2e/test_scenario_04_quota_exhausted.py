@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.providers.failure_classifier import FailureClassifier
 from film_pipeline.providers.health import ProviderHealth
 from film_pipeline.schemas._base import ProviderStatus

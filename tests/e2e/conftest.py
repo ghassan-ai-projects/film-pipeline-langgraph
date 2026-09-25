@@ -17,9 +17,9 @@ from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.devharness.mock_human import DecisionProfile, MockHumanActor
 from film_pipeline.devharness.mock_model import MockModelAdapter
-from film_pipeline.graph.services import GraphServices
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.kb.packets import KBContextPacketBuilder
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.providers.health import ProviderHealthTracker
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.providers.registry import ProviderRegistry

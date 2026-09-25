@@ -9,8 +9,8 @@ from film_pipeline.governance.validators import (
     validate_scene_count,
     validate_script_scene_preservation,
 )
-from film_pipeline.graph import nodes
-from film_pipeline.graph.edges import _is_auto_mode, after_approval
+from film_pipeline.orchestration import nodes
+from film_pipeline.orchestration.edges import _is_auto_mode, after_approval
 
 
 class TestGateSValidators:
@@ -113,7 +113,7 @@ class TestEdgesAutoMode:
         assert not _is_auto_mode({"resolved_config": {"studio": "not-a-dict"}})
 
     def test_after_approval_terminates_on_stall_in_auto_mode(self) -> None:
-        from film_pipeline.graph import orchestrator_state as ostate
+        from film_pipeline.orchestration import orchestrator_state as ostate
 
         state: dict[str, Any] = {
             "current_phase": "development",

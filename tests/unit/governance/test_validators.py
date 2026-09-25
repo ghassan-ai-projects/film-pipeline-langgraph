@@ -328,7 +328,7 @@ class TestApprovalEnforcement:
     """Verify that the approval path rejects phases with blocking issues."""
 
     def test_approve_phase_node_blocks_with_issues(self) -> None:
-        from film_pipeline.graph.nodes import approve_phase_node
+        from film_pipeline.orchestration.nodes import approve_phase_node
 
         state: dict[str, Any] = {
             "current_phase": "shot_bible",
@@ -342,7 +342,7 @@ class TestApprovalEnforcement:
         assert result.get("_approval_blocked_by_issues") is True
 
     def test_approve_phase_node_passes_without_blocking_issues(self) -> None:
-        from film_pipeline.graph.nodes import approve_phase_node
+        from film_pipeline.orchestration.nodes import approve_phase_node
 
         state: dict[str, Any] = {
             "current_phase": "shot_bible",

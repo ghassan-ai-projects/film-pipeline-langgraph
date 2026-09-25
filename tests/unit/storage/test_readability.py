@@ -147,7 +147,7 @@ class TestDeliverablesOnApprove:
     ) -> None:
         """D9's named test: the human gate fills deliverables/ and approves."""
         from film_pipeline.app.runtime import StudioRuntime
-        from film_pipeline.graph.services import GraphServices
+        from film_pipeline.orchestration.services import GraphServices
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.script import Script

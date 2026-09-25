@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.router import compute_actions
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.router import compute_actions
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
 

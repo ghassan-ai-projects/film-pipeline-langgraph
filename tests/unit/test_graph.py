@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from film_pipeline.app.graph_factory import build_graph
-from film_pipeline.graph import orchestrator_state as ostate
-from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.nodes import (
+from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.edges import after_approval, after_phase
+from film_pipeline.orchestration.nodes import (
     approve_phase_node,
     intake_node,
     request_revision_node,
 )
-from film_pipeline.graph.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
+from film_pipeline.orchestration.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
 
 
 class TestRouter:
@@ -235,6 +235,6 @@ class TestGraph:
 
 class TestSubgraphs:
     def test_qc_subgraph_importable(self) -> None:
-        from film_pipeline.graph.subgraphs import qc
+        from film_pipeline.orchestration.subgraphs import qc
 
         assert qc.build_qc_subgraph() is not None

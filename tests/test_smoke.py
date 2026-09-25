@@ -35,7 +35,7 @@ def test_subpackages_importable() -> None:
         "film_pipeline.filmspec",
         "film_pipeline.generation",
         "film_pipeline.governance",
-        "film_pipeline.graph",
+        "film_pipeline.orchestration",
         "film_pipeline.kb",
         "film_pipeline.mcp",
         "film_pipeline.operations",

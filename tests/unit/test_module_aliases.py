@@ -128,7 +128,12 @@ _SUBSET_PAIRS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 #: ``(alias, owner, alias_name, owner_name)`` where the two names differ.
 _RENAMED_PAIRS: tuple[tuple[str, str, str, str], ...] = (
-    ("film_pipeline.graph.router", "film_pipeline.filmspec", "APPROVAL_GATES", "PHASE_GATES"),
+    (
+        "film_pipeline.orchestration.router",
+        "film_pipeline.filmspec",
+        "APPROVAL_GATES",
+        "PHASE_GATES",
+    ),
 )
 
 

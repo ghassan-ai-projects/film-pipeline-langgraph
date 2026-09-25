@@ -9,8 +9,8 @@ import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.safety import ProductionDataError
-from film_pipeline.graph.orchestrator_state import set_candidate_ref
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.orchestrator_state import set_candidate_ref
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.storage.store import ArtifactStore
 
