@@ -17,8 +17,8 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.app.services import OperatorService
 from film_pipeline.config.profile_resolver import resolve_project_config
+from film_pipeline.operations import OperatorService
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase

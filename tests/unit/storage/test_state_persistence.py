@@ -298,7 +298,7 @@ class TestResumeAcrossRestart:
 class TestOperatorFreshness:
     def test_freshness_prefers_typed_record(self, tmp_path: Path) -> None:
         from film_pipeline.app.runtime import StudioRuntime
-        from film_pipeline.app.services.operator import OperatorService
+        from film_pipeline.operations.operator import OperatorService
 
         runtime_root = tmp_path / "runtime"
         rt = StudioRuntime(server_mode="mock", runtime_root=runtime_root)

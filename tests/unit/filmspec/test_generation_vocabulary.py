@@ -87,11 +87,11 @@ class TestTextOnlyRequestBuilder:
 
     def test_both_generation_paths_share_the_vocabulary(self) -> None:
         """The operator path and the MCP path must produce identical rows."""
-        from film_pipeline.app.services._generation_ops import (
-            _strip_stale_request_issues as operator_strip,
-        )
         from film_pipeline.mcp.tools.generation._text_only import (
             _apply_text_only_state,
+        )
+        from film_pipeline.operations._generation_ops import (
+            _strip_stale_request_issues as operator_strip,
         )
 
         rows = [{"shot_id": "S001"}]
@@ -109,7 +109,7 @@ class TestTextOnlyRequestBuilder:
     def test_module_exposes_one_code_set(self) -> None:
         """No consumer module may re-declare the codes for itself."""
         import film_pipeline.app._resume as resume
-        import film_pipeline.app.services._generation_ops as generation_ops
+        import film_pipeline.operations._generation_ops as generation_ops
 
         assert resume.__dict__["_STALE_REQUEST_CODES"] is STALE_GENERATION_REQUEST_CODES
         assert "_STALE_REQUEST_CODES" not in vars(generation_ops)

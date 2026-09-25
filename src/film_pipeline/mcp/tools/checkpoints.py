@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.app.services.operator import OperatorService
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
+from film_pipeline.operations.operator import OperatorService
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 from .helpers import _active_project_id, _error, _ok

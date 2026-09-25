@@ -92,7 +92,7 @@ class TestProjectTitleFromId:
 
 def test_discovery_module_reexports_the_owner() -> None:
     """The operator discovery module must not carry its own copies."""
-    from film_pipeline.app.services import _project_discovery as discovery
+    from film_pipeline.projects import discovery
 
     assert discovery.project_kind_for_name is project_kind_for_name
     assert discovery.normalize_project_kind is normalize_project_kind

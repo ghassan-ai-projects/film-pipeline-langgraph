@@ -99,12 +99,18 @@ class TestArtifactStoreOf:
 
 
 class TestOperationsDoesNotImportTheCompositionRoot:
-    def test_no_operations_module_imports_app(self) -> None:
-        """FES #3 (`operations → studio`) must not be introduced."""
+    def test_no_operations_module_imports_app_at_module_level(self) -> None:
+        """FES #3 (`operations → studio`) must not be introduced.
+
+        Module-level imports only: a *nested* import of
+        `film_pipeline.app._operator_runtime` is the deliberate lazy default
+        that keeps zero-arg `OperatorService()` working, and it is asserted
+        separately below.
+        """
         offenders: list[str] = []
         for path in sorted(_OPERATIONS_DIR.rglob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            for node in ast.walk(tree):
+            for node in tree.body:
                 targets: list[str] = []
                 if isinstance(node, ast.Import):
                     targets = [alias.name for alias in node.names]
@@ -115,30 +121,61 @@ class TestOperationsDoesNotImportTheCompositionRoot:
                         offenders.append(f"{path.name}: {target}")
         assert offenders == [], f"operations imports the composition root: {offenders}"
 
-    def test_operator_service_module_has_no_module_level_app_import(self) -> None:
-        """The service resolves the runtime through injected ports only.
+    def test_only_the_operator_module_binds_the_root_lazily(self) -> None:
+        """The nested exception is confined to one file and one purpose."""
+        nested: list[str] = []
+        for path in sorted(_OPERATIONS_DIR.rglob("*.py")):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            top_level = {id(node) for node in tree.body}
+            for node in ast.walk(tree):
+                if id(node) in top_level:
+                    continue
+                if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                    _FORBIDDEN_ROOT
+                ):
+                    nested.append(f"{path.name}: {node.module}")
+        assert nested == ["operator.py: film_pipeline.app._operator_runtime"], (
+            f"unexpected nested composition-root imports: {nested}"
+        )
 
-        Same-package imports (`app.services.*`) remain until the physical file
-        move; those are intra-module and constrained by neither the layer law
-        nor the port. What must not exist is a module-level import of the
-        runtime, the provider composition, or the persistence helpers.
+    def test_operator_service_resolves_the_ports_lazily(self) -> None:
+        """The service may bind the composition root only inside a call.
+
+        `operations` must not import `film_pipeline.app` at module level. The
+        one permitted exception is a function-local default that keeps the
+        zero-arg `OperatorService()` construction working; that import must not
+        be reachable at import time, so it is asserted to be nested inside a
+        function body rather than at module level.
         """
-        source = (_OPERATIONS_DIR / ".." / "app" / "services" / "operator.py").resolve()
+        source = _OPERATIONS_DIR / "operator.py"
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         forbidden = (
             "film_pipeline.app.runtime",
             "film_pipeline.app._provider_profiles",
             "film_pipeline.app._persistence",
         )
-        offenders: list[str] = []
+        module_level: list[str] = []
         for node in tree.body:
             targets: list[str] = []
             if isinstance(node, ast.Import):
                 targets = [alias.name for alias in node.names]
             elif isinstance(node, ast.ImportFrom):
                 targets = [node.module or ""]
-            offenders.extend(t for t in targets if t in forbidden)
-        assert offenders == [], f"module-level composition-root imports: {offenders}"
+            module_level.extend(t for t in targets if t in forbidden)
+        assert module_level == [], f"module-level composition-root imports: {module_level}"
+
+        # The composition-root binding must remain nested (lazy).
+        nested = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            and (node.module or "") == "film_pipeline.app._operator_runtime"
+        ]
+        assert nested, "expected the lazy composition-root binding to still exist"
+        top_level_linenos = {id(node) for node in tree.body}
+        assert all(id(node) not in top_level_linenos for node in nested), (
+            "the composition-root binding must not be a module-level import"
+        )
 
     @pytest.mark.parametrize(
         ("source", "expected"),
