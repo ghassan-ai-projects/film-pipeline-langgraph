@@ -110,7 +110,43 @@ tools obtain a runtime has to respect that seam or retarget all of it.
 This is why direction A is a real project rather than a round: it is not one
 refactor, it is a boundary change with a test-suite migration attached.
 
-## 7. What I have not established
+## 7. Resolution: most of the gap is not a capability gap
+
+Analysing each runtime-touching handler by *what it does with `rt`* changes the
+picture. Of 41 handlers that touch the runtime:
+
+| Handlers | Use of `rt` |
+|---:|---|
+| 16 | Project lookup and state only (`get_active`, `get_project`, `projects`) |
+| 25 | Something more (graph execution, checkpoints, providers, mutation) |
+
+The 16 are not missing a capability on `OperatorService`. They do not need a
+runtime at all — they need **the current project's state**, which is a mapping.
+`explain_agent_routing` is the pattern: it resolves a project id, reads
+`state["_routing_decisions"]`, and never touches `rt` again.
+
+So the honest decomposition of the original 20-name gap is:
+
+- **~16 handlers** want a *project-state accessor*, not the runtime. That is the
+  `projects` module's declared concern (`03` §3.8: "the in-memory project map and
+  active id — one place, replacing `StudioRuntime.projects` +
+  `active_project_id`"). Supplying it shrinks the runtime's *consumer* set
+  without touching its internals.
+- **~25 handlers** genuinely need runtime capabilities, and those must be
+  classified per capability: `run_graph` and `approve_phase` read like
+  `orchestration` concerns; checkpoint and provider access read like `checkpoints`
+  and `providers` concerns reached through the runtime today.
+
+This reframes the work. The question is no longer "how do we shrink a 39-method
+class" but "which of these 39 methods are actually *studio*'s, and which are
+other modules' concerns currently parked on it". A split by file would miss that;
+a reassignment by capability answers it.
+
+It also explains why the facade attempt failed: extracting state into a
+collaborator while every caller still asks the runtime for it changes nothing
+observable. The consumer set has to move first.
+
+## 8. What I have not established
 
 - Whether `OperatorService` is the right target for all 20 capabilities. Some
   (notably `run_graph`) may belong to `orchestration` rather than the operator
