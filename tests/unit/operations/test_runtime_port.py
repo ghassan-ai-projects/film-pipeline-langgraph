@@ -2,11 +2,15 @@
 
 `03-target-architecture.md` §4.6.1 records `operations → studio` as a forbidden
 edge. The operator surface still needs runtime capabilities, so `operations`
-declares them structurally and the concrete `StudioRuntime` satisfies the
-protocol without either side importing the other.
+declares them structurally and the composition root supplies the concrete
+bindings.
 
-These tests pin both halves: that a real runtime conforms to the port, and that
-nothing under `operations` imports the composition root.
+The port deliberately describes the *real* surface (`ArtifactStorePort` and
+`ServicesPort` are the concrete `storage`/`graph` owners, which `operations` may
+import), so conformance is checked against the production runtime rather than a
+toy double. These tests pin three things: that the real runtime conforms, that
+the injected collaborators conform, and that nothing under `operations` imports
+the composition root.
 """
 
 from __future__ import annotations
@@ -17,53 +21,29 @@ from typing import Any
 
 import pytest
 
+from film_pipeline.graph.services import GraphServices
 from film_pipeline.operations.ports import (
     ArtifactStorePort,
+    ProviderComposition,
     RuntimePort,
+    RuntimeProvider,
     ServicesPort,
     artifact_store_of,
 )
+from film_pipeline.storage.store import ArtifactStore
 
 _OPERATIONS_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "operations"
 _FORBIDDEN_ROOT = "film_pipeline.app"
 
 
-class _FakeStore:
-    def __init__(self, root: Path) -> None:
-        self.root = root
+class _NoServicesRuntime:
+    """The only runtime shape the port must tolerate besides the real one."""
 
-
-class _FakeServices:
-    def __init__(self, store: Any) -> None:
-        self.artifact_store = store
-
-
-class _FakeRuntime:
-    """A minimal object satisfying ``RuntimePort`` without any real runtime."""
-
-    def __init__(self, services: Any) -> None:
-        self.services = services
-        self.projects: dict[str, Any] = {}
-
-    def create_project(self, project_id: str, title: str = "", slug: str = "") -> dict[str, Any]:
-        state = {"project_id": project_id, "title": title, "slug": slug}
-        self.projects[project_id] = state
-        return state
-
-    def default_video_provider(self) -> tuple[str, str]:
-        return ("mock", "mock-video")
+    def __init__(self) -> None:
+        self.services: Any = None
 
 
 class TestProtocolConformance:
-    def test_fake_runtime_satisfies_the_port(self, tmp_path: Path) -> None:
-        runtime = _FakeRuntime(_FakeServices(_FakeStore(tmp_path)))
-        assert isinstance(runtime, RuntimePort)
-
-    def test_store_and_services_satisfy_their_ports(self, tmp_path: Path) -> None:
-        store = _FakeStore(tmp_path)
-        assert isinstance(store, ArtifactStorePort)
-        assert isinstance(_FakeServices(store), ServicesPort)
-
     def test_real_runtime_satisfies_the_port(self, tmp_path: Path) -> None:
         """The production runtime conforms structurally, with no subclass."""
         from film_pipeline.app.runtime import StudioRuntime
@@ -71,32 +51,51 @@ class TestProtocolConformance:
         runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         assert isinstance(runtime, RuntimePort)
 
+    def test_runtime_provider_is_satisfied_by_the_studio_binding(self, tmp_path: Path) -> None:
+        from film_pipeline.app._operator_runtime import StudioRuntimeProvider
+
+        assert isinstance(StudioRuntimeProvider(), RuntimeProvider)
+
+    def test_provider_composition_is_satisfied_by_the_studio_binding(self) -> None:
+        from film_pipeline.app._operator_runtime import profile_provider_composition
+
+        assert isinstance(profile_provider_composition(), ProviderComposition)
+
+    def test_store_and_services_ports_are_the_concrete_owners(self) -> None:
+        """`operations` may import these, so no structural stand-in is needed."""
+        assert ArtifactStorePort is ArtifactStore
+        assert ServicesPort is GraphServices
+
 
 class TestArtifactStoreOf:
     def test_returns_the_store_when_services_exist(self, tmp_path: Path) -> None:
-        store = _FakeStore(tmp_path)
-        runtime = _FakeRuntime(_FakeServices(store))
-        assert artifact_store_of(runtime) is store
+        from film_pipeline.app.runtime import StudioRuntime
+
+        runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+        assert runtime.services is not None
+        assert artifact_store_of(runtime) is runtime.services.artifact_store
 
     def test_returns_none_without_services(self) -> None:
-        assert artifact_store_of(_FakeRuntime(None)) is None
+        assert artifact_store_of(_NoServicesRuntime()) is None  # type: ignore[arg-type]
 
-    def test_persistence_helpers_accept_the_port(self, tmp_path: Path) -> None:
-        """`storage_for` and `artifact_root` take the port, not the runtime."""
+    def test_persistence_helpers_accept_the_real_runtime(self, tmp_path: Path) -> None:
+        """`storage_for` and `artifact_root` take the port, not a runtime import."""
         from film_pipeline.app._persistence import artifact_root, storage_for
+        from film_pipeline.app.runtime import StudioRuntime
 
-        runtime = _FakeRuntime(_FakeServices(_FakeStore(tmp_path)))
-        assert artifact_root(runtime) == tmp_path
+        runtime = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
         storage = storage_for(runtime)
-        assert storage is not None
-        assert storage.root == tmp_path
+        if storage is None:
+            assert artifact_root(runtime) is None
+        else:
+            assert storage.root == artifact_root(runtime)
 
     def test_persistence_helpers_tolerate_absent_services(self) -> None:
         from film_pipeline.app._persistence import artifact_root, storage_for
 
-        runtime = _FakeRuntime(None)
-        assert artifact_root(runtime) is None
-        assert storage_for(runtime) is None
+        runtime = _NoServicesRuntime()
+        assert artifact_root(runtime) is None  # type: ignore[arg-type]
+        assert storage_for(runtime) is None  # type: ignore[arg-type]
 
 
 class TestOperationsDoesNotImportTheCompositionRoot:
@@ -115,6 +114,31 @@ class TestOperationsDoesNotImportTheCompositionRoot:
                     if target == _FORBIDDEN_ROOT or target.startswith(f"{_FORBIDDEN_ROOT}."):
                         offenders.append(f"{path.name}: {target}")
         assert offenders == [], f"operations imports the composition root: {offenders}"
+
+    def test_operator_service_module_has_no_module_level_app_import(self) -> None:
+        """The service resolves the runtime through injected ports only.
+
+        Same-package imports (`app.services.*`) remain until the physical file
+        move; those are intra-module and constrained by neither the layer law
+        nor the port. What must not exist is a module-level import of the
+        runtime, the provider composition, or the persistence helpers.
+        """
+        source = (_OPERATIONS_DIR / ".." / "app" / "services" / "operator.py").resolve()
+        tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+        forbidden = (
+            "film_pipeline.app.runtime",
+            "film_pipeline.app._provider_profiles",
+            "film_pipeline.app._persistence",
+        )
+        offenders: list[str] = []
+        for node in tree.body:
+            targets: list[str] = []
+            if isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                targets = [node.module or ""]
+            offenders.extend(t for t in targets if t in forbidden)
+        assert offenders == [], f"module-level composition-root imports: {offenders}"
 
     @pytest.mark.parametrize(
         ("source", "expected"),

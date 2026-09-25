@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.app._persistence import storage_for
 from film_pipeline.operations.models import ProjectListItem
 from film_pipeline.projects.classification import (
     normalize_project_kind as normalize_project_kind,
@@ -26,6 +25,7 @@ from film_pipeline.projects.classification import (
 from film_pipeline.projects.classification import (
     project_title_from_id as project_title_from_id,
 )
+from film_pipeline.storage.runtime_gateway import project_storage_for as storage_for
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService

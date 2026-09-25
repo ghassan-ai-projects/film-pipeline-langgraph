@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.app._persistence import artifact_root
 from film_pipeline.filmspec import is_stale_generation_request_issue, text_only_generation_requests
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import GenerationWorkspace
 from film_pipeline.storage.manifest import read_manifest
+from film_pipeline.storage.runtime_gateway import artifact_store_root as artifact_root
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService

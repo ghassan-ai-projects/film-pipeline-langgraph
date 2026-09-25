@@ -12,8 +12,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from film_pipeline.app import _provider_profiles
-from film_pipeline.app.runtime import StudioRuntime, get_runtime, reset_runtime
 from film_pipeline.app.services import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.app.services._project_discovery import (
     discover_project_folders,
@@ -43,6 +41,11 @@ from film_pipeline.operations.models import (
     ReviewWorkspace,
     ValidationWorkspace,
 )
+from film_pipeline.operations.ports import (
+    ProviderComposition,
+    RuntimePort,
+    RuntimeProvider,
+)
 from film_pipeline.projects.classification import (
     normalize_project_kind,
     project_kind_for_state,
@@ -52,15 +55,38 @@ from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 
 class OperatorService:
-    """Shared service backing the MCP operator tools."""
+    """Shared service backing the MCP operator tools.
 
-    def __init__(self, runtime: StudioRuntime | None = None) -> None:
+    The runtime may be supplied directly or resolved lazily through an injected
+    :class:`~film_pipeline.operations.ports.RuntimeProvider`. Resolution policy
+    belongs to the composition root, so `operations` declares the capability and
+    the app supplies it (see ``film_pipeline.app._operator_runtime``).
+    """
+
+    def __init__(
+        self,
+        runtime: RuntimePort | None = None,
+        provider: RuntimeProvider | None = None,
+        composition: ProviderComposition | None = None,
+    ) -> None:
         self._runtime = runtime
+        if provider is None or composition is None:
+            from film_pipeline.app._operator_runtime import (
+                StudioRuntimeProvider,
+                profile_provider_composition,
+            )
+
+            if provider is None:
+                provider = StudioRuntimeProvider()
+            if composition is None:
+                composition = profile_provider_composition()
+        self._provider = provider
+        self._composition = composition
 
     @property
-    def runtime(self) -> StudioRuntime:
+    def runtime(self) -> RuntimePort:
         """Return the configured runtime, resolving the singleton lazily."""
-        return self._runtime if self._runtime is not None else get_runtime()
+        return self._runtime if self._runtime is not None else self._provider.current()
 
     def list_projects(self) -> list[ProjectListItem]:
         """List all known projects with operator status fields."""
@@ -161,7 +187,7 @@ class OperatorService:
         resolved_config: dict[str, object],
     ) -> None:
         """Register adapters selected by the resolved project profile."""
-        _provider_profiles.register_profile_providers(self.runtime, profile_stack, resolved_config)
+        self._composition.register_profile_providers(self.runtime, profile_stack, resolved_config)
 
     def missing_profile_credentials(
         self,
@@ -169,7 +195,7 @@ class OperatorService:
         resolved_config: dict[str, object],
     ) -> list[MissingProviderCredential]:
         """List missing credentials for providers selected by the profile."""
-        return _provider_profiles.missing_profile_credentials(profile_stack, resolved_config)
+        return self._composition.missing_profile_credentials(profile_stack, resolved_config)
 
     def _activate_new_project(
         self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest
@@ -209,10 +235,10 @@ class OperatorService:
                     "Runtime mode is fixed for an explicitly injected runtime."
                 )
             return self._runtime.server_mode
-        if get_runtime().server_mode == mode:
+        if self._provider.current().server_mode == mode:
             return mode
         os.environ["FILM_PIPELINE_MCP_MODE"] = mode
-        runtime = reset_runtime(mode)
+        runtime = self._provider.switch(mode)
         runtime.seed_default_provider_health()
         return runtime.server_mode
 
