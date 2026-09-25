@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from film_pipeline.app import _provider_profiles
 from film_pipeline.app.runtime import StudioRuntime, get_runtime, reset_runtime
 from film_pipeline.app.services import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.app.services._project_discovery import (
@@ -44,6 +45,7 @@ from film_pipeline.graph.router import (
     get_blockers_for_state,
     public_blocked_actions,
 )
+from film_pipeline.providers.credentials import MissingProviderCredential
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 
@@ -147,9 +149,25 @@ class OperatorService:
         state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
         state["resolved_config_sources"] = resolved_config["sources"]
         state["config_conflicts"] = list(cast(list[Any], resolved_config.get("conflicts", [])))
-        _profiles.register_project_providers(
-            self.runtime, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        self.register_profile_providers(
+            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
+
+    def register_profile_providers(
+        self,
+        profile_stack: dict[str, str],
+        resolved_config: dict[str, object],
+    ) -> None:
+        """Register adapters selected by the resolved project profile."""
+        _provider_profiles.register_profile_providers(self.runtime, profile_stack, resolved_config)
+
+    def missing_profile_credentials(
+        self,
+        profile_stack: dict[str, str],
+        resolved_config: dict[str, object],
+    ) -> list[MissingProviderCredential]:
+        """List missing credentials for providers selected by the profile."""
+        return _provider_profiles.missing_profile_credentials(profile_stack, resolved_config)
 
     def _activate_new_project(
         self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest

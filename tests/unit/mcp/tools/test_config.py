@@ -150,10 +150,16 @@ def test_approve_profile_change_requires_confirmed() -> None:
     assert result["ok"] is True
 
 
-def test_approve_profile_change_bumps_version_and_invalidates() -> None:
+def test_approve_profile_change_updates_config_and_registers_profile_providers() -> None:
     _create_active_project("profile-change-approve")
     proposed = asyncio.run(
-        propose_profile_change({"reason": "R", "quality_profile": "quality.draft"})
+        propose_profile_change(
+            {
+                "reason": "R",
+                "quality_profile": "quality.draft",
+                "provider_profile": "mock-demo",
+            }
+        )
     )
     proposal_id = cast(str, proposed["proposal_id"])
 
@@ -173,6 +179,7 @@ def test_approve_profile_change_bumps_version_and_invalidates() -> None:
     assert result["profile_version"] == 3
     result_stack = cast(dict[str, str], result["profile_stack"])
     assert result_stack.get("quality_profile") == "quality.draft"
+    assert result_stack.get("provider_profile") == "mock-demo"
     assert "resolved_config_ref" in result
     assert "invalidation_report_ref" in result
     assert "approval_ref" in result
@@ -182,6 +189,12 @@ def test_approve_profile_change_bumps_version_and_invalidates() -> None:
     assert state["profile_version"] == 3
     state_stack = cast(dict[str, str], state["profile_stack"])
     assert state_stack.get("quality_profile") == "quality.draft"
+    assert state_stack.get("provider_profile") == "mock-demo"
+    assert runtime.list_providers() == ["mock-video-provider", "mock-image-provider"]
+    assert runtime.get_provider_health("mock-video-provider") == {
+        "status": "healthy",
+        "reason": "",
+    }
 
 
 def test_approve_profile_change_rejects_missing_proposal() -> None:

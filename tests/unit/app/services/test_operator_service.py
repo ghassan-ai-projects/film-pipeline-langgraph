@@ -312,6 +312,18 @@ class TestOperatorService:
         assert state["profile_stack"]["quality_profile"] == "quality.draft"
         assert state["profile_stack"]["provider_profile"] == "mock-demo"
         assert "resolved_config" in state
+        assert service.runtime.list_providers() == [
+            "mock-video-provider",
+            "mock-image-provider",
+        ]
+        assert service.runtime.get_provider_health("mock-video-provider") == {
+            "status": "healthy",
+            "reason": "",
+        }
+        assert service.runtime.get_provider_health("mock-image-provider") == {
+            "status": "healthy",
+            "reason": "",
+        }
 
         dashboard = service.get_dashboard("profiled")
         assert dashboard.profile_stack["film_type_profile"] == "film-type.narrative"

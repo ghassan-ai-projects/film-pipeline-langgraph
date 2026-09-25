@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import os
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 
 # z.ai keys use an ``id.secret`` shape rather than a provider-specific prefix.
@@ -23,6 +25,14 @@ REDACTION_RE = re.compile(
     r"(?:sk-|key-|AIza)[a-zA-Z0-9_\-]{8,}|[a-fA-F0-9]{24,}\.[A-Za-z0-9_\-]{8,}"
 )
 ENV_FILE_NAME = ".env"
+
+
+@dataclass(frozen=True)
+class MissingProviderCredential:
+    """A provider credential required by a profile but not configured."""
+
+    provider_id: str
+    env_var: str
 
 
 def lookup(provider_id: str) -> str | None:
@@ -55,6 +65,23 @@ def env_or_dotenv(env_var: str) -> str | None:
 def is_configured(provider_id: str) -> bool:
     """Check whether a provider has credentials configured."""
     return lookup(provider_id) is not None
+
+
+def missing_provider_credentials(
+    provider_ids: Iterable[str],
+) -> list[MissingProviderCredential]:
+    """Return known providers without credentials, preserving first-seen order."""
+    missing: list[MissingProviderCredential] = []
+    seen: set[str] = set()
+    for provider_id in provider_ids:
+        if provider_id in seen:
+            continue
+        seen.add(provider_id)
+        env_var = _env_var_for(provider_id)
+        if env_var is None or is_configured(provider_id):
+            continue
+        missing.append(MissingProviderCredential(provider_id, env_var))
+    return missing
 
 
 def redact(text: str) -> str:

@@ -9,11 +9,13 @@ from unittest import mock
 import pytest
 
 from film_pipeline.providers.credentials import (
+    MissingProviderCredential,
     _env_var_for,
     _read_dotenv,
     env_or_dotenv,
     is_configured,
     lookup,
+    missing_provider_credentials,
     redact,
 )
 
@@ -104,6 +106,19 @@ class TestCredentials:
             mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
         ):
             assert is_configured("seedance-openrouter") is False
+
+    def test_missing_provider_credentials_skips_unknown_and_duplicate_ids(
+        self, tmp_path: Path
+    ) -> None:
+        with (
+            mock.patch.dict(os.environ, {}, clear=True),
+            mock.patch("film_pipeline.providers.credentials.Path.cwd", return_value=tmp_path),
+        ):
+            missing = missing_provider_credentials(
+                ["seedance-openrouter", "unknown", "seedance-openrouter"]
+            )
+
+        assert missing == [MissingProviderCredential("seedance-openrouter", "OPENROUTER_API_KEY")]
 
     def test_redact_replaces_keys(self) -> None:
         text = "Error: key sk-test1234abcde failed. Also AIza1234567890xyz here."
