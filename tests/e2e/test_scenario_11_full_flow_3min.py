@@ -20,6 +20,7 @@ from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.providers import credentials
 from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.artifact import ArtifactRef
 
 # A concrete 3-minute short with 12 scenes so every phase has material to work on.
 THE_LAST_SIGNAL_IDEA = """
@@ -117,9 +118,9 @@ class TestFull3MinuteFlowMock:
 
         matrix_ref = state.get("shot_matrix_ref", "")
         assert matrix_ref, f"Expected shot_matrix_ref, got keys: {list(state.keys())}"
-        parts = matrix_ref.split(":")
-        artifact_id = parts[1] if len(parts) > 1 else ""
-        version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+        matrix_parsed = ArtifactRef.from_string(matrix_ref)
+        artifact_id = matrix_parsed.artifact_id
+        version = matrix_parsed.version
         matrix_raw = store.load(project_id, FilmPhase("shot_bible"), artifact_id, version)
         assert isinstance(matrix_raw, dict), f"Expected matrix dict, got {type(matrix_raw)}"
 
@@ -128,9 +129,9 @@ class TestFull3MinuteFlowMock:
 
         scene_list_ref = state.get("scene_list_ref", "")
         assert scene_list_ref, "Expected scene_list_ref"
-        parts = scene_list_ref.split(":")
-        artifact_id = parts[1] if len(parts) > 1 else ""
-        version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+        scene_list_parsed = ArtifactRef.from_string(scene_list_ref)
+        artifact_id = scene_list_parsed.artifact_id
+        version = scene_list_parsed.version
         scene_list_raw = store.load(project_id, FilmPhase("development"), artifact_id, version)
         scenes = scene_list_raw.get("scenes", []) if isinstance(scene_list_raw, dict) else []
         assert len(scenes) >= 1, "Scene list should contain scenes"
@@ -217,9 +218,9 @@ class TestFull3MinuteFlowReal:
 
             matrix_ref = state.get("shot_matrix_ref", "")
             assert matrix_ref
-            parts = matrix_ref.split(":")
-            artifact_id = parts[1] if len(parts) > 1 else ""
-            version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+            matrix_parsed = ArtifactRef.from_string(matrix_ref)
+            artifact_id = matrix_parsed.artifact_id
+            version = matrix_parsed.version
             matrix_raw = rt.services.artifact_store.load(
                 project_id, FilmPhase("shot_bible"), artifact_id, version
             )
@@ -233,9 +234,9 @@ class TestFull3MinuteFlowReal:
 
             scene_list_ref = state.get("scene_list_ref", "")
             assert scene_list_ref
-            parts = scene_list_ref.split(":")
-            artifact_id = parts[1] if len(parts) > 1 else ""
-            version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+            scene_list_parsed = ArtifactRef.from_string(scene_list_ref)
+            artifact_id = scene_list_parsed.artifact_id
+            version = scene_list_parsed.version
             scene_list_raw = rt.services.artifact_store.load(
                 project_id, FilmPhase("development"), artifact_id, version
             )
@@ -246,9 +247,9 @@ class TestFull3MinuteFlowReal:
 
             script_ref = state.get("script_ref", "")
             assert script_ref, "Expected script_ref"
-            parts = script_ref.split(":")
-            artifact_id = parts[1] if len(parts) > 1 else ""
-            version = int(parts[2].removeprefix("v")) if len(parts) > 2 else 1
+            script_parsed = ArtifactRef.from_string(script_ref)
+            artifact_id = script_parsed.artifact_id
+            version = script_parsed.version
             script_raw = rt.services.artifact_store.load(
                 project_id, FilmPhase("script"), artifact_id, version
             )

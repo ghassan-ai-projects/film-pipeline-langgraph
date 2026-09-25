@@ -14,6 +14,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from film_pipeline.artifacts.storage import default_checkpoints_root
 from film_pipeline.graph.edges import after_approval, after_phase
 from film_pipeline.graph.nodes import (
     approve_phase_node,
@@ -37,21 +38,13 @@ from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.graph.subgraphs.qc import build_qc_subgraph
 
 
-def _checkpoint_dir() -> Path:
-    """Return the checkpoint directory honoring FILM_PIPELINE_PERSIST_ROOT."""
-    root = Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
-    return root / "checkpoints"
-
-
-_CHECKPOINT_DIR: Path = _checkpoint_dir()
-_CHECKPOINT_DB: Path = _CHECKPOINT_DIR / "checkpoints.sqlite"
-
-
 def _default_checkpointer(runtime_root: Path | None = None) -> BaseCheckpointSaver[Any]:
     """Return SQLite only when persistence is explicitly enabled."""
     if os.getenv("FILM_PIPELINE_NO_PERSIST") or not os.getenv("FILM_PIPELINE_PERSIST_STATE"):
         return MemorySaver()
-    checkpoint_dir = runtime_root / "checkpoints" if runtime_root is not None else _CHECKPOINT_DIR
+    checkpoint_dir = (
+        runtime_root / "checkpoints" if runtime_root is not None else default_checkpoints_root()
+    )
     checkpoint_db = checkpoint_dir / "checkpoints.sqlite"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(checkpoint_db), check_same_thread=False)

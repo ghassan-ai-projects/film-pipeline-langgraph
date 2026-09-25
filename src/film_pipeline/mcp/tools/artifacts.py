@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
@@ -59,16 +58,21 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     if not artifact_id:
         return _error("artifact_id is required.")
     phase_str = str(args.get("phase", state.get("current_phase", "")))
-    version_raw = args.get("version", 1)
-    version = int(str(version_raw)) if not isinstance(version_raw, int) else version_raw
+    version_raw = args.get("version")
     from film_pipeline.schemas._base import FilmPhase
 
     try:
         fp = FilmPhase(phase_str)
     except ValueError:
         return _error(f"Unknown phase: {phase_str}")
+    store = _services(rt).artifact_store
+    if version_raw is None:
+        # No explicit version: load the artifact's latest version.
+        version = max(1, store.latest_version(project_id, fp.value, artifact_id))
+    else:
+        version = int(str(version_raw)) if not isinstance(version_raw, int) else version_raw
     try:
-        content = _services(rt).artifact_store.load(project_id, fp, artifact_id, version)
+        content = store.load(project_id, fp, artifact_id, version)
         return _ok(content=content)
     except FileNotFoundError:
         return _error(f"Artifact '{artifact_id}' not found in phase '{phase_str}'.")
@@ -78,10 +82,10 @@ def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
     """Return the shot matrix rows from the project's shot bible, or None when absent."""
     from film_pipeline.schemas._base import FilmPhase
 
+    store = _services(rt).artifact_store
+    version = max(1, store.latest_version(project_id, "shot_bible", "shot_matrix"))
     try:
-        data = _services(rt).artifact_store.load(
-            project_id, FilmPhase("shot_bible"), "shot_matrix", 1
-        )
+        data = store.load(project_id, FilmPhase("shot_bible"), "shot_matrix", version)
     except (FileNotFoundError, ValueError):
         return None
     return cast(list[Any], data.get("rows", []))
@@ -130,8 +134,10 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
         return _error("No active project.")
     from film_pipeline.schemas._base import FilmPhase
 
+    store = _services(rt).artifact_store
     try:
-        data = _services(rt).artifact_store.load(project_id, FilmPhase("script"), "script", 1)
+        version = max(1, store.latest_version(project_id, "script", "script"))
+        data = store.load(project_id, FilmPhase("script"), "script", version)
         scenes = data.get("scenes", [])
         match = next((s for s in scenes if str(s.get("scene_id", "")) == scene_id), None)
         if match is None:
@@ -171,10 +177,7 @@ async def list_assets(args: dict[str, object]) -> dict[str, object]:
     if project_id is None:
         return _error("No active project.")
     store = _services(rt).artifact_store
-    root = getattr(store, "_root", None)
-    if not isinstance(root, Path):
-        root = Path("projects")
-    manifest = read_manifest(project_id, root=root)
+    manifest = read_manifest(project_id, root=store.root)
     if manifest is None:
         return _ok(assets=[])
     return _ok(

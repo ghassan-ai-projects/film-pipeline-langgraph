@@ -30,7 +30,7 @@ def test_intake_node_extracts_constraints_and_persists_artifact(
 
     updates = intake_node(state)
 
-    assert updates["constraints_ref"].startswith("artifact:project_constraints:")
+    assert updates["constraints_ref"].startswith("artifact:intake:project_constraints:")
     constraints = updates["constraints"]
     assert constraints["target_runtime_seconds"] == 240
     assert constraints["target_scene_count"] == 8

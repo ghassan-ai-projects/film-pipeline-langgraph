@@ -99,7 +99,7 @@ def _constitution_summary(state: dict[str, Any]) -> str:
         parsed = _parse_ref(str(constitution_ref))
         data = services.artifact_store.load(
             str(state.get("project_id", "")),
-            FilmPhase("constitution"),
+            FilmPhase(parsed.phase),
             parsed.artifact_id,
             parsed.version,
         )
@@ -289,9 +289,11 @@ def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
     for key in ref_keys:
         ref = state.get(key)
         if ref and isinstance(ref, str) and ":" in ref:
-            parts = ref.split(":")
-            if len(parts) >= 3:
-                built_from[parts[1]] = ref
+            try:
+                parsed = _ArtifactRef.from_string(ref)
+            except ValueError:
+                continue
+            built_from[parsed.artifact_id] = ref
     return built_from
 
 
@@ -320,12 +322,8 @@ def _infer_artifact_type(artifact: Any) -> _ArtifactType:
 
 
 def _parse_ref(ref_str: str) -> _ArtifactRef:
-    """Parse an artifact ref string like 'artifact:id:v1' into an ArtifactRef."""
-    parts = ref_str.split(":")
-    artifact_id = parts[1] if len(parts) > 1 else ref_str
-    version_str = parts[2] if len(parts) > 2 else "1"
-    version = int(version_str.lstrip("v"))
-    return _ArtifactRef(artifact_id=artifact_id, version=version)
+    """Parse the canonical ``artifact:<phase>:<id>:v<N>`` ref string."""
+    return _ArtifactRef.from_string(ref_str)
 
 
 _UPSTREAM_CONTENT_SOURCES: dict[str, tuple[str, str]] = {
@@ -350,14 +348,12 @@ def _inject_artifact_context(
     if not project_id:
         return
 
-    for ref_key, (phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
+    for ref_key, (_phase_name, content_key) in _UPSTREAM_CONTENT_SOURCES.items():
         ref = str(state.get(ref_key, "") or "").strip()
         if not ref:
             continue
         try:
-            context_vars[content_key] = _compact_upstream_content(
-                state, services, project_id, phase_name, ref
-            )
+            context_vars[content_key] = _compact_upstream_content(state, services, project_id, ref)
         except (FileNotFoundError, ValueError, KeyError) as exc:
             _record_context_load_failure(state, ref_key, ref, exc)
             continue
@@ -367,14 +363,13 @@ def _compact_upstream_content(
     state: dict[str, Any],
     services: GraphServices,
     project_id: str,
-    phase_name: str,
     ref: str,
 ) -> str:
     """Load one upstream artifact and compact it to the configured char budget."""
     parsed = _parse_ref(ref)
     data = services.artifact_store.load(
         project_id,
-        FilmPhase(phase_name),
+        FilmPhase(parsed.phase),
         parsed.artifact_id,
         parsed.version,
     )

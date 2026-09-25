@@ -38,6 +38,11 @@ class GenerationLedgerManager:
     def __init__(self, store: ArtifactStore) -> None:
         self._store = store
 
+    @property
+    def store(self) -> ArtifactStore:
+        """The backing artifact store."""
+        return self._store
+
     # ── create / load ────────────────────────────────────────────────────
 
     def create(self, project_id: str) -> GenerationLedger:
@@ -49,7 +54,7 @@ class GenerationLedgerManager:
     def load(self, project_id: str) -> GenerationLedger:
         """Load the ledger for *project_id*, or create if missing."""
         try:
-            data = self._store.load(project_id, FilmPhase.GENERATION, LEDGER_ARTIFACT_ID, 1)
+            data = self._store.load_mutable(project_id, FilmPhase.GENERATION, LEDGER_ARTIFACT_ID)
             return GenerationLedger.model_validate(data)
         except FileNotFoundError:
             return self.create(project_id)
@@ -214,6 +219,7 @@ class GenerationLedgerManager:
     # ── helpers ──────────────────────────────────────────────────────────
 
     def _persist(self, ledger: GenerationLedger) -> None:
+        """Persist the ledger as its revision-counted single mutable file."""
         meta = ArtifactMetadata(
             artifact_id=LEDGER_ARTIFACT_ID,
             artifact_type=ArtifactType.GENERATION_LEDGER,
@@ -225,7 +231,7 @@ class GenerationLedgerManager:
             created_by="generation-ledger-manager",
             created_at=datetime.now(UTC),
         )
-        self._store.save(ledger, meta)
+        self._store.save_mutable(ledger, meta)
 
 
 def _submit_prepared_rows(

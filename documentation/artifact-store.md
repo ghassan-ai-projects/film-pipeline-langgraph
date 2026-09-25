@@ -1,4 +1,9 @@
-# Phase 04 — Artifact Store & Manifests
+# Phase 04 — Artifact Store & Manifests (v2, post storage-upgrade)
+
+**Status:** implemented as described below. The storage upgrade
+(`documentation/storage-upgrade-plan.md`) replaced the original store; this
+document now describes the shipped design. Where the original phase-04 text
+disagreed, it has been rewritten rather than annotated.
 
 **Depends on:** Phase 01 (Schemas), Phase 03 (Config & Profile System)
 **Blocks:** Phase 05 (LangGraph Skeleton), Phase 08 (Review Package), Phase 11 (Checkpoint/Resume)
@@ -7,186 +12,194 @@
 
 ## Goal
 
-Implement the artifact storage layer: versioned artifact persistence, asset manifests, and the directory structure that every phase, agent, and validator reads from and writes to. This is the canonical artifact registry — one source of truth for all outputs.
+Versioned, typed, human-readable artifact persistence. One storage root
+holds one directory per project; a human can open a project folder and read
+its state and deliverables without tooling, while every machine consumer
+works through one small API.
 
 ---
 
-## Deliverables
+## One owner for storage
 
-### Files to Create
-
-#### Artifact Store (`src/film_pipeline/artifacts/`)
-
-- [ ] `store.py` — `ArtifactStore` class: save, load, list, version, supersede
-- [ ] `manifest.py` — asset manifest management (reference, generated clip, frame, audio, assembly, delivery)
-- [ ] `paths.py` — canonical path resolution per project, phase, and artifact type
-- [ ] `metadata.py` — artifact metadata writer/reader (attaches metadata to every artifact)
-- [ ] `versioning.py` — artifact version tracking (v1, v2, v3...), parent linking, status transitions
-- [ ] `index.py` — artifact index (queryable registry of all artifacts in a project)
-- [ ] `__init__.py`
-
-#### Storage Structure (per project)
+**`film_pipeline.artifacts` is the only component that knows the on-disk
+layout.** Everything else consumes it; nothing else builds project paths or
+writes project files itself.
 
 ```
-projects/<project_slug>/
-├── 01-vision/
-├── 02-development/
-├── 03-script/
-├── 04-visual-dev/
-├── 05-shot-bible/
-├── 06-generation-plan/
-├── 07-generated-assets/
-│   └── shots/
-│       └── S001-01/
-│           ├── take-001.mp4
-│           ├── take-002.mp4
-│           ├── last-frame.png
-│           └── mid-frame.png
-├── 08-validation/
-├── 09-post/
-├── 10-delivery/
-├── intake/
-│   ├── raw-user-input.md
-│   ├── intake-analysis-report.json
-│   ├── project-brief.v1.yaml
-│   └── project-config.resolved.yaml
-├── references/
-│   ├── index/
-│   │   └── reference-index.json
-│   ├── characters/
-│   ├── environments/
-│   ├── props/
-│   ├── style/
-│   └── scale/
-├── versions/
-│   ├── artifacts/
-│   └── checkpoints/
-└── state/
-    ├── graph/
-    ├── budget/
-    └── approvals/
+film_pipeline.artifacts/
+├── project_storage.py   ← ProjectStorage: THE gateway every consumer uses
+├── _layout.py           ← private: the only place filenames/relpaths exist
+├── store.py             ← ArtifactStore: versioned artifact envelopes
+├── registry.py          ← kind → (payload model, schema version, renderer)
+├── rendering.py         ← typed markdown views (current.md)
+├── serialization.py     ← atomic + durable writes; non-finite rejection
+├── storage.py           ← storage-root resolution + marker gate
+├── envelope.py          ← envelope/meta/index models + storage errors
+├── manifest.py          ← asset manifest model
+├── paths.py             ← canonical phase→directory map
+└── matrix_projection.py
 ```
 
-#### Artifact File Layout
+Two APIs, split by concern:
 
-Small projects optimize for human review over large-scale indexing. Each artifact is stored in
-its own directory. The current candidate is always obvious, and historical versions are tucked
-under `versions/`.
+| API | Use it for |
+|---|---|
+| `ArtifactStore` | versioned artifacts: `save`, `load`, `list_artifacts`, `approve`, `supersede` |
+| `ProjectStorage` | everything else in a project folder: `project.json`, `state/graph-state.json`, checkpoint/audit JSONL, media dirs, asset manifest, the per-project git repo |
+
+Consumers depend on storage; storage depends on nothing but `schemas/`. So:
+
+- **`ProjectStorage` returns typed values and locations, never a layout
+  contract.** Callers pass a project id and a model in, and get a model or a
+  directory back. They never assemble `media/scenes/...` themselves and never
+  import a relpath constant.
+- **The checkpoint backend is injected**, not imported. `project_storage.py`
+  declares a structural `CheckpointRepo` protocol and the application wires the
+  real backend via `set_git_backend_type()`. This keeps `artifacts/` free of a
+  `checkpoints/` dependency.
+- **`app/_persistence.py` holds policy, not I/O.** It decides which projects to
+  load and how the runtime's registries are updated; every byte goes through
+  `ProjectStorage`.
+
+`tests/unit/artifacts/test_storage_boundary.py` enforces this. It fails if a
+module outside `artifacts/` imports `_layout`, `serialization`, or `paths`,
+hardcodes a layout constant, or if the core imports any other component.
+
+Construction:
+
+```python
+storage = ProjectStorage.from_store(artifact_store)   # inside the application
+storage = ProjectStorage.for_root(resolved_root)      # media/sidecar writers
+```
+
+Note that `checkpoints/` and `runs/` sit under the storage root but **outside**
+the per-project tree, because they are machine-global rather than per-project.
+
+---
+
+## Storage root
+
+- Resolution: explicit argument > `FILM_PIPELINE_STORAGE_ROOT` >
+  `~/.film-pipeline/projects` for entry points. Library constructors
+  require an explicit root — there is no implicit default.
+- Roots are marker-gated (`storage.json`: `layout_version`, `profile`,
+  `schema_version`, `created_at`). Fresh directories auto-initialize;
+  pre-existing directories without a marker — including old
+  film-pipeline trees — and corrupt markers are refused with actionable
+  errors.
+
+## Per-project layout
 
 ```
-projects/<project_slug>/<phase>/<artifact_id>/
-├── current.json
-├── current.meta.json
-├── current.md
-└── versions/
-    ├── v001.json
-    ├── v001.meta.json
-    ├── v002.json
-    └── v002.meta.json
+<root>/<project_id>/
+├── project.json                    # typed ProjectRecord entry point
+├── README.md                       # GENERATED: phase + artifact links
+├── artifacts/
+│   └── <NN-phase>/<artifact_id>/
+│       ├── meta.json               # current version + status (only mutable file)
+│       ├── current.md              # GENERATED human view (typed renderer)
+│       └── versions/vNNN.json      # immutable envelopes (provenance+payload+checksum)
+├── media/scenes/<scene>/<shot>/    # generated media + take-NNN.json sidecars
+├── index/artifacts.json            # derived index, regenerated on write
+├── state/graph-state.json          # machine snapshot per mutating operation
+├── checkpoints/checkpoints.jsonl   # append-only checkpoint metadata
+├── audit/audit-log.jsonl           # append-only audit trail
+├── .storage.lock                   # per-project write lock (flock)
+├── .gitignore                      # media/ excluded from checkpoint commits
+└── .git/                           # per-project checkpoint repository
+```
+
+## The artifact envelope
+
+Every version is one immutable `versions/vNNN.json` file:
+
+```jsonc
+{
+  "kind": "film.studio/script",
+  "schema_version": 1,
+  "artifact_id": "script",
+  "artifact_type": "script",
+  "project_id": "…", "phase": "script",
+  "version": 1,
+  "created_at": "2026-09-24T12:00:00.123Z", "created_by": "screenwriter-agent",
+  "reviewed_by": [], "validation_refs": [], "approval_ref": null,
+  "kb_context_ref": null,
+  "parents": [{"artifact_id": "scene_list", "version": 1}],
+  "built_from": {"scene_list": "artifact:script:scene_list:v1"},
+  "prompt_template_version": null, "model_profile": null,
+  "change_summary": "", "checksum": "sha256:…",
+  "payload": { "…domain model…": true }
+}
 ```
 
 Rules:
 
-- `current.json` is the machine-readable artifact body the MCP tools inspect by default.
-- `current.md` is a generated human-readable review view for filesystem inspection.
-- `current.meta.json` contains the active artifact metadata.
-- `versions/` contains immutable historical JSON bodies and metadata.
-- Version files do not live next to the current files.
-- Scene and matrix artifacts should render useful Markdown: script text, scene intent, camera
-  movement, environment, references, and asset refs.
+- **Registry-gated.** `artifacts/registry.py` maps every artifact id to a
+  `KindSpec` (kind key, payload schema version, mutability). Saving an
+  unregistered id raises `KindNotRegisteredError`; ids must be lowercase
+  snake_case (`sanitize_artifact_id` maps arbitrary entity ids injectively).
+- **Tolerant reader, strict writer.** Unknown envelope fields are preserved
+  with a logged warning; a `schema_version` newer than supported raises
+  `SchemaTooNewError`; older payloads migrate through the registered
+  migration chain (`register_migration` / `migrate_payload`).
+- **Integrity.** Every envelope carries a payload checksum; reads verify it
+  (`ChecksumMismatchError` on tamper or corruption). All writes are atomic
+  (temp + fsync + rename) with deterministic, sorted-key JSON.
+- **Status is artifact-level.** `meta.json` names the current version and
+  its status; a non-current version is superseded by definition. The human
+  approval gate is the production caller of `approve()`, which also files
+  the artifact's human view under `deliverables/`.
+- **Mutable kinds** (generation ledger) are the exception: a single
+  revision-counted `<artifact_id>.json` written through `save_mutable`.
 
-#### Asset File Layout
+## Refs and reads
 
-Generated/reviewable media is organized by scene first, then shot. This matches the human review
-workflow: inspect a scene, inspect its shots, then choose or revise takes.
+- Refs are `ArtifactRef` values with canonical string form
+  `artifact:<phase>:<artifact_id>:v<N>`.
+- `store.save()` returns the canonical ref of the stored version.
+- `store.load_ref()` resolves any ref; `store.latest_version()` is the only
+  "latest" idiom; unversioned reads return the current version, so repaired
+  artifacts are visible to their consumers.
+- `list_artifacts()` returns a defined order: phase order, then artifact
+  id, then current version.
 
-```
-projects/<project_slug>/07-generated-assets/scenes/<scene_id>/<shot_id>/
-├── take_001.mp4
-├── take_001.meta.json
-├── take_002.mp4
-├── first_frame.png
-├── last_frame.png
-└── review.md
-```
+## Human views
 
-The root `asset-manifest.json` remains the machine-readable table of assets. Each entry should
-include `scene_id`, `shot_id`, `kind`, `take`, `active`, and `path` so the MCP tools can show actual
-files available for review.
+`current.md` is generated per save through typed renderers
+(`artifacts/rendering.py`): screenplay-style script scenes, tables for
+scene lists and the shot matrix, findings sections for validation and
+consensus reports, prose for treatments and constitutions, sections for
+bibles — generic fallback for unregistered kinds. The project `README.md`
+and `deliverables/` are generated the same way and must never be hand-edited.
 
-#### Tests
+## Asset manifests
 
-- [ ] `tests/unit/artifacts/test_store.py` — save, load, version, supersede
-- [ ] `tests/unit/artifacts/test_manifest.py` — manifest creation and query
-- [ ] `tests/unit/artifacts/test_paths.py` — path resolution
-- [ ] `tests/unit/artifacts/test_versioning.py` — version chains and status
-- [ ] `tests/unit/artifacts/test_index.py` — index queries
+`asset-manifest.json` per project records every generated asset:
+`asset_id`, `path` (project-relative), `kind`, `scene_id`, `shot_id`,
+`take`, `active`, `sha256`. The manifest API enforces the active-take
+invariant (exactly one active clip per shot). Generated media lives under
+`media/scenes/<scene>/<shot>/` with a `take-NNN.json` sidecar carrying the
+same facts. (The physical move of the manifest to `index/assets.json` is
+deferred — the manifest stays at the project root for now.)
 
----
+## Path rules
 
-## Task Checklist
+- Every artifact path flows through `artifacts/paths.py`; no other module
+  constructs paths manually. Media paths are project-relative.
+- Checkpoints never track media (`.gitignore` covers `media/`).
 
-- [ ] Implement `ArtifactStore` with methods: `save(artifact, metadata)`, `load(artifact_id, version)`, `list(phase)`, `list_by_type(type)`, `supersede(artifact_id, new_version)`
-- [ ] Implement canonical path resolver (`paths.py`) following the directory structure above
-- [ ] Implement artifact metadata attachment (every artifact gets `ArtifactMetadata` from Phase 01)
-- [ ] Implement version tracking: candidate → approved → superseded; parent_version linking
-- [ ] Implement asset manifest types:
-  - [ ] `ReferenceAssetManifest`
-  - [ ] `GeneratedClipManifest`
-  - [ ] `FrameExtractionManifest`
-  - [ ] `AudioAssetManifest`
-  - [ ] `AssemblyManifest`
-  - [ ] `DeliveryManifest`
-- [ ] Implement artifact index (in-memory + JSON file per project) for querying by phase, type, status, version
-- [ ] Implement active-take selection for generated assets (one take active per shot)
-- [ ] Write unit tests for all store operations
-- [ ] Write unit tests for manifest operations
-- [ ] Write unit tests for path resolution
-- [ ] Run `make ci-check`
+## Concurrency and safety
 
----
+Mutating store operations hold a per-project `flock` (`.storage.lock`), so
+version allocation and status transitions cannot collide between threads or
+sessions. Readers never take the lock; all reads consume atomically
+replaced files.
 
-## Artifact Metadata (Every Artifact)
+## Acceptance criteria
 
-```json
-{
-  "artifact_id": "artifact:script:S001:v1",
-  "artifact_type": "script_scene",
-  "project_id": "film_2026_0001",
-  "phase": "screenwriting",
-  "version": 1,
-  "status": "candidate",
-  "parents": ["artifact:scene-intent:S001:v1"],
-  "created_by": "screenwriter-agent",
-  "reviewed_by": [],
-  "validation_refs": [],
-  "approval_ref": null,
-  "kb_context_ref": null,
-  "created_at": "2026-06-19T12:00:00Z"
-}
-```
-
----
-
-## Acceptance Criteria
-
-- [ ] Artifacts can be saved, loaded, listed, versioned, and superseded
-- [ ] Every artifact has metadata with all required fields
-- [ ] Version chains are correct (v1 → v2 → v3, parent linking)
-- [ ] Status transitions work (candidate → approved → superseded)
-- [ ] Asset manifests track generated files and their relationships
-- [ ] Active-take selection works (only one active take per shot)
-- [ ] Artifact index supports queries by phase, type, status
-- [ ] Path resolution follows the canonical directory structure
-- [ ] All tests pass
-- [ ] `make ci-check` passes
-
----
-
-## Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Git vs external storage for large media | Metadata + manifests in git; media files referenced by path, optionally git LFS later |
-| Concurrent writes | Single-writer model (orchestrator is the only writer); file-based locking if needed |
-| Path conventions drift | Centralize in `paths.py`; no other module constructs paths manually |
+- Golden-layout test pins the on-disk tree (`tests/unit/artifacts/test_store_v2.py`).
+- Two concurrent savers produce distinct versions and valid JSON.
+- Tampered payloads fail integrity checks; too-new schema versions are
+  refused with actionable errors; older payloads migrate.
+- The suite leaves real storage roots untouched (session guard), and guard
+  tests forbid implicit roots, silent adoption, and unregistered kinds.

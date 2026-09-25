@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.app.safety import ProductionDataError
+from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.orchestrator_state import set_candidate_ref
-from film_pipeline.schemas._base import ArtifactType, FilmPhase
+from film_pipeline.graph.services import GraphServices
+from film_pipeline.schemas._base import FilmPhase
 
 
-def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
+def test_auto_checkpoint_references_state_snapshot_and_appends_jsonl() -> None:
     rt = StudioRuntime(server_mode="mock")
     rt.create_project("p5", title="Test")
     state = rt.get_project("p5")
@@ -27,24 +30,40 @@ def test_auto_checkpoint_creates_checkpoint_and_graph_state_artifact() -> None:
     cp = checkpoints[0]
     assert cp.phase.value == "script"
     assert cp.reason == "auto: graph step completed"
-    assert cp.graph_state_ref.startswith("artifact:graph_state:v")
+    # The snapshot lives at state/graph-state.json; checkpoints reference it.
+    assert cp.graph_state_ref == "state/graph-state.json"
     assert cp.artifact_versions.get("script") == "artifact:script:v1"
 
+    # The state snapshot was written and carries the step state.
+    project_root = rt.project_roots["p5"]
+    snapshot_file = project_root / "state" / "graph-state.json"
+    assert snapshot_file.exists()
+    snapshot = json.loads(snapshot_file.read_text())
+    assert snapshot["schema_version"] == 1
+    assert snapshot["state"]["current_phase"] == "script"
+
+    # No graph_state artifact is written anymore.
     assert rt.services is not None
-    store = rt.services.artifact_store
-    metas = store.list_artifacts("p5", FilmPhase("intake"))
-    assert len(metas) == 1
-    assert metas[0].artifact_type == ArtifactType.CHECKPOINT
+    assert rt.services.artifact_store.list_artifacts("p5", FilmPhase("intake")) == []
+
+    # Checkpoint metadata is append-only JSONL.
+    log_file = project_root / "checkpoints" / "checkpoints.jsonl"
+    assert log_file.exists()
+    lines = [line for line in log_file.read_text().splitlines() if line]
+    assert len(lines) == 1
 
 
 def test_delete_project_removes_state_and_directories(tmp_path: Path) -> None:
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=tmp_path / "projects")),
+    )
     assert rt.services is not None
-    rt.services.artifact_store._root = tmp_path / "projects"
     rt.create_project("p-delete", title="Delete Me")
     rt.set_active("p-delete")
     project_root = rt.project_roots["p-delete"]
-    artifact_dir = rt.services.artifact_store._root / "p-delete"
+    artifact_dir = rt.services.artifact_store.root / "p-delete"
 
     deleted = rt.delete_project("p-delete")
 
@@ -76,26 +95,32 @@ def test_delete_project_clears_active_project_only_when_matching(tmp_path: Path)
 
 def test_delete_project_archives_to_trash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     persist = tmp_path / "persist"
-    monkeypatch.setenv("FILM_PIPELINE_PERSIST_ROOT", str(persist))
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", str(persist / "projects"))
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=tmp_path / "projects")),
+    )
     assert rt.services is not None
-    rt.services.artifact_store._root = tmp_path / "projects"
     rt.create_project("p-trash", title="Trash Me")
     rt.set_active("p-trash")
+    # One folder holds state AND artifacts (plan §1/D3), so the project root
+    # and the artifact directory are the same path.
     project_root = rt.project_roots["p-trash"]
-    artifact_dir = rt.services.artifact_store._root / "p-trash"
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    (project_root / "state.json").write_text("{}")
-    (artifact_dir / "idea.json").write_text("{}")
+    artifact_dir = rt.services.artifact_store.root / "p-trash"
+    assert project_root == artifact_dir
+    (project_root / "index").mkdir(parents=True, exist_ok=True)
+    (project_root / "index" / "artifacts.json").write_text("{}")
 
     deleted = rt.delete_project("p-trash")
 
     assert deleted is True
     assert not project_root.exists()
-    assert not artifact_dir.exists()
+    # Exactly one archive, because the project was exactly one directory.
     trash_root = persist / "trash"
-    assert any(trash_root.glob("runtime-p-trash-*"))
-    assert any(trash_root.glob("artifacts-p-trash-*"))
+    archived = list(trash_root.glob("project-p-trash-*"))
+    assert len(archived) == 1
+    assert (archived[0] / "index" / "artifacts.json").exists()
 
 
 def test_delete_project_blocks_production_by_default(tmp_path: Path) -> None:
@@ -121,21 +146,28 @@ def test_delete_project_allows_production_with_force(tmp_path: Path) -> None:
 def test_load_persistent_projects_reloads_runtime_and_discovered_projects(
     tmp_path: Path,
 ) -> None:
-    rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
-    assert rt.services is not None
+    from film_pipeline.artifacts.store import ArtifactStore
+
     projects_root = tmp_path / "projects"
-    rt.services.artifact_store._root = projects_root
+    rt = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=projects_root)),
+    )
 
     rt.create_project("persisted", title="Persisted Project")
     rt._persist_project_state("persisted")
 
-    discovered_root = projects_root / "discovered"
-    (discovered_root / "intake").mkdir(parents=True)
-    (discovered_root / "intake" / "idea.v001.json").write_text("{}")
+    discovered_root = projects_root / "discovered" / "artifacts" / "intake"
+    discovered_root.mkdir(parents=True)
+    (discovered_root / "idea").mkdir()
+    (discovered_root / "idea" / "meta.json").write_text("{}")
 
-    fresh = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
-    assert fresh.services is not None
-    fresh.services.artifact_store._root = projects_root
+    fresh = StudioRuntime(
+        server_mode="mock",
+        runtime_root=tmp_path / "runtime",
+        services=GraphServices(artifact_store=ArtifactStore(root=projects_root)),
+    )
     fresh.load_persisted_projects()
 
     assert "persisted" in fresh.projects

@@ -80,7 +80,7 @@ class SubtitleAgent:
 
         from film_pipeline.schemas import subtitle as subtitle_schema
         from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.artifact import ArtifactMetadata
+        from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
         artifact_id = "subtitles"
         model = subtitle_schema.SubtitleArtifact(
@@ -105,8 +105,8 @@ class SubtitleAgent:
             created_by="subtitle-agent",
             created_at=datetime.now(UTC),
         )
-        artifact_store.save(model, meta)
-        return f"artifact:{artifact_id}:v1"
+        ref: ArtifactRef = artifact_store.save(model, meta)
+        return ref.to_string()
 
 
 def _format_time(seconds: float) -> str:

@@ -576,14 +576,14 @@ def test_assembly_manifest_required() -> None:
 
 def test_artifact_metadata_invariants() -> None:
     m = ArtifactMetadata(
-        artifact_id="artifact:script:S001:v1",
+        artifact_id="script_S001",
         artifact_type=ArtifactType.SCRIPT,
         project_id="p",
         phase=FilmPhase.SCRIPT,
         version=1,
         created_by="screenwriter-agent",
         created_at=_ts(),
-        parents=[ArtifactRef(artifact_id="artifact:scene-intent:S001:v1", version=1)],
+        parents=[ArtifactRef(artifact_id="scene_intent_S001", version=1, phase="script")],
     )
     assert m.status == ArtifactStatus.CANDIDATE
 
@@ -1006,17 +1006,6 @@ def test_validation_ledger_entry() -> None:
 
 
 # --- _base helpers --------------------------------------------------------
-
-
-def test_to_camel_and_json_safe() -> None:
-    from film_pipeline.schemas._base import json_safe as _json_safe
-    from film_pipeline.schemas._base import to_camel as _to_camel
-
-    assert _to_camel("snake_case") == "snakeCase"
-    assert _to_camel("x") == "x"
-    model = ProjectIdentity(project_id="p", slug="s", title="T")
-    payload = _json_safe(model)
-    assert payload["project_id"] == "p"
 
 
 def test_schema_version_default() -> None:

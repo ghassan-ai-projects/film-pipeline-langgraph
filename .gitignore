@@ -247,8 +247,10 @@ __marimo__/
 
 /.qwen
 /.claude
-# Test artifacts (temp dirs used in tests)
+# Legacy default storage root (tests never write here; see
+# documentation/storage-upgrade-plan.md — dev scripts use .scratch/)
 projects/
+.scratch/
 .DS_Store
 
 # Refactor fleet state (orchestrator machinery, not product)

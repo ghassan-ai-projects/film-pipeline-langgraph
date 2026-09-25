@@ -51,8 +51,8 @@ options:
   --film-type-profile FILM_TYPE_PROFILE
                         Film-type profile. Default: film-type.narrative.
   --runtime-root RUNTIME_ROOT
-                        Directory for runtime state and artifacts. Default: ~/.film-
-                        pipeline/runs/default.
+                        Directory for runtime state and artifacts. Default: <storage
+                        root>/../runs/default (see FILM_PIPELINE_STORAGE_ROOT).
   --constraints-file CONSTRAINTS_FILE
                         Optional JSON/YAML file with explicit project constraints.
   --confirm-real        Confirm that real-mode provider spend is acceptable. May also be set via

@@ -8,32 +8,6 @@ from __future__ import annotations
 from typing import Any
 
 
-def _load_artifact_metadata(
-    store: Any,
-    project_id: str,
-    artifact_id: str,
-    version_text: str,
-) -> Any:
-    """Locate the artifact metadata by trying each phase in order.
-
-    A missing file or unparseable version number moves on to the next
-    phase; ``None`` means no stored metadata matched.
-    """
-    from film_pipeline.schemas._base import FilmPhase
-
-    for fp in FilmPhase:
-        try:
-            return store.load_metadata(
-                project_id,
-                fp.value,
-                artifact_id,
-                int(version_text.lstrip("v")),
-            )
-        except (FileNotFoundError, ValueError):
-            continue
-    return None
-
-
 def _staleness_warnings(
     artifact_id: str,
     artifact_ref: str,
@@ -71,11 +45,18 @@ def check_staleness(
 
     Returns a list of staleness warnings. Empty list = all deps are current.
     """
-    parts = artifact_ref.split(":")
-    if len(parts) < 3:
+    from film_pipeline.schemas.artifact import ArtifactRef
+
+    try:
+        parsed = ArtifactRef.from_string(artifact_ref)
+    except ValueError:
         return []
 
-    metadata = _load_artifact_metadata(store, str(state.get("project_id", "")), parts[1], parts[2])
+    project_id = str(state.get("project_id", ""))
+    try:
+        metadata = store.load_metadata(project_id, parsed.phase, parsed.artifact_id, parsed.version)
+    except (FileNotFoundError, ValueError):
+        return []
     if metadata is None:
         return []
 
@@ -83,7 +64,9 @@ def check_staleness(
 
     from film_pipeline.graph.orchestrator_state import get_approved_refs
 
-    return _staleness_warnings(parts[1], artifact_ref, built_from, get_approved_refs(state))
+    return _staleness_warnings(
+        parsed.artifact_id, artifact_ref, built_from, get_approved_refs(state)
+    )
 
 
 def check_phase_consistency(

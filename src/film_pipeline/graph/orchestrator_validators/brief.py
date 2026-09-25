@@ -41,6 +41,7 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     if services is None:
         return None
     from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
 
     project_id = str(state.get("project_id", ""))
     if not project_id:
@@ -48,14 +49,14 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     ref = str(state.get("execution_brief_ref", "") or "")
     artifact_id = "execution_brief"
     version = 1
-    parts = ref.split(":")
-    if len(parts) >= 3 and parts[1]:
-        artifact_id = parts[1]
+    if ref:
         try:
-            version = int(parts[2].removeprefix("v"))
+            parsed = ArtifactRef.from_string(ref)
         except ValueError:
             return None
-    elif not ref:
+        artifact_id = parsed.artifact_id
+        version = parsed.version
+    else:
         try:
             artifacts = services.artifact_store.list_artifacts(project_id, FilmPhase.SHOT_BIBLE)
             matches = [a for a in artifacts if a.artifact_id == "execution_brief"]
@@ -185,7 +186,7 @@ def _story_bible_cross_check(
         parsed = _parse_ref(story_bible_ref)
         bible_data = services.artifact_store.load(
             str(state.get("project_id", "")),
-            FilmPhase.SCRIPT,
+            FilmPhase(parsed.phase),
             parsed.artifact_id,
             parsed.version,
         )

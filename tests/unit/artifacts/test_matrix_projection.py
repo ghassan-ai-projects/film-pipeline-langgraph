@@ -49,7 +49,7 @@ def test_materialize_matrix_applies_ordered_patch_layers() -> None:
                 1,
             ): {
                 "patch_id": "patch_a",
-                "matrix_ref": "artifact:shot_matrix:v1",
+                "matrix_ref": "artifact:shot_bible:shot_matrix:v1",
                 "phase": "gen_planning",
                 "updates": [
                     {"shot_id": "s1", "set": {"status": "prompted"}},
@@ -63,7 +63,7 @@ def test_materialize_matrix_applies_ordered_patch_layers() -> None:
                 2,
             ): {
                 "patch_id": "patch_b",
-                "matrix_ref": "artifact:shot_matrix:v1",
+                "matrix_ref": "artifact:shot_bible:shot_matrix:v1",
                 "phase": "generation",
                 "updates": [
                     {"shot_id": "s1", "append": {"asset_refs": ["a1"]}},
@@ -76,8 +76,8 @@ def test_materialize_matrix_applies_ordered_patch_layers() -> None:
     matrix = materialize_matrix(
         store,
         "p1",
-        "artifact:shot_matrix:v1",
-        ["artifact:patch_a:v1", "artifact:patch_b:v2"],
+        "artifact:shot_bible:shot_matrix:v1",
+        ["artifact:gen_planning:patch_a:v1", "artifact:generation:patch_b:v2"],
     )
 
     assert matrix["rows"] == [
@@ -96,7 +96,7 @@ def test_materialize_matrix_defaults_malformed_rows_to_empty_list() -> None:
         }
     )
 
-    matrix = materialize_matrix(store, "p1", "shot_matrix", [])
+    matrix = materialize_matrix(store, "p1", "artifact:shot_bible:shot_matrix:v1", [])
 
     assert matrix["rows"] == []
 
@@ -111,5 +111,7 @@ def test_materialize_matrix_raises_when_patch_ref_not_found() -> None:
         }
     )
 
-    with pytest.raises(FileNotFoundError, match="Patch artifact:missing:v1 not found"):
-        materialize_matrix(store, "p1", "artifact:shot_matrix:v1", ["artifact:missing:v1"])
+    with pytest.raises(FileNotFoundError):
+        materialize_matrix(
+            store, "p1", "artifact:shot_bible:shot_matrix:v1", ["artifact:gen_planning:missing:v1"]
+        )

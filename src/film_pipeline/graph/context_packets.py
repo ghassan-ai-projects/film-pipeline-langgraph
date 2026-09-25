@@ -11,14 +11,17 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
 
 
 class _ArtifactLoader(Protocol):
-    """Loads artifact bodies by project, phase, artifact id, and version."""
+    """Loads artifact bodies by coordinates or by ref."""
 
     def load(
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> dict[str, Any]: ...
+
+    def load_ref(self, project_id: str, ref: str | ArtifactRef) -> dict[str, Any]: ...
 
 
 class _ContextPacketSources(Protocol):
@@ -177,23 +180,7 @@ def _load_ref(
     state: dict[str, Any], services: _ContextPacketSources, ref: str
 ) -> dict[str, Any] | None:
     """Load an artifact's content by ref string. Returns None on failure."""
-    parts = ref.split(":")
-    if len(parts) < 3:
-        return None
-    artifact_id = parts[1]
     try:
-        version = int(parts[2].lstrip("v"))
-    except ValueError:
+        return services.artifact_store.load_ref(str(state.get("project_id", "")), ref)
+    except (FileNotFoundError, ValueError):
         return None
-    # Try common phase directories
-    from film_pipeline.schemas._base import FilmPhase
-
-    for phase in FilmPhase:
-        try:
-            result: dict[str, Any] = services.artifact_store.load(
-                str(state.get("project_id", "")), phase, artifact_id, version
-            )
-            return result
-        except (FileNotFoundError, ValueError):
-            continue
-    return None

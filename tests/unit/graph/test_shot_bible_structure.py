@@ -163,8 +163,8 @@ def test_five_scene_film_shot_matrix_conforms_to_three_act_brief(
         # Deliberately conflicting legacy scope hints reproduce the project shape.
         "target_shot_count": 55,
         "constraints": {"target_shot_count": 55, "max_shot_count": 55},
-        "script_ref": "artifact:script:v1",
-        "artifact_refs": ["artifact:script:v1"],
+        "script_ref": "artifact:script:script:v1",
+        "artifact_refs": ["artifact:script:script:v1"],
         "resolved_config": {"studio": {"require_human_approval": False}},
         "_orchestrator__execution_brief": None,
         SERVICES_KEY: services,
@@ -197,7 +197,7 @@ def test_five_scene_film_shot_matrix_conforms_to_three_act_brief(
     assert all(8 <= row.duration_seconds <= 10 for row in matrix.rows)
     assert abs(sum(row.duration_seconds for row in matrix.rows) - 600) <= 60
     assert validate_shot_structure({}, brief, matrix) == []
-    assert updates["execution_brief_ref"] == "artifact:execution_brief:v1"
+    assert updates["execution_brief_ref"] == "artifact:shot_bible:execution_brief:v1"
     assert "structure-extractor-agent" not in agent_calls
     assert shot_tasks
     assert "Total rows: exactly 67" in shot_tasks[0]

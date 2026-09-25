@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+
+from film_pipeline.artifacts.project_storage import ProjectStorage
 
 from ..helpers import _latest_artifact_version, _services
 
@@ -37,7 +38,9 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
             for e in entries
         ],
     }
-    (idx_dir / "reference-index.json").write_text(json.dumps(index_data, indent=2, default=str))
+    ProjectStorage.for_root(idx_dir).write_json_document(
+        idx_dir / "reference-index.json", index_data
+    )
 
     # reference-validation-summary.json
     scores = [
@@ -51,7 +54,9 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
         "failed": sum(1 for e in entries if e.get("generation_status") == "failed"),
         "average_score": sum(scores) / len(scores) if scores else 0.0,
     }
-    (idx_dir / "reference-validation-summary.json").write_text(json.dumps(summary, indent=2))
+    ProjectStorage.for_root(idx_dir).write_json_document(
+        idx_dir / "reference-validation-summary.json", summary
+    )
 
 
 def _select_image_provider(rt: Any) -> Any | None:
@@ -71,7 +76,7 @@ def _save_reference_index_artifact(
     from datetime import UTC, datetime
 
     from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
     project_id = str(state.get("project_id", ""))
     store = _services(rt).artifact_store
@@ -93,8 +98,8 @@ def _save_reference_index_artifact(
 
     entries = _reference_entries_from_grouped(artifact)
     reference_index = ReferenceIndex(project_id=project_id, entries=entries)
-    store.save(reference_index, meta)
-    return f"artifact:reference_index:v{version}"
+    ref: ArtifactRef = store.save(reference_index, meta)
+    return ref.to_string()
 
 
 def _reference_entries_from_grouped(

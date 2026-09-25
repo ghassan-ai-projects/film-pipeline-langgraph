@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from film_pipeline.artifacts.project_storage import ProjectStorage
 from film_pipeline.schemas.reference import ReferenceFrame
 
 
@@ -18,8 +19,9 @@ def write_frame_sidecar(frame_path: Path, metadata: ReferenceFrame) -> Path:
     Returns the sidecar path.
     """
     sidecar_path = _sidecar_path_for(frame_path)
-    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
-    sidecar_path.write_text(metadata.model_dump_json(indent=2))
+    ProjectStorage.for_root(sidecar_path.parent).write_json_document(
+        sidecar_path, metadata.model_dump(mode="json")
+    )
     return sidecar_path
 
 

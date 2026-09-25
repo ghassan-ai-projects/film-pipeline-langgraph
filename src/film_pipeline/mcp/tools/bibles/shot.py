@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
@@ -66,7 +66,7 @@ def _save_next_candidate_version(
     from datetime import UTC, datetime
 
     from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
-    from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), artifact_id) + 1
@@ -82,7 +82,8 @@ def _save_next_candidate_version(
         created_by="mcp.generate_shot_bible",
         created_at=datetime.now(UTC),
     )
-    return cast(str, store.save(payload, meta))
+    ref: ArtifactRef = store.save(payload, meta)
+    return ref.to_string()
 
 
 def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLedger) -> str:
@@ -107,8 +108,10 @@ def _load_matrix_inputs(store: Any, project_id: str) -> tuple[Any, Any]:
     """Load the Script and reference_index artifacts the matrix is built from."""
     from film_pipeline.schemas._base import FilmPhase
 
-    script_data = store.load(project_id, FilmPhase("script"), "script", 1)
-    ref_data = store.load(project_id, FilmPhase("visual_dev"), "reference_index", 1)
+    script_version = max(1, store.latest_version(project_id, "script", "script"))
+    script_data = store.load(project_id, FilmPhase("script"), "script", script_version)
+    ref_version = max(1, store.latest_version(project_id, "visual_dev", "reference_index"))
+    ref_data = store.load(project_id, FilmPhase("visual_dev"), "reference_index", ref_version)
     return script_data, ref_data
 
 

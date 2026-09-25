@@ -5,7 +5,6 @@ Tests the MCP surface + runtime both, with a visually distinct premise.
 import json
 import os
 import sys
-from pathlib import Path
 
 os.chdir("/Users/ghassan/my-projects/film-pipeline-langgraph")
 
@@ -17,6 +16,10 @@ with open(".env") as f:
             os.environ[k.strip()] = v.strip()
 
 os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
+
+from _scratch_bootstrap import use_scratch_roots
+
+SCRATCH_ARTIFACTS = use_scratch_roots()
 
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.schemas._base import FilmPhase
@@ -33,7 +36,7 @@ for pid in list(rt.projects.keys()):
 
 import shutil
 
-proj_dir = Path("projects") / PROJECT_ID
+proj_dir = SCRATCH_ARTIFACTS / PROJECT_ID
 if proj_dir.exists():
     shutil.rmtree(proj_dir)
 

@@ -82,7 +82,7 @@ def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:
         write_manifest,
     )
 
-    manifest = read_manifest(project_id, root=store._root)
+    manifest = read_manifest(project_id, root=store.root)
     entries = list(manifest.entries) if manifest else []
     if not any(entry.asset_id == "text-only-delivery" for entry in entries):
         entries.append(
@@ -94,7 +94,7 @@ def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:
                 path="",
             )
         )
-        write_manifest(AssetManifest(project_id=project_id, entries=entries), root=store._root)
+        write_manifest(AssetManifest(project_id=project_id, entries=entries), root=store.root)
 
 
 def _complete_text_only_generation(

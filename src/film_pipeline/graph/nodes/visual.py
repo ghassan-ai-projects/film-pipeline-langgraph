@@ -133,6 +133,7 @@ def _latest_execution_brief_ref(state: dict[str, Any]) -> str:
     if services is None:
         return ""
     from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
 
     try:
         artifacts = services.artifact_store.list_artifacts(
@@ -144,7 +145,9 @@ def _latest_execution_brief_ref(state: dict[str, Any]) -> str:
     if not matches:
         return ""
     latest = max(matches, key=lambda artifact: artifact.version)
-    return f"artifact:execution_brief:v{latest.version}"
+    return ArtifactRef(
+        artifact_id="execution_brief", version=latest.version, phase=latest.phase.value
+    ).to_string()
 
 
 def _execution_brief_contract(brief: ExecutionBrief | None) -> str:

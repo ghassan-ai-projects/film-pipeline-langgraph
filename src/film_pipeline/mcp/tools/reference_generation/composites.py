@@ -30,7 +30,12 @@ def _load_environment_palette(
     from film_pipeline.schemas._base import FilmPhase
 
     try:
-        bible = artifact_store.load(project_id, FilmPhase("visual_dev"), "environment_bible", 1)
+        version = max(
+            1, artifact_store.latest_version(project_id, "visual_dev", "environment_bible")
+        )
+        bible = artifact_store.load(
+            project_id, FilmPhase("visual_dev"), "environment_bible", version
+        )
         return _palette_from_bible(bible)
     except (FileNotFoundError, ValueError):
         return None

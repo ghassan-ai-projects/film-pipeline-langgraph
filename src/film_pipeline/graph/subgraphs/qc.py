@@ -172,7 +172,6 @@ def _load_artifact_for_validator(
     from copy import deepcopy
 
     from film_pipeline.graph.nodes import _get_services
-    from film_pipeline.schemas._base import FilmPhase
 
     srv: Any = _get_services(dict(state))
     if srv is None:
@@ -180,21 +179,27 @@ def _load_artifact_for_validator(
 
     project_id = str(state.get("project_id", ""))
     wanted = _VALIDATOR_ARTIFACTS.get(validator_id, ())
+    # One index scan replaces the old all-phase brute force: latest version
+    # per artifact id, with the phase the store recorded for it.
+    latest_by_id: dict[str, Any] = {}
+    for meta in srv.artifact_store.list_artifacts(project_id):
+        current = latest_by_id.get(meta.artifact_id)
+        if current is None or meta.version > current.version:
+            latest_by_id[meta.artifact_id] = meta
     for artifact_id in wanted:
-        for fp in FilmPhase:
-            latest = srv.artifact_store.next_version(project_id, fp.value, artifact_id) - 1
-            if latest < 1:
-                continue
-            try:
-                data = srv.artifact_store.load(project_id, fp, artifact_id, latest)
-            except (FileNotFoundError, ValueError):
-                continue
-            if isinstance(data, dict) and data:
-                data = deepcopy(data)
-                if artifact_id == "shot_matrix" and isinstance(data.get("rows"), list):
-                    # Continuity validator reads "shots"; the matrix stores "rows".
-                    data.setdefault("shots", data["rows"])
-                return data
+        meta = latest_by_id.get(artifact_id)
+        if meta is None:
+            continue
+        try:
+            data = srv.artifact_store.load(project_id, meta.phase, artifact_id, meta.version)
+        except (FileNotFoundError, ValueError):
+            continue
+        if isinstance(data, dict) and data:
+            data = deepcopy(data)
+            if artifact_id == "shot_matrix" and isinstance(data.get("rows"), list):
+                # Continuity validator reads "shots"; the matrix stores "rows".
+                data.setdefault("shots", data["rows"])
+            return data
     return None
 
 

@@ -86,7 +86,7 @@ class OperatorService:
         if root is None:
             return ""
         try:
-            mtime = (root / "project-state.json").stat().st_mtime
+            mtime = (root / "project.json").stat().st_mtime
         except OSError:
             return ""
         return datetime.fromtimestamp(mtime, tz=UTC).isoformat()

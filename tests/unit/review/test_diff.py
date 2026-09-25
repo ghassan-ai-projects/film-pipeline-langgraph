@@ -8,7 +8,9 @@ from film_pipeline.review.diff import ArtifactDiff, _id_stem, compute_artifact_d
 class TestIdStem:
     def test_strips_version(self) -> None:
         assert _id_stem("artifact:script:S001:v3") == "artifact:script:S001"
-        assert _id_stem("artifact:character:leo:v1") == "artifact:character:leo"
+        assert _id_stem("artifact:visual_dev:reference_index:v2") == (
+            "artifact:visual_dev:reference_index"
+        )
 
     def test_no_version(self) -> None:
         assert _id_stem("artifact:script:S001") == "artifact:script:S001"

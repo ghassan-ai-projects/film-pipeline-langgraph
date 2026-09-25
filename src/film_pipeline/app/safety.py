@@ -15,17 +15,21 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from film_pipeline.artifacts.storage import resolve_storage_root
+
 
 class ProductionDataError(RuntimeError):
     """Raised when an operation would destroy data outside a safe zone."""
 
 
 def persist_root() -> Path:
-    """Return the configured persistence root.
+    """Return the configured persistence base.
 
-    ``FILM_PIPELINE_PERSIST_ROOT`` overrides the default ``~/.film-pipeline``.
+    Derived from the resolved storage root; destructive-operation safe zones
+    are evaluated against this tree. Resolved before taking the parent so a
+    relative root can never widen the safe zone to the whole CWD.
     """
-    return Path(os.getenv("FILM_PIPELINE_PERSIST_ROOT", Path.home() / ".film-pipeline"))
+    return resolve_storage_root().resolve().parent
 
 
 def _temp_roots() -> set[Path]:
@@ -56,7 +60,7 @@ def is_safe_to_delete(path: Path) -> bool:
 
     Safe zones are:
     - a system temp directory,
-    - the configured ``FILM_PIPELINE_PERSIST_ROOT`` tree,
+    - the configured storage-root base tree (``FILM_PIPELINE_STORAGE_ROOT``),
     - a directory that contains a ``.film-pipeline-allow-delete`` marker file.
     """
     try:
@@ -80,7 +84,7 @@ def require_safe_to_delete(path: Path) -> None:
     if not is_safe_to_delete(path):
         raise ProductionDataError(
             f"Refusing to delete production path: {path}. "
-            "Set FILM_PIPELINE_PERSIST_ROOT to a temp directory, "
+            "Set FILM_PIPELINE_STORAGE_ROOT under a temp directory, "
             "or create a .film-pipeline-allow-delete marker in the target directory."
         )
 

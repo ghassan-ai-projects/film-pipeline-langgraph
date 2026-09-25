@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-from pathlib import Path
 
 os.chdir("/Users/ghassan/my-projects/film-pipeline-langgraph")
 with open(".env") as f:
@@ -13,6 +12,10 @@ with open(".env") as f:
             k, v = line.split("=", 1)
             os.environ[k.strip()] = v.strip()
 os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
+
+from _scratch_bootstrap import use_scratch_roots
+
+SCRATCH_ARTIFACTS = use_scratch_roots()
 
 from film_pipeline.app.runtime import get_runtime
 from film_pipeline.schemas._base import FilmPhase
@@ -24,7 +27,7 @@ PROJECT_ID = "camino-del-genesis-008"
 for pid in list(rt.projects.keys()):
     if pid == PROJECT_ID:
         del rt.projects[pid]
-d = Path("projects") / PROJECT_ID
+d = SCRATCH_ARTIFACTS / PROJECT_ID
 if d.exists():
     import shutil
 
@@ -111,7 +114,7 @@ for phase in list(FilmPhase):
     except:
         pass
 
-sm_path = Path("projects") / PROJECT_ID / "05-shot-bible" / "shot_matrix.v1.json"
+sm_path = SCRATCH_ARTIFACTS / PROJECT_ID / "05-shot-bible" / "shot_matrix.v1.json"
 if sm_path.exists():
     sm = json.load(open(sm_path))
     rows = sm.get("rows", [])

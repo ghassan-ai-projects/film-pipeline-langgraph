@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,13 +18,12 @@ from uuid import uuid4
 
 from film_pipeline.app import _graph_exec, _persistence, _provider_seeds
 from film_pipeline.app._persistence import (
-    RUNTIME_ROOT,
-    STATE_FILENAME,
     configured_runtime_root,
-    project_git_backend,
     use_persistent_runtime,
 )
 from film_pipeline.app.safety import ProductionDataError, can_delete_project, move_to_trash
+from film_pipeline.artifacts.storage import default_runtime_root, resolve_storage_root
+from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
 from film_pipeline.schemas._base import FilmPhase
@@ -55,21 +55,25 @@ class StudioRuntime:
 
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
-        explicit_runtime_root = self.runtime_root is not None or bool(
-            os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-        )
         if self.runtime_root is None:
             if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
                 self.runtime_root = configured_runtime_root()
             elif use_persistent_runtime():
-                self.runtime_root = RUNTIME_ROOT
+                self.runtime_root = default_runtime_root()
                 self.runtime_root.mkdir(parents=True, exist_ok=True)
             else:
-                self.runtime_root = Path("projects")
+                # Non-persistent invocation: use a throwaway directory and
+                # never touch the user's home or the current directory.
+                self.runtime_root = Path(tempfile.gettempdir()) / (
+                    f"film_pipeline_runtime_{os.getpid()}"
+                )
         if self.services is None:
-            artifacts_root = self.runtime_root / "artifacts" if explicit_runtime_root else None
+            # One root for the whole project folder (plan §1 / D3): the artifact
+            # store opens the runtime root itself, so state and artifacts are
+            # siblings inside ``<root>/<project_id>/`` rather than split across
+            # two trees. A throwaway runtime root gets a throwaway store.
             self.services = _build_services_for_mode(
-                self.server_mode, artifacts_root=artifacts_root
+                self.server_mode, artifacts_root=self.runtime_root
             )
         self.load_persisted_projects()
 
@@ -98,8 +102,13 @@ class StudioRuntime:
         if project_id in self.projects:
             raise ValueError(f"Project '{project_id}' already exists.")
         assert self.runtime_root is not None
-        project_root = self.runtime_root / project_id
-        git = project_git_backend(project_root)
+        storage = _persistence.storage_for(self)
+        if storage is None:
+            raise ValueError("Cannot create a project: no artifact store is configured.")
+        # The storage core owns the layout: it creates the single project
+        # directory, its .gitignore, and the checkpoint repository.
+        storage.ensure_project_dir(project_id)
+        git = cast(GitBackend, storage.git_backend(project_id))
         state: dict[str, Any] = {
             "project_id": project_id,
             "title": title,
@@ -113,10 +122,10 @@ class StudioRuntime:
             "issues": [],
         }
         self.projects[project_id] = state
-        self.project_roots[project_id] = project_root
+        self.project_roots[project_id] = storage.project_dir(project_id)
         self.checkpoint_managers[project_id] = CheckpointManager(git)
         self._persist_project_state(project_id)
-        git.commit("project: initialize runtime state", [STATE_FILENAME])
+        git.commit("project: initialize runtime state", [storage.project_record_name()])
         self._record_audit("system", "create_project", project_id=project_id)
         return state
 
@@ -125,6 +134,9 @@ class StudioRuntime:
 
     def delete_project(self, project_id: str, *, force: bool = False) -> bool:
         """Remove a project from runtime state and archive its on-disk data.
+
+        Call only while no other session is writing to the project (the
+        store's per-project lock covers saves, not archival).
 
         Returns ``True`` when the project existed and was removed, ``False``
         otherwise. Runtime state is moved to ``~/.film-pipeline/trash`` instead
@@ -136,12 +148,13 @@ class StudioRuntime:
         if project_id not in self.projects:
             return False
         self._require_deletable_project(project_id, force=force)
+        # One folder holds the project's state AND its artifacts, so a single
+        # archive removes the whole project.
         project_root = self._detach_project_state(project_id)
         if project_root is not None:
             self._archive_directory(
-                project_root, trash_prefix=f"runtime-{project_id}-", force=force
+                project_root, trash_prefix=f"project-{project_id}-", force=force
             )
-        self._archive_project_artifacts(project_id, force=force)
         self._drop_project_checkpoints(project_id)
         return True
 
@@ -174,20 +187,11 @@ class StudioRuntime:
                 raise
             shutil.rmtree(path, ignore_errors=True)
 
-    def _archive_project_artifacts(self, project_id: str, *, force: bool) -> None:
-        """Move the project's stored artifacts to the trash."""
-        project_artifact_dir = self._artifact_root() / project_id
-        if not project_artifact_dir.exists():
-            return
-        self._archive_directory(
-            project_artifact_dir, trash_prefix=f"artifacts-{project_id}-", force=force
-        )
-
     def _artifact_root(self) -> Path:
         """Resolve the directory where the artifact store keeps project artifacts."""
-        if self.services is not None and hasattr(self.services.artifact_store, "_root"):
-            return self.services.artifact_store._root
-        return Path("projects")
+        if self.services is not None:
+            return self.services.artifact_store.root
+        return resolve_storage_root()
 
     def _drop_project_checkpoints(self, project_id: str) -> None:
         """Forget every checkpoint belonging to the deleted project."""

@@ -42,7 +42,7 @@ def test_save_artifact_with_services(tmp_path: Path) -> None:
     }
     ref = _save_artifact(state, Script(project_id="p1", title="T", scenes=[]), "script", "script")
     assert ref is not None
-    assert ref == "artifact:script:v1"
+    assert ref == "artifact:script:script:v1"
 
 
 def test_save_artifact_records_kb_context_ref(tmp_path: Path) -> None:
@@ -72,9 +72,12 @@ def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) 
 
     updates = script_node(state)
 
-    assert updates["story_bible_ref"] == "artifact:story_bible:v1"
-    assert updates["script_ref"] == "artifact:script:v1"
-    assert updates["artifact_refs"] == ["artifact:story_bible:v1", "artifact:script:v1"]
+    assert updates["story_bible_ref"] == "artifact:script:story_bible:v1"
+    assert updates["script_ref"] == "artifact:script:script:v1"
+    assert updates["artifact_refs"] == [
+        "artifact:script:story_bible:v1",
+        "artifact:script:script:v1",
+    ]
 
     story_bible = services.artifact_store.load("p1", FilmPhase("script"), "story_bible", 1)
     script = services.artifact_store.load("p1", FilmPhase("script"), "script", 1)
@@ -269,7 +272,7 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     state: dict[str, object] = {
         "project_id": "p1",
         "idea": "A memory story.",
-        "constitution_ref": "artifact:film_constitution:v1",
+        "constitution_ref": "artifact:constitution:film_constitution:v1",
         SERVICES_KEY: services,
     }
     result = _run_agent(
@@ -280,7 +283,7 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
     )
     assert "treatment" in result
     assert "Memory is a wound." in adapter.prompt
-    assert "artifact:film_constitution:v1" in adapter.prompt
+    assert "artifact:constitution:film_constitution:v1" in adapter.prompt
 
 
 def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) -> None:
@@ -370,7 +373,7 @@ def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) ->
     state: dict[str, object] = {
         "project_id": "p1",
         "idea": "A memory story.",
-        "constitution_ref": "artifact:film_constitution:v1",
+        "constitution_ref": "artifact:constitution:film_constitution:v1",
         "resolved_config": {"context": {"max_chars_per_artifact": 700}},
         SERVICES_KEY: services,
     }

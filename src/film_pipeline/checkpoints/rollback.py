@@ -98,7 +98,25 @@ class RollbackManager:
         target_commit: str,
         performed_by: str = "system",
     ) -> None:
-        """Rollback a single artifact to a previous commit."""
+        """Rollback a single artifact to a previous commit.
+
+        Artifact ids are not git paths — the tracked tree stores them under
+        their layout directories (e.g. ``artifacts/01-vision/<id>/...``).
+        Resolve the tracked paths from the commit tree instead of passing the
+        bare id, which can never match.
+        """
         _ = performed_by
-        self.git.restore_files(target_commit, [artifact_id])
+        tracked = [
+            path
+            for path in self.git.list_files(target_commit)
+            if path == artifact_id
+            or path.startswith(f"{artifact_id}/")
+            or f"/{artifact_id}/" in path
+        ]
+        if not tracked:
+            raise ValueError(
+                f"Cannot rollback artifact '{artifact_id}': no tracked files for it "
+                f"exist at commit {target_commit[:8]}."
+            )
+        self.git.restore_files(target_commit, tracked)
         self.git.commit(f"rollback: artifact {artifact_id} to {target_commit[:8]}")

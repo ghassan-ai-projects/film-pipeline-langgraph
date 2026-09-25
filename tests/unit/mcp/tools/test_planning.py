@@ -58,6 +58,33 @@ def test_initialize_budget_success(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     assert active["budget_state_ref"] == result["budget_state_ref"]
 
 
+@pytest.mark.parametrize("bad_cap", [float("inf"), float("nan"), -5.0])
+def test_initialize_budget_rejects_bad_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_cap: float
+) -> None:
+    """A non-finite or negative cap must be refused before it reaches storage.
+
+    A non-finite cap would otherwise poison ``budget_state`` with a value the
+    store can never read back (see the store's non-finite guard).
+    """
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-bad")
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(initialize_budget({"cap_usd": bad_cap}))
+    assert result["ok"] is False
+    assert "cap_usd" in str(result["error"])
+
+
+def test_initialize_budget_rejects_non_numeric_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-nan-str")
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(initialize_budget({"cap_usd": "not-a-number"}))
+    assert result["ok"] is False
+
+
 def test_initialize_budget_creates_new_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

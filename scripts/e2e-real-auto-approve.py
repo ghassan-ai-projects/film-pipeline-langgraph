@@ -27,6 +27,10 @@ if env_file.exists():
 
 os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
 
+from _scratch_bootstrap import use_scratch_roots
+
+SCRATCH_ARTIFACTS = use_scratch_roots()
+
 from film_pipeline.app.runtime import StudioRuntime, get_runtime
 
 
@@ -45,6 +49,7 @@ def invoke_tool(rt: StudioRuntime, tool_name: str, **args: Any) -> dict[str, Any
         return result  # type: ignore[no-any-return]
 
     return asyncio.run(_invoke())
+
 
 rt = get_runtime()
 rt.server_mode = "real"
@@ -65,7 +70,8 @@ print("=" * 70)
 
 # Clean previous
 import shutil
-proj_dir = Path("projects") / PROJECT_ID
+
+proj_dir = SCRATCH_ARTIFACTS / PROJECT_ID
 if proj_dir.exists():
     shutil.rmtree(proj_dir)
 for pid in list(rt.projects.keys()):
@@ -75,7 +81,8 @@ for pid in list(rt.projects.keys()):
 # ── Create project with auto-approve ──────────────────────────────────────
 print("\n📦 Creating project...")
 r = invoke_tool(
-    rt, "create_film_project",
+    rt,
+    "create_film_project",
     project_id=PROJECT_ID,
     title="The Clockmaker's Minute",
     slug="the-clockmakers-minute",
@@ -91,7 +98,9 @@ r = invoke_tool(rt, "set_active_project", project_ref=PROJECT_ID)
 print(f"   set_active: {r.get('ok')}")
 
 r = invoke_tool(rt, "get_runtime_mode")
-print(f"   mode: aligned={r.get('aligned')}, server={r.get('server_mode')}, runtime={r.get('runtime_mode')}")
+print(
+    f"   mode: aligned={r.get('aligned')}, server={r.get('server_mode')}, runtime={r.get('runtime_mode')}"
+)
 if r.get("profile_stack"):
     print(f"   profile stack: {json.dumps(r['profile_stack'], indent=2)}")
 

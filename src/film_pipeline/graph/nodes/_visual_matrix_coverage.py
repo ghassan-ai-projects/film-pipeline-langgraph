@@ -21,23 +21,22 @@ def _load_script_scenes(state: dict[str, Any], services: GraphServices) -> list[
     script_ref = state.get("script_ref")
     if not script_ref or not isinstance(script_ref, str):
         return []
-    parts = script_ref.split(":")
-    if len(parts) < 3:
-        return []
-    artifact_id = parts[1]
+
+    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
+
     try:
-        version = int(parts[2].removeprefix("v"))
+        parsed = ArtifactRef.from_string(script_ref)
     except ValueError:
         return []
 
-    from film_pipeline.schemas._base import FilmPhase
-
+    phase = FilmPhase(parsed.phase) if parsed.phase else FilmPhase("script")
     try:
         script_raw = services.artifact_store.load(
             str(state.get("project_id", "")),
-            FilmPhase("script"),
-            artifact_id,
-            version,
+            phase,
+            parsed.artifact_id,
+            parsed.version,
         )
     except Exception:
         return []

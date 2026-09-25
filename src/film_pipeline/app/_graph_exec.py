@@ -12,6 +12,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
+from film_pipeline.app import _persistence
 from film_pipeline.app._resume import (
     _approval_made_progress,
     _build_resume_payload,
@@ -19,7 +20,10 @@ from film_pipeline.app._resume import (
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
+from film_pipeline.artifacts.project_storage import graph_state_location
 from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 
 if TYPE_CHECKING:
     from film_pipeline.app.runtime import StudioRuntime
@@ -70,51 +74,28 @@ def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
         _gn._SERVICES_CTX.reset(token)
     pid = str(result.get("project_id", ""))
     if pid:
-        save_graph_state(rt, dict(result), pid)
         auto_checkpoint(rt, result)
     return result
 
 
 def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
-    """Create a checkpoint after a graph step completes."""
+    """Persist the state snapshot and create a checkpoint after a graph step."""
     project_id = str(state.get("project_id", ""))
     if not project_id or project_id not in rt.projects:
-        return
-    manager = rt.checkpoint_managers.get(project_id)
-    if manager is None:
         return
     phase = str(state.get("current_phase", "") or "intake")
     if not phase:
         return
 
-    graph_state_ref = ""
-    if rt.services is not None:
-        store = rt.services.artifact_store
-        try:
-            from datetime import UTC, datetime
-
-            from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
-            from film_pipeline.schemas.artifact import ArtifactMetadata
-            from film_pipeline.schemas.checkpoint import CheckpointState
-
-            version = store.next_version(project_id, "intake", "graph_state")
-            meta = ArtifactMetadata(
-                artifact_id="graph_state",
-                artifact_type=ArtifactType.CHECKPOINT,
-                project_id=project_id,
-                phase=FilmPhase("intake"),
-                version=version,
-                status=ArtifactStatus.CANDIDATE,
-                created_by="runtime_auto_checkpoint",
-                created_at=datetime.now(UTC),
-            )
-            safe_state = {k: v for k, v in state.items() if not k.startswith("_services")}
-            store.save(CheckpointState(state=safe_state), meta)
-            graph_state_ref = f"artifact:graph_state:v{version}"
-        except Exception as exc:
-            _logger.warning(
-                "Auto-checkpoint could not persist graph state for %s: %s", project_id, exc
-            )
+    # The graph state snapshot lives at state/graph-state.json: one atomic
+    # write per mutating operation; checkpoints only reference it. The old
+    # per-step graph_state artifact is gone. A failed snapshot must not
+    # crash a run that already completed.
+    try:
+        save_graph_state(rt, dict(state), project_id)
+    except Exception as exc:
+        _logger.warning("Auto-checkpoint could not persist graph state for %s: %s", project_id, exc)
+    graph_state_ref = graph_state_location()
 
     from film_pipeline.graph.orchestrator_state import get_candidate_refs
 
@@ -143,14 +124,21 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
 
 
 def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) -> None:
-    """Persist graph state to disk for crash recovery."""
-    root = rt.project_roots.get(project_id)
-    if root is None:
+    """Persist one machine state snapshot for crash recovery (atomic).
+
+    Values the typed snapshot cannot serialize degrade through ``str()`` —
+    crash recovery must never fail on state content. The write itself belongs
+    to the storage core; this function only shapes the snapshot.
+    """
+    storage = _persistence.storage_for(rt)
+    if storage is None or project_id not in rt.project_roots:
         return
-    root.mkdir(parents=True, exist_ok=True)
-    state_path = root / ".graph_state.json"
     safe = {k: v for k, v in state.items() if not k.startswith("_services")}
-    state_path.write_text(json.dumps(safe, indent=2, sort_keys=True, default=str))
+    try:
+        snapshot = GraphStateSnapshot(state=safe)
+    except ValueError:
+        snapshot = GraphStateSnapshot(state=json.loads(json.dumps(safe, default=str)))
+    storage.write_graph_state(project_id, snapshot)
 
 
 def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_phase: str) -> bool:
@@ -255,6 +243,32 @@ def _resume_after_approval(
         _gn._SERVICES_CTX.reset(token)
 
 
+def _approve_phase_artifacts(rt: StudioRuntime, project_id: str, phase: str) -> None:
+    """Transition the approved phase's current artifacts to APPROVED.
+
+    The human gate is the one place the artifact status machine fires in
+    production: approved artifacts gain an approval ref and their human
+    views land in ``deliverables/``. Best-effort — a store transition
+    failure must not undo the phase approval itself.
+    """
+    if rt.services is None:
+        return
+    store = rt.services.artifact_store
+    for meta in store.list_artifacts(project_id, FilmPhase(phase)):
+        try:
+            store.approve(
+                project_id,
+                phase,
+                meta.artifact_id,
+                meta.version,
+                approval_ref=f"approval:{phase}:{meta.artifact_id}:v{meta.version}",
+            )
+        except (ValueError, FileNotFoundError, OSError) as exc:
+            _logger.warning(
+                "Could not mark %s v%d approved: %s", meta.artifact_id, meta.version, exc
+            )
+
+
 def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     """Approve the current phase and advance.
 
@@ -274,6 +288,7 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     rt.projects[active["project_id"]] = state
     rt._persist_project_state(active["project_id"])
     save_graph_state(rt, dict(state), active["project_id"])
+    _approve_phase_artifacts(rt, active["project_id"], current_phase)
 
     checkpoint = rt.create_checkpoint(
         project_id=active["project_id"],

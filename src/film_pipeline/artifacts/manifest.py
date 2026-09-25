@@ -6,9 +6,15 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from film_pipeline.artifacts.serialization import write_json_atomic
+
 
 class AssetEntry(BaseModel):
-    """A single generated or reference asset in a project."""
+    """A single generated or reference asset in a project.
+
+    ``path`` is project-relative so a project directory can be moved or
+    archived without breaking the manifest; ``sha256`` pins the content.
+    """
 
     asset_id: str
     path: str
@@ -17,6 +23,7 @@ class AssetEntry(BaseModel):
     shot_id: str = ""
     take: int = 1
     active: bool = True
+    sha256: str = ""
 
 
 class AssetManifest(BaseModel):
@@ -25,7 +32,16 @@ class AssetManifest(BaseModel):
     project_id: str
     entries: list[AssetEntry] = Field(default_factory=list)
 
-    def add(self, entry: AssetEntry) -> None:
+    def add_take(self, entry: AssetEntry) -> None:
+        """Add a take and enforce the invariant: one active clip per shot.
+
+        The new clip's take becomes the active one; earlier clips of the
+        same shot are deactivated.
+        """
+        if entry.kind == "generated_clip" and entry.active:
+            for existing in self.entries:
+                if existing.shot_id == entry.shot_id and existing.kind == "generated_clip":
+                    existing.active = False
         self.entries.append(entry)
 
     def active_take(self, shot_id: str) -> AssetEntry | None:
@@ -44,7 +60,7 @@ class AssetManifest(BaseModel):
         return [e for e in self.entries if e.shot_id == shot_id]
 
 
-def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManifest | None:
+def read_manifest(project_id: str, root: Path) -> AssetManifest | None:
     manifest_path = root / project_id / "asset-manifest.json"
     if not manifest_path.exists():
         return None
@@ -54,7 +70,7 @@ def read_manifest(project_id: str, root: Path = Path("projects")) -> AssetManife
     return manifest.model_copy(update={"project_id": project_id})
 
 
-def write_manifest(manifest: AssetManifest, root: Path = Path("projects")) -> None:
+def write_manifest(manifest: AssetManifest, root: Path) -> None:
+    """Write the asset manifest atomically (D6: all storage writes are atomic)."""
     manifest_path = root / manifest.project_id / "asset-manifest.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(manifest.model_dump_json(indent=2))
+    write_json_atomic(manifest_path, manifest.model_dump(mode="json"))

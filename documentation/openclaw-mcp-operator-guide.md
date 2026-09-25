@@ -25,7 +25,7 @@ The following improvements are now live across the pipeline:
 | 6 | Scoped context packets | Agents receive only phase-relevant data, reducing token cost ~80% |
 | 7 | QC subgraph with parallel validators | 6 validators run concurrently via `Send` API |
 | 8 | `top_p` + `frequency_penalty` sampling | Creative agents use `frequency_penalty=0.3` to reduce repetition |
-| P0 | Graph state checkpointing | `.graph_state.json` persisted after every graph interaction for crash recovery |
+| P0 | Graph state checkpointing | `state/graph-state.json` written atomically after every graph interaction for crash recovery |
 
 ## Modes
 
@@ -44,6 +44,61 @@ Notes:
 - real mode uses the real prompt-runner path, not canned mock responses
 - the server now speaks stdio MCP directly for `initialize`, `tools/list`, and `tools/call`
 - `run-mcp-headless` is identical to `run-mcp-real` — the headless behavior comes from the `auto-approve` profile at project creation time, not the server
+
+## Storage Locations (where your projects live)
+
+All project storage resolves through one variable, in priority order:
+
+1. `FILM_PIPELINE_STORAGE_ROOT` — canonical. Points at the directory that
+   contains one subdirectory per project (e.g. `~/.film-pipeline/projects`).
+2. Default: `~/.film-pipeline/projects`.
+
+Related roots are derived from the same base (`~/.film-pipeline` by default):
+`runtime/` (runtime state), `checkpoints/` (LangGraph checkpointer),
+`runs/<name>/` (headless CLI runs), `trash/` (archived deletions).
+
+Storage roots are marker-gated: each root carries a `storage.json` marker.
+A fresh directory is initialized automatically on first use. Any directory
+that was not created by this version of film-pipeline is **refused** with an
+actionable error instead of being silently adopted. Never point
+`FILM_PIPELINE_STORAGE_ROOT` at an arbitrary directory with unrelated files.
+
+Developer scripts under `scripts/` write to `.scratch/` (never the repo or
+your home directory); `make scratch-clean` removes it.
+
+### Per-project state files
+
+Each project directory holds one human entry point and quarantined machine
+state (storage upgrade P4):
+
+| File | Purpose |
+|---|---|
+| `project.json` | Typed project record — id, title, phase, approval flags. The entry point for humans and tools. |
+| `state/graph-state.json` | Machine-only LangGraph snapshot, written atomically after every mutating operation. Not for human reading. |
+| `checkpoints/checkpoints.jsonl` | Append-only checkpoint metadata (one JSON object per line). |
+| `audit/audit-log.jsonl` | Append-only audit trail (one JSON object per line). |
+| `.storage.lock` | Internal write lock; safe to ignore, never edit. |
+| `artifacts/<phase>/<id>/` | Versioned artifacts: `meta.json` (current), `current.md` (human view), `versions/`. |
+
+### Browsing a project (what to open)
+
+- `README.md` — GENERATED entry point: current phase and every artifact with
+  a direct link to its human view. Never hand-edit it.
+- `artifacts/<phase>/<artifact_id>/current.md` — the readable view of each
+  artifact (screenplay-style script, shot-matrix tables, validation findings,
+  bible sections). Generated from typed renderers; regenerated on every save.
+- `deliverables/` — filled automatically when a phase is approved at the
+  human gate; one markdown file per approved artifact plus a `README.md`.
+- `media/scenes/<scene>/<shot>/` — generated clips and frames with a
+  `take-NNN.json` sidecar (kind, take, sha256 per file).
+- `index/artifacts.json` — derived machine index, regenerated on every
+  write, always safe to delete.
+- `asset-manifest.json` — machine table of every generated asset
+  (project-relative paths, sha256). Moving it under `index/assets.json` is
+  deferred; it has not moved yet.
+
+Media and asset-manifest paths are relative to the project directory, so a
+project folder can be moved or archived whole.
 
 ## Before Starting Real Mode
 

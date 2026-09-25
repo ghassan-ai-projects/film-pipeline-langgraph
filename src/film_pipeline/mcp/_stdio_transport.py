@@ -89,7 +89,7 @@ def _initialize_result() -> dict[str, Any]:
         },
         "serverInfo": {
             "name": "film-pipeline-mcp",
-            "version": "0.3.0",
+            "version": "0.4.0",
         },
     }
 

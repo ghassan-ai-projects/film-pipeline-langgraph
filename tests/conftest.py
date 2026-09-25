@@ -1,9 +1,13 @@
-"""Root test configuration — keeps production data safe from test runs."""
+"""Root test configuration — keeps production data safe from test runs.
+
+Storage roots are separated from production by construction (see
+``film_pipeline.artifacts.storage``): every test runs with
+``FILM_PIPELINE_STORAGE_ROOT`` pointed at a per-test temp directory, and a
+session guard asserts the run leaves the user's real roots untouched.
+"""
 
 from __future__ import annotations
 
-import os
-import shutil
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,7 +19,7 @@ def _isolated_runtime_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Give every test its own persistent runtime root.
+    """Give every test its own persistent runtime and storage roots.
 
     ``StudioRuntime`` restores persisted project state from its runtime root
     at construction; without per-test isolation, projects created by one
@@ -23,6 +27,7 @@ def _isolated_runtime_root(
     reset so tests that exercise MCP tools share no in-memory state.
     """
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(tmp_path / "runtime-root"))
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", str(tmp_path / "storage-root"))
     monkeypatch.delenv("FILM_PIPELINE_PERSIST_STATE", raising=False)
     # Production code writes FILM_PIPELINE_MCP_MODE directly (operator backend
     # mode switch). Without this, a leaking test leaves
@@ -38,6 +43,21 @@ def _isolated_runtime_root(
     reset_in_memory_git()
     reset_runtime()
 
+    # Defensively rebind the tool->runtime function to the genuine one: a
+    # stale MagicMock must never survive into the next test regardless of
+    # how it got there.
+    import film_pipeline.mcp.tools as tools_pkg
+
+    tools_pkg.get_runtime = reset_runtime.__globals__["get_runtime"]
+
+
+@pytest.fixture
+def store_root(tmp_path: Path) -> Path:
+    """A marked sandbox storage root for direct store construction."""
+    from film_pipeline.testing.storage import sandbox_store_root
+
+    return sandbox_store_root(tmp_path / "storage-root")
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _fast_checkpoint_backend() -> Iterator[None]:
@@ -48,14 +68,19 @@ def _fast_checkpoint_backend() -> Iterator[None]:
     projects without asserting git semantics. The genuine ``GitBackend``
     contract tests construct ``GitBackend`` directly and are unaffected.
     """
-    from film_pipeline.app._persistence import reset_git_backend_type, set_git_backend_type
+    from film_pipeline.artifacts.project_storage import (
+        get_git_backend_type,
+        set_git_backend_type,
+    )
     from film_pipeline.testing.in_memory_git import InMemoryGitBackend
 
+    previous = get_git_backend_type()
     set_git_backend_type(InMemoryGitBackend)
     try:
         yield
     finally:
-        reset_git_backend_type()
+        if previous is not None:
+            set_git_backend_type(previous)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -68,57 +93,74 @@ def _clean_production_state_stores(
     the legacy ``projects/`` / ``.film-pipeline-run`` folders.  The session is
     pointed at a temp directory and only that directory is cleaned.
     """
-    os.environ["FILM_PIPELINE_NO_PERSIST"] = "1"
-    persist_root = tmp_path_factory.mktemp("film-pipeline")
-    os.environ["FILM_PIPELINE_PERSIST_ROOT"] = str(persist_root)
+    import os
 
-    home_root = Path.home() / ".film-pipeline"
-    cwd_root = Path(".film-pipeline-run").resolve()
-    for path in (persist_root, home_root, cwd_root):
-        assert not _is_under(path, home_root) or path == home_root, (
-            f"Session persist root {path} would overlap the production root"
-        )
+    os.environ["FILM_PIPELINE_NO_PERSIST"] = "1"
+    session_root = tmp_path_factory.mktemp("film-pipeline")
+    os.environ["FILM_PIPELINE_STORAGE_ROOT"] = str(session_root / "storage")
 
     try:
         yield
     finally:
-        if persist_root.exists():
-            shutil.rmtree(persist_root, ignore_errors=True)
+        import shutil
+
+        if session_root.exists():
+            shutil.rmtree(session_root, ignore_errors=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _redirect_default_projects_root(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> Iterator[None]:
-    """Redirect the default artifact store root to a temp directory.
+def _production_roots_untouched() -> Iterator[None]:
+    """Fail the suite if any test wrote into a real production storage root.
 
-    In addition, the production code now defaults artifact storage to the
-    configured persistence root, which is already redirected to a temp dir by
-    ``_clean_production_state_stores``.  This monkeypatch catches any code
-    paths that still instantiate ``ArtifactStore(root=Path(\"projects\"))``.
+    Snapshots file path sets and sizes (not mtimes) for the user's
+    ``~/.film-pipeline`` tree and the repo's legacy ``projects/`` /
+    ``.film-pipeline-run`` directories, and asserts nothing was added,
+    removed, or resized. Log files are ignored: a live server on this machine
+    may legitimately append to its own logs while tests run.
     """
-    from film_pipeline.artifacts.store import ArtifactStore
+    watched = {
+        "home-film-pipeline": Path.home() / ".film-pipeline",
+        "cwd-projects": Path("projects").resolve(),
+        "cwd-film-pipeline-run": Path(".film-pipeline-run").resolve(),
+    }
+    before = {name: _snapshot_tree(path) for name, path in watched.items()}
+    yield
+    failures = []
+    for name, path in watched.items():
+        before_tree = before.get(name)
+        after_tree = _snapshot_tree(path)
+        if after_tree == before_tree:
+            continue
+        old = before_tree or {}
+        new = after_tree or {}
+        added = sorted(set(new) - set(old))[:10]
+        removed = sorted(set(old) - set(new))[:10]
+        resized = sorted(key for key in set(old) & set(new) if old[key] != new[key])[:10]
+        failures.append(f"{name} ({path}): added={added} removed={removed} resized={resized}")
+    assert not failures, "Test run touched production storage roots:\n" + "\n".join(failures)
 
-    default_root = Path("projects")
-    session_root = tmp_path_factory.mktemp("projects")
-    original_init = ArtifactStore.__init__
 
-    def _init_with_redirect(self: ArtifactStore, root: Path = default_root) -> None:
-        if root == default_root:
-            root = session_root
-        original_init(self, root)
+def _snapshot_tree(root: Path) -> dict[str, int] | None:
+    """Snapshot ``relative path -> size`` for files and dirs under ``root``.
 
-    ArtifactStore.__init__ = _init_with_redirect  # type: ignore[method-assign]
+    Directories are recorded with size 0 so pure directory creation (writing
+    nothing) is still caught. Unreadable subtrees are skipped rather than
+    failing the snapshot itself; the comparison covers everything readable.
+    """
+    if not root.exists():
+        return None
+    snapshot: dict[str, int] = {}
     try:
-        yield
-    finally:
-        ArtifactStore.__init__ = original_init  # type: ignore[method-assign]
-
-
-def _is_under(path: Path, root: Path) -> bool:
-    try:
-        resolved = path.resolve()
-        resolved_root = root.resolve()
+        paths = sorted(root.rglob("*"))
     except OSError:
-        return False
-    return resolved == resolved_root or resolved_root in resolved.parents
+        return snapshot
+    for path in paths:
+        relative = path.relative_to(root).as_posix()
+        parts = relative.split("/")
+        if "logs" in parts or relative.endswith(".log"):
+            continue
+        try:
+            snapshot[relative] = path.stat().st_size if path.is_file() else 0
+        except OSError:
+            continue
+    return snapshot

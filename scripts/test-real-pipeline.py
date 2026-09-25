@@ -10,7 +10,6 @@ REAL MODE: uses actual LLM via OpenRouter
 import json
 import os
 import sys
-from pathlib import Path
 
 os.chdir("/Users/ghassan/my-projects/film-pipeline-langgraph")
 
@@ -24,6 +23,10 @@ with open(".env") as f:
 
 # Force real mode
 os.environ["FILM_PIPELINE_MCP_MODE"] = "real"
+
+from _scratch_bootstrap import use_scratch_roots
+
+SCRATCH_ARTIFACTS = use_scratch_roots()
 
 print("🚀 Running pipeline in REAL mode")
 print(f"   OPENROUTER_API_KEY: set={bool(os.environ.get('OPENROUTER_API_KEY'))}")
@@ -45,7 +48,7 @@ for pid in list(rt.projects.keys()):
 
 import shutil
 
-proj_dir = Path("projects") / PROJECT_ID
+proj_dir = SCRATCH_ARTIFACTS / PROJECT_ID
 if proj_dir.exists():
     shutil.rmtree(proj_dir)
 

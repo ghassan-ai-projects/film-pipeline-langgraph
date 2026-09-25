@@ -8,7 +8,6 @@ generation, KB, and provider state.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -279,20 +278,3 @@ class MutableSchemaBase(BaseModel):
 
     model_config = ConfigDict(frozen=False, extra="ignore", populate_by_name=True)
     schema_version: str = Field(default="v1", description="Schema version identifier.")
-
-
-def to_camel(snake: str) -> str:
-    """Convert a snake_case identifier to lowerCamelCase for JSON output."""
-    head, *rest = snake.split("_")
-    return head + "".join(part.capitalize() for part in rest)
-
-
-def json_safe(value: Any) -> Any:
-    """Recursively convert Pydantic models to JSON-safe primitives."""
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="json")
-    if isinstance(value, dict):
-        return {k: json_safe(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [json_safe(v) for v in value]
-    return value

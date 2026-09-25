@@ -13,7 +13,7 @@ UV_RUN = uv run --python $(PYTHON) --group dev
 
 .PHONY: help setup lock format format-check lint lint-fix typecheck test \
         test-cov test-unit test-integration test-e2e build precommit hooks \
-        ci-check ci-verify clean product-gate
+        ci-check ci-verify clean scratch-clean product-gate
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -115,3 +115,6 @@ clean: ## Remove local caches and build artifacts
 	rm -rf .coverage .mypy_cache .pytest_cache .ruff_cache .venv
 	rm -rf build dist htmlcov
 	rm -rf src/*.egg-info src/*/*.egg-info
+
+scratch-clean: ## Remove the developer scratch storage used by scripts/
+	rm -rf .scratch
