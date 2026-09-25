@@ -1229,7 +1229,7 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
 ) -> None:
     import film_pipeline.mcp.tools as mcp_tools
     from film_pipeline.app import runtime as runtime_mod
-    from film_pipeline.providers.factory import build_provider_adapter
+    from film_pipeline.app._provider_factory import build_provider_adapter
 
     rt = runtime_mod.StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("ref-gen-test", "Reference Test")

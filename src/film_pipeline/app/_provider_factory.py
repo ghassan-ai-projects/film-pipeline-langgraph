@@ -1,4 +1,4 @@
-"""Provider adapter factory for runtime registration from config/profile data."""
+"""Build provider adapters for app runtime composition."""
 
 from __future__ import annotations
 

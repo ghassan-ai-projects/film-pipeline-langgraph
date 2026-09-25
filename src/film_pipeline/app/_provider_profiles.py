@@ -24,7 +24,7 @@ def register_profile_providers(
     if not specs:
         return
 
-    from film_pipeline.providers.factory import build_provider_adapter
+    from film_pipeline.app._provider_factory import build_provider_adapter
 
     runtime.clear_providers()
     for spec in specs:

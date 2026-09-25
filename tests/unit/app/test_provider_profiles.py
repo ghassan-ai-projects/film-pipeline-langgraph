@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
+from film_pipeline.app import _provider_factory as provider_factory
 from film_pipeline.app._provider_profiles import (
     missing_profile_credentials,
     register_profile_providers,
 )
 from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.providers import factory
 from film_pipeline.providers.credentials import MissingProviderCredential
 
 
@@ -27,7 +27,7 @@ def test_register_profile_providers_builds_ordered_adapters_and_health(
         built.append((provider_id, provider_type, models or []))
         return object()
 
-    monkeypatch.setattr(factory, "build_provider_adapter", build_adapter)
+    monkeypatch.setattr(provider_factory, "build_provider_adapter", build_adapter)
 
     register_profile_providers(
         runtime,
