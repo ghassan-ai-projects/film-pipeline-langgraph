@@ -8,6 +8,7 @@ import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
+    resolved_config_state_keys,
 )
 from film_pipeline.operations.operator import OperatorService
 from film_pipeline.studio._operator_runtime import operator_service
@@ -116,11 +117,9 @@ def _populate_project_state(
                 quality if quality.startswith("quality.") else f"quality.{quality}"
             )
     state["runtime_mode"] = runtime_mode
-    state["profile_stack"] = effective_stack
     state["server_mode"] = server_mode
-    state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
-    state["resolved_config_sources"] = resolved_config["sources"]
-    state["config_conflicts"] = _extract_conflicts(resolved_config)
+    # `config` owns profile resolution and therefore the projection onto state.
+    state.update(resolved_config_state_keys(effective_stack, resolved_config))
     state["generation_policy"] = str(args.get("generation_policy", "generate"))
     user_runtime = _coerce_runtime_arg(args)
     if user_runtime > 0:

@@ -193,10 +193,7 @@ class OperatorService:
             }
         )
         resolved_config = _profiles.resolve_project_config(profile_stack)
-        state["profile_stack"] = profile_stack
-        state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
-        state["resolved_config_sources"] = resolved_config["sources"]
-        state["config_conflicts"] = list(cast(list[Any], resolved_config.get("conflicts", [])))
+        state.update(_profiles.resolved_config_state_keys(profile_stack, resolved_config))
         self.register_profile_providers(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )

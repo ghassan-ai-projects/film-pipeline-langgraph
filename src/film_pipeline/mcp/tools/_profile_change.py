@@ -17,7 +17,10 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.config.profile_resolver import resolve_project_config
+from film_pipeline.config.profile_resolver import (
+    resolve_project_config,
+    resolved_config_state_keys,
+)
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
@@ -275,10 +278,7 @@ def _apply_resolved_config(
 ) -> None:
     """Bump the project's profile version and cache the resolved configuration."""
     state["profile_version"] = new_version
-    state["profile_stack"] = new_stack
-    state["resolved_config"] = cast(dict[str, object], resolved.get("raw", {}))
-    state["resolved_config_sources"] = resolved.get("sources", [])
-    state["config_conflicts"] = list(cast(list[Any], resolved.get("conflicts", [])))
+    state.update(resolved_config_state_keys(new_stack, resolved))
 
 
 def _commit_profile_config(

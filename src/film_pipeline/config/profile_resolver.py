@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
 def load_profile_flex(
@@ -77,6 +77,30 @@ def resolve_project_config(profile_stack: dict[str, str]) -> dict[str, object]:
             }
             for conflict in resolved.conflicts
         ],
+    }
+
+
+def resolved_config_state_keys(
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> dict[str, object]:
+    """The graph-state keys a resolved configuration contributes.
+
+    `config` owns profile resolution, so it also owns the projection of that
+    result onto graph state. Three call sites previously built these five keys
+    by hand — two in `mcp` and one in `operations` — with small divergences
+    (`["sources"]` vs `.get("sources", [])`, and an inline cast where another
+    site called a helper). Producing the mapping once removes the drift and
+    gives the keys a single writer.
+    """
+    raw = resolved_config.get("raw", {})
+    return {
+        "profile_stack": profile_stack,
+        "resolved_config": raw if isinstance(raw, dict) else {},
+        "resolved_config_sources": [
+            str(source) for source in cast(list[object], resolved_config.get("sources", []))
+        ],
+        "config_conflicts": list(cast(list[object], resolved_config.get("conflicts", []))),
     }
 
 

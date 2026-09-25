@@ -178,7 +178,10 @@ class StudioGraphState(TypedDict, total=False):
     provider_health_snapshot: dict[str, object]
     resolved_config: dict[str, object]
     profile_stack: dict[str, str]
-    resolved_config_sources: dict[str, object]
+    # The producer (`config.resolve_project_config`) emits profile file
+    # stems as a list; the declaration previously said `dict`, and the
+    # mismatch was invisible because nothing reads this key.
+    resolved_config_sources: list[str]
     config_conflicts: list[dict[str, object]]
 
     # ── Operator annotations (persisted with project state) ──────────────
