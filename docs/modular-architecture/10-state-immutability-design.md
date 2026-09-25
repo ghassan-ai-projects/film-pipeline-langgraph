@@ -186,6 +186,43 @@ pointed:
    migration's progress bar — and it cannot be gamed, because pydantic enforces
    it.
 
+## 6d. Outcome: the boundary was the fix, and it landed
+
+The `extra="forbid"` acceptance test went from **96 failures to zero** with one
+change, which confirms the diagnosis and locates the defect precisely.
+
+**Root cause.** `rt.projects[project_id]` holds the *entire graph state*, not a
+project record. `persist_project_state` validated that whole dict into
+`ProjectRecord`, which only worked because `extra="allow"` tolerated the
+difference. The record was never the wrong shape; the *input to it* was.
+
+**Fix.** `_persist_project_state` projects the live state onto the record's
+declared fields before validating. The record now has one writer and a closed
+shape.
+
+Measured on a real runtime after a graph run:
+
+| Artifact | Keys |
+|---|---:|
+| Live graph state | 28 |
+| `project.json` before | 14 (11 declared + 3 leaked) |
+| `project.json` after | **11 (declared only)** |
+| `state/graph-state.json` | separate, unchanged |
+
+Nothing was lost — graph state was already checkpointed separately. Reload
+across a fresh runtime still restores the project, verified directly.
+
+**What this means for the wider design.** The 17-key list in §6b is now mostly
+moot: those keys were never supposed to be on the record. The remaining
+question is smaller and different — they are graph state, and graph state has no
+declared owner either. That is the `09` problem, unchanged by this fix, and now
+much more clearly separated from the record question.
+
+Two tests that encoded the old behaviour were corrected rather than deleted:
+`test_project_json_round_trips_typed_and_extra_fields` asserted a made-up
+`custom_key` survived the round trip, which pinned the mechanism rather than a
+feature; it is replaced by guards asserting the opposite.
+
 ## 7. Checked: the typed record already exists, and it is load-bearing
 
 The risk in §6 is smaller than it looked, because the work is partly done. I ran
