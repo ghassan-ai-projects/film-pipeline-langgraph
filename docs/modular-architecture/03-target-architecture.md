@@ -1404,8 +1404,25 @@ forbidden precisely so that `post → validation` (L7→L6), `generation → bud
 | **C1** | `agents/prompt_templates` ↔ `agents/prompt_templates/defaults` | `registry.py` lazily imports `defaults` to load the built-in templates, and `defaults/*` import `registry` for the `PromptTemplate` type | `agents/prompt_templates/registry.py:100 → agents/prompt_templates.defaults` (deleted; loading moves to `agents.catalog.bootstrap_defaults()`, called by `studio`). Both members become the single module `agents`, so the enola edge `prompt_templates → prompt_templates.defaults` also disappears. | W2 |
 | **C2** | `app` ↔ `mcp` + 5 sub-modules (7 members) | `app/product_gate.py:17` imports `mcp.contract.make_registry` while `mcp/server.py:164,241,248,249` and `mcp/tools/__init__.py:22` import `app.runtime`, `app.bootstrap`, `app._persistence`, `app.logging_setup` | `mcp/tools/__init__.py:22 → app.runtime.get_runtime` (and the three `mcp/server.py` app imports). `mcp` receives an injected `operations` backend; the bootstrap moves to `studio`, which is **above** `mcp`; `app → mcp` becomes the legal `studio → mcp`. | W1 (early move of `product_gate`), W11 (close) |
 | **C3** | `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs` | node modules import gate/validator helpers (`_repair_loop.py:199 → approval`, `approval` re-imports `_repair_loop`) and `orchestrator_validators/brief.py:179` imports `graph.nodes` back | `graph/orchestrator_validators/brief.py:179 → graph.nodes` (deleted). `orchestration → governance` remains (L9→L8); `governance` becomes a pure function over values and may not import `orchestration`. The `nodes/↔subgraphs/` half becomes intra-module. | W9 |
-| **C4** | `providers` ↔ `providers/adapters` | `providers/__init__.py:9-13` re-exports the concrete adapters, while `adapters/imagen4_gemini.py:13`, `seedance_openrouter.py:19`, `veo_fast.py:13` import `providers.base` (and `credentials`, `pricing`) | `providers/__init__.py:9-13 → providers.adapters.*` (deleted; `studio` imports concrete adapters and injects them). Both members become the module `providers`. | W2/W11 |
+| **C4** | `providers` ↔ `providers/adapters` | `providers/__init__.py:9` re-exports `Imagen4GeminiProvider`, while `adapters/imagen4_gemini.py:13`, `seedance_openrouter.py:19`, `veo_fast.py:13` import `providers.base` (and `credentials`, `pricing`) | `providers/__init__.py:9 → providers.adapters.imagen4_gemini` (deleted; `studio` imports concrete adapters and injects them). Both members become the module `providers`. | W2/W11 |
 | **C5** | `schemas` ↔ `schemas/registries` | `schemas/__init__.py:120` re-exports the four registry entry records, while `registries/*.py` import `schemas._base` (`agent_registry.py:7`) | `schemas/__init__.py:120 → schemas.registries` (deleted; consumers import `film_pipeline.schemas.registries` directly) **and** `registries/*.py:7 → schemas._base` becomes an import of the L0 `filmspec` enums plus `schemas.base`. Both members become the module `schemas`. | W2/W5 |
+
+#### C4 source evidence correction (2026-09-25)
+
+The C4 row above understates the provider-to-adapter side of the measured
+cycle. The pinned source also has three direct adapter imports in
+`src/film_pipeline/providers/factory.py:5-7`; removing only the listed
+`providers/__init__.py` re-export would leave those edges and would not clear
+C4. The approved migration direction in
+[`06-independent-review-and-decision.md`](06-independent-review-and-decision.md)
+governs execution: C-02 moves adapter construction to the existing app
+composition layer, removes the root concrete Imagen alias, and keeps
+`providers.adapters` as the concrete-adapter export surface. The old
+`film_pipeline.providers.factory` and
+`film_pipeline.providers.Imagen4GeminiProvider` import paths are therefore
+removed as part of the migration; the builder behavior remains covered by the
+current progress ledger. This correction records the complete measured edge;
+it does not revive the superseded 20-module proposal.
 
 C1, C4, C5 are cheap: each member pair maps to one target module, so the enola
 cycle vanishes as soon as the module catalog is applied; the concrete source

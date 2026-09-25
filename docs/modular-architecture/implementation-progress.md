@@ -65,7 +65,7 @@ No Enola filter or threshold changed.
 | R-01a | Migration only: move checkpoint rollback manager orchestration and bookkeeping from MCP tools into `OperatorService` / app services while preserving active-project selection, confirmation, errors, and response projection | Three independent final reviews pass; first-round findings addressed | PASS — 63 passed / 10 strict xfailed across checkpoint service, MCP checkpoint, and O-01 divergence suites | PASS — `make ci-check`; 2,023 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — docs-local snapshot baseline; clean, no cycle delta | `e5a74dc` | Complete |
 | V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
-| C-02 | Break C4: `providers` ↔ `providers/adapters`, preserving adapter exports and factory behavior | Three independent plan reviews in progress | Pending | Pending | Target: 1 cycle → 0 | Pending | Planning |
+| C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three independent plan reviews pass; import-path changes recorded | Pending | Pending | Target: 1 cycle → 0 | Pending | Planned |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`, preserving schema and registry exports | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
@@ -188,6 +188,66 @@ path adds a dependency-depth advisory. Therefore total insights remain 115
 receipt (five cycles and 110 heuristic insights). This change removes a cycle;
 it does not claim the whole heuristic inventory declined. The checked-in
 baseline remains pinned at `fb85baa`. Code commit: `261f4a1`.
+
+## C-02 plan
+
+- **Owner and consumers:** `app` owns adapter construction and registration
+  composition. `providers.adapters` owns and exports the concrete adapters;
+  provider contracts, credentials, pricing, and registry remain in `providers`.
+  The approved `06` direction and V-01 already place runtime composition in
+  `app`; no new phase package is introduced.
+- **Measured edges:** the C4 cycle has both `providers/__init__.py`'s concrete
+  Imagen re-export and `providers/factory.py`'s three imports of adapter
+  implementations. Adapter modules also import provider base, credential, and
+  pricing modules, which form the return edge. Removing only the package
+  re-export would therefore leave C4 intact.
+- **Planned code and tests:** move the builder body intact to
+  `app/_provider_factory.py`, retarget profile/default seeding consumers and
+  every in-repo test caller, and delete `providers/factory.py` without a
+  forwarding shim. Remove `Imagen4GeminiProvider` from the root providers
+  facade; keep all three exports in `providers.adapters`. Add one table-driven
+  builder test for every supported provider ID/alias, concrete adapter class,
+  default model and entry facts, plus the unsupported-ID error. Retarget the
+  existing pricing test's adapter imports to the package exports and remove its
+  now-duplicated Imagen factory-rate assertion. Add a focused import-direction
+  guard so provider-root modules cannot reintroduce imports from the adapters
+  subpackage.
+- **Deliberate import-path migration:** `film_pipeline.providers.factory` and
+  `film_pipeline.providers.Imagen4GeminiProvider` are removed. No in-repository
+  consumer imports the root Imagen alias. The canonical adapter export surface
+  remains `film_pipeline.providers.adapters`; builder signature, selected
+  classes, provider aliases, entry defaults, and returned adapter behavior
+  remain unchanged. A forwarding shim is excluded because it would recreate
+  the measured providers-to-adapters edge.
+- **Files:** `providers/factory.py` (moved), `providers/__init__.py`,
+  `app/_provider_factory.py` (new), `app/_provider_profiles.py`,
+  `app/_provider_seeds.py`, `tests/unit/app/test_provider_factory.py` (new),
+  `tests/unit/providers/test_import_boundaries.py` (new),
+  `tests/unit/app/test_provider_profiles.py`,
+  `tests/unit/providers/test_pricing.py`,
+  `tests/unit/mcp/tools/test_generation.py`,
+  `tests/integration/test_reference_generation_mcp.py`, and
+  `tests/unit/test_mcp.py`.
+- **Validation:** run the focused changed suites with `--no-cov`, full
+  `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at least 90%), Enola against
+  the docs-local receipt, and `git diff --check`. Close C-02 only when Enola
+  removes C4 (four cycles to three), adds no cycle, and the full suite/build/
+  product gate pass.
+
+## C-02 plan review record
+
+The boundary review found that removing only the root Imagen export would not
+remove the measured edge: `providers/factory.py` imports all three concrete
+adapters. The selected plan moves that construction module to the existing app
+composition layer and removes both parent-to-adapter sources. Behavior review
+confirmed that the builder can move intact and required a table-driven proof
+for every ID/alias and unsupported-ID behavior. Quality review required
+retargeting existing callers/tests instead of duplicating the factory assertion,
+and using `providers.adapters` in the existing pricing test to verify its
+export surface. All three final plan reviews pass. They also identified the two
+source-visible import paths being removed; this migration is documented above
+and preserves in-repository behavior without a cycle-preserving compatibility
+shim.
 
 ## R-01a plan
 
