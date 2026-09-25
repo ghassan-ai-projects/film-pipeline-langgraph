@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults._quality import (
     _QUALITY_DIRECTIVE,
 )
-from film_pipeline.agents.prompt_templates.registry import PromptTemplate
 
 
 def _visual_development_creator() -> PromptTemplate:

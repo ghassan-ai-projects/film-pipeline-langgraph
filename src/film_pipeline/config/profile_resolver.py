@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
 
 def load_profile_flex(
@@ -168,52 +168,3 @@ def provider_specs(
         if specs:
             return specs
     return []
-
-
-def register_project_providers(
-    rt: Any,
-    profile_stack: dict[str, str],
-    resolved_config: dict[str, object],
-) -> None:
-    """Clear existing providers and register the project's provider stack."""
-    from film_pipeline.providers.factory import build_provider_adapter
-
-    provider_ids = provider_specs(profile_stack, resolved_config)
-    if not provider_ids:
-        return
-
-    rt.clear_providers()
-    for spec in provider_ids:
-        provider_id = str(spec["provider_id"])
-        provider_type = str(spec.get("provider_type", "video"))
-        models = [str(model) for model in cast(list[Any], spec.get("models", [])) if str(model)]
-        adapter = build_provider_adapter(
-            provider_id,
-            provider_type=provider_type,
-            models=models,
-        )
-        rt.register_provider(provider_id, adapter)
-        rt.set_provider_health(provider_id, "healthy")
-
-
-def missing_provider_credentials(
-    profile_stack: dict[str, str],
-    resolved_config: dict[str, object],
-) -> list[dict[str, str]]:
-    """Return providers required by the stack that lack API credentials."""
-    from film_pipeline.providers.credentials import _env_var_for, is_configured
-
-    missing: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for spec in provider_specs(profile_stack, resolved_config):
-        provider_id = str(spec["provider_id"])
-        if provider_id in seen:
-            continue
-        seen.add(provider_id)
-        env_var = _env_var_for(provider_id)
-        if not env_var:
-            continue
-        if is_configured(provider_id):
-            continue
-        missing.append({"provider_id": provider_id, "env_var": env_var})
-    return missing

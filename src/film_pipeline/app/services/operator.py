@@ -12,8 +12,9 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
+from film_pipeline.app import _provider_profiles
 from film_pipeline.app.runtime import StudioRuntime, get_runtime, reset_runtime
-from film_pipeline.app.services import _browse_ops, _generation_ops
+from film_pipeline.app.services import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.app.services._project_discovery import (
     discover_project_folders,
     load_discovered_project,
@@ -23,7 +24,9 @@ from film_pipeline.app.services._project_discovery import (
 from film_pipeline.app.services.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.app.services.models import (
     ArtifactDetail,
+    ArtifactRollbackResult,
     AuditEvent,
+    CheckpointRollbackResult,
     DashboardSummary,
     GenerationWorkspace,
     MutationResult,
@@ -42,6 +45,8 @@ from film_pipeline.graph.router import (
     get_blockers_for_state,
     public_blocked_actions,
 )
+from film_pipeline.providers.credentials import MissingProviderCredential
+from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 
 class OperatorService:
@@ -144,9 +149,25 @@ class OperatorService:
         state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
         state["resolved_config_sources"] = resolved_config["sources"]
         state["config_conflicts"] = list(cast(list[Any], resolved_config.get("conflicts", [])))
-        _profiles.register_project_providers(
-            self.runtime, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        self.register_profile_providers(
+            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
+
+    def register_profile_providers(
+        self,
+        profile_stack: dict[str, str],
+        resolved_config: dict[str, object],
+    ) -> None:
+        """Register adapters selected by the resolved project profile."""
+        _provider_profiles.register_profile_providers(self.runtime, profile_stack, resolved_config)
+
+    def missing_profile_credentials(
+        self,
+        profile_stack: dict[str, str],
+        resolved_config: dict[str, object],
+    ) -> list[MissingProviderCredential]:
+        """List missing credentials for providers selected by the profile."""
+        return _provider_profiles.missing_profile_credentials(profile_stack, resolved_config)
 
     def _activate_new_project(
         self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest
@@ -415,6 +436,31 @@ class OperatorService:
     def list_checkpoints(self, project_id: str | None = None) -> list[dict[str, str]]:
         """List checkpoints for a project."""
         return _browse_ops.list_checkpoints(self, project_id)
+
+    def get_checkpoint(
+        self,
+        checkpoint_id: str,
+    ) -> CheckpointMetadata | None:
+        """Get checkpoint metadata by its globally unique identifier."""
+        return _checkpoint_ops.get_checkpoint(self, checkpoint_id)
+
+    def rollback_to_checkpoint(
+        self,
+        checkpoint: CheckpointMetadata,
+        project_id: str,
+    ) -> CheckpointRollbackResult:
+        """Restore one project's checkpoint and persist its rollback records."""
+        return _checkpoint_ops.rollback_to_checkpoint(self, checkpoint, project_id)
+
+    def rollback_artifact(
+        self,
+        artifact_id: str,
+        checkpoint_id: str = "",
+        *,
+        project_id: str,
+    ) -> ArtifactRollbackResult:
+        """Restore one artifact from a project checkpoint."""
+        return _checkpoint_ops.rollback_artifact(self, project_id, artifact_id, checkpoint_id)
 
     def list_provider_status(self) -> list[dict[str, Any]]:
         """Return provider health rows."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import os
 import tempfile
 from collections.abc import Mapping
@@ -135,3 +136,20 @@ class GraphServices:
 
 
 SERVICES_KEY = "_services"
+
+_SERVICES_CTX: contextvars.ContextVar[GraphServices | None] = contextvars.ContextVar(
+    "_film_pipeline_services", default=None
+)
+
+
+def _get_services(state: dict[str, Any]) -> GraphServices | None:
+    """Return graph services from state, falling back to runtime context.
+
+    LangGraph may drop undeclared state keys between node boundaries. The
+    context variable keeps runtime services available without checkpointing
+    them into graph state.
+    """
+    svc = state.get(SERVICES_KEY)
+    if svc is not None:
+        return svc  # type: ignore[no-any-return]
+    return _SERVICES_CTX.get()

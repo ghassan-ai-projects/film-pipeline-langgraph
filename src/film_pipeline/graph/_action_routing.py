@@ -13,21 +13,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from film_pipeline.graph import orchestrator_state as ostate
+from film_pipeline.graph.phase_sequence import next_phase
 from film_pipeline.schemas._base import ValidationStatus
-
-PHASE_ORDER = [
-    "intake",
-    "constitution",
-    "development",
-    "script",
-    "visual_dev",
-    "shot_bible",
-    "gen_planning",
-    "generation",
-    "qc",
-    "post",
-    "delivery",
-]
 
 # Actions that can operate in any phase regardless of provider health
 _PHASE_AGNOSTIC_PHASES = {
@@ -323,25 +310,24 @@ def _review_package_result(result: RouterResult, approved: bool, phase: str) -> 
 
 
 def _advance_result(state: dict[str, Any], phase: str, result: RouterResult) -> RouterResult:
-    """Approved phases advance to the next phase in PHASE_ORDER, or wrap."""
-    idx = PHASE_ORDER.index(phase) if phase in PHASE_ORDER else -1
-    if idx < 0 or idx + 1 >= len(PHASE_ORDER):
+    """Advance approved phases to their sequence successor, or wrap."""
+    successor = next_phase(phase)
+    if successor is None:
         result.eligible = ["wrap"]
         result.next_action = "wrap"
         return result
 
-    next_phase = PHASE_ORDER[idx + 1]
     blocked_providers = ostate.get_blocked_providers(state)
 
     # Generation cannot start while its providers are blocked.
-    if next_phase == "generation" and blocked_providers:
+    if successor == "generation" and blocked_providers:
         result.eligible = ["continue_unrelated_work", "escalate_to_human"]
         result.next_action = "continue_unrelated_work"
         result.blocked = [_advance_to_generation_blocker(blocked_providers)]
         return result
 
-    result.eligible = [f"advance_to_{next_phase}"]
-    result.next_action = f"advance_to_{next_phase}"
+    result.eligible = [f"advance_to_{successor}"]
+    result.next_action = f"advance_to_{successor}"
     return result
 
 

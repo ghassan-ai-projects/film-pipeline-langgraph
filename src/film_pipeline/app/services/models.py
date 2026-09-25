@@ -164,6 +164,28 @@ class MutationResult:
 
 
 @dataclass(frozen=True)
+class CheckpointRollbackResult:
+    """Completed project rollback and persisted bookkeeping references."""
+
+    rollback_target: str
+    phase: str
+    reason: str
+    invalidation_report_ref: str
+    rollback_record_ref: str
+
+
+@dataclass(frozen=True)
+class ArtifactRollbackResult:
+    """Completed artifact restore and persisted bookkeeping references."""
+
+    artifact_id: str
+    restored_from: str
+    git_commit: str
+    invalidation_report_ref: str
+    rollback_record_ref: str
+
+
+@dataclass(frozen=True)
 class AuditEvent:
     """Audit feed item."""
 

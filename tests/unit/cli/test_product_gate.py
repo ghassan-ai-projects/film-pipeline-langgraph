@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from film_pipeline.app.product_gate import (
+from film_pipeline.cli.product_gate import (
     ProductGateManifest,
     ProductGateReport,
     detect_stubbed_critical_tools,
@@ -216,10 +216,10 @@ def test_main_returns_zero_for_passing_report(monkeypatch: pytest.MonkeyPatch) -
         required_behavior_tests=(),
     )
 
-    monkeypatch.setattr("film_pipeline.app.product_gate.load_manifest", lambda: manifest)
-    monkeypatch.setattr("film_pipeline.app.product_gate.load_plan_manifest", lambda: manifest)
+    monkeypatch.setattr("film_pipeline.cli.product_gate.load_manifest", lambda: manifest)
+    monkeypatch.setattr("film_pipeline.cli.product_gate.load_plan_manifest", lambda: manifest)
     monkeypatch.setattr(
-        "film_pipeline.app.product_gate.evaluate_product_gate",
+        "film_pipeline.cli.product_gate.evaluate_product_gate",
         lambda _manifest, _plan_manifest: ProductGateReport(),
     )
 
@@ -235,10 +235,10 @@ def test_main_returns_one_for_failing_report(monkeypatch: pytest.MonkeyPatch) ->
         required_behavior_tests=(),
     )
 
-    monkeypatch.setattr("film_pipeline.app.product_gate.load_manifest", lambda: manifest)
-    monkeypatch.setattr("film_pipeline.app.product_gate.load_plan_manifest", lambda: None)
+    monkeypatch.setattr("film_pipeline.cli.product_gate.load_manifest", lambda: manifest)
+    monkeypatch.setattr("film_pipeline.cli.product_gate.load_plan_manifest", lambda: None)
     monkeypatch.setattr(
-        "film_pipeline.app.product_gate.evaluate_product_gate",
+        "film_pipeline.cli.product_gate.evaluate_product_gate",
         lambda _manifest, _plan_manifest: ProductGateReport(plan_manifest_missing=True),
     )
 

@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.app.services import OperatorService
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
-    missing_provider_credentials,
-    register_project_providers,
     resolve_project_config,
 )
 
@@ -71,6 +70,7 @@ def _validate_resolved_profile(
     profile_stack: Any,
     resolved_config: dict[str, Any],
     runtime_mode: str,
+    service: OperatorService,
 ) -> dict[str, object] | None:
     """Reject blocking conflicts and missing real-mode provider credentials."""
     conflicts = _extract_conflicts(resolved_config)
@@ -82,13 +82,16 @@ def _validate_resolved_profile(
                 conflicts=conflicts,
             )
     if runtime_mode == "real":
-        missing_credentials = missing_provider_credentials(
+        missing_credentials = service.missing_profile_credentials(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         if missing_credentials:
             return _error(
                 "Real-mode provider credentials are missing.",
-                missing_credentials=missing_credentials,
+                missing_credentials=[
+                    {"provider_id": row.provider_id, "env_var": row.env_var}
+                    for row in missing_credentials
+                ],
             )
     return None
 
@@ -172,7 +175,10 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        profile_error = _validate_resolved_profile(profile_stack, resolved_config, runtime_mode)
+        service = OperatorService(rt)
+        profile_error = _validate_resolved_profile(
+            profile_stack, resolved_config, runtime_mode, service
+        )
         if profile_error is not None:
             return profile_error
 
@@ -189,8 +195,8 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
             runtime_mode=runtime_mode,
             server_mode=server_mode,
         )
-        register_project_providers(
-            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        service.register_profile_providers(
+            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         _audit_project_creation(rt, project_id, runtime_mode, server_mode)
         state = _run_intake_for_idea(rt, state, args, project_id)

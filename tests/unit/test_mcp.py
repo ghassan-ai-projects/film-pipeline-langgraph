@@ -1155,21 +1155,29 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
     assert pstack["provider_profile"] == "provider.seedance_primary"
 
 
-def test_wired_create_film_project_rejects_missing_google_key_for_real_image_provider() -> None:
+def test_wired_create_film_project_reports_all_providers_missing_google_key() -> None:
     from unittest import mock
 
     from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
 
+    def is_configured(provider_id: str) -> bool:
+        return provider_id == "seedance-openrouter"
+
     with (
         mock.patch("film_pipeline.providers.credentials.lookup", return_value=""),
-        mock.patch("film_pipeline.providers.credentials.is_configured", return_value=False),
+        mock.patch(
+            "film_pipeline.providers.credentials.is_configured",
+            side_effect=is_configured,
+        ),
         mock.patch("film_pipeline.providers.adapters.imagen4_gemini.lookup", return_value=""),
         pytest.MonkeyPatch.context() as monkeypatch,
     ):
         monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
         monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-        reset_runtime("real")
+        rt = reset_runtime("real")
+        providers_before = rt.list_providers()
+        health_before = rt.get_all_health()
         _pin_tools_runtime(monkeypatch)
         result = asyncio.run(
             create_film_project(
@@ -1186,7 +1194,13 @@ def test_wired_create_film_project_rejects_missing_google_key_for_real_image_pro
     assert result["ok"] is False
     assert result["error"] == "Real-mode provider credentials are missing."
     missing = cast(list[dict[str, str]], result["missing_credentials"])
-    assert {"provider_id": "gemini-imagen-4", "env_var": "GOOGLE_API_KEY"} in missing
+    assert missing == [
+        {"provider_id": "gemini-imagen-4", "env_var": "GOOGLE_API_KEY"},
+        {"provider_id": "veo-3.1-fast", "env_var": "GOOGLE_API_KEY"},
+    ]
+    assert rt.get_project("test-missing-google-key") is None
+    assert rt.list_providers() == providers_before
+    assert rt.get_all_health() == health_before
 
 
 def test_wired_create_film_project_rejects_mode_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1215,7 +1229,7 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
 ) -> None:
     import film_pipeline.mcp.tools as mcp_tools
     from film_pipeline.app import runtime as runtime_mod
-    from film_pipeline.providers.factory import build_provider_adapter
+    from film_pipeline.app._provider_factory import build_provider_adapter
 
     rt = runtime_mod.StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("ref-gen-test", "Reference Test")

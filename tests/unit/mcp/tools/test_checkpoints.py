@@ -303,6 +303,8 @@ def test_rollback_artifact_specific_checkpoint_success(
     from film_pipeline.app.runtime import get_runtime as gr
 
     rt = gr()
+    cp = rt.get_checkpoint(cast(str, created["checkpoint_id"]))
+    assert cp is not None
     manager = rt.checkpoint_managers.get("proj-cp-restore-ok")
     assert manager is not None
     monkeypatch.setattr(
@@ -314,8 +316,25 @@ def test_rollback_artifact_specific_checkpoint_success(
             {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]}
         )
     )
+    assert set(result) == {
+        "ok",
+        "artifact_id",
+        "restored_from",
+        "git_commit",
+        "invalidation_report_ref",
+        "rollback_record_ref",
+    }
     assert result["ok"] is True
     assert result["artifact_id"] == "script"
+    assert result["restored_from"] == cp.checkpoint_id
+    assert result["git_commit"] == cp.git_commit[:8]
+    invalidation_ref = cast(str, result["invalidation_report_ref"])
+    rollback_ref = cast(str, result["rollback_record_ref"])
+    assert rt.services is not None
+    invalidation = rt.services.artifact_store.load_ref("proj-cp-restore-ok", invalidation_ref)
+    rollback = rt.services.artifact_store.load_ref("proj-cp-restore-ok", rollback_ref)
+    assert invalidation["rollback_target"] == cp.checkpoint_id
+    assert rollback["target_checkpoint_id"] == cp.checkpoint_id
 
 
 def test_rollback_artifact_specific_checkpoint_no_manager(

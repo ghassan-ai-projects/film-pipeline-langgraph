@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.agents.registry import AgentRegistry
@@ -12,7 +12,12 @@ from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.graph.nodes import _run_agent, _save_artifact, script_node
-from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.graph.services import (
+    _SERVICES_CTX,
+    SERVICES_KEY,
+    GraphServices,
+    _get_services,
+)
 from film_pipeline.schemas._base import (
     AgentFamily,
     AgentRole,
@@ -25,6 +30,17 @@ from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 from film_pipeline.schemas.script import Script
+
+
+def test_get_services_prefers_state_then_uses_context_fallback() -> None:
+    context_services = object()
+    state_services = object()
+    token = _SERVICES_CTX.set(cast(GraphServices, context_services))
+    try:
+        assert _get_services({}) is context_services
+        assert _get_services({SERVICES_KEY: state_services}) is state_services
+    finally:
+        _SERVICES_CTX.reset(token)
 
 
 def test_save_artifact_no_services(tmp_path: Path) -> None:

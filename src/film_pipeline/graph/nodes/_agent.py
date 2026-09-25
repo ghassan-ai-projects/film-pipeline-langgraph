@@ -30,9 +30,7 @@ from film_pipeline.graph.nodes._context import (
     _inject_config_context,
     _model_overrides_for,
 )
-from film_pipeline.graph.nodes._shared import (
-    _get_services,
-)
+from film_pipeline.graph.services import _get_services
 
 if TYPE_CHECKING:
     from film_pipeline.agents.base import BaseAgent

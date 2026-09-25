@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from film_pipeline.app.graph_factory import build_graph
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.graph import build_graph
 from film_pipeline.graph.nodes import (
     approve_phase_node,
     intake_node,

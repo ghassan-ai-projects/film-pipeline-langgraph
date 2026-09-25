@@ -20,20 +20,20 @@ from film_pipeline.graph.orchestrator_state import (
     get_approved_refs,
     get_candidate_refs,
 )
-from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.graph.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
 
 
 @pytest.fixture(autouse=True)
 def _reset_services_contextvar() -> Any:
     """Reset the services ContextVar so it never leaks between tests."""
-    token = nodes._SERVICES_CTX.set(None)
+    token = _SERVICES_CTX.set(None)
     yield
-    nodes._SERVICES_CTX.reset(token)
+    _SERVICES_CTX.reset(token)
 
 
 def _mock_state(**extra: Any) -> dict[str, Any]:
     svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
-    nodes._SERVICES_CTX.set(svc)
+    _SERVICES_CTX.set(svc)
     state: dict[str, Any] = {
         "project_id": "d009-regression",
         "idea": "A lighthouse keeper who mails letters to the future.",

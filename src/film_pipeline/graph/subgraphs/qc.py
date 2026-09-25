@@ -77,7 +77,7 @@ def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
     """Run a single validator in parallel and append its report to the raw channel."""
-    from film_pipeline.graph.nodes import _get_services
+    from film_pipeline.graph.services import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
@@ -171,7 +171,7 @@ def _load_artifact_for_validator(
     """
     from copy import deepcopy
 
-    from film_pipeline.graph.nodes import _get_services
+    from film_pipeline.graph.services import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
@@ -254,7 +254,7 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     only produce reports) and translates validator findings into issues so
     the approval gate sees them.
     """
-    from film_pipeline.graph.nodes import _require_human_approval
+    from film_pipeline.graph.orchestrator_state import _require_human_approval
 
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []

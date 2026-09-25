@@ -35,7 +35,7 @@ def _load_brief_from_state(state: dict[str, Any]) -> ExecutionBrief | None:
 
 def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     """Load the ExecutionBrief from the artifact store."""
-    from film_pipeline.graph.nodes import _get_services
+    from film_pipeline.graph.services import _get_services
 
     services = _get_services(state)
     if services is None:
@@ -176,14 +176,15 @@ def _story_bible_cross_check(
     story_bible_ref = str(state.get("story_bible_ref", ""))
     if not story_bible_ref:
         return []
-    from film_pipeline.graph.nodes import _get_services, _parse_ref
+    from film_pipeline.graph.services import _get_services
     from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.artifact import ArtifactRef
 
     services = _get_services(state)
     if services is None:
         return []
     try:
-        parsed = _parse_ref(story_bible_ref)
+        parsed = ArtifactRef.from_string(story_bible_ref)
         bible_data = services.artifact_store.load(
             str(state.get("project_id", "")),
             FilmPhase(parsed.phase),

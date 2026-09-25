@@ -5,7 +5,7 @@ this table — never from local literals — so planner prompts advertise exactl
 what adapters bill. Mock providers are explicit zero-cost pricing entries, so
 they cannot be confused with an unknown provider during planning.
 
-Known limitation (recorded deliberately): ``factory._default_cost_profile``
+Known limitation (recorded deliberately): ``app._provider_factory._default_cost_profile``
 reports the standard tier because it has no model in hand; per-tier honesty
 lives in ``rate_for(provider_id, model)`` and the prompt block.
 """
@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.providers.adapters.imagen4_gemini import Imagen4GeminiProvider
-from film_pipeline.providers.adapters.seedance_openrouter import SeedanceOpenRouterProvider
-from film_pipeline.providers.adapters.veo_fast import VeoFastProvider
+from film_pipeline.providers.adapters import (
+    Imagen4GeminiProvider,
+    SeedanceOpenRouterProvider,
+    VeoFastProvider,
+)
 from film_pipeline.providers.pricing import (
     PROVIDER_PRICING,
     pricing_prompt_block,
@@ -141,14 +143,6 @@ class TestAdapterPricingParity:
             unit = unit_for(provider_id)
             expected = expected_rate if unit == "image" else round(10.0 * expected_rate, 6)
             assert billed == pytest.approx(expected), f"model={model!r}"
-
-    def test_factory_uses_standard_catalog_rate_for_default_entry(self) -> None:
-        from film_pipeline.providers.factory import build_provider_adapter
-
-        adapter = build_provider_adapter(
-            "gemini-imagen-4", provider_type="image", models=["imagen-4.0-generate-001"]
-        )
-        assert adapter.entry.cost_profile.estimated_rate_usd == 0.05
 
 
 class TestPromptBlock:

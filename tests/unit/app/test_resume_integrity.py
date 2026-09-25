@@ -23,6 +23,7 @@ from film_pipeline.app._resume import (
     _strip_stale_generation_request_blockers,
 )
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.graph.services import _SERVICES_CTX, GraphServices, _get_services
 
 
 class _FakeSnapshot:
@@ -109,15 +110,21 @@ def test_generic_resume_failure_raises_and_audits(
         invoke_error=RuntimeError("boom"),
     )
     _patch_graph(monkeypatch, graph)
-    with pytest.raises(RuntimeError, match="boom"):
-        _graph_exec._resume_after_approval(rt, _active(), "script")
-    events = _audit(rt, "resume_failed")
-    assert len(events) == 1
-    event = events[0]
-    assert event["actor"] == "system"
-    assert event["details"]["error"] == "RuntimeError"
-    assert event["details"]["project_id"] == "p1"
-    assert event["details"]["phase"] == "script"
+    previous_services = object()
+    token = _SERVICES_CTX.set(cast(GraphServices, previous_services))
+    try:
+        with pytest.raises(RuntimeError, match="boom"):
+            _graph_exec._resume_after_approval(rt, _active(), "script")
+        assert _get_services({}) is previous_services
+        events = _audit(rt, "resume_failed")
+        assert len(events) == 1
+        event = events[0]
+        assert event["actor"] == "system"
+        assert event["details"]["error"] == "RuntimeError"
+        assert event["details"]["project_id"] == "p1"
+        assert event["details"]["phase"] == "script"
+    finally:
+        _SERVICES_CTX.reset(token)
 
 
 def test_successful_resume_returns_state_without_failure_audit(
@@ -184,7 +191,7 @@ def test_real_graph_recovers_failed_start_and_reaches_approval(
     from langgraph.errors import InvalidUpdateError
     from langgraph.types import Command
 
-    from film_pipeline.graph import graph as graph_module
+    from film_pipeline.app import graph_factory as graph_module
 
     reached_repair: list[bool] = []
 

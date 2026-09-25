@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
+from film_pipeline.app.graph_factory import build_graph
 from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.graph import build_graph
 from film_pipeline.graph.nodes import (
     approve_phase_node,
     constitution_node,

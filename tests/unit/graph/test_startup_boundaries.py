@@ -18,28 +18,129 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 _GRAPH_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "graph"
 
 _FORBIDDEN_ROOTS = ("film_pipeline.testing", "film_pipeline.app")
+
+
+def _imported_modules(tree: ast.Module, current_package: str) -> set[str]:
+    """Resolve module paths named by absolute and relative import statements."""
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name for alias in node.names)
+            continue
+        if not isinstance(node, ast.ImportFrom):
+            continue
+
+        if node.level:
+            package_parts = current_package.split(".")
+            base_parts = package_parts[: len(package_parts) - (node.level - 1)]
+            if node.module:
+                base_parts.extend(node.module.split("."))
+            base_module = ".".join(base_parts)
+        else:
+            base_module = node.module or ""
+
+        if base_module:
+            imported.add(base_module)
+        for alias in node.names:
+            if alias.name != "*" and base_module:
+                imported.add(f"{base_module}.{alias.name}")
+    return imported
+
+
+def _module_path(path: Path) -> tuple[str, str]:
+    """Return a Python module path and its package for a graph source file."""
+    relative = path.relative_to(_GRAPH_DIR.parent.parent)
+    parts = list(relative.with_suffix("").parts)
+    if parts[-1] == "__init__":
+        parts.pop()
+        module = ".".join(parts)
+        return module, module
+    module = ".".join(parts)
+    return module, module.rpartition(".")[0]
+
+
+def _imports_forbidden(imported: set[str], roots: tuple[str, ...]) -> list[str]:
+    return sorted(
+        module
+        for module in imported
+        if any(module == root or module.startswith(f"{root}.") for root in roots)
+    )
 
 
 def test_graph_package_never_imports_testing_or_app() -> None:
     """AST sweep over every graph module, including lazy function-body imports."""
     offenders: list[str] = []
     for path in sorted(_GRAPH_DIR.rglob("*.py")):
+        module, package = _module_path(path)
         tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith(_FORBIDDEN_ROOTS):
-                        offenders.append(f"{path.name}:{node.lineno} import {alias.name}")
-            elif (
-                isinstance(node, ast.ImportFrom)
-                and node.module
-                and node.module.startswith(_FORBIDDEN_ROOTS)
-            ):
-                offenders.append(f"{path.name}:{node.lineno} from {node.module} import ...")
+        for imported in _imports_forbidden(_imported_modules(tree, package), _FORBIDDEN_ROOTS):
+            offenders.append(f"{module} imports {imported}")
     assert not offenders, "forbidden graph imports:\n" + "\n".join(offenders)
+
+
+def test_graph_composition_imports_remain_one_way() -> None:
+    """Keep graph composition and its validators/subgraphs from reaching into nodes."""
+    offenders: list[str] = []
+    for path in sorted(_GRAPH_DIR.rglob("*.py")):
+        relative = path.relative_to(_GRAPH_DIR)
+        module, package = _module_path(path)
+        roots: tuple[str, ...] = ()
+        if len(relative.parts) == 1:
+            roots = ("film_pipeline.graph.nodes", "film_pipeline.graph.subgraphs")
+        elif relative.parts[0] in {"orchestrator_validators", "subgraphs"}:
+            roots = ("film_pipeline.graph.nodes",)
+        if not roots:
+            continue
+        tree = ast.parse(path.read_text())
+        for imported in _imports_forbidden(_imported_modules(tree, package), roots):
+            offenders.append(f"{module} imports {imported}")
+    assert not offenders, "forbidden graph ownership imports:\n" + "\n".join(offenders)
+
+
+@pytest.mark.parametrize(
+    ("source", "package", "expected"),
+    [
+        (
+            "from film_pipeline.graph.nodes._shared import helper",
+            "film_pipeline.graph",
+            {"film_pipeline.graph.nodes._shared", "film_pipeline.graph.nodes._shared.helper"},
+        ),
+        (
+            "from film_pipeline.graph import nodes as node_package",
+            "film_pipeline.app",
+            {"film_pipeline.graph", "film_pipeline.graph.nodes"},
+        ),
+        (
+            "from . import nodes as node_package",
+            "film_pipeline.graph",
+            {"film_pipeline.graph", "film_pipeline.graph.nodes"},
+        ),
+        (
+            "from .. import nodes as node_package",
+            "film_pipeline.graph.subgraphs",
+            {"film_pipeline.graph", "film_pipeline.graph.nodes"},
+        ),
+        (
+            "from .nodes import helper",
+            "film_pipeline.graph.orchestrator_validators",
+            {
+                "film_pipeline.graph.orchestrator_validators.nodes",
+                "film_pipeline.graph.orchestrator_validators.nodes.helper",
+            },
+        ),
+    ],
+)
+def test_import_resolver_covers_absolute_relative_and_reexport_forms(
+    source: str, package: str, expected: set[str]
+) -> None:
+    """The ownership guard resolves module paths, not only literal AST module fields."""
+    tree = ast.parse(source)
+    assert _imported_modules(tree, package) == expected
 
 
 def test_mock_service_construction_imports_no_testing_modules() -> None:

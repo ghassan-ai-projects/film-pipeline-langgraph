@@ -43,7 +43,7 @@ def seed_default_provider_adapters(rt: StudioRuntime) -> None:
     Project profiles can replace these via ``register_provider``; seeding
     only fills providers that are not registered yet.
     """
-    from film_pipeline.providers.factory import build_provider_adapter
+    from film_pipeline.app._provider_factory import build_provider_adapter
 
     specs: tuple[tuple[str, str], ...]
     if rt.server_mode == "real":

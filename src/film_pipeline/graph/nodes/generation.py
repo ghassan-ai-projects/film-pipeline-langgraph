@@ -13,12 +13,11 @@ from film_pipeline.graph.nodes._generation_batch_planning import (
     _plan_generation_ledger,
 )
 from film_pipeline.graph.nodes._shared import (
-    _get_services,
     _is_new_issue,
     _is_new_ref,
     _phase_gate_updates,
 )
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.graph.services import GraphServices, _get_services
 from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 
 

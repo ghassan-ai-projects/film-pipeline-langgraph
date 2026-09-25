@@ -136,10 +136,10 @@ class HeadlessDriver:
         Raises ``HeadlessDriverError`` if the target is not reached within
         ``max_phase_iterations`` or a tool error blocks progress.
         """
-        from film_pipeline.graph.router import PHASE_ORDER
+        from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
 
         try:
-            target_index = PHASE_ORDER.index(self.target_phase)
+            target_index = PHASE_SEQUENCE.index(self.target_phase)
         except ValueError as exc:
             raise HeadlessDriverError(f"Unknown target phase: {self.target_phase}") from exc
 
@@ -176,10 +176,10 @@ class HeadlessDriver:
         """
         state = dict(self._active_state())
         current_phase = str(state.get("current_phase", ""))
-        from film_pipeline.graph.router import PHASE_ORDER
+        from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
 
         if _phase_order_index(current_phase) > target_index:
-            state["current_phase"] = PHASE_ORDER[target_index]
+            state["current_phase"] = PHASE_SEQUENCE[target_index]
             state["approved"] = True
             state["human_approval_required"] = False
         return state
@@ -207,11 +207,11 @@ class HeadlessDriver:
 
 
 def _phase_order_index(phase: str) -> int:
-    """Return the position of ``phase`` in ``PHASE_ORDER``, or -1 when unknown."""
-    from film_pipeline.graph.router import PHASE_ORDER
+    """Return the position of ``phase`` in the sequence, or -1 when unknown."""
+    from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
 
     try:
-        return PHASE_ORDER.index(phase)
+        return PHASE_SEQUENCE.index(phase)
     except ValueError:
         return -1
 

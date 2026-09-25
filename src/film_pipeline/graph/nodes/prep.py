@@ -19,10 +19,10 @@ from film_pipeline.graph.nodes._shared import (
     _coerce_user_runtime,
     _critical_context_issues,
     _extract_target_scene_count,
-    _get_services,
     _is_new_issue,
     _phase_gate_updates,
 )
+from film_pipeline.graph.services import _get_services
 from film_pipeline.schemas.constraints import ProjectConstraints
 
 _logger = logging.getLogger(__name__)

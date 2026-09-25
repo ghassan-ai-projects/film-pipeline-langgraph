@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.graph.router import PHASE_ORDER
+from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
 
 _STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
 
@@ -28,8 +28,8 @@ def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
     current_phase = str(state.get("current_phase", ""))
     if current_phase == previous_phase:
         return False
-    if current_phase in PHASE_ORDER and previous_phase in PHASE_ORDER:
-        return PHASE_ORDER.index(current_phase) > PHASE_ORDER.index(previous_phase)
+    if current_phase in PHASE_SEQUENCE and previous_phase in PHASE_SEQUENCE:
+        return PHASE_SEQUENCE.index(current_phase) > PHASE_SEQUENCE.index(previous_phase)
     return bool(current_phase)
 
 

@@ -17,11 +17,9 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.app.services import OperatorService
 from film_pipeline.artifacts.registry import sanitize_artifact_id
-from film_pipeline.config.profile_resolver import (
-    register_project_providers,
-    resolve_project_config,
-)
+from film_pipeline.config.profile_resolver import resolve_project_config
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
@@ -126,7 +124,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    register_project_providers(rt, new_stack, _resolved_raw(resolved))
+    OperatorService(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack

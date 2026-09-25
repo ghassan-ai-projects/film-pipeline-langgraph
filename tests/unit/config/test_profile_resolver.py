@@ -2,17 +2,45 @@
 
 from __future__ import annotations
 
+import ast
+from pathlib import Path
 from typing import Any, cast
-
-import pytest
 
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
-    missing_provider_credentials,
     provider_specs,
     provider_specs_from_raw,
     resolve_project_config,
 )
+
+
+def _import_targets(node: ast.AST, package_parts: tuple[str, ...]) -> list[str]:
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    if not isinstance(node, ast.ImportFrom):
+        return []
+
+    if node.level:
+        parent_size = len(package_parts) - node.level + 1
+        base = package_parts[: max(parent_size, 0)]
+    else:
+        base = ()
+    module_parts = tuple(node.module.split(".")) if node.module else ()
+    imported_parts = (*base, *module_parts)
+    targets = [".".join(imported_parts)] if imported_parts else []
+    targets.extend(
+        ".".join((*imported_parts, *alias.name.split(".")))
+        for alias in node.names
+        if alias.name != "*"
+    )
+    return targets
+
+
+def _is_app_or_provider_import(module: str) -> bool:
+    return any(
+        module == forbidden or module.startswith(f"{forbidden}.")
+        for forbidden in ("film_pipeline.app", "film_pipeline.providers")
+    )
 
 
 def test_canonicalize_profile_stack_resolves_existing_profiles() -> None:
@@ -87,28 +115,33 @@ def test_provider_specs_uses_resolved_config_when_no_provider_profile() -> None:
     assert specs[0]["provider_id"] == "seedance-openrouter"
 
 
-def test_missing_provider_credentials_reports_unconfigured_providers(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("film_pipeline.providers.credentials.is_configured", lambda _: False)
-    stack = {"provider_profile": "mock-demo"}
-    resolved = resolve_project_config(stack)
-    missing = missing_provider_credentials(stack, cast(dict[str, object], resolved["raw"]))
-    # mock-demo uses mock providers which do not require credentials, so the list
-    # should be empty.
-    assert missing == []
+def test_profile_resolver_does_not_import_app_or_provider_modules() -> None:
+    src_root = Path(__file__).resolve().parents[3] / "src"
+    config_root = src_root / "film_pipeline/config"
+    violations: list[str] = []
+    for source_path in sorted(config_root.rglob("*.py")):
+        tree = ast.parse(source_path.read_text())
+        package_parts = source_path.relative_to(src_root).parts[:-1]
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+            for imported in _import_targets(node, package_parts):
+                if _is_app_or_provider_import(imported):
+                    violations.append(f"{source_path}:{node.lineno}: {imported}")
+
+    assert violations == []
 
 
-def test_missing_provider_credentials_reports_real_provider_without_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("film_pipeline.providers.credentials.is_configured", lambda _: False)
-    resolved_config: dict[str, Any] = {
-        "providers": {
-            "video": [{"provider_id": "seedance-openrouter", "models": []}],
-        }
-    }
-    missing = missing_provider_credentials({}, resolved_config)
-    assert len(missing) == 1
-    assert missing[0]["provider_id"] == "seedance-openrouter"
-    assert missing[0]["env_var"] == "OPENROUTER_API_KEY"
+def test_config_import_guard_resolves_relative_and_package_reexports() -> None:
+    package_parts = ("film_pipeline", "config")
+    relative_import = ast.parse("from ..providers import credentials").body[0]
+    package_reexport = ast.parse("from film_pipeline import providers").body[0]
+
+    assert any(
+        _is_app_or_provider_import(target)
+        for target in _import_targets(relative_import, package_parts)
+    )
+    assert any(
+        _is_app_or_provider_import(target)
+        for target in _import_targets(package_reexport, package_parts)
+    )

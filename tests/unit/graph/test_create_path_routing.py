@@ -80,14 +80,13 @@ def test_extraction_produces_execution_brief_through_full_lifecycle(
     tmp_path: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The DF-F2 causal chain end-to-end with mock services, no graph needed."""
-    from film_pipeline.graph import nodes as gn
     from film_pipeline.graph.nodes.visual import _ensure_execution_brief
-    from film_pipeline.graph.services import SERVICES_KEY
+    from film_pipeline.graph.services import _SERVICES_CTX, SERVICES_KEY
 
     svc = GraphServices.for_mock_runtime(
         artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
     )
-    token = gn._SERVICES_CTX.set(svc)
+    token = _SERVICES_CTX.set(svc)
     try:
         state: dict[str, Any] = {
             "project_id": "dff2-root-cause",
@@ -104,4 +103,4 @@ def test_extraction_produces_execution_brief_through_full_lifecycle(
         )
         assert state.get("execution_brief_ref")
     finally:
-        gn._SERVICES_CTX.reset(token)
+        _SERVICES_CTX.reset(token)
