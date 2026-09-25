@@ -54,11 +54,10 @@ ownership boundaries in `docs/modular-architecture/03-target-architecture.md`.
 not import each other directly — they communicate through `storage` (the owner
 of artifact identity and layout).
 
-All eight target modules now exist and own their concerns: `filmspec`,
-`storage`, `projects`, `operations`, `governance`, `orchestration`, `studio`,
-`budget`, and `devharness`. The older names `artifacts`, `graph`, `review`,
-and `app` survive only as compatibility shims that re-export their owner, so
-existing consumer imports keep resolving. `testing` is fully retired.
+The migration is complete: every package under `src/film_pipeline/` is a target
+module that owns its concern. The pre-migration names — `artifacts`, `graph`,
+`review`, `testing`, and `app` — have been removed along with their
+compatibility shims, and all consumers import the owners directly.
 
 | Sub-package | Phase | Notes |
 |-------------|-------|-------|
@@ -81,10 +80,10 @@ existing consumer imports keep resolving. `testing` is fully retired.
 | `studio` | — | Composition root; formerly `app` |
 | `devharness` | — | Test doubles and scenarios; formerly `testing` |
 
-Compatibility shims that still exist: `artifacts`, `graph`, `review`, `app`,
-and `app/services`. They are migration scaffolding, not owners; do not add new
-code to them. Removing them is pending consumer migration and is tracked in
-`docs/modular-architecture/implementation-progress.md`.
+The former owners map to their replacements as follows: `artifacts` ->
+`storage`, `graph` -> `orchestration` (with the gate law and validators in
+`governance`), `review` -> `governance`, `testing` -> `devharness`, and `app` ->
+`studio` (with the operator surface in `operations`). Import the new names.
 
 ## Operating Rules
 

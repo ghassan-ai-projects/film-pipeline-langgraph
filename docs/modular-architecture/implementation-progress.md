@@ -140,6 +140,8 @@ Enola filter or threshold changed.
 
 | S-01b | Rename `app` -> `studio`; delete the moved-package `services/` (the operator surface already lives in `operations`); migrate the `langgraph.json` graph entry in the same change; add an `app` compatibility package; retarget 83 test files, the Makefile/README smoke paths, and three guards | Chose rename-over-move for the same reason as O-01; the entry-point migration is roadmap-scoped (W11) and must land with the rename so no commit leaves the configured graph unresolvable | PASS — full suite; `langgraph.json` entry resolves and carries a `graph` object; MCP server imports; shim identity probe | PASS — `make ci-check`; 2,233 passed / 8 skipped / 11 xfailed; 91.14% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `8c28bba` | Complete |
 
+| SHIM-01 | Remove every compatibility shim (`artifacts`, `graph`, `review`, `app`, `app/services` — 70 files); retarget all consumers to the owners; delete the ownership test that existed only to verify the `artifacts` shim | Predicted the depth cost would recover, and it did; two defects surfaced that the shims were hiding (`mcp/tools/__init__.pyi` pointed at a removed path; `helpers.py` returned `Any` through the lazy facade) | PASS — full suite including the 71 monkeypatch sites the lazy runtime facade serves | PASS — `make ci-check`; 2,172 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycles; `mcp` depth recovers 16 -> 15; advisories 56 -> 71, mostly findings re-keyed from shim paths to owner paths with identical fan-in/out | `ff5b8e2` | Complete |
+
 ### OP-02c — the remaining physical move
 
 **Done in OP-02c (`6b0cd34`).** The four operator modules now live in
@@ -148,6 +150,10 @@ Enola filter or threshold changed.
 cycle: `projects.classification` imports `operations.errors`, so an eager
 `OperatorService` import in the `operations` facade made `film_pipeline.mcp.server`
 unimportable; the facade now resolves it through a module `__getattr__`.
+
+**The tree now contains only target modules (SHIM-01 `ff5b8e2`).** No
+compatibility shim remains, so the former names (`artifacts`, `graph`,
+`review`, `testing`, `app`) no longer resolve.
 
 **All eight target modules now exist.** `storage` (ST-04), `projects` (P-02),
 `operations` (OP-02c), `governance` (G-04/G-05), `orchestration` (O-01),
