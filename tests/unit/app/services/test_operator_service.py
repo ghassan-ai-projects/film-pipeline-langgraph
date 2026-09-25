@@ -467,7 +467,7 @@ class TestOperatorService:
                 active=True,
             )
         )
-        write_manifest(manifest, root=service.runtime.services.artifact_store._root)
+        write_manifest(manifest, root=service.runtime.services.artifact_store.root)
 
         assert service.list_assets("assets") == [
             {

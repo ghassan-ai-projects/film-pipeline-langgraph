@@ -297,24 +297,37 @@ def test_list_assets_returns_entries(tmp_path: Path, monkeypatch: pytest.MonkeyP
                     kind="generated_clip",
                     shot_id="shot_0001",
                     scene_id="scene_01",
-                    path="projects/proj-assets-2/07-generated-assets/clip-001.mp4",
+                    take=2,
+                    path="media/scenes/scene_01/shot_0001/take-002.mp4",
+                    sha256="a" * 64,
                 ),
                 AssetEntry(
                     asset_id="frame-001",
                     kind="last_frame",
                     shot_id="shot_0001",
                     scene_id="scene_01",
-                    path="projects/proj-assets-2/07-generated-assets/frame-001.png",
+                    path="media/scenes/scene_01/shot_0001/take-002_last.png",
                 ),
             ],
         ),
-        root=rt.services.artifact_store._root,
+        root=rt.services.artifact_store.root,
     )
 
     result = asyncio.run(list_assets({}))
     assert result["ok"] is True
     assets = cast(list[dict[str, object]], result["assets"])
     assert len(assets) == 2
-    assert assets[0]["asset_id"] == "clip-001"
-    assert assets[0]["kind"] == "generated_clip"
+    # Contract (§5): every documented row field is surfaced, and paths
+    # stay project-relative (never absolute, never root-prefixed).
+    assert assets[0] == {
+        "asset_id": "clip-001",
+        "kind": "generated_clip",
+        "scene_id": "scene_01",
+        "shot_id": "shot_0001",
+        "take": 2,
+        "active": True,
+        "path": "media/scenes/scene_01/shot_0001/take-002.mp4",
+    }
     assert assets[1]["asset_id"] == "frame-001"
+    assert assets[1]["kind"] == "last_frame"
+    assert not str(assets[0]["path"]).startswith(("projects/", "/"))
