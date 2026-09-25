@@ -133,6 +133,12 @@ def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) 
     if storage is None or project_id not in rt.project_roots:
         return
     safe = {k: v for k, v in state.items() if not k.startswith("_services")}
+    # A key the state schema does not declare means a writer added state
+    # without a contract. Warn rather than raise: crash recovery must not fail
+    # on state content, but the drift must be visible.
+    undeclared = GraphStateSnapshot.check_state_keys(safe)
+    if undeclared:
+        _logger.warning("Graph state for %s carries undeclared keys: %s", project_id, undeclared)
     try:
         snapshot = GraphStateSnapshot(state=safe)
     except ValueError:
