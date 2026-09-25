@@ -23,9 +23,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectRecord(BaseModel):
-    """Typed project entry point persisted as ``project.json``."""
+    """Typed project entry point persisted as ``project.json``.
 
-    model_config = ConfigDict(extra="allow")
+    Frozen: a change produces a new record rather than mutating this one, so a
+    caller cannot silently alter persisted state through a shared reference.
+    """
+
+    model_config = ConfigDict(extra="allow", frozen=True)
 
     schema_version: int = 1
     project_id: str = ""

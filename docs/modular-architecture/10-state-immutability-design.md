@@ -121,6 +121,71 @@ immutability is the enforcement mechanism, not the solution.
 4. **Then** reassess `StudioRuntime` with the 16 state-only handlers already
    detached.
 
+## 6b. The experiment: what actually happened
+
+I ran the prototype rather than leaving it as a design argument. Three steps,
+each measured.
+
+**Step 1 — `frozen=True` on `ProjectRecord`.** Passed everything: mypy clean,
+2,184 tests green, CI exit 0, Enola exit 0. Verified directly that mutation is
+now rejected (`ValidationError`) and that `extra` keys still round-trip.
+
+That is the honest result: **the record was already immutable in practice.**
+Nothing in the codebase mutates a validated `ProjectRecord`. The immutability
+half of the idea was already true and is now enforced rather than assumed.
+
+**Step 2 — declare the three leaked keys** (`idea`, `constraints_hints`,
+`issues`). Also clean. Declaring them closes the field set without changing the
+on-disk format.
+
+**Step 3 — `extra="forbid"`.** **96 tests failed**, and the failure is the
+measurement I wanted. Pydantic reported up to 27 extra inputs per record. After
+a graph run, a live project state carries **28 keys** of which **17 are
+undeclared**:
+
+```
+_orchestrator__candidate_refs   _qc_raw_reports      _qc_reports
+_routing_decisions              artifact_refs        constraints
+constraints_ref                 film_type            generation_requests
+min_scene_count                 pacing_style         profile_ref
+scope_contract_ref              target_runtime_seconds
+target_scene_count              target_shot_count    validation_report_refs
+```
+
+That list is not incidental. It is almost exactly the split §5 predicted:
+
+| Kind | Keys | Should live in |
+|---|---|---|
+| Graph channels with reducers | `artifact_refs`, `generation_requests`, `validation_report_refs` | `orchestration` |
+| Private graph bookkeeping | `_orchestrator__candidate_refs`, `_qc_reports`, `_qc_raw_reports`, `_routing_decisions` | `orchestration` |
+| Derived values | `constraints`, `constraints_ref`, `film_type`, `min_scene_count`, `pacing_style`, `profile_ref`, `scope_contract_ref`, `target_*` | derived, not stored on the record |
+
+**All 17 are graph concerns leaking into the persisted project record.** None is
+operator intent; none is project identity.
+
+## 6c. What the experiment establishes
+
+The design question is answered, and not in the direction the original idea
+pointed:
+
+1. **Immutability was never the problem.** Applying it changed nothing because
+   the mutation was never happening on the validated record. It is still worth
+   keeping — it converts an unstated assumption into an enforced invariant — but
+   it is not the fix.
+
+2. **The leak is real, measured, and large.** 17 of 28 live keys are undeclared
+   graph state flowing into a project record. `extra="allow"` is what permits it.
+
+3. **The fix is a boundary, not a type.** The record must regain a closed field
+   set, and the 17 keys must be routed to their owners. That is precisely the
+   "name the authority, then make the writers honest" sequence proposed in `09`,
+   now backed by an empirical list instead of a census.
+
+4. **`extra="forbid"` is the acceptance test.** It fails 96 tests today. Each
+   failure is a key in the wrong place, so the count going to zero *is* the
+   migration's progress bar — and it cannot be gamed, because pydantic enforces
+   it.
+
 ## 7. Checked: the typed record already exists, and it is load-bearing
 
 The risk in §6 is smaller than it looked, because the work is partly done. I ran
