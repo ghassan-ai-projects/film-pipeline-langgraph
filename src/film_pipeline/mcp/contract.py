@@ -120,7 +120,7 @@ def make_registry() -> ToolRegistry:
 
     Importing this lazily avoids circular import problems at module load.
     """
-    from film_pipeline.mcp.tools import register_all_tools
+    from film_pipeline.mcp.registry import register_all_tools
 
     registry = ToolRegistry()
     register_all_tools(registry)

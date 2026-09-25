@@ -1,204 +1,110 @@
-"""Tool implementations and the registration entry point.
+"""Tool export facade with lazy handlers and the runtime injection hook.
 
-Every tool function takes a dict of arguments (including ``_envelope``) and
-returns a serializable dict result. Key tools are wired to the runtime
-backend; remaining tools return stubs pending full Phase 05+ wiring.
-
-This package was split from a single monolithic module into per-concern
-submodules. This file remains a thin facade so existing call sites
-(``from film_pipeline.mcp.tools import register_all_tools``) keep working
-unchanged.
+Handlers are imported on first use so registration never imports a tool package
+while that package is initializing. The public names and callable identities
+stay the same as the original eager facade.
 """
 
 from __future__ import annotations
 
-# NOTE: ``get_runtime`` must be bound on this package *before* importing
-# ``registry`` (and transitively every tool submodule). Submodules import
-# ``get_runtime`` back from this package (rather than directly from
-# ``film_pipeline.app.runtime``) so that tests which do
-# ``monkeypatch.setattr(film_pipeline.mcp.tools, "get_runtime", ...)``
-# continue to affect every tool function, exactly as they did when all
-# tools lived in this single module.
-from film_pipeline.app.runtime import get_runtime
+from importlib import import_module
+from typing import Any
 
-# Re-export every public tool function so ``from film_pipeline.mcp.tools
-# import <tool_name>`` keeps working for callers/tests that import tools
-# directly from the package, as they did before the split.
-from film_pipeline.mcp.tools.artifacts import (
-    inspect_artifact,
-    inspect_reference,
-    inspect_scene,
-    inspect_shot,
-    list_artifacts,
-    list_assets,
-    list_shots,
-)
-from film_pipeline.mcp.tools.assembly import (
-    approve_coverage_generation,
-    assemble_final_cut,
-    assemble_review_cut,
-    export_delivery_package,
-    inspect_coverage_group,
-    list_coverage_groups,
-    plan_coverage_group,
-)
-from film_pipeline.mcp.tools.audit import (
-    explain_agent_routing,
-    explain_kb_context,
-    explain_last_decision,
-    get_audit_log,
-)
-from film_pipeline.mcp.tools.bibles import (
-    generate_camera_bible,
-    generate_character_bible,
-    generate_environment_bible,
-    generate_shot_bible,
-    generate_style_bible,
-)
-from film_pipeline.mcp.tools.checkpoints import (
-    compare_versions,
-    create_checkpoint,
-    get_checkpoint,
-    get_invalidation_report,
-    list_artifact_versions,
-    list_checkpoints,
-    rollback_artifact,
-    rollback_to_checkpoint,
-)
-from film_pipeline.mcp.tools.config import (
-    approve_profile_change,
-    get_runtime_mode,
-    inspect_profile,
-    list_profiles,
-    propose_profile_change,
-)
-from film_pipeline.mcp.tools.generation import (
-    approve_generation_spend,
-    cancel_generation_request,
-    get_generation_status,
-    list_active_generations,
-    plan_generation_batch,
-    preview_generation_prompts,
-    promote_test_to_production,
-    resume_generation_polling,
-    start_generation_batch,
-)
-from film_pipeline.mcp.tools.intake import approve_intake, get_intake_analysis, submit_idea
-from film_pipeline.mcp.tools.kb import (
-    kb_explain_context_choice,
-    kb_get_context_packet,
-    kb_get_item,
-    kb_search,
-)
-from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
-from film_pipeline.mcp.tools.planning import generate_plan, initialize_budget
-from film_pipeline.mcp.tools.projects import (
-    create_film_project,
-    find_project,
-    get_active_project,
-    get_project_summary,
-    list_projects,
-    set_active_project,
-)
-from film_pipeline.mcp.tools.providers import (
-    check_provider_health,
-    list_providers,
-    resolve_provider_block,
-)
-from film_pipeline.mcp.tools.reference_generation import generate_reference_images
-from film_pipeline.mcp.tools.registry import register_all_tools
-from film_pipeline.mcp.tools.review import approve_phase, request_revision, review_phase_artifacts
-from film_pipeline.mcp.tools.state import (
-    get_blockers,
-    get_current_phase,
-    get_film_state,
-    get_next_actions,
-    get_orchestrator_summary,
-)
-from film_pipeline.mcp.tools.validation import (
-    get_validation_report,
-    list_validation_issues,
-    run_validation,
-)
+from film_pipeline.app.runtime import get_runtime as get_runtime
 
-__all__ = [
-    "add_operator_comment",
-    "approve_coverage_generation",
-    "approve_generation_spend",
-    "approve_intake",
-    "approve_phase",
-    "approve_profile_change",
-    "assemble_final_cut",
-    "assemble_review_cut",
-    "cancel_generation_request",
-    "check_provider_health",
-    "compare_versions",
-    "create_checkpoint",
-    "create_film_project",
-    "explain_agent_routing",
-    "explain_kb_context",
-    "explain_last_decision",
-    "export_delivery_package",
-    "find_project",
-    "generate_camera_bible",
-    "generate_character_bible",
-    "generate_environment_bible",
-    "generate_plan",
-    "generate_reference_images",
-    "generate_shot_bible",
-    "generate_style_bible",
-    "get_active_project",
-    "get_audit_log",
-    "get_blockers",
-    "get_checkpoint",
-    "get_current_phase",
-    "get_film_state",
-    "get_generation_status",
-    "get_intake_analysis",
-    "get_invalidation_report",
-    "get_next_actions",
-    "get_orchestrator_summary",
-    "get_project_summary",
-    "get_runtime",
-    "get_runtime_mode",
-    "get_validation_report",
-    "initialize_budget",
-    "inspect_artifact",
-    "inspect_coverage_group",
-    "inspect_profile",
-    "inspect_reference",
-    "inspect_scene",
-    "inspect_shot",
-    "kb_explain_context_choice",
-    "kb_get_context_packet",
-    "kb_get_item",
-    "kb_search",
-    "list_active_generations",
-    "list_artifact_versions",
-    "list_artifacts",
-    "list_assets",
-    "list_checkpoints",
-    "list_coverage_groups",
-    "list_operator_comments",
-    "list_profiles",
-    "list_projects",
-    "list_providers",
-    "list_shots",
-    "list_validation_issues",
-    "plan_coverage_group",
-    "plan_generation_batch",
-    "preview_generation_prompts",
-    "promote_test_to_production",
-    "propose_profile_change",
-    "register_all_tools",
-    "request_revision",
-    "resolve_provider_block",
-    "resume_generation_polling",
-    "review_phase_artifacts",
-    "rollback_artifact",
-    "rollback_to_checkpoint",
-    "run_validation",
-    "set_active_project",
-    "start_generation_batch",
-    "submit_idea",
-]
+_TOOL_MODULES: dict[str, str] = {
+    "add_operator_comment": "film_pipeline.mcp.tools.operator",
+    "approve_coverage_generation": "film_pipeline.mcp.tools.assembly",
+    "approve_generation_spend": "film_pipeline.mcp.tools.generation",
+    "approve_intake": "film_pipeline.mcp.tools.intake",
+    "approve_phase": "film_pipeline.mcp.tools.review",
+    "approve_profile_change": "film_pipeline.mcp.tools.config",
+    "assemble_final_cut": "film_pipeline.mcp.tools.assembly",
+    "assemble_review_cut": "film_pipeline.mcp.tools.assembly",
+    "cancel_generation_request": "film_pipeline.mcp.tools.generation",
+    "check_provider_health": "film_pipeline.mcp.tools.providers",
+    "compare_versions": "film_pipeline.mcp.tools.checkpoints",
+    "create_checkpoint": "film_pipeline.mcp.tools.checkpoints",
+    "create_film_project": "film_pipeline.mcp.tools.projects",
+    "explain_agent_routing": "film_pipeline.mcp.tools.audit",
+    "explain_kb_context": "film_pipeline.mcp.tools.audit",
+    "explain_last_decision": "film_pipeline.mcp.tools.audit",
+    "export_delivery_package": "film_pipeline.mcp.tools.assembly",
+    "find_project": "film_pipeline.mcp.tools.projects",
+    "generate_camera_bible": "film_pipeline.mcp.tools.bibles",
+    "generate_character_bible": "film_pipeline.mcp.tools.bibles",
+    "generate_environment_bible": "film_pipeline.mcp.tools.bibles",
+    "generate_plan": "film_pipeline.mcp.tools.planning",
+    "generate_reference_images": "film_pipeline.mcp.tools.reference_generation",
+    "generate_shot_bible": "film_pipeline.mcp.tools.bibles",
+    "generate_style_bible": "film_pipeline.mcp.tools.bibles",
+    "get_active_project": "film_pipeline.mcp.tools.projects",
+    "get_audit_log": "film_pipeline.mcp.tools.audit",
+    "get_blockers": "film_pipeline.mcp.tools.state",
+    "get_checkpoint": "film_pipeline.mcp.tools.checkpoints",
+    "get_current_phase": "film_pipeline.mcp.tools.state",
+    "get_film_state": "film_pipeline.mcp.tools.state",
+    "get_generation_status": "film_pipeline.mcp.tools.generation",
+    "get_intake_analysis": "film_pipeline.mcp.tools.intake",
+    "get_invalidation_report": "film_pipeline.mcp.tools.checkpoints",
+    "get_next_actions": "film_pipeline.mcp.tools.state",
+    "get_orchestrator_summary": "film_pipeline.mcp.tools.state",
+    "get_project_summary": "film_pipeline.mcp.tools.projects",
+    "get_runtime_mode": "film_pipeline.mcp.tools.config",
+    "get_validation_report": "film_pipeline.mcp.tools.validation",
+    "initialize_budget": "film_pipeline.mcp.tools.planning",
+    "inspect_artifact": "film_pipeline.mcp.tools.artifacts",
+    "inspect_coverage_group": "film_pipeline.mcp.tools.assembly",
+    "inspect_profile": "film_pipeline.mcp.tools.config",
+    "inspect_reference": "film_pipeline.mcp.tools.artifacts",
+    "inspect_scene": "film_pipeline.mcp.tools.artifacts",
+    "inspect_shot": "film_pipeline.mcp.tools.artifacts",
+    "kb_explain_context_choice": "film_pipeline.mcp.tools.kb",
+    "kb_get_context_packet": "film_pipeline.mcp.tools.kb",
+    "kb_get_item": "film_pipeline.mcp.tools.kb",
+    "kb_search": "film_pipeline.mcp.tools.kb",
+    "list_active_generations": "film_pipeline.mcp.tools.generation",
+    "list_artifact_versions": "film_pipeline.mcp.tools.checkpoints",
+    "list_artifacts": "film_pipeline.mcp.tools.artifacts",
+    "list_assets": "film_pipeline.mcp.tools.artifacts",
+    "list_checkpoints": "film_pipeline.mcp.tools.checkpoints",
+    "list_coverage_groups": "film_pipeline.mcp.tools.assembly",
+    "list_operator_comments": "film_pipeline.mcp.tools.operator",
+    "list_profiles": "film_pipeline.mcp.tools.config",
+    "list_projects": "film_pipeline.mcp.tools.projects",
+    "list_providers": "film_pipeline.mcp.tools.providers",
+    "list_shots": "film_pipeline.mcp.tools.artifacts",
+    "list_validation_issues": "film_pipeline.mcp.tools.validation",
+    "plan_coverage_group": "film_pipeline.mcp.tools.assembly",
+    "plan_generation_batch": "film_pipeline.mcp.tools.generation",
+    "preview_generation_prompts": "film_pipeline.mcp.tools.generation",
+    "promote_test_to_production": "film_pipeline.mcp.tools.generation",
+    "propose_profile_change": "film_pipeline.mcp.tools.config",
+    "register_all_tools": "film_pipeline.mcp.registry",
+    "request_revision": "film_pipeline.mcp.tools.review",
+    "resolve_provider_block": "film_pipeline.mcp.tools.providers",
+    "resume_generation_polling": "film_pipeline.mcp.tools.generation",
+    "review_phase_artifacts": "film_pipeline.mcp.tools.review",
+    "rollback_artifact": "film_pipeline.mcp.tools.checkpoints",
+    "rollback_to_checkpoint": "film_pipeline.mcp.tools.checkpoints",
+    "run_validation": "film_pipeline.mcp.tools.validation",
+    "set_active_project": "film_pipeline.mcp.tools.projects",
+    "start_generation_batch": "film_pipeline.mcp.tools.generation",
+    "submit_idea": "film_pipeline.mcp.tools.intake",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _TOOL_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(name)
+    value = getattr(import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | set(_TOOL_MODULES))
+
+
+__all__ = sorted((*_TOOL_MODULES, "get_runtime"))

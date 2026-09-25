@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
+from film_pipeline.filmspec import PHASE_SEQUENCE
 
 _STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
 

@@ -16,6 +16,9 @@ from film_pipeline.app.graph_factory import (
     build_graph,
 )
 from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.filmspec import PHASE_SEQUENCE as CANONICAL_PHASE_SEQUENCE
+from film_pipeline.filmspec import FilmPhase as CanonicalFilmPhase
+from film_pipeline.filmspec import next_phase as canonical_next_phase
 from film_pipeline.graph.edges import after_approval
 from film_pipeline.graph.nodes._repair_loop import _PHASE_NODES
 from film_pipeline.graph.phase_sequence import (
@@ -47,6 +50,9 @@ def test_phase_order_preserves_the_serialized_workflow() -> None:
     assert expected == PHASE_ORDER
     assert [phase.value for phase in FilmPhase] == list(PHASE_SEQUENCE)
     assert PUBLIC_PHASE_ORDER is PHASE_ORDER
+    assert FilmPhase is CanonicalFilmPhase
+    assert PHASE_SEQUENCE is CANONICAL_PHASE_SEQUENCE
+    assert next_phase is canonical_next_phase
 
 
 def test_legacy_list_mutation_does_not_change_internal_sequence() -> None:

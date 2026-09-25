@@ -12,8 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from film_pipeline.filmspec import next_phase
 from film_pipeline.graph import orchestrator_state as ostate
-from film_pipeline.graph.phase_sequence import next_phase
 from film_pipeline.schemas._base import ValidationStatus
 
 # Actions that can operate in any phase regardless of provider health

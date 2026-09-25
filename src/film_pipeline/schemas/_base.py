@@ -11,6 +11,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from film_pipeline.filmspec import FilmPhase as FilmPhase
+
 # --- Enums used across the studio -----------------------------------------
 
 
@@ -72,22 +74,6 @@ class ArtifactType(StrEnum):
     FINAL_CUT = "final_cut"
     DELIVERY_PACKAGE = "delivery_package"
     SUBTITLE = "subtitle"
-
-
-class FilmPhase(StrEnum):
-    """The canonical production phases of a film."""
-
-    INTAKE = "intake"
-    CONSTITUTION = "constitution"
-    DEVELOPMENT = "development"
-    SCRIPT = "script"
-    VISUAL_DEV = "visual_dev"
-    SHOT_BIBLE = "shot_bible"
-    GEN_PLANNING = "gen_planning"
-    GENERATION = "generation"
-    QC = "qc"
-    POST = "post"
-    DELIVERY = "delivery"
 
 
 class AgentRole(StrEnum):

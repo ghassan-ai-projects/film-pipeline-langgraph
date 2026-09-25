@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import next_phase
 from film_pipeline.graph.orchestrator_state import is_stalled
-from film_pipeline.graph.phase_sequence import next_phase
 from film_pipeline.graph.router import compute_actions
 
 

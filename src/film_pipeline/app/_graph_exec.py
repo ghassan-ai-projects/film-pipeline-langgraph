@@ -21,7 +21,7 @@ from film_pipeline.app._resume import (
     _strip_stale_generation_request_blockers,
 )
 from film_pipeline.artifacts.project_storage import graph_state_location
-from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE, next_phase
+from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
 from film_pipeline.graph.services import _SERVICES_CTX
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot

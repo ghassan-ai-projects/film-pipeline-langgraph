@@ -8,8 +8,7 @@ from film_pipeline.mcp.contract import (
     ToolHandler,
     ToolRegistry,
 )
-
-from .artifacts import (
+from film_pipeline.mcp.tools.artifacts import (
     inspect_artifact,
     inspect_reference,
     inspect_scene,
@@ -18,7 +17,7 @@ from .artifacts import (
     list_assets,
     list_shots,
 )
-from .assembly import (
+from film_pipeline.mcp.tools.assembly import (
     approve_coverage_generation,
     assemble_final_cut,
     assemble_review_cut,
@@ -27,20 +26,20 @@ from .assembly import (
     list_coverage_groups,
     plan_coverage_group,
 )
-from .audit import (
+from film_pipeline.mcp.tools.audit import (
     explain_agent_routing,
     explain_kb_context,
     explain_last_decision,
     get_audit_log,
 )
-from .bibles import (
+from film_pipeline.mcp.tools.bibles import (
     generate_camera_bible,
     generate_character_bible,
     generate_environment_bible,
     generate_shot_bible,
     generate_style_bible,
 )
-from .checkpoints import (
+from film_pipeline.mcp.tools.checkpoints import (
     compare_versions,
     create_checkpoint,
     get_checkpoint,
@@ -50,14 +49,14 @@ from .checkpoints import (
     rollback_artifact,
     rollback_to_checkpoint,
 )
-from .config import (
+from film_pipeline.mcp.tools.config import (
     approve_profile_change,
     get_runtime_mode,
     inspect_profile,
     list_profiles,
     propose_profile_change,
 )
-from .generation import (
+from film_pipeline.mcp.tools.generation import (
     approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
@@ -68,16 +67,16 @@ from .generation import (
     resume_generation_polling,
     start_generation_batch,
 )
-from .intake import approve_intake, get_intake_analysis, submit_idea
-from .kb import (
+from film_pipeline.mcp.tools.intake import approve_intake, get_intake_analysis, submit_idea
+from film_pipeline.mcp.tools.kb import (
     kb_explain_context_choice,
     kb_get_context_packet,
     kb_get_item,
     kb_search,
 )
-from .operator import add_operator_comment, list_operator_comments
-from .planning import generate_plan, initialize_budget
-from .projects import (
+from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
+from film_pipeline.mcp.tools.planning import generate_plan, initialize_budget
+from film_pipeline.mcp.tools.projects import (
     create_film_project,
     find_project,
     get_active_project,
@@ -85,17 +84,25 @@ from .projects import (
     list_projects,
     set_active_project,
 )
-from .providers import check_provider_health, list_providers, resolve_provider_block
-from .reference_generation import generate_reference_images
-from .review import approve_phase, request_revision, review_phase_artifacts
-from .state import (
+from film_pipeline.mcp.tools.providers import (
+    check_provider_health,
+    list_providers,
+    resolve_provider_block,
+)
+from film_pipeline.mcp.tools.reference_generation import generate_reference_images
+from film_pipeline.mcp.tools.review import approve_phase, request_revision, review_phase_artifacts
+from film_pipeline.mcp.tools.state import (
     get_blockers,
     get_current_phase,
     get_film_state,
     get_next_actions,
     get_orchestrator_summary,
 )
-from .validation import get_validation_report, list_validation_issues, run_validation
+from film_pipeline.mcp.tools.validation import (
+    get_validation_report,
+    list_validation_issues,
+    run_validation,
+)
 
 
 def _tool_contract(
