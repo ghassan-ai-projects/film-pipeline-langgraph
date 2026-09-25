@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.review.actions import AvailableActions, compute_available_actions
+from film_pipeline.governance.actions import AvailableActions, compute_available_actions
 
 
 class TestAvailableActions:

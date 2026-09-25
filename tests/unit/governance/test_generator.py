@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from film_pipeline.review.generator import REVIEW_TYPE_MAP, ReviewPackageGenerator
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.governance.generator import REVIEW_TYPE_MAP, ReviewPackageGenerator
+from film_pipeline.schemas.base import FilmPhase
 
 
 class TestGenerator:
