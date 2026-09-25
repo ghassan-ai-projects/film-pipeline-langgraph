@@ -111,6 +111,28 @@ own, because the 16 handlers that only want project state no longer need it, and
 the keys it persists are the ones it actually owns. Decomposition becomes a
 consequence of correct ownership rather than a goal pursued directly.
 
+## 5b. Progress: the boundary is now enforced
+
+Three rounds landed the parts of §5 that did not require deciding every key:
+
+| Round | Result |
+|---|---|
+| `7845834` | `project.json` no longer absorbs graph state: `persist_project_state` projects the state onto the record's declared fields. 28 live keys -> 11 persisted, from 14. |
+| `d079a5e` | `state/graph-state.json` enforces the state schema's declared shape. Every live key was already declared — zero drift — and the check now keeps it that way instead of leaving it unverified. |
+| `13fa190` | `config` owns the resolved-config projection. Three hand-built copies consolidated, which exposed a type defect they were hiding: the producer emits `sources` as a list, the schema declared a dict, and nothing reads it so nobody noticed. |
+
+The last one is the §2 finding fixed at its root: `resolved_config` now has a
+single writer in the module that owns the resolution, rather than three
+sites assigning the key directly.
+
+**What is still open.** The remaining shared keys from §2 — `issues`,
+`generation_requests`, `shot_matrix_ref`, `target_runtime_seconds`,
+`target_scene_count`, `visual_refs`, `idea` — are written by MCP and owned by
+nodes. Unlike `resolved_config` they are not obviously mis-placed: operator
+intent keys (`idea`, `target_*`) genuinely originate outside the graph and are
+*inputs* to it. They need the per-key authority decision §5 step 1 describes,
+which is a design call, not a mechanical consolidation.
+
 ## 6. Why this ordering matters
 
 Every failed attempt so far — my `ProviderRegistry` extraction, and to a lesser
