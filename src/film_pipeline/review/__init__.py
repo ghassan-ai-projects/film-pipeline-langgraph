@@ -7,7 +7,7 @@ available actions.
 
 from __future__ import annotations
 
-from film_pipeline.review.actions import AvailableActions, compute_available_actions
+from film_pipeline.governance.actions import AvailableActions, compute_available_actions
 from film_pipeline.review.diff import ArtifactDiff, compute_artifact_diff
 from film_pipeline.review.generator import REVIEW_TYPE_MAP, ReviewPackageGenerator
 
