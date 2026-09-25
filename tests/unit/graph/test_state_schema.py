@@ -65,11 +65,45 @@ class TestStudioGraphState:
         assert merged["idea"] == "test idea"
 
     def test_intake_node_returns_partial_update(self) -> None:
-        """intake_node returns only modified keys, not full state."""
-        # Verify the node function signature and that it returns a dict
+        """intake_node reports a partial update, not the whole state.
+
+        The graph merges a node's return value into the existing state, so a
+        node that echoed its entire input would overwrite channels it does not
+        own. Measured at this revision the node returns its phase-gate keys and
+        the derived constraints, and does not echo unrelated channels: the
+        ``unrelated_channel`` seeded here survives the merge untouched.
+
+        ``current_phase`` is returned unchanged, which is redundant under the
+        graph's merge but harmless, so it is recorded explicitly rather than
+        asserted away.
+        """
         from film_pipeline.graph.nodes import intake_node
 
-        assert callable(intake_node)
+        state: dict[str, object] = {
+            "project_id": "test",
+            "current_phase": "intake",
+            "idea": "a quiet film about a lighthouse keeper",
+            "unrelated_channel": "must survive the merge",
+        }
+        updates = intake_node(dict(state))
+
+        assert isinstance(updates, dict)
+        assert updates, "intake_node should report at least a phase update"
+        assert "unrelated_channel" not in updates, "the node echoed an unrelated channel"
+        assert set(updates) <= set(state) | {
+            "approved",
+            "human_approval_required",
+            "human_approval_phase",
+            "constraints",
+            "profile_ref",
+            "constraints_ref",
+            "artifact_refs",
+            "scope_contract",
+        }
+
+        merged = {**state, **updates}
+        assert merged["unrelated_channel"] == "must survive the merge"
+        assert merged["project_id"] == "test"
 
 
 class TestTypedStateKeys:

@@ -32,5 +32,11 @@ def test_default_checkpointer_returns_sqlite_when_persist_enabled(
 
 
 def test_build_graph_uses_supplied_checkpointer() -> None:
-    graph = build_graph(checkpointer=MemorySaver())
-    assert graph is not None
+    """A caller-supplied checkpointer is the one the compiled graph carries.
+
+    Asserting only that ``build_graph`` returned something would pass even if
+    the supplied saver were dropped in favour of the environment default.
+    """
+    supplied = MemorySaver()
+    graph = build_graph(checkpointer=supplied)
+    assert graph.checkpointer is supplied
