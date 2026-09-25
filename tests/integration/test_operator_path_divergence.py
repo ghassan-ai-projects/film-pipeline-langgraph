@@ -299,7 +299,7 @@ def test_mcp_rollback_uses_resolved_project(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import film_pipeline.mcp.tools as tools_pkg
-    import film_pipeline.mcp.tools.checkpoints as checkpoint_tools
+    from film_pipeline.checkpoints.rollback import RollbackManager
 
     runtime = _make_project_pair(tmp_path / "runtime")
     checkpoint = runtime.create_checkpoint(
@@ -308,18 +308,20 @@ def test_mcp_rollback_uses_resolved_project(
         reason="requested project rollback",
     )
     monkeypatch.setattr(tools_pkg, "get_runtime", lambda: runtime)
-    selected_projects: list[str] = []
+    selected_managers: list[object] = []
 
     def record_rollback(
-        _runtime: StudioRuntime,
-        project_id: str,
-        checkpoint_id: str,
-        _checkpoint: object,
-    ) -> dict[str, object]:
-        selected_projects.append(project_id)
-        return {"ok": True, "rollback_target": checkpoint_id, "phase": "qc"}
+        manager: RollbackManager,
+        _checkpoint_id: str,
+        *,
+        performed_by: str = "system",
+        artifact_types: list[str] | None = None,
+    ) -> tuple[object, object]:
+        del performed_by, artifact_types
+        selected_managers.append(manager.checkpoint_manager)
+        return None, None
 
-    monkeypatch.setattr(checkpoint_tools, "_run_checkpoint_rollback", record_rollback)
+    monkeypatch.setattr(RollbackManager, "rollback_to_checkpoint", record_rollback)
     server = MCPServer()
     server.register_project(
         ProjectRecord(
@@ -343,7 +345,7 @@ def test_mcp_rollback_uses_resolved_project(
     assert response.success is True
     data = cast(dict[str, object], response.data)
     assert data["rollback_target"] == checkpoint.checkpoint_id
-    assert selected_projects == ["requested-project"]
+    assert selected_managers == [runtime.checkpoint_managers["requested-project"]]
 
 
 @pytest.mark.xfail(

@@ -651,3 +651,30 @@ class TestTextOnlyGeneration:
         assert workspace.completed == 1
         workspace = service.poll_generation("text-only-noop")
         assert workspace.completed == 1
+
+
+class TestCheckpointOperations:
+    def test_checkpoint_rollback_persists_bookkeeping(self, tmp_path: Path) -> None:
+        service = _service(tmp_path)
+        project_id = "checkpoint-service"
+        service.runtime.create_project(project_id, "Checkpoint Service")
+        checkpoint = service.runtime.create_checkpoint(
+            project_id=project_id,
+            phase="intake",
+            reason="service rollback target",
+        )
+
+        result = service.rollback_to_checkpoint(checkpoint, project_id)
+
+        assert result.rollback_target == checkpoint.checkpoint_id
+        assert result.phase == "intake"
+        assert result.reason == "service rollback target"
+        assert result.invalidation_report_ref.startswith("artifact:")
+        assert result.rollback_record_ref.startswith("artifact:")
+        assert service.runtime.services is not None
+        saved_types = {
+            artifact.artifact_type
+            for artifact in service.runtime.services.artifact_store.list_artifacts(project_id)
+        }
+        assert ArtifactType.INVALIDATION_REPORT in saved_types
+        assert ArtifactType.ROLLBACK_RECORD in saved_types

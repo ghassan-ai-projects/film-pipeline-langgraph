@@ -26,7 +26,7 @@ direction and tested at consumer boundaries.
 |---|---|---|---|---|---|---|---|
 | G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | `62b3eea` | Complete |
 | O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Three independent lenses complete; all findings resolved | PASS — 14 passed / 11 strict xfailed; `--runxfail` confirms all 11 fail at their intended divergences | PASS — `make ci-check`; 2,022 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — clean against comparable baseline; no cycle findings changed | `8900416` | Complete |
-| R-01a | Honor resolved project IDs for approval, revision, validation, and checkpoint rollback without changing runtime active selection | Three lenses complete; boundary path and negative checkpoint case identified | Pending | Pending | Pending | Pending | Ready to implement |
+| R-01a | Migration only: move checkpoint rollback manager orchestration and bookkeeping from MCP tools into `OperatorService` / app services while preserving active-project selection, confirmation, errors, and response projection | Three independent final reviews pass; first-round findings addressed | PASS — 63 passed / 10 strict xfailed across checkpoint service, MCP checkpoint, and O-01 divergence suites | PASS — `make ci-check`; 2,023 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — docs-local snapshot baseline; clean, no cycle delta | Pending | In progress |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Queued | Pending | Pending | Pending | Pending | Queued |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Queued | Pending | Pending | Pending | Pending | Queued |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Queued | Pending | Pending | Pending | Pending | Queued |
@@ -37,25 +37,59 @@ direction and tested at consumer boundaries.
 
 ## R-01a plan
 
-- **Owner and consumers:** MCP resolves the public `project_ref`; app/runtime
-  executes approval and revision against explicit project state; MCP validation
-  keeps its frozen response projection while selecting the resolved project's
-  state; checkpoint rollback verifies checkpoint ownership before using that
-  project's manager. Calls without a project reference keep their current active
-  project fallback.
-- **Planned code and tests:** pass optional `project_id` through
-  `StudioRuntime.approve_phase` and `request_revision` into graph execution;
-  remove active-project switching from the matching `OperatorService` methods;
-  use `_require_project` in MCP validation; scope rollback and reject a
-  cross-project checkpoint; strengthen the existing two-project probes to use
-  the real revision path, assert active-project isolation, and cover mismatch
-  refusal. Keep MCP response keys stable.
+- **Owner and consumers:** MCP keeps confirmation, existing runtime-active (or
+  checkpoint-owner fallback) project selection, error mapping, and response
+  projection. `OperatorService` owns rollback use-case orchestration;
+  `app.services._checkpoint_ops` owns manager selection, rollback execution,
+  and invalidation/rollback artifact persistence. The runtime remains the
+  owner of checkpoint metadata and manager registries.
+- **Planned code and tests:** extract the MCP-local rollback helpers into the
+  app service without changing project-ref routing or any other operator
+  behavior. Keep checkpoint lookup global, as before. Retain the committed
+  O-01 strict xfails for deferred approval, revision, validation, and
+  project-targeting divergences. Add a service-level proof that a checkpoint
+  rollback returns its typed result and persists both bookkeeping artifacts;
+  retain the MCP contract tests for confirmation and response shape.
 - **Validation:** focused R-01a tests with `--no-cov -n 0`, full
   `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at least 90%), Enola against
   `docs/modular-architecture/enola-out`, and `git diff --check` before commit.
-- **Risks:** never route an explicit request by mutating the runtime's global
-  active-project pointer; an explicit target that is missing or does not own a
-  checkpoint must fail without falling back to another project's data.
+- **Migration exit bar:** rollback manager construction/calls and bookkeeping
+  persistence exist only in the app service; MCP contains confirmation and DTO
+  projection only; success/confirmation response projections remain unchanged;
+  all three independent reviewers approve the migration scope; full CI remains
+  above 90% coverage; Enola reports no structural regression or cycle delta.
+- **Deferred behavior:** request-scoped project targeting for approval,
+  revision, validation, and rollback; checkpoint cross-project mismatch
+  semantics; revision-note normalization at MCP; and the read-only
+  `get_invalidation_report` scope finding. These remain explicit follow-ups.
+
+## R-01a review record
+
+The previous draft bundled request-scoped behavior repairs with the extraction.
+At user direction, those edits were removed so this slice measures the
+migration alone. The three independent review lenses were app/MCP ownership,
+behavior preservation at the existing MCP contract, and implementation/test
+quality. Behavior findings outside the extraction are recorded as deferred
+rather than fixed in this slice.
+
+The first review round found: a new import from private `schemas._base`,
+redundant checkpoint reads on confirmed paths, and formatting/output-coverage
+gaps. These were addressed by importing from `film_pipeline.schemas`, passing
+the already-read typed checkpoint into rollback execution, skipping artifact
+preview reads on confirmed calls, and strengthening the existing artifact
+rollback success test to load both returned bookkeeping refs. The final
+boundary review found no ownership blocker; the behavior review confirmed
+normal-path parity; the quality review found no remaining actionable issue.
+Ruff, strict mypy, the full test suite, package build, product gate, and Enola
+all pass. Enola policy status is clean against the docs-local snapshot, with
+the same five cycle findings and no cycle delta.
+
+One invalid-runtime-state edge is explicit: if `runtime.services` is missing,
+the app service now returns an actionable initialization error rather than
+MCP's former empty assertion message. Normal initialized runtime paths and
+their MCP output remain covered and unchanged. The read-only
+`get_invalidation_report` path and request-scoped routing divergences remain
+deferred as listed above.
 
 ## G-01 review record
 
