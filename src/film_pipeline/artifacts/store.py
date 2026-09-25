@@ -32,6 +32,7 @@ from film_pipeline.artifacts.envelope import (
     ArtifactCurrentMeta,
     ArtifactEnvelope,
     ChecksumMismatchError,
+    MutableRevisionMismatchError,
     SchemaTooNewError,
     payload_checksum,
 )
@@ -115,6 +116,13 @@ class ArtifactStore:
         file is the only copy.
         """
         validate_artifact_id(meta.artifact_id)
+        if meta.status is ArtifactStatus.SUPERSEDED:
+            raise ValueError(
+                f"Cannot save {meta.artifact_id} with status 'superseded': the "
+                "version being written becomes the current version, and only "
+                "approve()/supersede() move a version out of current. Pass "
+                "'candidate' or 'approved'."
+            )
         spec = REGISTRY.spec_for(meta.artifact_id)
         if spec.mutable:
             raise ValueError(
@@ -161,6 +169,9 @@ class ArtifactStore:
             current_version=version,
             # Callers may pre-approve a written artifact (e.g. profile-change
             # config snapshots); the store never invents a higher status.
+            # SUPERSEDED is refused earlier in save(): a version being written
+            # as current cannot be superseded by definition, and allowing it
+            # would make status unable to distinguish current from historical.
             status=meta.status,
             created_at=meta.created_at,
             updated_at=now,
@@ -302,7 +313,10 @@ class ArtifactStore:
     def load_ref(self, project_id: str, ref: str | ArtifactRef) -> dict[str, Any]:
         """Resolve an artifact ref to its payload.
 
-        Phase-bearing refs load directly from their phase.
+        Phase-bearing refs load directly from their phase. A mutable kind has
+        exactly one revision-counted file, so only a ref naming its CURRENT
+        revision resolves; a stale ref raises instead of silently returning
+        newer content, keeping the ``v<N>`` grammar honest.
         """
         parsed = ref if isinstance(ref, ArtifactRef) else ArtifactRef.from_string(ref)
         try:
@@ -413,11 +427,18 @@ class ArtifactStore:
     ) -> dict[str, Any]:
         """Load an artifact body (payload) as a raw dict.
 
-        Mutable kinds resolve to their single mutable file regardless of the
-        requested version (refs carry the revision they were minted with).
+        A mutable kind has one revision-counted file, so only the ref naming its
+        CURRENT revision resolves; requesting a superseded revision raises
+        rather than silently returning newer content (the ref grammar promises
+        ``v<N>`` identifies what was asked for).
         """
         if self._safe_spec(artifact_id).mutable:
-            return self.load_mutable(project_id, phase, artifact_id)
+            envelope = self.load_mutable_envelope(project_id, phase, artifact_id)
+            if envelope.version != version:
+                raise MutableRevisionMismatchError(
+                    artifact_id, requested=version, current=envelope.version
+                )
+            return envelope.payload
         path = self._version_path(project_id, phase.value, artifact_id, version)
         if not path.exists():
             raise FileNotFoundError(f"Artifact version not found: {path}")
@@ -426,7 +447,19 @@ class ArtifactStore:
     def load_envelope(
         self, project_id: str, phase: FilmPhase, artifact_id: str, version: int
     ) -> ArtifactEnvelope:
-        """Load one artifact version envelope, schema-checked and migrated."""
+        """Load one artifact version envelope, schema-checked and migrated.
+
+        Mutable kinds have no ``versions/`` tree, so they route to their single
+        revision-counted file; a stale revision raises rather than reporting a
+        bare missing file.
+        """
+        if self._safe_spec(artifact_id).mutable:
+            envelope = self.load_mutable_envelope(project_id, phase, artifact_id)
+            if envelope.version != version:
+                raise MutableRevisionMismatchError(
+                    artifact_id, requested=version, current=envelope.version
+                )
+            return envelope
         path = self._version_path(project_id, phase.value, artifact_id, version)
         if not path.exists():
             raise FileNotFoundError(f"Artifact version not found: {path}")

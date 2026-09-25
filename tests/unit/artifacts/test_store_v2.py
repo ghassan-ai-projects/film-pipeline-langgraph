@@ -5,11 +5,15 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from pydantic import BaseModel
 
 from film_pipeline.artifacts.envelope import SchemaTooNewError, payload_checksum
+
+if TYPE_CHECKING:
+    from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.artifacts.registry import (
     MIGRATIONS,
     REGISTRY,
@@ -506,3 +510,78 @@ class TestRendererRegistryOwnership:
         from film_pipeline.artifacts.registry import REGISTRY
 
         assert REGISTRY.renderer_for("film.studio/not-a-kind") is None
+
+
+class TestStatusMachineIntegrity:
+    """Only approve()/supersede() may move a version out of "current".
+
+    A version being written becomes the current version, so accepting
+    ``SUPERSEDED`` at save time would make the status field unable to
+    distinguish a live current version from a historical one.
+    """
+
+    def test_save_rejects_superseded_status(self, tmp_path: Path) -> None:
+        store = make_store(tmp_path / "store")
+        with pytest.raises(ValueError, match="superseded"):
+            store.save(_constitution(), _meta(status=ArtifactStatus.SUPERSEDED))
+
+    def test_save_still_honors_pre_approved_status(self, tmp_path: Path) -> None:
+        """Pre-approved writes (config snapshots) must keep working."""
+        store = make_store(tmp_path / "store")
+        store.save(_constitution(), _meta(status=ArtifactStatus.APPROVED))
+        listed = store.list_artifacts("p1")
+        assert [m.status for m in listed] == [ArtifactStatus.APPROVED]
+
+    def test_approve_then_supersede_moves_status(self, tmp_path: Path) -> None:
+        """The real transition path still works after the save-time guard."""
+        store = make_store(tmp_path / "store")
+        store.save(_constitution(), _meta())
+        store.approve("p1", FilmPhase.CONSTITUTION.value, "film_constitution", 1)
+        assert store.list_artifacts("p1")[0].status is ArtifactStatus.APPROVED
+        store.supersede("p1", FilmPhase.CONSTITUTION.value, "film_constitution", 1)
+        assert store.list_artifacts("p1")[0].status is ArtifactStatus.SUPERSEDED
+
+
+class TestMutableRefRevisions:
+    """A ref must identify what it names (plan D5).
+
+    Mutable kinds keep one revision-counted file, so an older ref cannot be
+    satisfied. It must fail loudly rather than silently returning the current
+    content, which would answer a question the caller did not ask.
+    """
+
+    def _ledger_store(self, tmp_path: Path) -> tuple[ArtifactStore, ArtifactMetadata]:
+        from film_pipeline.schemas.generation import GenerationLedger
+
+        store = make_store(tmp_path / "store")
+        meta = _meta(
+            artifact_id="generation_ledger",
+            artifact_type=ArtifactType.GENERATION_LEDGER,
+            phase=FilmPhase.GEN_PLANNING,
+        )
+        store.save_mutable(GenerationLedger(project_id="p1"), meta)
+        store.save_mutable(GenerationLedger(project_id="p1"), meta)
+        return store, meta
+
+    def test_current_revision_resolves(self, tmp_path: Path) -> None:
+        store, _ = self._ledger_store(tmp_path)
+        assert (
+            store.load_ref("p1", "artifact:gen_planning:generation_ledger:v2")["project_id"] == "p1"
+        )
+
+    def test_stale_revision_raises_instead_of_substituting(self, tmp_path: Path) -> None:
+        from film_pipeline.artifacts.envelope import MutableRevisionMismatchError
+
+        store, _ = self._ledger_store(tmp_path)
+        with pytest.raises(MutableRevisionMismatchError, match="revision 2"):
+            store.load_ref("p1", "artifact:gen_planning:generation_ledger:v1")
+
+    def test_load_envelope_agrees_with_load_ref(self, tmp_path: Path) -> None:
+        """The two public read paths must not disagree about a mutable ref."""
+        from film_pipeline.artifacts.envelope import MutableRevisionMismatchError
+
+        store, _ = self._ledger_store(tmp_path)
+        current = store.load_envelope("p1", FilmPhase.GEN_PLANNING, "generation_ledger", 2)
+        assert current.version == 2
+        with pytest.raises(MutableRevisionMismatchError):
+            store.load_envelope("p1", FilmPhase.GEN_PLANNING, "generation_ledger", 1)

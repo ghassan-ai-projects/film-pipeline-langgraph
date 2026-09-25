@@ -39,6 +39,25 @@ class ChecksumMismatchError(RuntimeError):
     """Raised when a stored envelope fails its integrity check."""
 
 
+class MutableRevisionMismatchError(RuntimeError):
+    """Raised when a ref names a mutable kind's superseded revision.
+
+    A mutable kind keeps exactly one revision-counted file, so an older ref
+    cannot be satisfied. Returning the current content instead would silently
+    answer a question the caller did not ask.
+    """
+
+    def __init__(self, artifact_id: str, requested: int, current: int) -> None:
+        self.artifact_id = artifact_id
+        self.requested = requested
+        self.current = current
+        super().__init__(
+            f"Mutable artifact '{artifact_id}' is at revision {current}, but "
+            f"revision {requested} was requested. Mutable kinds keep only their "
+            "current revision; re-read the artifact to get the current ref."
+        )
+
+
 def payload_checksum(payload: dict[str, Any]) -> str:
     """Content checksum over the canonical payload form (stable across runs).
 
