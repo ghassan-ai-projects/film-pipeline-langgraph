@@ -132,6 +132,8 @@ Enola filter or threshold changed.
 
 | B-02 | Create the `budget` module: `cap_for` as the single cap reader, `authorize_spend` as the single refusal path, `BudgetLedger` with derived spend, `budget_cap_prompt_value`; retarget the MCP planning tool's invented `100.0` default | Verified against `audit/12` F-BUD-01/02/03/04: four cap shapes, eight gate sites, zero `SpendRecord` writers. Found a real gap: profiles declare `project_cap_usd` but no creation path writes it, so every project resolves to no cap | PASS — 27 new budget cases covering the single reader, inclusive boundary, refusal payload, derived spend, and a guard that `budget` imports neither `config` nor `generation` | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.98% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycle findings; two advisory additions are in untouched modules | `665581a` | Complete |
 
+| G-04 | Move `scope_contract.py` and `consistency.py` from `graph` to `governance`; make the approved-ref registry an injected parameter so `governance` (L8) stops reaching up into `orchestration` (L9); retarget consumers, add shims, move behavior tests to their owner | Found an upward dependency the (nonexistent) guard suite could not catch: `check_staleness` imported `graph.orchestrator_state` lazily | PASS — governance consistency and scope-contract suites, plus the full run | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `81adc8f` | Complete |
+
 ### OP-02c — the remaining physical move
 
 **Done in OP-02c (`6b0cd34`).** The four operator modules now live in
