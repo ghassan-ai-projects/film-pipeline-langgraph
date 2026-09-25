@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
+from film_pipeline.operations.ports import RuntimePort, artifact_store_of
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.schemas.runtime_state import ProjectRecord
 from film_pipeline.storage.project_storage import (
@@ -53,18 +54,25 @@ def use_persistent_runtime() -> bool:
     )
 
 
-def storage_for(rt: StudioRuntime) -> ProjectStorage | None:
-    """The project-storage gateway for a runtime, or ``None`` without services."""
-    if rt.services is None:
+def storage_for(rt: RuntimePort) -> ProjectStorage | None:
+    """The project-storage gateway for a runtime, or ``None`` without services.
+
+    Accepts the structural :class:`~film_pipeline.operations.ports.RuntimePort`
+    rather than the concrete runtime, so the operator surface can call it
+    without importing the composition root.
+    """
+    store = artifact_store_of(rt)
+    if store is None:
         return None
-    return ProjectStorage.from_store(rt.services.artifact_store)
+    return ProjectStorage.for_root(store.root)
 
 
-def artifact_root(rt: StudioRuntime) -> Path | None:
+def artifact_root(rt: RuntimePort) -> Path | None:
     """Return the artifact store root configured on the runtime."""
-    if rt.services is None:
+    store = artifact_store_of(rt)
+    if store is None:
         return None
-    return rt.services.artifact_store.root
+    return store.root
 
 
 def artifact_discovery_roots(rt: StudioRuntime) -> list[Path]:
