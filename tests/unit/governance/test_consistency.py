@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.graph.consistency import (
+from film_pipeline.governance.consistency import (
     _staleness_warnings,
     check_staleness,
 )

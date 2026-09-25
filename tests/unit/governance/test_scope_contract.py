@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.graph.scope_contract import (
+from film_pipeline.governance.scope_contract import (
     avg_shot_duration_for,
     derive_scope_contract,
     normalize_pacing,

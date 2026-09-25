@@ -108,7 +108,7 @@ def _movement_count_issues(brief: ExecutionBrief) -> list[dict[str, Any]]:
 
 def _runtime_inconsistency_issues(brief: ExecutionBrief, total_shots: int) -> list[dict[str, Any]]:
     """Runtime self-consistency: total shots * avg_duration ~= target_runtime."""
-    from film_pipeline.graph.scope_contract import avg_shot_duration_for
+    from film_pipeline.governance.scope_contract import avg_shot_duration_for
 
     avg_duration = avg_shot_duration_for(brief.pacing_style)
     estimated_runtime = total_shots * avg_duration

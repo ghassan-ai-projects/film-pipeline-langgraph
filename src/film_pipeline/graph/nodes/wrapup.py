@@ -54,7 +54,10 @@ def consistency_check_node(state: dict[str, Any]) -> dict[str, Any]:
     if services is None:
         return {}
 
-    from film_pipeline.graph.consistency import check_phase_consistency
+    from film_pipeline.governance.consistency import check_phase_consistency
+    from film_pipeline.graph.orchestrator_state import get_approved_refs
 
-    warnings = check_phase_consistency(state, services)
+    # `governance` sits below `orchestration` and must not read orchestrator
+    # state itself, so the approved-ref registry is supplied from here.
+    warnings = check_phase_consistency(state, services, get_approved_refs(state))
     return {"consistency_warnings": warnings} if warnings else {}

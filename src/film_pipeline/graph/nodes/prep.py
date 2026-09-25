@@ -154,7 +154,7 @@ def _attach_scope_contract(
     the classified film_type, and the profile's pacing. Stores concrete scene/
     shot targets in state so prep prompts and gates can enforce them.
     """
-    from film_pipeline.graph.scope_contract import derive_scope_contract, pacing_from_config
+    from film_pipeline.governance.scope_contract import derive_scope_contract, pacing_from_config
 
     runtime = int(
         updates.get("target_runtime_seconds", state.get("target_runtime_seconds", 0)) or 0
