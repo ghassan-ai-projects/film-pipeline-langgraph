@@ -251,7 +251,7 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
             new_refs.append(ref)
 
         # ── Gate S: scene count must meet the Scope Contract floor ────────
-        from film_pipeline.graph.orchestrator_validators import validate_scene_count
+        from film_pipeline.governance.validators import validate_scene_count
 
         scene_count = len(getattr(scene_list, "scenes", []) or [])
         node_issues += validate_scene_count(new_state, scene_count)
@@ -300,7 +300,7 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
             new_refs.append(ref)
 
         # ── Gate S: script must preserve development scenes and meet floor ─
-        from film_pipeline.graph.orchestrator_validators import (
+        from film_pipeline.governance.validators import (
             validate_script_scene_preservation,
         )
 

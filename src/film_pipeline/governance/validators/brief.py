@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.graph.orchestrator_validators._shared import (
+from film_pipeline.governance.validators._shared import (
     _blocking,
 )
 from film_pipeline.schemas.execution_brief import ExecutionBrief
@@ -18,27 +18,20 @@ def _load_brief_from_state(state: dict[str, Any]) -> ExecutionBrief | None:
     ``set_execution_brief`` persists ``model_dump(mode="json")``, so live
     state holds a plain mapping once the brief crosses any node boundary.
     """
-    from film_pipeline.graph.orchestrator_state import get_execution_brief
+    from film_pipeline.governance.orchestrator_reads import get_execution_brief
 
     data = get_execution_brief(state)
     if data is None:
         return None
-    if isinstance(data, ExecutionBrief):
-        return data
-    if isinstance(data, dict):
-        try:
-            return ExecutionBrief(**data)
-        except (TypeError, ValueError):
-            return None
-    return None
+    try:
+        return ExecutionBrief(**data)
+    except (TypeError, ValueError):
+        return None
 
 
-def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
+def _load_brief_from_store(state: dict[str, Any], store: Any) -> ExecutionBrief | None:
     """Load the ExecutionBrief from the artifact store."""
-    from film_pipeline.graph.services import _get_services
-
-    services = _get_services(state)
-    if services is None:
+    if store is None:
         return None
     from film_pipeline.schemas.artifact import ArtifactRef
     from film_pipeline.schemas.base import FilmPhase
@@ -58,14 +51,14 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
         version = parsed.version
     else:
         try:
-            artifacts = services.artifact_store.list_artifacts(project_id, FilmPhase.SHOT_BIBLE)
+            artifacts = store.list_artifacts(project_id, FilmPhase.SHOT_BIBLE)
             matches = [a for a in artifacts if a.artifact_id == "execution_brief"]
             if matches:
                 version = max(a.version for a in matches)
         except (FileNotFoundError, OSError, ValueError):
             return None
     try:
-        data = services.artifact_store.load(project_id, FilmPhase.SHOT_BIBLE, artifact_id, version)
+        data = store.load(project_id, FilmPhase.SHOT_BIBLE, artifact_id, version)
         if isinstance(data, dict):
             return ExecutionBrief(**data)
     except (FileNotFoundError, ValueError, KeyError, TypeError):
@@ -73,12 +66,12 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     return None
 
 
-def load_execution_brief(state: dict[str, Any]) -> ExecutionBrief | None:
-    """Load the ExecutionBrief, trying state cache first, then artifact store."""
+def load_execution_brief(state: dict[str, Any], store: Any = None) -> ExecutionBrief | None:
+    """Load the ExecutionBrief, trying the state cache first, then the store."""
     brief = _load_brief_from_state(state)
     if brief is not None:
         return brief
-    return _load_brief_from_store(state)
+    return _load_brief_from_store(state, store)
 
 
 # ── Post-extraction: cross-validate ExecutionBrief against StoryBible ──────
@@ -171,21 +164,20 @@ def _story_bible_cross_check(
     state: dict[str, Any],
     brief: ExecutionBrief,
     total_shots: int,
+    store: Any = None,
 ) -> list[dict[str, Any]]:
     """Load the StoryBible from the artifact store and cross-check structure."""
     story_bible_ref = str(state.get("story_bible_ref", ""))
     if not story_bible_ref:
         return []
-    from film_pipeline.graph.services import _get_services
     from film_pipeline.schemas.artifact import ArtifactRef
     from film_pipeline.schemas.base import FilmPhase
 
-    services = _get_services(state)
-    if services is None:
+    if store is None:
         return []
     try:
         parsed = ArtifactRef.from_string(story_bible_ref)
-        bible_data = services.artifact_store.load(
+        bible_data = store.load(
             str(state.get("project_id", "")),
             FilmPhase(parsed.phase),
             parsed.artifact_id,
@@ -204,6 +196,7 @@ def _story_bible_cross_check(
 def validate_execution_brief(
     state: dict[str, Any],
     brief: ExecutionBrief,
+    store: Any = None,
 ) -> list[dict[str, Any]]:
     """Cross-validate the ExecutionBrief against the StoryBible and Script.
 
@@ -235,5 +228,5 @@ def validate_execution_brief(
             )
         )
 
-    issues.extend(_story_bible_cross_check(state, brief, total_shots))
+    issues.extend(_story_bible_cross_check(state, brief, total_shots, store))
     return issues

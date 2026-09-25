@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents.model_routing import ModelRouter
-from film_pipeline.graph import nodes
-from film_pipeline.graph.edges import _is_auto_mode, after_approval
-from film_pipeline.graph.orchestrator_validators import (
+from film_pipeline.governance.validators import (
     validate_scene_count,
     validate_script_scene_preservation,
 )
+from film_pipeline.graph import nodes
+from film_pipeline.graph.edges import _is_auto_mode, after_approval
 
 
 class TestGateSValidators:

@@ -28,7 +28,7 @@ class TestStaleGenerationRequestCodes:
 
     def test_recognises_codes_the_planning_gate_raises(self) -> None:
         """Every code the gate emits must be recognised as stale here."""
-        from film_pipeline.graph.orchestrator_validators.planning_gates import (
+        from film_pipeline.governance.validators.planning_gates import (
             validate_dispatch_readiness,
         )
 
@@ -38,7 +38,7 @@ class TestStaleGenerationRequestCodes:
             assert is_stale_generation_request_issue(issue)
 
     def test_empty_request_list_is_also_recognised(self) -> None:
-        from film_pipeline.graph.orchestrator_validators.planning_gates import (
+        from film_pipeline.governance.validators.planning_gates import (
             validate_dispatch_readiness,
         )
 

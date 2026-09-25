@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.graph.orchestrator_validators._shared import (
+from film_pipeline.governance.validators._shared import (
     _blocking,
     _extract_rows,
     _extract_scene_ids,

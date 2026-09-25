@@ -89,10 +89,15 @@ def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
     shape is sufficient for prompt assembly, so a valid stored brief is
     rehydrated into both state domains before extraction is considered.
     """
+    from film_pipeline.governance.validators import load_execution_brief
     from film_pipeline.graph.orchestrator_state import set_execution_brief
-    from film_pipeline.graph.orchestrator_validators import load_execution_brief
 
-    brief = load_execution_brief(new_state)
+    # The store is passed explicitly: `governance` must not reach up into
+    # `orchestration` for services, and a storeless load silently degrades to
+    # "no brief" rather than failing loudly.
+    services = _get_services(new_state)
+    store = services.artifact_store if services is not None else None
+    brief = load_execution_brief(new_state, store)
     if brief is not None:
         set_execution_brief(new_state, brief)
         if not new_state.get("execution_brief_ref"):
@@ -121,9 +126,9 @@ def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
         new_state["execution_brief_ref"] = brief_ref
 
     # Cross-validate the extracted brief against the StoryBible
-    from film_pipeline.graph.orchestrator_validators import validate_execution_brief
+    from film_pipeline.governance.validators import validate_execution_brief
 
-    brief_issues = validate_execution_brief(new_state, brief)
+    brief_issues = validate_execution_brief(new_state, brief, store)
     new_state.setdefault("issues", []).extend(brief_issues)
 
 
@@ -455,12 +460,12 @@ def _validate_shot_structure_gate(new_state: dict[str, Any], shot_matrix: Any) -
     """Validate the shot structure against the execution brief."""
     if shot_matrix is None:
         return
-    from film_pipeline.graph.orchestrator_validators import load_execution_brief
+    from film_pipeline.governance.validators import load_execution_brief
 
     brief = load_execution_brief(new_state)
     if brief is None:
         return
-    from film_pipeline.graph.orchestrator_validators import validate_shot_structure
+    from film_pipeline.governance.validators import validate_shot_structure
 
     struct_issues = validate_shot_structure(new_state, brief, shot_matrix)
     new_state.setdefault("issues", []).extend(struct_issues)
@@ -474,7 +479,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
 
     _ensure_execution_brief(new_state)
 
-    from film_pipeline.graph.orchestrator_validators import load_execution_brief
+    from film_pipeline.governance.validators import load_execution_brief
 
     shot_matrix = _design_shot_matrix(new_state, load_execution_brief(new_state))
 
@@ -568,7 +573,7 @@ def _validate_planning_gate(new_state: dict[str, Any], cost_estimate: Any) -> No
             parsed.artifact_id,
             parsed.version,
         )
-        from film_pipeline.graph.orchestrator_validators import (
+        from film_pipeline.governance.validators import (
             validate_planning_completeness,
             validate_shot_scene_references,
         )

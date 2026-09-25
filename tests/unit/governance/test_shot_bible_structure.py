@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from film_pipeline.app.mock_responses import default_mock_responses
+from film_pipeline.governance.validators import validate_shot_structure
 from film_pipeline.graph.nodes import shot_bible_node
 from film_pipeline.graph.nodes.visual import _reconcile_shot_matrix_to_brief
-from film_pipeline.graph.orchestrator_validators import validate_shot_structure
 from film_pipeline.graph.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata

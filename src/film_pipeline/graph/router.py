@@ -17,8 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
 from film_pipeline.graph._action_routing import (
-    APPROVAL_GATES,
     RouterResult,
     compute_actions,
 )

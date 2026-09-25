@@ -26,7 +26,7 @@ def _gate_dispatch_readiness(new_state: dict[str, Any]) -> None:
     gen_requests = new_state.get("generation_requests")
     if gen_requests is None:
         return
-    from film_pipeline.graph.orchestrator_validators import validate_dispatch_readiness
+    from film_pipeline.governance.validators import validate_dispatch_readiness
 
     dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
     new_state.setdefault("issues", []).extend(dispatch_issues)

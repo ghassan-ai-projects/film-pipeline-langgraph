@@ -92,7 +92,7 @@ def test_graph_composition_imports_remain_one_way() -> None:
         roots: tuple[str, ...] = ()
         if len(relative.parts) == 1:
             roots = ("film_pipeline.graph.nodes", "film_pipeline.graph.subgraphs")
-        elif relative.parts[0] in {"orchestrator_validators", "subgraphs"}:
+        elif relative.parts[0] == "subgraphs":
             roots = ("film_pipeline.graph.nodes",)
         if not roots:
             continue
@@ -127,10 +127,10 @@ def test_graph_composition_imports_remain_one_way() -> None:
         ),
         (
             "from .nodes import helper",
-            "film_pipeline.graph.orchestrator_validators",
+            "film_pipeline.graph.subgraphs",
             {
-                "film_pipeline.graph.orchestrator_validators.nodes",
-                "film_pipeline.graph.orchestrator_validators.nodes.helper",
+                "film_pipeline.graph.subgraphs.nodes",
+                "film_pipeline.graph.subgraphs.nodes.helper",
             },
         ),
     ],
