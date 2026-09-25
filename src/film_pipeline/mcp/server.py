@@ -28,7 +28,7 @@ from film_pipeline.mcp.contract import (
 )
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
-from film_pipeline.mcp.resolution import (
+from film_pipeline.projects import (
     AmbiguousProjectError,
     ProjectRecord,
     ProjectRegistry,
