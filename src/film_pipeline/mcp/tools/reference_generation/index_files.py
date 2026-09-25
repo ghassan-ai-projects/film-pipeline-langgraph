@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+
+from film_pipeline.artifacts.serialization import write_json_atomic
 
 from ..helpers import _latest_artifact_version, _services
 
@@ -37,7 +38,7 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
             for e in entries
         ],
     }
-    (idx_dir / "reference-index.json").write_text(json.dumps(index_data, indent=2, default=str))
+    write_json_atomic(idx_dir / "reference-index.json", index_data)
 
     # reference-validation-summary.json
     scores = [
@@ -51,7 +52,7 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
         "failed": sum(1 for e in entries if e.get("generation_status") == "failed"),
         "average_score": sum(scores) / len(scores) if scores else 0.0,
     }
-    (idx_dir / "reference-validation-summary.json").write_text(json.dumps(summary, indent=2))
+    write_json_atomic(idx_dir / "reference-validation-summary.json", summary)
 
 
 def _select_image_provider(rt: Any) -> Any | None:

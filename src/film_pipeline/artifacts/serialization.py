@@ -58,8 +58,32 @@ def dump_json(obj: Any) -> str:
     return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Flush a directory entry so a rename survives a crash.
+
+    ``os.replace`` is atomic, but the new name lives in the parent directory
+    block; without flushing that block the rename can be lost on power failure
+    even though the file contents were fsynced. Not supported everywhere (and
+    meaningless on Windows), so failure to open or sync is not fatal.
+    """
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
 def atomic_write_text(path: Path, content: str) -> None:
-    """Write ``content`` to ``path`` atomically (sibling temp file + replace)."""
+    """Write ``content`` to ``path`` atomically and durably.
+
+    Sibling temp file -> fsync contents -> rename over the target -> fsync the
+    parent directory, so a crash cannot leave a torn file or lose the rename.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_name(f".{path.name}.tmp-{os.getpid()}-{uuid4().hex[:8]}")
     try:
@@ -68,6 +92,7 @@ def atomic_write_text(path: Path, content: str) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         temp.replace(path)
+        _fsync_directory(path.parent)
     finally:
         temp.unlink(missing_ok=True)
 

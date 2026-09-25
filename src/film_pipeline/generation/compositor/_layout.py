@@ -7,6 +7,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from film_pipeline.artifacts.serialization import write_json_atomic
+
 # ── Layout constants ─────────────────────────────────────────────────────
 
 _SHEET_SIZE = (2048, 2048)
@@ -230,8 +232,7 @@ def _write_sheet_manifest(
         placeholder_tiles=placeholders,
     )
     manifest_path = Path(str(sheet_path) + ".sheet.json")
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(manifest.model_dump_json(indent=2))
+    write_json_atomic(manifest_path, manifest.model_dump(mode="json"))
 
 
 def _parse_palette(hex_strings: list[str]) -> list[tuple[int, int, int]]:

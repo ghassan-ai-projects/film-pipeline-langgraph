@@ -585,3 +585,48 @@ class TestMutableRefRevisions:
         assert current.version == 2
         with pytest.raises(MutableRevisionMismatchError):
             store.load_envelope("p1", FilmPhase.GEN_PLANNING, "generation_ledger", 1)
+
+
+class TestAtomicDurability:
+    """D6: every storage write is atomic and durable.
+
+    The write helper must fsync the file contents AND the parent directory,
+    otherwise a crash can lose the rename even though the bytes were flushed.
+    """
+
+    def test_atomic_write_fsyncs_file_and_parent_directory(
+        self, tmp_path: Path, monkeypatch
+    ) -> None:
+        import os
+
+        from film_pipeline.artifacts import serialization
+
+        synced: list[int] = []
+        real_fsync = os.fsync
+        monkeypatch.setattr(os, "fsync", lambda fd: (synced.append(fd), real_fsync(fd))[1])
+
+        target = tmp_path / "nested" / "file.json"
+        serialization.write_json_atomic(target, {"a": 1})
+        assert target.exists()
+        # One fsync for the temp file, one for the containing directory.
+        assert len(synced) == 2
+
+    def test_atomic_write_leaves_no_temp_files(self, tmp_path: Path) -> None:
+        from film_pipeline.artifacts.serialization import write_json_atomic
+
+        target = tmp_path / "out" / "file.json"
+        write_json_atomic(target, {"a": 1})
+        assert [p.name for p in target.parent.iterdir()] == ["file.json"]
+
+    def test_manifest_write_is_atomic(self, tmp_path: Path, monkeypatch) -> None:
+        """The asset manifest must not be written with a bare write_text."""
+        from film_pipeline.artifacts import manifest as manifest_mod
+        from film_pipeline.artifacts.manifest import AssetManifest, write_manifest
+
+        calls: list[str] = []
+        real = manifest_mod.write_json_atomic
+        monkeypatch.setattr(
+            manifest_mod, "write_json_atomic", lambda p, o: (calls.append(str(p)), real(p, o))[1]
+        )
+        write_manifest(AssetManifest(project_id="p1"), tmp_path)
+        assert calls and calls[0].endswith("asset-manifest.json")

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from film_pipeline.artifacts.serialization import write_json_atomic
+
 
 class AssetEntry(BaseModel):
     """A single generated or reference asset in a project.
@@ -69,6 +71,6 @@ def read_manifest(project_id: str, root: Path) -> AssetManifest | None:
 
 
 def write_manifest(manifest: AssetManifest, root: Path) -> None:
+    """Write the asset manifest atomically (D6: all storage writes are atomic)."""
     manifest_path = root / manifest.project_id / "asset-manifest.json"
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest_path.write_text(manifest.model_dump_json(indent=2))
+    write_json_atomic(manifest_path, manifest.model_dump(mode="json"))

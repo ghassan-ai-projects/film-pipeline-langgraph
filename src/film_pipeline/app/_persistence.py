@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.artifacts.paths import PHASE_DIR_MAP
-from film_pipeline.artifacts.serialization import write_json_atomic
+from film_pipeline.artifacts.serialization import atomic_write_text, write_json_atomic
 from film_pipeline.artifacts.storage import default_runtime_root
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
@@ -99,7 +99,7 @@ def project_git_backend(project_root: Path) -> GitBackend:
     git = _GIT_BACKEND_TYPE.init_temp(project_root)
     gitignore = project_root / ".gitignore"
     if not gitignore.exists():
-        gitignore.write_text(_PROJECT_GITIGNORE)
+        atomic_write_text(gitignore, _PROJECT_GITIGNORE)
     if not already_initialized:
         with contextlib.suppress(RuntimeError):
             git.commit("checkpoint: initialize project repository")
