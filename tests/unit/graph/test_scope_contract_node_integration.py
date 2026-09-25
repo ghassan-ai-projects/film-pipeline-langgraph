@@ -15,7 +15,7 @@ import pytest
 from film_pipeline.app.mock_responses import default_mock_responses
 from film_pipeline.graph import nodes
 from film_pipeline.graph.nodes import _attach_scope_contract, _development_scene_count
-from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+from film_pipeline.graph.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
 
 _AUTO_CFG = {"studio": {"require_human_approval": False}}
 
@@ -28,14 +28,14 @@ def _reset_services_contextvar() -> Any:
     without an explicit reset, ``ContextVar.set()`` persists for the rest of the
     test process (same thread), breaking unrelated "no services" tests.
     """
-    token = nodes._SERVICES_CTX.set(None)
+    token = _SERVICES_CTX.set(None)
     yield
-    nodes._SERVICES_CTX.reset(token)
+    _SERVICES_CTX.reset(token)
 
 
 def _mock_state(**extra: Any) -> dict[str, Any]:
     svc = GraphServices.for_mock_runtime(mock_responses=default_mock_responses())
-    nodes._SERVICES_CTX.set(svc)
+    _SERVICES_CTX.set(svc)
     state: dict[str, Any] = {
         "project_id": "probe",
         "idea": "a short film",

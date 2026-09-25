@@ -162,7 +162,7 @@ def test_no_persist_wins_for_runtime_checkpointer(
     from langgraph.checkpoint.memory import MemorySaver
 
     from film_pipeline.app._persistence import use_persistent_runtime
-    from film_pipeline.graph.graph import _default_checkpointer
+    from film_pipeline.app.graph_factory import _default_checkpointer
 
     monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
     monkeypatch.setenv("FILM_PIPELINE_NO_PERSIST", "1")

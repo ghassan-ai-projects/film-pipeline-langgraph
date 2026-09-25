@@ -22,6 +22,7 @@ from film_pipeline.app._resume import (
 )
 from film_pipeline.artifacts.project_storage import graph_state_location
 from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE, next_phase
+from film_pipeline.graph.services import _SERVICES_CTX
 from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 
@@ -34,7 +35,7 @@ _logger = logging.getLogger(__name__)
 def ensure_graph(rt: StudioRuntime) -> Any:
     """Lazy-load and cache the graph instance."""
     if rt.graph is None:
-        from film_pipeline.graph.graph import build_graph
+        from film_pipeline.app.graph_factory import build_graph
 
         rt.graph = build_graph(runtime_root=rt.runtime_root)
     return rt.graph
@@ -58,9 +59,7 @@ def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
 
     # Set context-var fallback so nodes can find services without storing
     # runtime dependencies in checkpointed graph state.
-    import film_pipeline.graph.nodes as _gn
-
-    token = _gn._SERVICES_CTX.set(rt.services)
+    token = _SERVICES_CTX.set(rt.services)
     try:
         config: dict[str, Any] = {
             "configurable": {
@@ -71,7 +70,7 @@ def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
         }
         result: dict[str, Any] = cast(dict[str, Any], graph.invoke(state, config))
     finally:
-        _gn._SERVICES_CTX.reset(token)
+        _SERVICES_CTX.reset(token)
     pid = str(result.get("project_id", ""))
     if pid:
         auto_checkpoint(rt, result)
@@ -186,9 +185,7 @@ def _resume_after_approval(
 
     # Set the services context variable so graph nodes can find
     # GraphServices without checkpointing runtime objects.
-    import film_pipeline.graph.nodes as _gn
-
-    token = _gn._SERVICES_CTX.set(rt.services)
+    token = _SERVICES_CTX.set(rt.services)
     try:
         try:
             snapshot = graph.get_state(config)
@@ -240,7 +237,7 @@ def _resume_after_approval(
             return advance_to_next_phase(rt, dict(active))
         return state
     finally:
-        _gn._SERVICES_CTX.reset(token)
+        _SERVICES_CTX.reset(token)
 
 
 def _approve_phase_artifacts(rt: StudioRuntime, project_id: str, phase: str) -> None:
@@ -372,9 +369,7 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
         "recursion_limit": 50,
     }
 
-    import film_pipeline.graph.nodes as _gn
-
-    token = _gn._SERVICES_CTX.set(rt.services)
+    token = _SERVICES_CTX.set(rt.services)
     try:
         try:
             snapshot = graph.get_state(config)
@@ -406,7 +401,7 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
             )
             raise
     finally:
-        _gn._SERVICES_CTX.reset(token)
+        _SERVICES_CTX.reset(token)
     state = cast(dict[str, Any], state)
 
     rt.projects[active["project_id"]] = state

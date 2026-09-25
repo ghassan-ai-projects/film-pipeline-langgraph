@@ -64,6 +64,20 @@ _BUDGET_SNAPSHOT = f"{_ORCH_NS}__budget_snapshot"
 _EXECUTION_BRIEF = f"{_ORCH_NS}__execution_brief"
 
 
+def _require_human_approval(state: dict[str, Any]) -> bool:
+    """Read the human-approval requirement from resolved graph config.
+
+    Defaults to ``True`` when the key is missing or the config is
+    unpopulated, keeping human gates enabled unless a profile opts out.
+    """
+    cfg = state.get("resolved_config", {})
+    if isinstance(cfg, dict):
+        studio = cfg.get("studio", {})
+        if isinstance(studio, dict):
+            return bool(studio.get("require_human_approval", True))
+    return True
+
+
 # --- Channel registry --------------------------------------------------------
 
 

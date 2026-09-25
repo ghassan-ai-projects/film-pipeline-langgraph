@@ -10,11 +10,9 @@ from film_pipeline.graph.nodes._repair_loop import (
     _PHASE_NODES,
     repair_phase_node,
 )
-from film_pipeline.graph.nodes._shared import (
-    _apply_external_state,
-    _get_services,
-    _require_human_approval,
-)
+from film_pipeline.graph.nodes._shared import _apply_external_state
+from film_pipeline.graph.orchestrator_state import _require_human_approval
+from film_pipeline.graph.services import _get_services
 
 # The bounded repair loop lives in ``_repair_loop``; these re-exports keep the
 # historical ``graph.nodes.approval`` import paths working.

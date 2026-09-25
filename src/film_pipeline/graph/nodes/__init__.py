@@ -25,16 +25,13 @@ from film_pipeline.graph.nodes._context import (
     _parse_ref,
 )
 from film_pipeline.graph.nodes._shared import (
-    _SERVICES_CTX,
     _apply_external_state,
     _coerce_user_runtime,
     _critical_context_issues,
     _extract_target_scene_count,
-    _get_services,
     _is_new_issue,
     _is_new_ref,
     _phase_gate_updates,
-    _require_human_approval,
 )
 from film_pipeline.graph.nodes.approval import (
     approve_phase_node,
@@ -67,7 +64,6 @@ from film_pipeline.graph.nodes.wrapup import (
 
 __all__ = [
     "_AGENT_PROFILE_MAP",
-    "_SERVICES_CTX",
     "_apply_external_state",
     "_artifact_context_max_chars",
     "_attach_scope_contract",
@@ -78,7 +74,6 @@ __all__ = [
     "_development_scene_count",
     "_ensure_matrix_scene_coverage",
     "_extract_target_scene_count",
-    "_get_services",
     "_get_template_registry",
     "_infer_artifact_type",
     "_inject_artifact_context",
@@ -90,7 +85,6 @@ __all__ = [
     "_phase_gate_updates",
     "_propagate_side_effects",
     "_record_handoff",
-    "_require_human_approval",
     "_run_agent",
     "_run_validators",
     "_save_artifact",

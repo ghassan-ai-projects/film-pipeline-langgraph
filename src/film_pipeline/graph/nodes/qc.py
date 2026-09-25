@@ -15,11 +15,11 @@ from film_pipeline.graph.nodes._context import (
     _get_template_registry,
 )
 from film_pipeline.graph.nodes._shared import (
-    _get_services,
     _is_new_issue,
     _is_new_ref,
     _phase_gate_updates,
 )
+from film_pipeline.graph.services import _get_services
 
 _ValidatorRunner = Callable[
     [dict[str, Any], list[dict[str, Any]], dict[str, Any], Any],

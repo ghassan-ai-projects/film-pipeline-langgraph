@@ -320,18 +320,16 @@ class TestShotBibleBriefReachesUpdates:
 
     @pytest.fixture(autouse=True)
     def _services_env(self, tmp_path: Path) -> Any:
-        from film_pipeline.graph import nodes
-        from film_pipeline.graph.services import SERVICES_KEY, GraphServices
+        from film_pipeline.graph.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
 
         svc = GraphServices.for_mock_runtime(
             artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
         )
-        self._token = nodes._SERVICES_CTX.set(svc)
-        self._nodes = nodes
+        self._token = _SERVICES_CTX.set(svc)
         self._services_key = SERVICES_KEY
         self._svc = svc
         yield
-        nodes._SERVICES_CTX.reset(self._token)
+        _SERVICES_CTX.reset(self._token)
 
     def _state(self) -> dict[str, Any]:
         return {

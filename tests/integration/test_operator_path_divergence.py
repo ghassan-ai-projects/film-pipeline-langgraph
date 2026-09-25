@@ -356,7 +356,7 @@ def test_compiled_graph_approval_edge_remains_blocked_after_human_approval() -> 
     from langchain_core.runnables import RunnableConfig
     from langgraph.checkpoint.memory import MemorySaver
 
-    from film_pipeline.graph.graph import build_graph
+    from film_pipeline.app.graph_factory import build_graph
 
     before_approval = _blocked_provider_state()
     gate = compute_actions(before_approval)

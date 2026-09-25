@@ -10,13 +10,13 @@ import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
 from film_pipeline.app import _graph_exec
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.edges import after_approval
-from film_pipeline.graph.graph import (
+from film_pipeline.app.graph_factory import (
     _APPROVAL_DESTINATIONS,
     _route_current_phase,
     build_graph,
 )
+from film_pipeline.app.runtime import StudioRuntime
+from film_pipeline.graph.edges import after_approval
 from film_pipeline.graph.nodes._repair_loop import _PHASE_NODES
 from film_pipeline.graph.phase_sequence import (
     PHASE_NODES,

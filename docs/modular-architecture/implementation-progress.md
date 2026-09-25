@@ -78,7 +78,7 @@ Enola filter or threshold changed.
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
-| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan lenses pass; findings resolved | Pending | Pending | Current: 2 cycle findings; target after slice: 1, no additions | Pending | Plan reviewed |
+| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | Precommit Enola: clean, C3 removed (2→1 current cycles), no new finding | Pending | Committed-tree Enola check |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target after slice: 0 total cycle findings | Pending | Queued after C-04 |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -115,7 +115,7 @@ follow C-04; completing the graph slice alone is not migration completion.
   subgraph also reaches into nodes for service lookup and approval policy.
   Removing the composition edge and the sibling-to-node helper imports breaks
   the measured cycle without adding a runtime package.
-- **Planned code and tests:** move `graph/graph.py` intact to
+- **Code and tests:** moved `graph/graph.py` intact to
   `app/graph_factory.py`; update `langgraph.json` and every in-repository
   consumer. Do not leave a `graph.graph` forwarding module, which would restore
   an edge from `graph` to the app composition package. Preserve `build_graph`,
@@ -165,14 +165,24 @@ follow C-04; completing the graph slice alone is not migration completion.
   only when all three plan and implementation lenses pass, all in-repo imports
   use the app composition owner, the C3 cycle is removed (2→1 current cycles),
   no cycle is added, and the full quality gate passes.
-- **Plan review:** all three independent lenses pass with no remaining
-  actionable findings. Boundary review required the user's migration-first
+- **Plan and implementation reviews:** all six independent reviews passed with
+  no remaining actionable findings. Boundary review confirmed removal of the
+  measured C3 return path and coverage of the import forms; behavior review
+  confirmed preserved callable and state contracts; quality review found no
+  dead exports, weak or duplicate tests, or maintainability issue.
+  **Implementation proof:** changed graph/app suites pass (184 passed,
+  2 skipped, 10 xfailed), and the app-owned graph factory compiles.
+  The first full-gate attempt stopped at Ruff on import ordering in eight
+  retargeted test files; Ruff fixed these mechanical issues. The rerun passed
+  the full gate with 91.73% coverage, and strict mypy, source/wheel builds, and
+  the product gate passed.
+- **Plan review detail:** boundary review required the user's migration-first
   priority to be recorded against the R-01e sequencing recommendation; the
   existing eager checkpointer behavior remains deliberately deferred. Behavior
   review required tests for state-first service lookup, ContextVar fallback,
   and exact restoration of a prior context value after failure. Quality review
-  required package re-export and alias cases in the AST guard. All findings are
-  resolved in this plan; implementation has not started.
+  required package re-export and alias cases in the AST guard. All findings were
+  resolved before implementation.
 
 ## V-01 plan
 

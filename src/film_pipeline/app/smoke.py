@@ -11,7 +11,7 @@ from collections.abc import Callable
 def check_graph_compiles() -> tuple[bool, str]:
     """Verify the LangGraph graph compiles."""
     try:
-        from film_pipeline.graph.graph import build_graph
+        from film_pipeline.app.graph_factory import build_graph
 
         build_graph()
         return True, "Graph compiles successfully"

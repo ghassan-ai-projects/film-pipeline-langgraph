@@ -1,30 +1,11 @@
-"""Shared node-level state helpers: services access, gates, diff utilities."""
+"""Shared node-level state helpers for gates and state diffs."""
 
 from __future__ import annotations
 
-import contextvars
 import re
 from typing import Any
 
-from film_pipeline.graph.services import SERVICES_KEY, GraphServices
-
-_SERVICES_CTX: contextvars.ContextVar[GraphServices | None] = contextvars.ContextVar(
-    "_film_pipeline_services", default=None
-)
-
-
-def _get_services(state: dict[str, Any]) -> GraphServices | None:
-    """Return ``GraphServices`` from state, falling back to context variable.
-
-    When running through a LangGraph ``StateGraph`` channel system,
-    extra state keys not declared in the TypedDict may be dropped.
-    The context variable provides a reliable fallback.
-    """
-    svc = state.get(SERVICES_KEY)
-    if svc is not None:
-        return svc  # type: ignore[no-any-return]
-    return _SERVICES_CTX.get()
-
+from film_pipeline.graph.orchestrator_state import _require_human_approval
 
 _NUMBER_WORDS: dict[str, int] = {
     "one": 1,
@@ -127,21 +108,6 @@ def _coerce_user_runtime(state: dict[str, Any]) -> int:
     except (TypeError, ValueError):
         return 0
     return value if value > 0 else 0
-
-
-def _require_human_approval(state: dict[str, Any]) -> bool:
-    """Read ``require_human_approval`` from resolved config.
-
-    Defaults to ``True`` (gates ON) when the key is missing or the config
-    is unpopulated — safe-by-default for production. Set to ``False`` in
-    a profile (e.g. ``auto-approve.yaml``) for headless/automated runs.
-    """
-    cfg = state.get("resolved_config", {})
-    if isinstance(cfg, dict):
-        studio = cfg.get("studio", {})
-        if isinstance(studio, dict):
-            return bool(studio.get("require_human_approval", True))
-    return True
 
 
 def _phase_gate_updates(state: dict[str, Any], *, phase: str, gate: str) -> dict[str, Any]:

@@ -11,8 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from film_pipeline.graph.nodes._shared import _get_services
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.graph.services import GraphServices, _get_services
 from film_pipeline.schemas.matrix import MasterFilmMatrixRow
 
 

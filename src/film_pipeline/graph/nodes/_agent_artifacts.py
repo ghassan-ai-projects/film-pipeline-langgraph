@@ -10,9 +10,7 @@ from film_pipeline.graph.nodes._context import (
     _infer_artifact_type,
     _parse_ref,
 )
-from film_pipeline.graph.nodes._shared import (
-    _get_services,
-)
+from film_pipeline.graph.services import _get_services
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 
 if TYPE_CHECKING:

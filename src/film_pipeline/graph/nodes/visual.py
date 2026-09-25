@@ -14,7 +14,6 @@ from film_pipeline.graph.nodes._agent import (
 )
 from film_pipeline.graph.nodes._context import _parse_ref
 from film_pipeline.graph.nodes._shared import (
-    _get_services,
     _is_new_issue,
     _is_new_ref,
     _phase_gate_updates,
@@ -25,6 +24,7 @@ from film_pipeline.graph.nodes._visual_matrix_coverage import (
 from film_pipeline.graph.nodes._visual_matrix_coverage import (
     _load_script_scenes,
 )
+from film_pipeline.graph.services import _get_services
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.matrix import MasterFilmMatrix
 

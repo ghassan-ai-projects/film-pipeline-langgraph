@@ -11,9 +11,9 @@ from film_pipeline.graph.nodes._agent import (
     _save_artifact,
 )
 from film_pipeline.graph.nodes._shared import (
-    _get_services,
     _phase_gate_updates,
 )
+from film_pipeline.graph.services import _get_services
 
 
 def post_node(state: dict[str, Any]) -> dict[str, Any]:

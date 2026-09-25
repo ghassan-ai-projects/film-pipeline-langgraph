@@ -5,10 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from film_pipeline.graph.nodes._shared import (
-    _get_services,
-)
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.graph.services import GraphServices, _get_services
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.schemas._base import ArtifactType as _ArtifactType
 from film_pipeline.schemas._base import FilmPhase
