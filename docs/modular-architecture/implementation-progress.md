@@ -126,6 +126,26 @@ Enola filter or threshold changed.
 | D-02 | Correct `05-enforcement-and-guard-tests.md`: state that the guard suite was never implemented, and fix the false "exactly four `ast.parse` test files" measurement | Verified every claim against the tree: `tests/architecture/` absent, `architecture.py` absent, zero `ModuleContract` occurrences, 15 of 16 guards missing, measured count 8 not 4 | Documentation only; no test run required | N/A — docs-only change | N/A | `ef2fa73` | Complete |
 | P-02 | Move project classification policy (folder-name kind rule, explicit-kind validation, derived title) from `app/services/_project_discovery.py` into `projects.classification`; keep the runtime-coupled discovery helpers in app | Verified the pure half has no runtime dependency and that removing it deletes one of the four FES #3 blockers | PASS — new classification suite covering the substring rule, canonicalization, actionable error, precedence, and owner re-export | PASS — `make ci-check`; 2,187 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `018babb` | Complete |
 | OP-02a | Break FES #3 without moving `OperatorService`: declare `operations.ports.RuntimePort` structurally, widen `_persistence.storage_for`/`artifact_root` to the port, and guard that no `operations` module imports `film_pipeline.app` | Plan review found the move as originally briefed would materialize a forbidden edge; verified the remaining coupling is only `runtime.services.artifact_store` | PASS — new runtime-port suite: protocol conformance for the real runtime and a fake, store/absent-services branches, and a source-level FES #3 guard with mutation cases | PASS — `make ci-check`; 2,200 passed / 8 skipped / 11 xfailed; 92.00% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `ea0df4e` | Complete |
+| OP-02b | Remove the remaining forbidden `app.services → app.*` imports: extend `RuntimePort` to the measured surface, add `ProviderComposition`, supply the concrete bindings from `app/_operator_runtime.py`, and move the runtime-to-storage gateway into `storage.runtime_gateway` | Type checker caught two real protocol errors (settable `services`, mapping-typed `project_roots`/`provider_adapters`); `_persist_project_state` reach-in recorded as O7 debt rather than renamed | PASS — updated runtime-port suite proving the real runtime conforms, both injected collaborators conform, the service module has no module-level composition-root import, and the guard detects its claimed forms | PASS — `make ci-check`; 2,202 passed / 8 skipped / 11 xfailed; 91.99% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `157387a` | Complete |
+
+### OP-02c — the remaining physical move
+
+OP-02a and OP-02b removed the *coupling*; the files themselves have not moved.
+`app/services/` now contains no cross-package `app` import (only intra-package
+`app.services.*` references), so the module is clean enough to relocate. What
+remains is the physical move of `operator.py`, `_browse_ops.py`,
+`_checkpoint_ops.py`, and `_generation_ops.py` into `operations`, plus
+retargeting the four MCP consumers, the app-service alias modules, and the
+test imports and boundary-guard fixture strings.
+
+`_project_discovery.py` should go to `projects`, not `operations`: it is
+project discovery, and roadmap item 1 already assigns it there.
+
+This is deliberately a separate round. The move changes import paths for
+`OperatorService`, which the MCP tool facade re-exports and which 71 test sites
+reach through `film_pipeline.mcp.tools.get_runtime`. Those seams are verified
+intact after OP-02b, but they need their own round with their own review rather
+than being folded into a coupling change.
 
 ### OP-02 — why the round was rescoped
 
