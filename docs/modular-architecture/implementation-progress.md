@@ -25,7 +25,7 @@ direction and tested at consumer boundaries.
 | Slice | Scope | Review | Focused proof | Full gate / coverage | Enola | Commit | Status |
 |---|---|---|---|---|---|---|---|
 | G-01 | Reference extraction: immutable phase sequence, graph destinations, app/CLI/resume consumers, and callable-registry parity | Three independent lenses complete; all findings addressed | Graph/app/CLI/dynamic-routing subset passed | PASS — `make ci-check`; 2,008 passed / 8 skipped; 91.62% coverage | PASS — comparable baseline; 0 cycle findings added or removed | `62b3eea` | Complete |
-| O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Not started | Not started | Pending | Pending | Pending | Queued |
+| O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Three independent lenses complete; all findings resolved | PASS — 14 passed / 11 strict xfailed; `--runxfail` confirms all 11 fail at their intended divergences | PASS — `make ci-check`; 2,022 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — clean against comparable baseline; no cycle findings changed | Pending | Ready to commit |
 | R-01 | Repair proven runtime, validation handoff, and persistence defects from O-01 evidence | Not started | Not started | Pending | Pending | Pending | Queued |
 | V-01 | Consolidate other high-value vocabularies and provider registration ownership where tests prove a seam | Not started | Not started | Pending | Pending | Pending | Queued |
 | B-01 | Tighten only measured import boundaries after behavior fixes | Not started | Not started | Pending | Pending | Pending | Queued |
@@ -51,3 +51,45 @@ The first sandboxed `make ci-check` run passed format, lint, typing, and tests
 but could not fetch the isolated `hatchling` build backend because DNS access was
 blocked. The required full command was rerun with network access and passed,
 including source/wheel builds and the product gate.
+
+## O-01 review record
+
+- **Behavior lens:** confirmed approval can enter `generation` after a human
+  gate even when the provider is blocked; the graph edge and app fallback both
+  advance directly. Also flagged revision-note preservation, approval-result
+  reporting, and rollback state/report behavior for the next evidence pass; O-01
+  freezes their response surfaces but does not yet claim those secondary leads
+  are reproduced defects.
+- **Boundary lens:** identified that all four mutating operator handlers can
+  ignore the resolved request project and use active runtime state. Final
+  two-project probes cover `approve_phase`, `request_revision`, `run_validation`,
+  and checkpoint rollback. The action contract tests freeze `MCPResponse` and
+  the JSON-RPC distinction between handler results and pre-dispatch errors.
+- **Quality lens:** found existing tests mostly call handlers directly or use
+  self-framed stdio fixtures; recommended real registry dispatch, mutation-
+  relevant parity assertions, isolated roots, and no duplicate framing tests.
+  Final review confirmed strict typing, a real compiled graph QC subgraph, a
+  real persisted matrix fixture, and precise expected-failure boundaries.
+- **Protocol check:** the in-repo stdio uses `Content-Length`; the current MCP
+  transport spec requires newline-delimited JSON. The process probe sends only
+  the valid initialization request, so it records the framing divergence without
+  sending an operation before the initialize response.
+- **Final review loop:** the behavior lens found that the earlier batched probe
+  sent follow-up messages before receiving the initialize response. The probe
+  was narrowed to one initialization request; the final behavior, boundary, and
+  quality passes reported no remaining findings.
+
+O-01 is characterization-only until its test commit. Known-divergence probes
+must be strict expected failures so the suite stays green and the repair step
+cannot accidentally leave a probe failing silently after it is fixed. No
+production behavior changes are included in this slice.
+
+The QC parity target follows §4 of the approved decision: graph and MCP
+validation expose equivalent report findings, issues, and row-patch references.
+The current MCP QC branch returns only `ok` plus a no-validator message, while
+the existing script branch returns concise report summaries and saved refs.
+O-01 therefore records an additive QC result projection (`reports`, `issues`,
+and `qc_patch_ref`) as an explicit R-01 API target; the established script
+response remains separately frozen. The project-resolution probes cover all
+four mutating operator actions, and the stdio expected failure is isolated from
+process-startup and malformed-response failures.
