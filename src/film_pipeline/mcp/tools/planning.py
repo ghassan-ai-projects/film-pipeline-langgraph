@@ -6,9 +6,14 @@ import math
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.budget import cap_for
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
 from .helpers import _error, _latest_artifact_version, _ok, _services
+
+#: Fallback cap when neither the caller nor the project supplies one. Kept
+#: explicit and named so it is visible as the last-resort default it is.
+_DEFAULT_CAP_USD: float = 100.0
 
 
 async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
@@ -18,10 +23,21 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     if not active:
         return _error("No active project.")
     project_id = str(active["project_id"])
-    try:
-        cap = float(cast(float, args.get("cap_usd", 100.0)))
-    except (TypeError, ValueError):
-        return _error("cap_usd must be a number.")
+    raw_cap = args.get("cap_usd")
+    if raw_cap is None:
+        # Read the project's configured cap rather than carrying a rival literal.
+        # `cap_for` returns unlimited when nothing is configured; that is a real
+        # gap (profiles declare `project_cap_usd`, but no creation path writes it
+        # onto the project), so this preserves the previous *effective* behavior
+        # of "no cap supplied means no limit" instead of silently inventing 100.
+        cap = cap_for(active)
+        if not math.isfinite(cap):
+            cap = _DEFAULT_CAP_USD
+    else:
+        try:
+            cap = float(cast(float, raw_cap))
+        except (TypeError, ValueError):
+            return _error("cap_usd must be a number.")
     if not math.isfinite(cap) or cap < 0:
         return _error("cap_usd must be a finite, non-negative number.")
     store = _services(rt).artifact_store
