@@ -36,9 +36,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 4 remain (C2–C5); C1 was removed by C-01 |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | 3 remain (C2, C3, C5); C1 was removed by C-01 and C4 by C-02 |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 111 in the live C-01 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | 111 in the latest C-02 check; pinned receipt remains at baseline 110 |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -56,6 +56,11 @@ dependency-depth insight; the changed prompt-template dependency path produced
 a new dependency-depth advisory, so the aggregate insight count stayed level.
 No Enola filter or threshold changed.
 
+C-02 removed C4. Its committed-tree check at 21:08 UTC was clean with three
+current cycle insights and 114 total insights (111 heuristic insights). The
+live cycle count fell from four to three, with no new finding; the pinned
+receipt remains unchanged and no Enola filter or threshold changed.
+
 ## Progress ledger
 
 | Slice | Scope | Review | Focused proof | Full gate / coverage | Enola | Commit | Status |
@@ -65,7 +70,7 @@ No Enola filter or threshold changed.
 | R-01a | Migration only: move checkpoint rollback manager orchestration and bookkeeping from MCP tools into `OperatorService` / app services while preserving active-project selection, confirmation, errors, and response projection | Three independent final reviews pass; first-round findings addressed | PASS — 63 passed / 10 strict xfailed across checkpoint service, MCP checkpoint, and O-01 divergence suites | PASS — `make ci-check`; 2,023 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — docs-local snapshot baseline; clean, no cycle delta | `e5a74dc` | Complete |
 | V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
-| C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three independent plan reviews pass; import-path changes recorded | Pending | Pending | Target: 1 cycle → 0 | Pending | Planned |
+| C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`, preserving schema and registry exports | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
@@ -248,6 +253,25 @@ export surface. All three final plan reviews pass. They also identified the two
 source-visible import paths being removed; this migration is documented above
 and preserves in-repository behavior without a cycle-preserving compatibility
 shim.
+
+## C-02 implementation review record
+
+The boundary review confirmed app-owned construction adds no providers-to-app
+edge and that the AST guard covers absolute and relative adapter imports. The
+behavior review confirmed the builder body/signature stayed intact, the local
+factory imports preserve lazy loading and the existing monkeypatch seam, and
+the tests do not consult ambient credentials. The quality review required the
+factory matrix to compare the full `ProviderCapabilities` value and to cover
+the omitted `provider_type` and empty profile-model defaults; those cases were
+added before final review. All three final reviews passed with no remaining
+finding.
+
+The focused changed suites, Ruff checks, formatting, and `git diff --check`
+passed. `make ci-check` passed with 2,041 passed, 8 skipped, 11 xfailed,
+91.73% coverage, source and wheel builds, and the product gate. The live
+committed-tree Enola check at 21:08 UTC was clean: current cycles fell from
+four to three, with 114 total insights (111 heuristics) against the pinned
+115-insight baseline. Code commit: `d02e439`.
 
 ## R-01a plan
 

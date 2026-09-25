@@ -1424,6 +1424,22 @@ removed as part of the migration; the builder behavior remains covered by the
 current progress ledger. This correction records the complete measured edge;
 it does not revive the superseded 20-module proposal.
 
+#### C4 implementation status correction (2026-09-25)
+
+C-02 is implemented. The builder now lives in
+`src/film_pipeline/app/_provider_factory.py`; the profile and default-seed
+composition paths import it from `app`, and `providers/__init__.py` no longer
+imports a concrete adapter. `providers.adapters` remains the adapter export
+surface, while the removed `providers.factory` and root Imagen paths have no
+in-repository callers. This is the selected existing-app composition route
+recorded in the implementation ledger, rather than the provisional `studio`
+wording in the target row above. The factory builder body and signature are
+preserved, with the behavior characterized by the C-02 test matrix.
+
+The committed-tree Enola check at 21:08 UTC was clean and reduced the current
+cycle count from four to three; no cycle was added. The pinned baseline remains
+unchanged. See `implementation-progress.md` for review and validation evidence.
+
 C1, C4, C5 are cheap: each member pair maps to one target module, so the enola
 cycle vanishes as soon as the module catalog is applied; the concrete source
 edge is additionally deleted to keep the file-level import graph clean.
