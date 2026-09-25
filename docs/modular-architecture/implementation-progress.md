@@ -19,9 +19,11 @@ into `storage`, `projects`, `operations`, `studio`, `governance`, and
 `validation`, `generation`, `post`, and `mcp`) and add `budget` and
 `devharness` only when their current responsibilities are ready to move.
 Each round names the source and consumers and gets its own commit. From F-02
-onward, tests and Enola have not been run by user direction; compatibility
-checks were added but their results are pending. The last measured Enola
-result applies only to commit `d86db22`. The
+onward, tests and Enola were not run by user direction; R2-01 measured the tree
+and found the gate **red**, and repaired it (see the R2-01 row). Every round
+from R2-02 onward runs its own focused proof, the full `make ci-check`, and its
+own Enola check before commit; a round with a red gate is not complete.
+The last measured Enola result applies only to `7254827`. The
 R-01b through R-01e behavior repairs remain deferred.
 
 This log tracks implementation slices from the reviewed direction in
@@ -115,6 +117,47 @@ Enola filter or threshold changed.
 | OP-01 | Move operator view models and service errors into `operations`; preserve app-service aliases and retarget consumers | Leaf contracts and imports inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `42b9aa5` | Migrated; verification deferred |
 | ST-03 | Move immutable `KindSpec` and renderer type into `storage.contract`; preserve registry aliases and retarget store | Registry value object and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `d10c18b` | Migrated; verification deferred |
 | DH-01 | Move mock actors, in-memory Git, storage fixtures, and scenarios into `devharness`; keep `testing` aliases and wheel content during behavior freeze | Harness source modules inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `0167bd9` | Migrated; packaging seal deferred |
+| R2-01 | Repair the tree so the quality gate can run again: fix the broken test collection, the strict-mypy re-export errors, and the shim surfaces that caused them | Independent audit of the whole tree; no behavior change claimed | PASS — review, governance, testing, devharness, graph-boundary, and artifact suites; full `pytest --collect-only` over `tests/` | PASS — `make ci-check`; 1,986 passed / 7 skipped / 11 xfailed; 91.75% coverage; strict mypy, source/wheel builds, product gate | PASS — live docs-local check at 23:34 UTC; clean, zero cycle findings; 8,240 facts | `7254827` | Complete |
+
+### R2-01 — the gate was broken, not merely unverified
+
+F-02 through DH-01 recorded "not run by user direction" and were therefore
+never actually validated. R2-01 measured the tree and found it **red**: three
+independent defects that made `make ci-check` impossible to pass, all of them
+consequences of the migration rounds themselves.
+
+1. **The whole test suite could not be collected.** `tests/unit/review/test_diff.py`
+   imported the private `_id_stem` from `film_pipeline.review.diff`, a four-line
+   alias module created by G-03 that never carried the private helper. pytest
+   aborted collection with `ImportError`, so *no* test in the repository could
+   run. Fixed by importing from the owner, `film_pipeline.governance.diff`,
+   which is the same pattern the other alias tests use.
+2. **Strict mypy failed with 16 errors in six files.** `graph/_action_routing.py`
+   bound `APPROVAL_GATES` through a plain `import ... as`, which mypy does not
+   accept as an explicit re-export, and the five `testing/*` shims re-exported
+   standard-library names (`Path`, `dataclass`, `field`, `Any`, `StrEnum`) that
+   merely leaked out of the `devharness` modules they alias.
+3. **The shim surfaces were wider than any consumer needed.** The `testing/*`
+   shims now re-export only the symbols that are actually used and declare
+   `__all__`. Object identity is unchanged, and the removed names had no
+   consumer in `src/`, `tests/`, or `scripts/`.
+
+The behavior freeze held: no functional code path changed, and the diff is
+limited to import surfaces. The Enola check is clean against the docs-local
+receipt with zero cycle findings.
+
+A full-tree audit run alongside this round also corrected two premises that
+later rounds depended on, and they are recorded here rather than in a chat log:
+
+- `src/film_pipeline/testing/*.py` are **alias shims, not duplicate copies**.
+  `git show --stat 0167bd9` shows the modules were reduced, not added
+  (`testing/in_memory_git.py | 202 +--------------------`); today every line is
+  an `X as X` re-export, and they have live consumers in `tests/`. They are
+  retarget-first material, never "delete as duplicated".
+- `src/film_pipeline/schemas/_base.py` is **not a pure shim** despite being
+  small: it has roughly 90 import sites, including four under `scripts/` that
+  pytest never executes and that would therefore break silently. It is the most
+  expensive retarget in the repository and must be scheduled late, not early.
 
 ## Remaining migration work
 
