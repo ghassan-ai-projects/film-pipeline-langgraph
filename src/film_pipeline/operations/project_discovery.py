@@ -1,11 +1,13 @@
 """Discovery of projects found in artifact storage but absent from runtime memory.
 
-Only the two helpers that need a live runtime live here: scanning the storage
-root and promoting a discovered folder into a runtime project. The pure
-classification rules they rely on — project kind, title, and name policy — are
-owned by :mod:`film_pipeline.projects.classification`.
+This is operator-surface code: it takes an `OperatorService`, reads the
+runtime's storage gateway, and produces `ProjectListItem` view models. It lives
+in `operations` rather than `projects` because `projects` (L4) may import only
+`filmspec`, `schemas`, and `storage` — importing this layer's view models or
+service would invert the layer order.
 
-The former names remain importable from this module while its consumers migrate.
+The pure classification rules it relies on — project kind, title, and name
+policy — are owned by :mod:`film_pipeline.projects.classification`.
 """
 
 from __future__ import annotations
@@ -13,18 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.operations.models import ProjectListItem
-from film_pipeline.projects.classification import (
-    normalize_project_kind as normalize_project_kind,
-)
-from film_pipeline.projects.classification import (
-    project_kind_for_name as project_kind_for_name,
-)
-from film_pipeline.projects.classification import (
-    project_kind_for_state as project_kind_for_state,
-)
-from film_pipeline.projects.classification import (
-    project_title_from_id as project_title_from_id,
-)
+from film_pipeline.projects.classification import project_kind_for_name, project_title_from_id
 from film_pipeline.storage.runtime_gateway import project_storage_for as storage_for
 
 if TYPE_CHECKING:
@@ -33,10 +24,6 @@ if TYPE_CHECKING:
 __all__ = [
     "discover_project_folders",
     "load_discovered_project",
-    "normalize_project_kind",
-    "project_kind_for_name",
-    "project_kind_for_state",
-    "project_title_from_id",
 ]
 
 

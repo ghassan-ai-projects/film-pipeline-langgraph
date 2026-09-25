@@ -16,15 +16,22 @@ from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.story_bible import SceneList
 from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
 from film_pipeline.storage.store import ArtifactStore
+from film_pipeline.studio._operator_runtime import operator_service
 from film_pipeline.studio.runtime import create_runtime
 
 
 def _service(tmp_path: Path) -> OperatorService:
+    """A fully-wired operator service, built the way production builds it.
+
+    The composition root supplies the runtime provider and provider
+    composition; `operations` cannot supply them itself without importing
+    `studio`, which would close an `operations <-> studio` cycle.
+    """
     runtime = create_runtime("mock")
     runtime.runtime_root = tmp_path
     assert runtime.services is not None
     runtime.services.artifact_store = ArtifactStore(root=tmp_path / "projects")
-    return OperatorService(runtime)
+    return operator_service(runtime)
 
 
 class TestOperatorService:

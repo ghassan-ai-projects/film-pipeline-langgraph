@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.projects.classification import (
     VALID_PROJECT_KINDS,
+    InvalidProjectKindError,
     normalize_project_kind,
     project_kind_for_name,
     project_kind_for_state,
@@ -52,11 +52,11 @@ class TestNormalizeProjectKind:
         assert normalize_project_kind("  PRODUCTION  ") == "production"
 
     def test_unknown_kind_raises_actionable_error(self) -> None:
-        with pytest.raises(BackendOperationError, match=r"production.*test"):
+        with pytest.raises(InvalidProjectKindError, match=r"production.*test"):
             normalize_project_kind("staging")
 
     def test_error_reports_the_rejected_value(self) -> None:
-        with pytest.raises(BackendOperationError, match="staging"):
+        with pytest.raises(InvalidProjectKindError, match="staging"):
             normalize_project_kind("staging")
 
 
@@ -72,7 +72,7 @@ class TestProjectKindForState:
         assert project_kind_for_state({"project_kind": "   "}, "test-thing") == "test"
 
     def test_invalid_declared_kind_raises(self) -> None:
-        with pytest.raises(BackendOperationError):
+        with pytest.raises(InvalidProjectKindError):
             project_kind_for_state({"project_kind": "bogus"}, "my-film")
 
 
@@ -90,11 +90,36 @@ class TestProjectTitleFromId:
         assert project_title_from_id(project_id) == expected
 
 
-def test_discovery_module_reexports_the_owner() -> None:
-    """The operator discovery module must not carry its own copies."""
-    from film_pipeline.projects import discovery
+def test_discovery_lives_in_the_operator_layer() -> None:
+    """Discovery is operator-surface code, not a `projects` concern.
 
-    assert discovery.project_kind_for_name is project_kind_for_name
-    assert discovery.normalize_project_kind is normalize_project_kind
-    assert discovery.project_kind_for_state is project_kind_for_state
-    assert discovery.project_title_from_id is project_title_from_id
+    `projects` sits at L4 and may import only `filmspec`, `schemas`, and
+    `storage`. Discovery takes an `OperatorService` and produces operator view
+    models, so it belongs to `operations`; keeping it in `projects` created an
+    `operations <-> projects` import cycle.
+    """
+    from film_pipeline.operations import project_discovery
+
+    assert callable(project_discovery.discover_project_folders)
+    assert callable(project_discovery.load_discovered_project)
+    assert not hasattr(project_discovery, "normalize_project_kind")
+
+
+def test_projects_package_imports_no_higher_layer() -> None:
+    """No module under `projects` may import `operations` or `studio`."""
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "projects"
+    forbidden = ("film_pipeline.operations", "film_pipeline.studio")
+    offenders: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            targets: list[str] = []
+            if isinstance(node, ast.Import):
+                targets = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                targets = [node.module or ""]
+            offenders.extend(f"{path.name}: {t}" for t in targets if t.startswith(forbidden))
+    assert offenders == [], f"projects imports a higher layer: {offenders}"

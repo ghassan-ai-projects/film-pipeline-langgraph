@@ -18,11 +18,11 @@ from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import resolve_project_config
-from film_pipeline.operations import OperatorService
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage.contract import sanitize_artifact_id
+from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_id,
@@ -124,7 +124,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    OperatorService(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
+    operator_service(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack

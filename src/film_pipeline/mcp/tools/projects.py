@@ -9,7 +9,8 @@ from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
 )
-from film_pipeline.operations import OperatorService
+from film_pipeline.operations.operator import OperatorService
+from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_state,
@@ -175,7 +176,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        service = OperatorService(rt)
+        service = operator_service(rt)
         profile_error = _validate_resolved_profile(
             profile_stack, resolved_config, runtime_mode, service
         )

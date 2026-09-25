@@ -14,6 +14,7 @@ inside the service.
 from __future__ import annotations
 
 from film_pipeline.config.profile_resolver import provider_specs
+from film_pipeline.operations.operator import OperatorService
 from film_pipeline.operations.ports import RuntimePort
 from film_pipeline.providers.credentials import (
     MissingProviderCredential,
@@ -122,3 +123,17 @@ __all__ = [
     "reset_runtime",
     "runtime_for",
 ]
+
+
+def operator_service(runtime: RuntimePort | None = None) -> OperatorService:
+    """Build an operator service wired to this composition root's collaborators.
+
+    The service requires a runtime provider and a provider composition; both are
+    composition-root policy, so `studio` supplies them and `operations` never
+    imports back into this package.
+    """
+    return OperatorService(
+        runtime=runtime,
+        provider=StudioRuntimeProvider(),
+        composition=profile_provider_composition(),
+    )

@@ -35,6 +35,10 @@ from film_pipeline.operations.ports import (
     RuntimePort,
     RuntimeProvider,
 )
+from film_pipeline.operations.project_discovery import (
+    discover_project_folders,
+    load_discovered_project,
+)
 from film_pipeline.orchestration import orchestrator_state as ostate
 from film_pipeline.orchestration.router import (
     RouterResult,
@@ -43,12 +47,9 @@ from film_pipeline.orchestration.router import (
     public_blocked_actions,
 )
 from film_pipeline.projects.classification import (
+    InvalidProjectKindError,
     normalize_project_kind,
     project_kind_for_state,
-)
-from film_pipeline.projects.discovery import (
-    discover_project_folders,
-    load_discovered_project,
 )
 from film_pipeline.providers.credentials import MissingProviderCredential
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
@@ -60,7 +61,12 @@ class OperatorService:
     The runtime may be supplied directly or resolved lazily through an injected
     :class:`~film_pipeline.operations.ports.RuntimeProvider`. Resolution policy
     belongs to the composition root, so `operations` declares the capability and
-    the app supplies it (see ``film_pipeline.studio._operator_runtime``).
+    `studio` supplies it.
+
+    The collaborators are required rather than defaulted. A lazy default would
+    have to import `film_pipeline.studio`, and `studio` already imports this
+    module — that mutual edge is a dependency cycle, and the production call
+    sites all pass a runtime explicitly, so the default bought nothing.
     """
 
     def __init__(
@@ -70,23 +76,31 @@ class OperatorService:
         composition: ProviderComposition | None = None,
     ) -> None:
         self._runtime = runtime
-        if provider is None or composition is None:
-            from film_pipeline.studio._operator_runtime import (
-                StudioRuntimeProvider,
-                profile_provider_composition,
-            )
-
-            if provider is None:
-                provider = StudioRuntimeProvider()
-            if composition is None:
-                composition = profile_provider_composition()
         self._provider = provider
         self._composition = composition
 
     @property
     def runtime(self) -> RuntimePort:
-        """Return the configured runtime, resolving the singleton lazily."""
-        return self._runtime if self._runtime is not None else self._provider.current()
+        """Return the configured runtime, resolving through the injected provider."""
+        if self._runtime is not None:
+            return self._runtime
+        return self._require_provider().current()
+
+    def _require_provider(self) -> RuntimeProvider:
+        """Return the injected runtime provider, or fail with an actionable error."""
+        if self._provider is None:
+            raise BackendOperationError(
+                "OperatorService requires a runtime or an injected RuntimeProvider."
+            )
+        return self._provider
+
+    def _require_composition(self) -> ProviderComposition:
+        """Return the injected provider composition, or fail actionably."""
+        if self._composition is None:
+            raise BackendOperationError(
+                "OperatorService requires an injected ProviderComposition for this call."
+            )
+        return self._composition
 
     def list_projects(self) -> list[ProjectListItem]:
         """List all known projects with operator status fields."""
@@ -155,7 +169,13 @@ class OperatorService:
         """Copy the operator-chosen modes, kind, and policy into the fresh state."""
         state["runtime_mode"] = request.runtime_mode
         state["workflow_mode"] = request.workflow_mode
-        state["project_kind"] = normalize_project_kind(request.project_kind)
+        try:
+            state["project_kind"] = normalize_project_kind(request.project_kind)
+        except InvalidProjectKindError as exc:
+            # `projects` raises a ValueError-family error because it may not
+            # import this layer's error type; the operator boundary owns the
+            # caller-facing translation.
+            raise BackendOperationError(str(exc)) from exc
         state["generation_policy"] = request.generation_policy
         self._resolve_and_store_profiles(state, request)
 
@@ -187,7 +207,9 @@ class OperatorService:
         resolved_config: dict[str, object],
     ) -> None:
         """Register adapters selected by the resolved project profile."""
-        self._composition.register_profile_providers(self.runtime, profile_stack, resolved_config)
+        self._require_composition().register_profile_providers(
+            self.runtime, profile_stack, resolved_config
+        )
 
     def missing_profile_credentials(
         self,
@@ -195,7 +217,9 @@ class OperatorService:
         resolved_config: dict[str, object],
     ) -> list[MissingProviderCredential]:
         """List missing credentials for providers selected by the profile."""
-        return self._composition.missing_profile_credentials(profile_stack, resolved_config)
+        return self._require_composition().missing_profile_credentials(
+            profile_stack, resolved_config
+        )
 
     def _activate_new_project(
         self, project_id: str, state: dict[str, Any], request: ProjectCreateRequest
@@ -235,10 +259,11 @@ class OperatorService:
                     "Runtime mode is fixed for an explicitly injected runtime."
                 )
             return self._runtime.server_mode
-        if self._provider.current().server_mode == mode:
+        provider = self._require_provider()
+        if provider.current().server_mode == mode:
             return mode
         os.environ["FILM_PIPELINE_MCP_MODE"] = mode
-        runtime = self._provider.switch(mode)
+        runtime = provider.switch(mode)
         runtime.seed_default_provider_health()
         return runtime.server_mode
 

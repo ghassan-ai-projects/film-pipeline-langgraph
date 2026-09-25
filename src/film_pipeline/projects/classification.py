@@ -6,22 +6,29 @@ pure functions over names and state, with no runtime, storage, or operator
 dependency, so both the operator service and any future surface can share one
 definition.
 
-Ownership note: this module deliberately does not know about the runtime. The
-storage-scanning helpers that need a live runtime stay with the operator
-service until the runtime is available through an injected port.
+`projects` sits at L4 and may import only `filmspec`, `schemas`, and `storage`,
+so this module raises the built-in :class:`ValueError` for a bad kind. The
+operator surface translates that into its own `BackendOperationError` at the
+boundary where a caller-facing message is built.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 
-from film_pipeline.operations.errors import BackendOperationError
-
 #: Folder-name markers that identify throwaway or fixture projects. A project
 #: whose name contains any of these is classified as test scaffolding.
 _TEST_NAME_MARKERS: tuple[str, ...] = ("test", "fixture", "sample", "tmp", "demo")
 
 VALID_PROJECT_KINDS: frozenset[str] = frozenset({"production", "test"})
+
+
+class InvalidProjectKindError(ValueError):
+    """Raised when a project kind falls outside the closed set.
+
+    A `ValueError` subclass, so existing callers that catch `ValueError` keep
+    working while the operator boundary can catch this precisely.
+    """
 
 
 def project_kind_for_name(name: str) -> str:
@@ -33,12 +40,12 @@ def project_kind_for_name(name: str) -> str:
 def normalize_project_kind(project_kind: str) -> str:
     """Validate and canonicalize an explicit project kind.
 
-    Raises :class:`BackendOperationError` for a kind outside the closed set, so
-    callers surface an actionable message rather than storing a bad value.
+    Raises :class:`InvalidProjectKindError` for a kind outside the closed set,
+    so callers surface an actionable message rather than storing a bad value.
     """
     kind = project_kind.strip().lower()
     if kind not in VALID_PROJECT_KINDS:
-        raise BackendOperationError(
+        raise InvalidProjectKindError(
             f"project_kind must be 'production' or 'test', got '{project_kind}'."
         )
     return kind

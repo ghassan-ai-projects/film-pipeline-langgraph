@@ -134,10 +134,10 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     if project_id is None:
         return _error("No active project.")
     from film_pipeline.operations.errors import ServiceError
-    from film_pipeline.operations.operator import OperatorService
+    from film_pipeline.studio._operator_runtime import operator_service
 
     try:
-        previews = OperatorService(rt).preview_generation_prompts(project_id)
+        previews = operator_service(rt).preview_generation_prompts(project_id)
     except ServiceError as exc:
         return _error(str(exc))
     return _ok(previews=previews)

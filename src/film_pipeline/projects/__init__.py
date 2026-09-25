@@ -2,6 +2,7 @@
 
 from film_pipeline.projects.classification import (
     VALID_PROJECT_KINDS,
+    InvalidProjectKindError,
     normalize_project_kind,
     project_kind_for_name,
     project_kind_for_state,
@@ -17,6 +18,7 @@ from film_pipeline.projects.resolution import (
 __all__ = [
     "VALID_PROJECT_KINDS",
     "AmbiguousProjectError",
+    "InvalidProjectKindError",
     "ProjectRecord",
     "ProjectRegistry",
     "ResolutionResult",
