@@ -108,7 +108,15 @@ class TestConcurrentWrites:
 
 
 class TestProjectRecord:
-    def test_project_json_round_trips_typed_and_extra_fields(self, tmp_path: Path) -> None:
+    def test_project_json_round_trips_the_typed_record_only(self, tmp_path: Path) -> None:
+        """`project.json` carries the project record, not graph state.
+
+        It used to accept undeclared keys because the model set
+        ``extra="allow"``, which is how 17 graph keys — reducer-managed
+        channels, private orchestrator bookkeeping, derived values — ended up
+        in the persisted record. Graph state is preserved separately in
+        ``state/graph-state.json``, so nothing is lost by closing the shape.
+        """
         from film_pipeline.studio.runtime import StudioRuntime
 
         rt = StudioRuntime(
@@ -123,13 +131,17 @@ class TestProjectRecord:
         assert record["schema_version"] == 1
         assert record["project_id"] == "p1"
         assert record["title"] == "Round Trip"
-        # Runtime-only extras survive the typed round trip.
+
+        # A graph-state key added to the live state must not reach the record.
         state = rt.get_project("p1")
         assert state is not None
-        state["custom_key"] = "kept"
+        state["artifact_refs"] = ["artifact:script:S001:v1"]
+        state["_qc_reports"] = [{"ok": True}]
         rt._persist_project_state("p1")
         reloaded = json.loads(project_file.read_text())
-        assert reloaded["custom_key"] == "kept"
+        assert "artifact_refs" not in reloaded
+        assert "_qc_reports" not in reloaded
+        assert set(reloaded) <= set(record)
 
     def test_stale_legacy_file_is_ignored(self, tmp_path: Path) -> None:
         """`project-state.json` is never read; a stale copy cannot leak in."""
@@ -456,3 +468,47 @@ class TestMediaLayout:
         # State IS tracked; media is NOT (it lives in the asset manifest).
         assert "project.json" in tracked
         assert all(not path.startswith("media/") for path in tracked)
+
+
+class TestProjectRecordIsClosed:
+    """The record is a closed, frozen contract, not graph scratch space.
+
+    Measured before this change: a live project state carried 28 keys and 17 of
+    them were undeclared graph state that reached `project.json` because the
+    model set `extra="allow"`. Closing the shape took the suite from 96
+    failures to zero, and this guard keeps it closed.
+    """
+
+    def test_undeclared_fields_are_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from film_pipeline.schemas.runtime_state import ProjectRecord
+
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            ProjectRecord.model_validate({"project_id": "p1", "artifact_refs": []})
+
+    def test_record_is_frozen(self) -> None:
+        from pydantic import ValidationError
+
+        from film_pipeline.schemas.runtime_state import ProjectRecord
+
+        record = ProjectRecord(project_id="p1")
+        with pytest.raises(ValidationError):
+            record.project_id = "p2"
+
+    def test_persisted_record_holds_only_declared_fields(self, tmp_path: Path) -> None:
+        from film_pipeline.schemas.runtime_state import ProjectRecord
+        from film_pipeline.studio.runtime import StudioRuntime
+
+        rt = StudioRuntime(server_mode="mock", runtime_root=tmp_path / "runtime")
+        rt.create_project("p1", title="Closed")
+        rt.set_active("p1")
+        state = rt.get_project("p1")
+        assert state is not None
+        # Simulate graph state that used to leak into the record.
+        state["artifact_refs"] = ["a"]
+        state["_routing_decisions"] = [{"x": 1}]
+        state["pacing_style"] = "slow"
+        rt._persist_project_state("p1")
+        reloaded = json.loads((rt.project_roots["p1"] / "project.json").read_text())
+        assert set(reloaded) <= set(ProjectRecord.model_fields)

@@ -264,10 +264,35 @@ def _stringified(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [json.loads(json.dumps(record, default=str)) for record in records]
 
 
+#: Fields of the live project state that belong in the persisted project
+#: record. Everything else in `rt.projects[project_id]` is graph state — it is
+#: checkpointed separately as `state/graph-state.json` and must not leak into
+#: the record.
+_RECORD_FIELDS: frozenset[str] = frozenset(ProjectRecord.model_fields)
+
+
+def _project_record_from_state(state: dict[str, Any]) -> ProjectRecord:
+    """Extract the project record from live graph state.
+
+    `rt.projects[project_id]` holds the *entire graph state*, not a record: it
+    carries reducer-managed channels (`artifact_refs`, `issues`,
+    `generation_requests`), private orchestrator bookkeeping
+    (`_qc_reports`, `_routing_decisions`), and derived values. Validating the
+    whole dict into `ProjectRecord` worked only because the model tolerated
+    undeclared keys via ``extra="allow"``, which is how 17 graph keys ended up
+    in `project.json`.
+
+    Only the declared fields are read here, so the record has one writer and a
+    closed shape.
+    """
+    known = {key: value for key, value in state.items() if key in _RECORD_FIELDS}
+    return ProjectRecord.model_validate(known)
+
+
 def persist_project_state(rt: StudioRuntime, project_id: str) -> None:
     """Persist the typed project record (``project.json``, atomic)."""
     storage = storage_for(rt)
     if storage is None:
         return
-    record = ProjectRecord.model_validate(rt.projects[project_id])
+    record = _project_record_from_state(rt.projects[project_id])
     storage.write_project_record(project_id, record)

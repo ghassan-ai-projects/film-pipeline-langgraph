@@ -4,8 +4,10 @@ The runtime persists one typed project record and one machine state
 snapshot per project instead of raw dict dumps:
 
 - ``project.json``      — :class:`ProjectRecord`, the human- and MCP-readable
-                          project entry point (known fields typed, unknown
-                          runtime fields preserved via ``extra="allow"``).
+                          project entry point. A closed, frozen set of fields:
+                          graph state is checkpointed separately, so the record
+                          must not absorb it. It previously set
+                          ``extra="allow"``, which let 17 graph keys reach disk.
 - ``state/graph-state.json`` — :class:`GraphStateSnapshot`, the machine-only
                           LangGraph state snapshot written once per mutating
                           operation (replaces ``project-state.json`` plus
@@ -27,9 +29,15 @@ class ProjectRecord(BaseModel):
 
     Frozen: a change produces a new record rather than mutating this one, so a
     caller cannot silently alter persisted state through a shared reference.
+
+    Closed: the shape is exactly the fields declared here. The live project
+    state is the *graph* state — 28 keys, including reducer-managed channels
+    and private orchestrator bookkeeping — and it is checkpointed separately in
+    ``state/graph-state.json``. Only the declared fields are projected into the
+    record when persisting.
     """
 
-    model_config = ConfigDict(extra="allow", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: int = 1
     project_id: str = ""
