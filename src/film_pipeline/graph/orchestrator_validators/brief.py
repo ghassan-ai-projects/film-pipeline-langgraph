@@ -40,8 +40,8 @@ def _load_brief_from_store(state: dict[str, Any]) -> ExecutionBrief | None:
     services = _get_services(state)
     if services is None:
         return None
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     project_id = str(state.get("project_id", ""))
     if not project_id:
@@ -177,8 +177,8 @@ def _story_bible_cross_check(
     if not story_bible_ref:
         return []
     from film_pipeline.graph.services import _get_services
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     services = _get_services(state)
     if services is None:

@@ -6,7 +6,7 @@ scan order that matters. No logic lives here.
 
 from __future__ import annotations
 
-from film_pipeline.schemas._base import FilmType
+from film_pipeline.schemas.base import FilmType
 from film_pipeline.schemas.project import DeliveryMode
 
 # Number words up to twenty, plus some common larger ones.

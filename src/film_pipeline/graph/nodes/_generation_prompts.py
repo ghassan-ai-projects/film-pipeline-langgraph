@@ -27,7 +27,7 @@ def _load_artifact_data(
     project_id = str(state.get("project_id", ""))
     if not project_id:
         return None
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         return services.artifact_store.load(
@@ -83,7 +83,7 @@ def _load_visual_dev_bible(
     bible_id: str,
 ) -> dict[str, Any] | None:
     """Load the latest visual_dev bible, returning None when absent or malformed."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     version = services.artifact_store.latest_version(project_id, "visual_dev", bible_id)
     try:

@@ -10,8 +10,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
 
 class _ArtifactLoader(Protocol):

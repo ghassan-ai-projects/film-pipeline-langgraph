@@ -17,8 +17,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from film_pipeline.artifacts.serialization import NonFiniteNumberError
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
 
 class SchemaTooNewError(RuntimeError):

@@ -11,7 +11,7 @@ from film_pipeline.graph.nodes._context import (
     _parse_ref,
 )
 from film_pipeline.graph.services import _get_services
-from film_pipeline.schemas._base import ArtifactType as _ArtifactType
+from film_pipeline.schemas.base import ArtifactType as _ArtifactType
 
 if TYPE_CHECKING:
     from film_pipeline.graph.services import GraphServices
@@ -60,8 +60,8 @@ def _build_artifact_metadata(
     """
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     project_id = str(state.get("project_id", ""))
     version = services.artifact_store.next_version(project_id, provenance.phase, artifact_id)

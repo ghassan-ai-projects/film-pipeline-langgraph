@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import MutableSchemaBase, SchemaBase
+from film_pipeline.schemas.base import MutableSchemaBase, SchemaBase
 
 
 class CostEstimate(SchemaBase):

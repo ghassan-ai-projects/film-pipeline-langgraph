@@ -19,7 +19,7 @@ from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHAS
 from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
 from film_pipeline.filmspec import next_phase
 from film_pipeline.graph import orchestrator_state as ostate
-from film_pipeline.schemas._base import ValidationStatus
+from film_pipeline.schemas.base import ValidationStatus
 
 
 @dataclass

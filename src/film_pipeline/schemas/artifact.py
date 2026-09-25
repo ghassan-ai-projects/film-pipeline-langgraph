@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
 
 _REF_VERSION_PATTERN = re.compile(r"^v(\d+)$")
 

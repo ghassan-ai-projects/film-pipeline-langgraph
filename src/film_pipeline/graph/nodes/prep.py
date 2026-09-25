@@ -363,7 +363,7 @@ def _development_scene_count(state: dict[str, Any]) -> int:
     if services is None or not ref:
         return 0
     try:
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         parsed = _parse_ref(ref)
         data = services.artifact_store.load(

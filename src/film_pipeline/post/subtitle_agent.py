@@ -79,8 +79,8 @@ class SubtitleAgent:
         from datetime import UTC, datetime
 
         from film_pipeline.schemas import subtitle as subtitle_schema
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
         artifact_id = "subtitles"
         model = subtitle_schema.SubtitleArtifact(

@@ -49,7 +49,7 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
     if state is None:
         return _error("No active project.")
     project_id = str(state["project_id"])
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         data = _services(rt).artifact_store.load(

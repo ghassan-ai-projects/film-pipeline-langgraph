@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from film_pipeline.checkpoints.git_backend import GitBackend
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 

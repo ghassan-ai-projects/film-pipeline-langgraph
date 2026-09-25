@@ -161,7 +161,7 @@ def _request_character_bible_output(
 def _execute_character_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run CharacterBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
-    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.base import AgentFamily, AgentRole
     from film_pipeline.schemas.handoff import AgentRegistration
 
     agent = CharacterBibleAgent(
@@ -189,7 +189,7 @@ def _deliver_character_bible(
     bible: Any,
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas._base import ArtifactType
+    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,

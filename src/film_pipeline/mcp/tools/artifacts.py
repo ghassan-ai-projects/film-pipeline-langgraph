@@ -24,7 +24,7 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
     if project_id is None:
         return _error("No active project.")
     phase_str = args.get("phase")
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     fp = None
     if phase_str:
@@ -59,7 +59,7 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
         return _error("artifact_id is required.")
     phase_str = str(args.get("phase", state.get("current_phase", "")))
     version_raw = args.get("version")
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase_str)
@@ -80,7 +80,7 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
 
 def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
     """Return the shot matrix rows from the project's shot bible, or None when absent."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = max(1, store.latest_version(project_id, "shot_bible", "shot_matrix"))
@@ -132,7 +132,7 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
     project_id = _active_project_id(args, rt)
     if project_id is None:
         return _error("No active project.")
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     try:

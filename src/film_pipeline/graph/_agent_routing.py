@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from film_pipeline.schemas._base import AgentRole
+from film_pipeline.schemas.base import AgentRole
 
 
 @dataclass

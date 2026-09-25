@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.schemas._base import IssueSeverity
+from film_pipeline.schemas.base import IssueSeverity
 
 
 def _blocking(code: str, message: str) -> dict[str, Any]:

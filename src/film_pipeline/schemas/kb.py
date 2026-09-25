@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.base import (
     KbAuthority,
     MutableSchemaBase,
     SchemaBase,

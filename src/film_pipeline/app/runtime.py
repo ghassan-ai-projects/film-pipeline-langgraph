@@ -26,7 +26,7 @@ from film_pipeline.artifacts.storage import default_runtime_root, resolve_storag
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.graph.services import GraphServices
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 _logger = logging.getLogger(__name__)

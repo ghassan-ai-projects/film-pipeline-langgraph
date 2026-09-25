@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import SchemaBase
+from film_pipeline.schemas.base import SchemaBase
 
 
 class AuditLogEntry(SchemaBase):

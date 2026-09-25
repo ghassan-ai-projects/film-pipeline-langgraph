@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import AgentFamily, AgentRole, SchemaBase
+from film_pipeline.schemas.base import AgentFamily, AgentRole, SchemaBase
 
 
 class AgentHandoff(SchemaBase):

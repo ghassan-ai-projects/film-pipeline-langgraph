@@ -41,7 +41,7 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     if project_id is None:
         return _error("No active project.")
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     terminal = {

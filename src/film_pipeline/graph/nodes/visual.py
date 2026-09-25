@@ -132,8 +132,8 @@ def _latest_execution_brief_ref(state: dict[str, Any]) -> str:
     services = _get_services(state)
     if services is None:
         return ""
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         artifacts = services.artifact_store.list_artifacts(
@@ -559,7 +559,7 @@ def _validate_planning_gate(new_state: dict[str, Any], cost_estimate: Any) -> No
     if services is None:
         return
     try:
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         parsed = _parse_ref(shot_matrix_ref)
         matrix_data = services.artifact_store.load(

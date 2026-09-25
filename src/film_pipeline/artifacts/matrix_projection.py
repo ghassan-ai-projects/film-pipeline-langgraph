@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from film_pipeline.schemas.artifact import ArtifactRef
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
     from film_pipeline.schemas.matrix_patch import MatrixPatch
 
 
@@ -55,7 +55,7 @@ def _parse_artifact_ref(artifact_ref: str) -> ArtifactRef:
 
 def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> dict[str, Any]:
     """Load the base matrix artifact."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     parsed = _parse_artifact_ref(matrix_ref)
     phase = FilmPhase(parsed.phase)
@@ -65,7 +65,7 @@ def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> 
 
 def _load_patch(store: _MatrixStore, project_id: str, patch_ref: str) -> MatrixPatch:
     """Load a matrix patch artifact from its ref's phase, or the patch phases."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
     from film_pipeline.schemas.matrix_patch import MatrixPatch
 
     parsed = _parse_artifact_ref(patch_ref)

@@ -140,8 +140,8 @@ def _run_validators(state: dict[str, Any]) -> None:
 def _collect_artifacts(state: dict[str, Any], services: Any) -> dict[str, Any]:
     """Load artifacts referenced by ``state["artifact_refs"]`` from their phases."""
 
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     store = services.artifact_store
     project_id = str(state.get("project_id", ""))

@@ -27,7 +27,7 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     store = _services(rt).artifact_store
 
     try:
-        from film_pipeline.schemas._base import ArtifactType
+        from film_pipeline.schemas.base import ArtifactType
         from film_pipeline.schemas.budget import BudgetState
 
         budget = BudgetState(
@@ -68,8 +68,8 @@ def _save_gen_planning_candidate(
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
@@ -102,7 +102,7 @@ def _register_active_artifact_ref(
 def _load_master_matrix(store: Any, project_id: str) -> Any:
     """Load and validate the latest MasterFilmMatrix artifact, if it exists."""
     try:
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
         from film_pipeline.schemas.matrix import MasterFilmMatrix
 
         version = max(1, store.latest_version(project_id, "shot_bible", "master_film_matrix"))
@@ -198,7 +198,7 @@ def _build_generation_plan(
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
     """Save the generation plan artifact and link it into the project state."""
-    from film_pipeline.schemas._base import ArtifactType
+    from film_pipeline.schemas.base import ArtifactType
 
     store = _services(rt).artifact_store
     ref = _save_gen_planning_candidate(

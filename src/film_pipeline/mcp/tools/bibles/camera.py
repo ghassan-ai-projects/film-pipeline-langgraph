@@ -62,7 +62,7 @@ def _request_camera_bible_output(
 def _execute_camera_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run CameraBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
-    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.base import AgentFamily, AgentRole
     from film_pipeline.schemas.handoff import AgentRegistration
 
     agent = CameraBibleAgent(
@@ -85,7 +85,7 @@ def _deliver_camera_bible(
     rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas._base import ArtifactType
+    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,

@@ -21,13 +21,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from film_pipeline.artifacts.store import ArtifactStore
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
     from film_pipeline.schemas.validation import ValidationReport
 
 
 def _parse_phase(phase_str: str) -> FilmPhase | None:
     """Parse a phase string into a FilmPhase, or None when unknown."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         return FilmPhase(phase_str)
@@ -180,8 +180,8 @@ def _save_report(
     """Persist a ValidationReport as a candidate artifact and return its ref."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType
 
     meta = ArtifactMetadata(
         artifact_id="validation_report",

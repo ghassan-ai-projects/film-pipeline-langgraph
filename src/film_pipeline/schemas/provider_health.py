@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import MutableSchemaBase, ProviderStatus
+from film_pipeline.schemas.base import MutableSchemaBase, ProviderStatus
 
 
 class ProviderHealthState(MutableSchemaBase):

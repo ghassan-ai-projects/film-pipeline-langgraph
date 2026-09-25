@@ -21,8 +21,8 @@ def _load_script_scenes(state: dict[str, Any], services: GraphServices) -> list[
     if not script_ref or not isinstance(script_ref, str):
         return []
 
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         parsed = ArtifactRef.from_string(script_ref)

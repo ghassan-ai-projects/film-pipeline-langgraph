@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from film_pipeline.kb.manifest import KBManifest
-from film_pipeline.schemas._base import KbAuthority
+from film_pipeline.schemas.base import KbAuthority
 from film_pipeline.schemas.kb import KBConflictRecord, KBExcludedRef, KBItemMetadata
 
 AUTHORITY_RANK: dict[KbAuthority, int] = {

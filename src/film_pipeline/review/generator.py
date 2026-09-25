@@ -7,8 +7,8 @@ from uuid import uuid4
 
 from film_pipeline.review.actions import compute_available_actions
 from film_pipeline.review.diff import compute_artifact_diff
-from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.approval import ReviewPackage
+from film_pipeline.schemas.base import FilmPhase
 
 REVIEW_TYPE_MAP: dict[FilmPhase, str] = {
     FilmPhase.INTAKE: "config_review",

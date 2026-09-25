@@ -14,12 +14,12 @@ from film_pipeline.graph.services import GraphServices
 
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
 
 
 def _parse_generation_mode(mode_str: str) -> GenerationMode:
     """Parse a generation mode string, falling back to TEST when unknown."""
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
 
     mode = GenerationMode.TEST
     with contextlib.suppress(ValueError):
@@ -108,8 +108,8 @@ def _persist_planned_ledger(
     has already persisted the planned rows, so mint the ref from the stored
     envelope's revision instead of saving again.
     """
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.artifact import ArtifactRef
+    from film_pipeline.schemas.base import FilmPhase
 
     mgr.load(project_id)  # ensures the ledger exists and rows are persisted
     envelope = mgr.store.load_mutable_envelope(

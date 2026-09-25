@@ -14,7 +14,7 @@ from film_pipeline.app.services.models import (
     OperatorCommentRequest,
 )
 from film_pipeline.artifacts.manifest import read_manifest
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService

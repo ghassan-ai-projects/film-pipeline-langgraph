@@ -27,7 +27,7 @@ def _load_environment_palette(
     project_id: str,
 ) -> list[str] | None:
     """Load the visual-dev EnvironmentBible palette (None when unavailable)."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         version = max(

@@ -192,7 +192,7 @@ def _load_latest_reference_index(
     project_id: str,
     state: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = 0

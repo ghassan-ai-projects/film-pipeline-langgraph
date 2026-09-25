@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from film_pipeline.kb.manifest import KBManifest
-from film_pipeline.schemas._base import KbAuthority
+from film_pipeline.schemas.base import KbAuthority
 from film_pipeline.schemas.kb import KBItemMetadata
 
 

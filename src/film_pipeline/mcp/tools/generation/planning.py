@@ -14,13 +14,13 @@ from film_pipeline.mcp.tools.generation._text_only import (
 from ..helpers import _active_project_id, _error, _ok, _services
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
 def _resolve_generation_mode(args: dict[str, object]) -> GenerationMode:
     """Map the optional ``mode`` argument to a GenerationMode (default TEST)."""
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
 
     mode_str = str(args.get("mode", "test"))
     mode = GenerationMode.TEST

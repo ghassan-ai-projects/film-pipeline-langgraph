@@ -14,7 +14,7 @@ from ..helpers import _error, _ok, _services
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
@@ -26,7 +26,7 @@ def _submit_failure(
     reason: str,
 ) -> dict[str, str]:
     """Mark a ledger row FAILED and build its failure record."""
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -95,7 +95,7 @@ def _mark_row_running(
     provider_job_id: str,
 ) -> dict[str, str]:
     """Persist the provider_job_id on the row and build its success record."""
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -127,7 +127,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
     from film_pipeline.generation.executor import GenerationExecutor
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
@@ -182,7 +182,7 @@ def _poll_row_status(
 def _generation_status(provider_status: str) -> GenerationStatus:
     """Map a provider job status to its ledger generation status."""
     from film_pipeline.providers.base import ProviderJobStatus
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     try:
         job_status = ProviderJobStatus(provider_status)
@@ -262,7 +262,7 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
         return _error("No active project.")
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)

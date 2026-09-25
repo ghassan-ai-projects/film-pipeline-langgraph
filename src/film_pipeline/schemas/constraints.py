@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import FilmType, SchemaBase
+from film_pipeline.schemas.base import FilmType, SchemaBase
 from film_pipeline.schemas.project import DeliveryMode
 
 

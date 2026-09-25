@@ -9,8 +9,8 @@ import film_pipeline.mcp.tools as tools_pkg
 from .helpers import _active_project_state, _error, _ok, _services
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.approval import ReviewPackage
+    from film_pipeline.schemas.base import FilmPhase
 
 
 def _collect_phase_artifacts(
@@ -80,7 +80,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     if not phase:
         return _error("No phase specified and no active phase.")
     project_id = str(state["project_id"])
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase)

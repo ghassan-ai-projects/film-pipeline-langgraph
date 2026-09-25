@@ -7,9 +7,9 @@ from typing import Any
 
 from film_pipeline.graph.services import GraphServices, _get_services
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
-from film_pipeline.schemas._base import ArtifactType as _ArtifactType
-from film_pipeline.schemas._base import FilmPhase
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
+from film_pipeline.schemas.base import ArtifactType as _ArtifactType
+from film_pipeline.schemas.base import FilmPhase
 
 _logger = logging.getLogger(__name__)
 

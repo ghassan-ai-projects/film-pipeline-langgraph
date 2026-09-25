@@ -48,8 +48,8 @@ from film_pipeline.artifacts.registry import (
 )
 from film_pipeline.artifacts.serialization import atomic_write_text, dump_json
 from film_pipeline.artifacts.storage import ensure_storage_root
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
 _logger = logging.getLogger(__name__)
 

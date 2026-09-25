@@ -12,14 +12,14 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import (
     ArtifactStatus,
     ArtifactType,
     FilmPhase,
     GenerationMode,
     GenerationStatus,
 )
-from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.generation import (
     GenerationLedger,
     GenerationLedgerRow,

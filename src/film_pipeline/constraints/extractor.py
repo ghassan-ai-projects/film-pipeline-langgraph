@@ -29,7 +29,7 @@ from film_pipeline.constraints._keywords import (
     _TONE_KEYWORDS,
     _VISUAL_STYLE_KEYWORDS,
 )
-from film_pipeline.schemas._base import FilmType
+from film_pipeline.schemas.base import FilmType
 from film_pipeline.schemas.constraints import ProjectConstraints
 from film_pipeline.schemas.project import DeliveryMode
 

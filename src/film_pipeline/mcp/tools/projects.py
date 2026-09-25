@@ -253,7 +253,7 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     """Summarize every stored artifact of a project across all film phases."""
     # Imported here to match the lazy-import pattern used by tools.helpers,
     # which keeps tool-module import time independent of schema enum loading.
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     summaries: list[dict[str, object]] = []
     for phase in FilmPhase:
