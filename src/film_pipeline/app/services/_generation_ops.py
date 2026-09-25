@@ -10,14 +10,13 @@ from typing import TYPE_CHECKING, Any
 
 from film_pipeline.app._persistence import artifact_root
 from film_pipeline.artifacts.manifest import read_manifest
+from film_pipeline.filmspec import is_stale_generation_request_issue, text_only_generation_requests
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import GenerationWorkspace
 
 if TYPE_CHECKING:
     from film_pipeline.app.services.operator import OperatorService
     from film_pipeline.generation.executor import GenerationExecutor
-
-_STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
 
 
 def get_generation_workspace(
@@ -171,9 +170,7 @@ def _strip_stale_request_issues(state: dict[str, Any]) -> None:
     issues = state.get("issues", [])
     if isinstance(issues, list):
         state["issues"] = [
-            issue
-            for issue in issues
-            if not (isinstance(issue, dict) and issue.get("code") in _STALE_REQUEST_CODES)
+            issue for issue in issues if not is_stale_generation_request_issue(issue)
         ]
 
 
@@ -222,38 +219,12 @@ def _complete_text_only_generation(
     executor = _generation_executor(svc)
     shot_rows = executor.load_shot_rows(project_id)
     provider, model = svc.runtime.default_video_provider()
-    requests: list[dict[str, Any]] = []
-    for row in shot_rows:
-        shot_id = _shot_row_id(row)
-        if not shot_id:
-            continue
-        requests.append(_text_only_request(project_id, shot_id, provider, model))
-    if not requests:
-        requests.append(_text_only_request(project_id, "all", provider, model))
+    requests = text_only_generation_requests(project_id, shot_rows, provider, model)
     state["generation_requests"] = requests
     state["_text_only_generation_completed"] = True
     _strip_stale_request_issues(state)
     _record_text_only_manifest(svc, project_id)
     _store_project_state(svc, state, project_id)
-
-
-def _text_only_request(project_id: str, shot_id: str, provider: str, model: str) -> dict[str, Any]:
-    payload: dict[str, Any] = {"text_only": True}
-    if shot_id != "all":
-        payload["shot_id"] = shot_id
-    return {
-        "generation_request_id": f"text-only-{project_id}-{shot_id}",
-        "generation_id": f"text-only-{project_id}-{shot_id}",
-        "project_id": project_id,
-        "shot_id": shot_id,
-        "mode": "text_only",
-        "provider": provider,
-        "model": model,
-        "prompt_ref": "",
-        "prompt_payload": payload,
-        "reference_refs": [],
-        "status": "completed",
-    }
 
 
 def _text_only_workspace(

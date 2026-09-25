@@ -10,8 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.filmspec import PHASE_SEQUENCE
-
-_STALE_REQUEST_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
+from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES as _STALE_REQUEST_CODES
 
 
 def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:

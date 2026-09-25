@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 
 class FilmPhase(StrEnum):
@@ -166,6 +167,82 @@ GENERATION_DEPENDENT_PHASES: set[str] = {"generation"}
 TRANSITION_TYPES: tuple[str, ...] = ("cut", "dissolve", "fade_in", "fade_out", "crossfade")
 # A bare "fade" means fade to black; "wipe" has no canonical equivalent.
 LEGACY_TRANSITION_ALIASES: dict[str, str] = {"fade": "fade_out"}
+
+# Issue codes raised by the generation-planning gates when a project has no
+# dispatchable work yet. They are reusable vocabulary rather than a per-module
+# detail: the gate that raises them lives in the orchestrator validators, while
+# the graph resume path, the operator service, and the MCP text-only policy all
+# have to recognise and clear them once requests exist. Declaring them once
+# keeps the producer and those three consumers from drifting apart.
+STALE_GENERATION_REQUEST_CODES: frozenset[str] = frozenset(
+    {"empty_generation_requests", "no_generation_requests"}
+)
+
+
+def is_stale_generation_request_issue(issue: object) -> bool:
+    """Return whether ``issue`` is a no-requests blocker that is now stale.
+
+    ``issue`` is arbitrary state content, so this only reports ``True`` for a
+    mapping whose ``code`` is one of :data:`STALE_GENERATION_REQUEST_CODES`.
+    """
+    if not isinstance(issue, dict):
+        return False
+    return issue.get("code") in STALE_GENERATION_REQUEST_CODES
+
+
+def text_only_generation_request(
+    project_id: str,
+    shot_id: str,
+    provider: str,
+    model: str,
+) -> dict[str, Any]:
+    """Build one completed text-only generation request row.
+
+    The text-only policy satisfies the generation gates without producing media.
+    Both the operator service and the MCP tool path build these rows, and they
+    must agree on the id scheme and field set, so the shape is declared once.
+    The ``shot_id`` of ``"all"`` marks the single fallback row used when no shot
+    rows exist, and carries no ``shot_id`` in its prompt payload.
+    """
+    payload: dict[str, Any] = {"text_only": True}
+    if shot_id != "all":
+        payload["shot_id"] = shot_id
+    return {
+        "generation_request_id": f"text-only-{project_id}-{shot_id}",
+        "generation_id": f"text-only-{project_id}-{shot_id}",
+        "project_id": project_id,
+        "shot_id": shot_id,
+        "mode": "text_only",
+        "provider": provider,
+        "model": model,
+        "prompt_ref": "",
+        "prompt_payload": payload,
+        "reference_refs": [],
+        "status": "completed",
+    }
+
+
+def text_only_generation_requests(
+    project_id: str,
+    shot_rows: list[dict[str, Any]],
+    provider: str,
+    model: str,
+) -> list[dict[str, Any]]:
+    """Build one completed text-only request per shot row, or a single fallback.
+
+    Rows without a usable ``shot_id`` (falling back to ``scene_id``) are
+    skipped; if that leaves nothing, the fallback ``"all"`` row is emitted so
+    the generation gate is still satisfied.
+    """
+    requests: list[dict[str, Any]] = []
+    for row in shot_rows:
+        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
+        if not shot_id:
+            continue
+        requests.append(text_only_generation_request(project_id, shot_id, provider, model))
+    if not requests:
+        requests.append(text_only_generation_request(project_id, "all", provider, model))
+    return requests
 
 
 def next_phase(phase: str) -> str | None:
