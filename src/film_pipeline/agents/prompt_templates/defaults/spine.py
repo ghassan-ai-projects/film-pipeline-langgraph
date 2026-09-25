@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults._quality import (
     _QUALITY_DIRECTIVE,
     _SCREENWRITER_QUALITY,
 )
-from film_pipeline.agents.prompt_templates.registry import PromptTemplate
 
 
 def _structure_extractor() -> PromptTemplate:

@@ -8,6 +8,9 @@ Template versions are incremented when the template content changes.
 
 from __future__ import annotations
 
+from typing import Protocol
+
+from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults.production import (
     _assembly_agent,
     _generation_planner,
@@ -32,7 +35,11 @@ from film_pipeline.agents.prompt_templates.defaults.validators import (
     _scene_continuity_validator,
     _script_structure_validator,
 )
-from film_pipeline.agents.prompt_templates.registry import PromptTemplateRegistry
+
+
+class _TemplateRegistrar(Protocol):
+    def register(self, template: PromptTemplate) -> None: ...
+
 
 __all__ = [
     "_assembly_agent",
@@ -58,7 +65,7 @@ __all__ = [
 ]
 
 
-def load_all(reg: PromptTemplateRegistry) -> None:
+def load_all(reg: _TemplateRegistrar) -> None:
     """Register all critical-path agent templates."""
     reg.register(_intake_classifier())
     reg.register(_constitution_creator())
@@ -73,7 +80,7 @@ def load_all(reg: PromptTemplateRegistry) -> None:
     reg.register(_orchestrator_review())
 
 
-def load_validator_templates(reg: PromptTemplateRegistry) -> None:
+def load_validator_templates(reg: _TemplateRegistrar) -> None:
     """Register all 7 validator prompt templates for LLM-based validation."""
     reg.register(_script_structure_validator())
     reg.register(_dialogue_voice_validator())

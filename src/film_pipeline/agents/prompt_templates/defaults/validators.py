@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.agents.prompt_templates.registry import PromptTemplate
+from film_pipeline.agents._prompt_template import PromptTemplate
 
 
 def _script_structure_validator() -> PromptTemplate:
