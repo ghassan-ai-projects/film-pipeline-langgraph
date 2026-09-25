@@ -36,9 +36,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 5 remain; each is a separately reviewed migration slice |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | 4 remain (C2–C5); C1 was removed by C-01 |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 109 in the live V-01 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | 111 in the live C-01 check; pinned receipt remains at baseline 110 |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -49,9 +49,12 @@ ran at 20:07 UTC with:
 enola check --json --baseline=docs/modular-architecture/enola-out docs/modular-architecture/enola-config.yaml
 ```
 
-The checked-in receipt remains the pinned 115-insight baseline. V-01 did not
-touch C1–C5, so five cycle findings remain; cycle progress begins only when a
-cycle is actually removed.
+The checked-in receipt remains the pinned 115-insight baseline. C-01 removed
+C1. Its live check at 18:32 UTC (20:32 CEST) was clean with four cycle insights and 115 total
+insights (111 heuristic insights). It resolved C1 and the prior config
+dependency-depth insight; the changed prompt-template dependency path produced
+a new dependency-depth advisory, so the aggregate insight count stayed level.
+No Enola filter or threshold changed.
 
 ## Progress ledger
 
@@ -61,8 +64,8 @@ cycle is actually removed.
 | O-01 | Freeze operator-path behavior at MCP call and stdio boundaries; compare graph/MCP validation and blocked-generation behavior | Three independent lenses complete; all findings resolved | PASS — 14 passed / 11 strict xfailed; `--runxfail` confirms all 11 fail at their intended divergences | PASS — `make ci-check`; 2,022 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — clean against comparable baseline; no cycle findings changed | `8900416` | Complete |
 | R-01a | Migration only: move checkpoint rollback manager orchestration and bookkeeping from MCP tools into `OperatorService` / app services while preserving active-project selection, confirmation, errors, and response projection | Three independent final reviews pass; first-round findings addressed | PASS — 63 passed / 10 strict xfailed across checkpoint service, MCP checkpoint, and O-01 divergence suites | PASS — `make ci-check`; 2,023 passed / 8 skipped / 11 xfailed; 91.69% coverage | PASS — docs-local snapshot baseline; clean, no cycle delta | `e5a74dc` | Complete |
 | V-01 | Migration only: keep profile resolution/spec normalization in `config`; move credential policy and adapter composition behind providers/app services | Three final lenses pass; initial guard/test-fixture findings addressed; final audit has no remaining findings | PASS — six changed suites; all pass | PASS — `make ci-check`; 2,027 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 20:07 UTC; clean, 0 new findings, 5 cycles unchanged, 1 dependency-depth finding resolved (114 total / 109 heuristic vs. 115 / 110 baseline); pinned receipt unchanged | `8fa6890` | Complete |
-| C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
-| C-02 | Break C4: `providers` ↔ `providers/adapters`, preserving adapter exports and factory behavior | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
+| C-02 | Break C4: `providers` ↔ `providers/adapters`, preserving adapter exports and factory behavior | Three independent plan reviews in progress | Pending | Pending | Target: 1 cycle → 0 | Pending | Planning |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`, preserving schema and registry exports | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
 | C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
@@ -139,6 +142,52 @@ duplication. All three final reviews passed. The focused changed suites and
 full gate passed. The live Enola check exited clean at 20:07 UTC with no new
 finding and one dependency-depth insight resolved; the checked-in receipt is
 still the pinned baseline at `fb85baa`. The code is committed as `8fa6890`.
+
+## C-01 plan
+
+- **Owner and consumers:** `agents._prompt_template` owns the shared immutable
+  `PromptTemplate` value object. The prompt registry and defaults keep their
+  compatibility imports; defaults depend on a narrow registrar protocol rather
+  than importing the concrete registry back from the parent package.
+- **Planned code and tests:** move the dataclass without changing its fields or
+  rendering behavior; update registry/default factories and the runner's
+  type-only import to the shared owner; retain package and registry re-exports.
+  Extend the existing registry suite to prove import identity, registry
+  singleton reuse, the seven validator templates, and representative template
+  identity across repeated registry loads. Do not freeze template iteration
+  order, for which there is no caller contract.
+- **Files:** `agents/_prompt_template.py`, `agents/prompt_templates/registry.py`,
+  `agents/prompt_templates/defaults/{__init__,production,spine,validators}.py`,
+  `agents/runner.py`, and
+  `tests/unit/agents/test_prompt_template_registry.py`.
+- **Validation:** focused registry/identity tests passed. Full
+  `UV_CACHE_DIR=.uv-cache make ci-check` passed (2,029 passed, 8 skipped,
+  11 xfailed, 91.71% coverage, source/wheel builds, product gate). The committed
+  tree's comparable Enola check ran at 18:32 UTC / 20:32 CEST, was clean with
+  four cycle insights and zero new findings; `git diff --check` passed.
+- **Migration exit bar:** no import path from defaults back into the prompt
+  registry; old public/registry imports still identify the same class; the C1
+  cycle is removed; all three review lenses approve; full CI stays above 90%.
+
+## C-01 review record
+
+The boundary lens caught `agents/runner.py`'s `TYPE_CHECKING` import as a
+remaining parent-package edge; it now imports from `_prompt_template`, and the
+final Enola run confirms C1 is gone (five cycle findings to four). The behavior
+lens confirmed that the legacy package and registry imports preserve class
+identity and template loading. The quality lens rejected an insertion-order
+assertion without a consumer contract. The first full check caught strict-mypy
+implicit-reexport errors; an explicit `PromptTemplate as PromptTemplate`
+re-export resolved them without changing the public export. All three final
+reviews passed, with no remaining actionable finding.
+
+The live Enola result is clean, with zero new findings. It resolved C1 and the
+prior config dependency-depth insight; the updated prompt-template dependency
+path adds a dependency-depth advisory. Therefore total insights remain 115
+(four cycles and 111 heuristic insights), compared with the pinned 115-insight
+receipt (five cycles and 110 heuristic insights). This change removes a cycle;
+it does not claim the whole heuristic inventory declined. The checked-in
+baseline remains pinned at `fb85baa`. Code commit: `261f4a1`.
 
 ## R-01a plan
 
