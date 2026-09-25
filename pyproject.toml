@@ -57,6 +57,10 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/film_pipeline"]
+# `devharness` holds test doubles and scenario scripts. Nothing in production
+# imports it (measured: zero `src/` importers outside the package), and D6
+# makes it dev-only, so it is not shipped.
+exclude = ["src/film_pipeline/devharness"]
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -94,7 +98,6 @@ branch = true
 source = ["film_pipeline"]
 omit = [
   "*/devharness/*",
-  "*/testing/*",
   "src/film_pipeline/mcp/tools/__init__.py",
 ]
 
@@ -103,7 +106,6 @@ show_missing = true
 skip_covered = false
 omit = [
   "*/devharness/*",
-  "*/testing/*",
 ]
 
 [tool.mypy]
