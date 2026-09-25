@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.generation.gemini_client import call_gemini
 from film_pipeline.generation.review_parsing import strip_markdown_fences
+from film_pipeline.providers.gemini_review_client import call_gemini
 
 # ── Data types ────────────────────────────────────────────────────────────
 

@@ -504,7 +504,7 @@ def test_accepts_timeout_kw_handles_var_kwargs_and_rejects_plain_builtins() -> N
 
 
 def test_transport_scrubs_sensitive_headers_before_reraising() -> None:
-    from film_pipeline.agents._http_transport import post_json
+    from film_pipeline.providers.http_transport import post_json
 
     opener = MagicMock()
     secret = "0123456789abcdef0123456789abcdef.secret-value"

@@ -10,7 +10,7 @@ dispatched by id prefix: ``zai/`` goes to z.ai's OpenAI-compatible endpoint
 API (``GOOGLE_API_KEY``), everything else goes to OpenRouter
 (``OPENROUTER_API_KEY``).
 
-Transport concerns live in ``_http_transport`` and model-text JSON recovery in
+Transport concerns live in ``providers.http_transport`` and model-text JSON recovery in
 ``_json_extraction``; this module stays with request shaping, key resolution,
 and provider payload/response mapping.
 """
@@ -23,18 +23,19 @@ from dataclasses import dataclass, replace
 from typing import Any
 from urllib.parse import urlsplit
 
-# Historical import paths kept stable for callers and tests (explicit alias
-# form so mypy strict's no_implicit_reexport passes them through).
-from film_pipeline.agents._http_transport import (
-    _accepts_timeout_kw as _accepts_timeout_kw,
-)
-from film_pipeline.agents._http_transport import (
-    _open_with_timeout as _open_with_timeout,
-)
-from film_pipeline.agents._http_transport import post_json
 from film_pipeline.agents._json_extraction import extract_json_object
 from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
 from film_pipeline.providers.credentials import env_or_dotenv, lookup
+
+# Historical import paths kept stable for callers and tests (explicit alias
+# form so mypy strict's no_implicit_reexport passes them through).
+from film_pipeline.providers.http_transport import (
+    _accepts_timeout_kw as _accepts_timeout_kw,
+)
+from film_pipeline.providers.http_transport import (
+    _open_with_timeout as _open_with_timeout,
+)
+from film_pipeline.providers.http_transport import post_json
 
 ZAI_MODEL_PREFIX = "zai/"
 ZAI_API_BASE = "https://api.z.ai/api/paas/v4"
