@@ -1,8 +1,9 @@
 """Typed Pydantic schemas — the contract layer for the studio.
 
 Every data structure that crosses a boundary (LangGraph state, MCP
-responses, agent I/O, ledger rows) is defined here. Re-export everything
-so callers can ``from film_pipeline.schemas import ProjectProfile``.
+responses, agent I/O, ledger rows) is defined here. Core schema contracts
+are re-exported here; agent, model, provider, and validator registry schemas
+are exported from ``film_pipeline.schemas.registries``.
 """
 
 from __future__ import annotations
@@ -117,18 +118,6 @@ from film_pipeline.schemas.reference import (
     ReferenceValidationSummary,
     TileEntry,
 )
-from film_pipeline.schemas.registries import (
-    AgentRegistryEntry,
-    CostProfile,
-    ModelRegistry,
-    ModelRegistryEntry,
-    ProviderCapabilities,
-    ProviderRegistry,
-    ProviderRegistryEntry,
-    ValidatorRegistry,
-    ValidatorRegistryEntry,
-    ValidatorThresholds,
-)
 from film_pipeline.schemas.story_bible import (
     ActMap,
     Logline,
@@ -154,7 +143,6 @@ __all__ = [
     "AgentFamily",
     "AgentHandoff",
     "AgentRegistration",
-    "AgentRegistryEntry",
     "AgentRole",
     "ApprovalRecord",
     "ArtifactMetadata",
@@ -182,7 +170,6 @@ __all__ = [
     "ContinuityLedger",
     "ContinuityLedgerEntry",
     "CostEstimate",
-    "CostProfile",
     "CoverageGroup",
     "DeliveryManifest",
     "DeliveryPackage",
@@ -214,18 +201,13 @@ __all__ = [
     "Logline",
     "MasterFilmMatrix",
     "MasterFilmMatrixRow",
-    "ModelRegistry",
-    "ModelRegistryEntry",
     "Premise",
     "ProjectConfig",
     "ProjectIdentity",
     "ProjectProfile",
     "PromptRegistry",
     "PromptRegistryEntry",
-    "ProviderCapabilities",
     "ProviderHealthState",
-    "ProviderRegistry",
-    "ProviderRegistryEntry",
     "ProviderStatus",
     "QualityLevel",
     "RCTCOPrompt",
@@ -264,9 +246,6 @@ __all__ = [
     "ValidationReport",
     "ValidationScope",
     "ValidationStatus",
-    "ValidatorRegistry",
-    "ValidatorRegistryEntry",
-    "ValidatorThresholds",
     "Viewpoint",
     "VoiceRules",
     "WardrobeRules",
