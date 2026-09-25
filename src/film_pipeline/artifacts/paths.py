@@ -34,17 +34,6 @@ def phase_dir(project_slug: str, phase: str, root: Path) -> Path:
     return project_dir(project_slug, root) / PHASE_DIR_MAP.get(phase, phase)
 
 
-def artifact_dir(project_slug: str, phase: str, artifact_id: str, root: Path) -> Path:
-    safe_id = artifact_id.replace(":", "_").replace("/", "_")
-    return phase_dir(project_slug, phase, root) / safe_id
-
-
-def artifact_path(
-    project_slug: str, phase: str, artifact_id: str, version: int, root: Path
-) -> Path:
-    return artifact_dir(project_slug, phase, artifact_id, root) / "versions" / f"v{version:03}.json"
-
-
 def media_scene_dir(project_slug: str, scene_id: str, shot_id: str, root: Path) -> Path:
     """A shot's media directory: ``<project>/media/scenes/<scene>/<shot>``."""
     return project_dir(project_slug, root) / "media" / "scenes" / scene_id / shot_id

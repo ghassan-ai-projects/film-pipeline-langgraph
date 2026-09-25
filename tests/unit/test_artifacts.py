@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest
-from film_pipeline.artifacts.paths import artifact_path, phase_dir, project_dir
+from film_pipeline.artifacts.paths import phase_dir, project_dir
 from film_pipeline.artifacts.registry import KindNotRegisteredError
 from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase, SchemaBase
@@ -42,10 +42,6 @@ class TestPaths:
     def test_phase_dir_fallback(self) -> None:
         p = phase_dir("slug", "unknown_phase", Path("/store"))
         assert p.parts[-1] == "unknown_phase"
-
-    def test_artifact_path(self) -> None:
-        p = artifact_path("slug", "script", "artifact:scene:S001", 3, Path("/store"))
-        assert p.parts[-3:] == ("artifact_scene_S001", "versions", "v003.json")
 
 
 class TestArtifactStore:

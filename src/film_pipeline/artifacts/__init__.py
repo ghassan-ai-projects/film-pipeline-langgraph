@@ -5,6 +5,8 @@ from __future__ import annotations
 from film_pipeline.artifacts.envelope import (
     ArtifactCurrentMeta,
     ArtifactEnvelope,
+    ChecksumMismatchError,
+    MutableRevisionMismatchError,
     SchemaTooNewError,
     payload_checksum,
 )
@@ -15,8 +17,6 @@ from film_pipeline.artifacts.manifest import (
     write_manifest,
 )
 from film_pipeline.artifacts.paths import (
-    artifact_dir,
-    artifact_path,
     media_scene_dir,
     phase_dir,
     project_dir,
@@ -27,6 +27,7 @@ from film_pipeline.artifacts.registry import (
     KindNotRegisteredError,
     KindSpec,
 )
+from film_pipeline.artifacts.serialization import NonFiniteNumberError
 from film_pipeline.artifacts.store import ArtifactStore
 
 __all__ = [
@@ -37,11 +38,12 @@ __all__ = [
     "ArtifactStore",
     "AssetEntry",
     "AssetManifest",
+    "ChecksumMismatchError",
     "KindNotRegisteredError",
     "KindSpec",
+    "MutableRevisionMismatchError",
+    "NonFiniteNumberError",
     "SchemaTooNewError",
-    "artifact_dir",
-    "artifact_path",
     "media_scene_dir",
     "payload_checksum",
     "phase_dir",
