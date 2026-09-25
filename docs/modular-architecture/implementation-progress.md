@@ -78,8 +78,8 @@ Enola filter or threshold changed.
 | C-01 | Break C1: `agents/prompt_templates` ↔ `agents/prompt_templates/defaults`, preserving the prompt-template public contract | Three final lenses pass; all first-round findings addressed | PASS — focused registry/identity suite | PASS — `make ci-check`; 2,029 passed / 8 skipped / 11 xfailed; 91.71% coverage; source/wheel builds and product gate pass | PASS — live docs-local check at 18:32 UTC; clean, 0 new findings, C1 removed (5→4 cycles); 115 total / 111 heuristic vs. 115 / 110 baseline; pinned receipt unchanged | `261f4a1` | Complete |
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
-| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
-| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target: 1 cycle → 0 | Pending | Queued |
+| C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan lenses pass; findings resolved | Pending | Pending | Current: 2 cycle findings; target after slice: 1, no additions | Pending | Plan reviewed |
+| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Pending three lenses | Pending | Pending | Target after slice: 0 total cycle findings | Pending | Queued after C-04 |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -94,6 +94,85 @@ Behavior repairs resume only after cycle burndown reaches zero and the measured
 ownership seams selected under B-01 have a code owner and a consumer-boundary
 guard. D-01 remains after the relevant behavior work because it must describe
 exercised behavior.
+
+The user's Enola cycle exit bar is **zero total cycle findings**, so C-05 must
+follow C-04; completing the graph slice alone is not migration completion.
+
+## C-04 plan — graph composition and shared-owner imports
+
+- **Owner and consumers:** move complete supervisor-graph construction to
+  `app.graph_factory`, the existing composition layer. `graph` retains phase
+  nodes, routing, state schema, service definitions, validators, and the QC
+  subgraph. `graph.services` owns the runtime service context/accessor, and
+  `graph.orchestrator_state` owns the human-approval policy read. Validators
+  and subgraphs depend on these owners directly; they do not import
+  `graph.nodes`.
+- **Measured cycle:** Enola's C3 is
+  `graph → graph/nodes → graph/orchestrator_validators → graph/subgraphs →
+  graph`. `graph/graph.py` is the composition source that imports nodes and the
+  QC subgraph. Nodes call validators; validator `brief.py` reaches back into
+  the node package for service lookup and artifact-ref parsing. The QC
+  subgraph also reaches into nodes for service lookup and approval policy.
+  Removing the composition edge and the sibling-to-node helper imports breaks
+  the measured cycle without adding a runtime package.
+- **Planned code and tests:** move `graph/graph.py` intact to
+  `app/graph_factory.py`; update `langgraph.json` and every in-repository
+  consumer. Do not leave a `graph.graph` forwarding module, which would restore
+  an edge from `graph` to the app composition package. Preserve `build_graph`,
+  `_default_checkpointer`, routing destinations, node callables, state
+  channels, and the exported `graph` object. Move `_SERVICES_CTX` and
+  `_get_services` into `graph.services`; preserve state-key-first lookup and
+  ContextVar fallback when `_services` is absent. Extend the existing graph
+  services test to prove both branches, and the existing app resume-integrity
+  test to seed a prior ContextVar value and prove it is restored after an
+  execution failure. Retarget
+  app execution and node consumers to the service owner. Move
+  `_require_human_approval` into
+  `graph.orchestrator_state`; retarget node gate logic and QC. In validator
+  `brief.py`, use `ArtifactRef.from_string` from the schema owner rather than
+  importing the node package's `_parse_ref`. Remove the now-misowned private
+  helper exports from `graph.nodes`. Extend the existing graph startup-boundary
+  test with an AST rule that forbids direct graph modules from importing nodes
+  or subgraphs, and forbids validator/subgraph modules from importing nodes;
+  cover absolute, relative, and package-re-export/alias forms (including
+  `from film_pipeline.graph import nodes as ...` and `from . import nodes`).
+  Retarget existing builder,
+  checkpointer, service-context, approval-policy, QC, routing, and gate tests;
+  add no duplicate behavior tests and make no deferred behavior fixes.
+- **Explicitly deferred behavior:** retain the current module-level
+  `graph = build_graph()` and eager checkpointer selection, including any
+  import-time filesystem effect. R-01e's explicit bootstrap and persistence
+  policy repair stay deferred until after migration, per the user's
+  migration-first direction. This move changes the composition owner/path only.
+- **Deliberate import-path migration:** `film_pipeline.graph.graph` is removed;
+  the application composition module is `film_pipeline.app.graph_factory`, and
+  `langgraph.json` points to its `graph` object. All discovered in-repository
+  code and entrypoint consumers will be migrated. There is no graph-level
+  compatibility shim because that would recreate the C3 edge.
+- **Files:** `graph/graph.py` (move), `app/graph_factory.py` (new),
+  `langgraph.json`, `app/_graph_exec.py`, `app/smoke.py`,
+  `graph/services.py`, `graph/orchestrator_state.py`,
+  `graph/nodes/{__init__,_shared,_agent,_agent_artifacts,_context,_visual_matrix_coverage,approval,generation,prep,qc,visual,wrapup}.py`,
+  `graph/orchestrator_validators/brief.py`, `graph/subgraphs/qc.py`,
+  `tests/unit/graph/test_services.py`,
+  `tests/unit/app/test_resume_integrity.py`, and the existing graph builder,
+  context, gate, QC, phase-sequence, checkpointer, and end-to-end consumer
+  tests.
+- **Validation:** focused changed graph/app suites with `--no-cov -n 0`,
+  `UV_CACHE_DIR=.uv-cache make ci-check` (coverage at least 90%, strict typing,
+  build and product gate), `langgraph.json` entrypoint import, Enola against
+  `docs/modular-architecture/enola-out`, and `git diff --check`. Close C-04
+  only when all three plan and implementation lenses pass, all in-repo imports
+  use the app composition owner, the C3 cycle is removed (2→1 current cycles),
+  no cycle is added, and the full quality gate passes.
+- **Plan review:** all three independent lenses pass with no remaining
+  actionable findings. Boundary review required the user's migration-first
+  priority to be recorded against the R-01e sequencing recommendation; the
+  existing eager checkpointer behavior remains deliberately deferred. Behavior
+  review required tests for state-first service lookup, ContextVar fallback,
+  and exact restoration of a prior context value after failure. Quality review
+  required package re-export and alias cases in the AST guard. All findings are
+  resolved in this plan; implementation has not started.
 
 ## V-01 plan
 
