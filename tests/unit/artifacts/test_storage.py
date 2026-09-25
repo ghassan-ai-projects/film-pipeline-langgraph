@@ -53,10 +53,33 @@ class TestResolveStorageRoot:
         assert resolve_storage_root() == Path.home() / ".film-pipeline" / "projects"
 
     def test_derived_defaults_cohere(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv(STORAGE_ROOT_ENV, str(tmp_path / "base" / "projects"))
-        assert default_runtime_root() == tmp_path / "base" / "runtime"
-        assert default_checkpoints_root() == tmp_path / "base" / "checkpoints"
-        assert default_run_root() == tmp_path / "base" / "runs" / "default"
+        """Runtime root IS the storage root so a project is one folder (§1/D3).
+
+        Checkpoints and runs stay outside the per-project tree, under the same
+        root, because they are machine-global rather than per-project.
+        """
+        root = tmp_path / "base" / "projects"
+        monkeypatch.setenv(STORAGE_ROOT_ENV, str(root))
+        assert default_runtime_root() == root
+        assert default_checkpoints_root() == root / "checkpoints"
+        assert default_run_root() == root / "runs" / "default"
+
+    def test_runtime_and_artifact_roots_coincide(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A project's record, state, audit, and artifacts share one directory.
+
+        This is the §1 end-goal guard: if the runtime tree and the artifact tree
+        ever drift apart again, a human can no longer read a project folder as a
+        single document set.
+        """
+        from film_pipeline.app.runtime import StudioRuntime
+
+        monkeypatch.setenv(STORAGE_ROOT_ENV, str(tmp_path / "store"))
+        rt = StudioRuntime(server_mode="mock")
+        rt.create_project("p1")
+        assert rt.services is not None
+        assert rt.project_roots["p1"] == rt.services.artifact_store.root / "p1"
 
 
 class TestMarker:

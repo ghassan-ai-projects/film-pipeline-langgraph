@@ -417,3 +417,15 @@ Each phase's Done = its bar + quality bar §1 + `make ci-check` + reviewer sign-
 11. Status becomes an artifact-level property (current version's state) instead of
     per-version sidecar data; `supersede` semantics preserved (non-current = superseded).
     `save()` honors a caller-provided status (pre-approved writes stay approved) (P2).
+12. **Post-P7 review fix — single-folder projects.** P4's "the wider runtime tree
+    keeps working unchanged until P4 merges it" had not actually merged. Previously
+    `project.json`/`state/`/`checkpoints/`/`audit/` landed in
+    `<root>/runtime/<project_id>/` while `artifacts/`/`README.md`/`deliverables/`
+    landed in `<root>/artifacts/<project_id>/`, so no single folder held a project
+    and §1's "a human can open any project folder and read its state and final
+    results" was unmet. Now exactly one directory per project
+    (`<root>/<project_id>/`) holds everything, matching the D3 diagram and
+    `artifact-store.md`: `default_runtime_root()` returns the storage root and the
+    runtime builds its store on that same root. Checkpoints and CLI run directories
+    stay under the root but outside the per-project tree, since they are
+    machine-global rather than per-project.

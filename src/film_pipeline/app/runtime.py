@@ -56,9 +56,6 @@ class StudioRuntime:
 
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
-        explicit_runtime_root = self.runtime_root is not None or bool(
-            os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-        )
         if self.runtime_root is None:
             if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
                 self.runtime_root = configured_runtime_root()
@@ -72,9 +69,12 @@ class StudioRuntime:
                     f"film_pipeline_runtime_{os.getpid()}"
                 )
         if self.services is None:
-            artifacts_root = self.runtime_root / "artifacts" if explicit_runtime_root else None
+            # One root for the whole project folder (plan §1 / D3): the artifact
+            # store opens the runtime root itself, so state and artifacts are
+            # siblings inside ``<root>/<project_id>/`` rather than split across
+            # two trees. A throwaway runtime root gets a throwaway store.
             self.services = _build_services_for_mode(
-                self.server_mode, artifacts_root=artifacts_root
+                self.server_mode, artifacts_root=self.runtime_root
             )
         self.load_persisted_projects()
 

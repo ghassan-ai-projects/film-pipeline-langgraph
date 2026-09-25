@@ -131,8 +131,11 @@ class TestProjectRecord:
     def test_stale_legacy_file_is_ignored(self, tmp_path: Path) -> None:
         """`project-state.json` is never read; a stale copy cannot leak in."""
         from film_pipeline.app.runtime import StudioRuntime
+        from film_pipeline.artifacts.storage import ensure_storage_root
 
-        runtime_root = tmp_path / "runtime"
+        # The runtime root is the storage root, so it must carry the marker
+        # before a project directory is created inside it.
+        runtime_root = ensure_storage_root(tmp_path / "runtime")
         project_dir = runtime_root / "p1"
         project_dir.mkdir(parents=True)
         (project_dir / "project.json").write_text(

@@ -56,3 +56,34 @@ Conclusion: **no unique film data was lost**; the deleted directory held depreca
 legacy test debris. It was deliberately **not** reconstructed. Recovery from
 `~/.film-pipeline/runtime/` remains possible if a legacy project copy is ever wanted,
 but the branch declares the legacy layout unreadable by design.
+
+## Blocking findings and fixes
+
+### B1 — Non-finite numbers wrote permanently unreadable artifacts (fixed in `fa8903a`)
+
+Found by the correctness lens. `payload_checksum` used `json.dumps` defaults,
+emitting bare `Infinity`/`NaN` (not legal JSON). The checksum was computed over
+that non-canonical form while `ArtifactEnvelope.model_validate` normalized the
+float on read, so the recomputed checksum differed and every load raised
+`ChecksumMismatchError`. The write reported **success** and the artifact was
+unreadable forever. Reachable from a live MCP path: `initialize_budget` passed
+an unchecked `cap_usd` into the unbounded `BudgetState.per_phase_caps_usd`.
+
+Fixed failing closed at the write boundary (`serialization.dump_json`),
+independently in `payload_checksum` (`allow_nan=False`), and at the MCP input.
+The 6 new regression tests were verified to fail against the pre-fix code.
+
+### B2 — Projects were split across two directories (fixed in `d9f6f18`)
+
+Found by the completeness lens and independently reproduced. `project.json`,
+`state/`, `checkpoints/`, and `audit/` were written to
+`<root>/runtime/<project_id>/`, while `artifacts/`, `README.md`, `deliverables/`,
+and `index/` were written to `<root>/artifacts/<project_id>/`. §1's end goal
+("a human can open any project folder and read its state and final results")
+was therefore unmet, the D3 diagram was not implemented, and the tests encoded
+the split as correct so nothing could catch it. Plan D2 had in fact required
+P4 to merge the two trees; the merge never happened.
+
+Fixed by making the runtime root the storage root. One project folder now holds
+everything, verified by an end-to-end tree dump and pinned by a new guard test
+(`test_runtime_and_artifact_roots_coincide`).

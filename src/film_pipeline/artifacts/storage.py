@@ -59,18 +59,24 @@ def default_storage_root() -> Path:
 
 
 def default_runtime_root() -> Path:
-    """Return the default runtime-state root, derived from the storage root."""
-    return resolve_storage_root().parent / "runtime"
+    """Return the default runtime-state root.
+
+    This is the storage root itself: a project's typed record, machine state,
+    checkpoints, audit log, and artifacts all live in ONE folder
+    (``<root>/<project_id>/``) so a human can open a project directory and read
+    its state and results together (plan §1 end goal / D3 layout).
+    """
+    return resolve_storage_root()
 
 
 def default_checkpoints_root() -> Path:
     """Return the default LangGraph checkpointer directory."""
-    return resolve_storage_root().parent / "checkpoints"
+    return resolve_storage_root() / "checkpoints"
 
 
 def default_run_root() -> Path:
     """Return the default headless CLI run directory."""
-    return resolve_storage_root().parent / "runs" / "default"
+    return resolve_storage_root() / "runs" / "default"
 
 
 def resolve_storage_root(explicit: Path | str | None = None) -> Path:
