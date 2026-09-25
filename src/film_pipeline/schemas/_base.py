@@ -12,6 +12,12 @@ from enum import StrEnum
 from pydantic import BaseModel, ConfigDict, Field
 
 from film_pipeline.filmspec import (
+    LEGACY_TRANSITION_ALIASES as LEGACY_TRANSITION_ALIASES,
+)
+from film_pipeline.filmspec import (
+    TRANSITION_TYPES as TRANSITION_TYPES,
+)
+from film_pipeline.filmspec import (
     AgentFamily as AgentFamily,
 )
 from film_pipeline.filmspec import (
@@ -138,19 +144,6 @@ class KbAuthority(StrEnum):
     ACTIVE_PLAYBOOK = "active_playbook"
     CASE_STUDY = "case_study"
     RAW_ARCHIVE = "raw_archive"
-
-
-# --- Shared vocabularies ----------------------------------------------------
-
-
-# Closed vocabulary of transitions the studio plans, validates, and executes.
-TRANSITION_TYPES: tuple[str, ...] = ("cut", "dissolve", "fade_in", "fade_out", "crossfade")
-
-# Legacy transition spellings resolved onto TRANSITION_TYPES before validation.
-# "fade" survives in assembly prompt prose ("fade for chapter breaks"); a bare
-# fade is a fade to black, so it maps onto the executable fade_out. "wipe" has
-# no honest canonical equivalent and stays unrecognized.
-LEGACY_TRANSITION_ALIASES: dict[str, str] = {"fade": "fade_out"}
 
 
 # --- Base models -----------------------------------------------------------

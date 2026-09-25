@@ -12,40 +12,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from film_pipeline.filmspec import (
+    GENERATION_DEPENDENT_PHASES as _GENERATION_DEPENDENT_PHASES,
+)
+from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHASES
+from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
 from film_pipeline.filmspec import next_phase
 from film_pipeline.graph import orchestrator_state as ostate
 from film_pipeline.schemas._base import ValidationStatus
-
-# Actions that can operate in any phase regardless of provider health
-_PHASE_AGNOSTIC_PHASES = {
-    "intake",
-    "constitution",
-    "development",
-    "script",
-    "visual_dev",
-    "shot_bible",
-    "gen_planning",
-    "qc",
-    "post",
-    "delivery",
-}
-
-# Actions that require a healthy generation-capable provider
-_GENERATION_DEPENDENT_PHASES = {"generation"}
-
-APPROVAL_GATES = {
-    "intake": "config",
-    "constitution": "constitution",
-    "development": "treatment",
-    "script": "script",
-    "visual_dev": "visual_bible",
-    "shot_bible": "shot_bible",
-    "gen_planning": "generation_spend",
-    "generation": "generation_batch",
-    "qc": "qc",
-    "post": "assembly",
-    "delivery": "final_delivery",
-}
 
 
 @dataclass

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import LEGACY_TRANSITION_ALIASES, TRANSITION_TYPES
 from film_pipeline.schemas._base import (
-    LEGACY_TRANSITION_ALIASES,
-    TRANSITION_TYPES,
     IssueSeverity,
     ValidationModality,
     ValidationScope,

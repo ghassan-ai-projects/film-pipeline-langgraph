@@ -135,6 +135,38 @@ class IssueSeverity(StrEnum):
 
 PHASE_SEQUENCE: tuple[str, ...] = tuple(phase.value for phase in FilmPhase)
 
+PHASE_GATES: dict[str, str] = {
+    "intake": "config",
+    "constitution": "constitution",
+    "development": "treatment",
+    "script": "script",
+    "visual_dev": "visual_bible",
+    "shot_bible": "shot_bible",
+    "gen_planning": "generation_spend",
+    "generation": "generation_batch",
+    "qc": "qc",
+    "post": "assembly",
+    "delivery": "final_delivery",
+}
+PHASE_AGNOSTIC_PHASES: set[str] = {
+    "intake",
+    "constitution",
+    "development",
+    "script",
+    "visual_dev",
+    "shot_bible",
+    "gen_planning",
+    "qc",
+    "post",
+    "delivery",
+}
+GENERATION_DEPENDENT_PHASES: set[str] = {"generation"}
+
+# Closed transition vocabulary shared by validation and post production.
+TRANSITION_TYPES: tuple[str, ...] = ("cut", "dissolve", "fade_in", "fade_out", "crossfade")
+# A bare "fade" means fade to black; "wipe" has no canonical equivalent.
+LEGACY_TRANSITION_ALIASES: dict[str, str] = {"fade": "fade_out"}
+
 
 def next_phase(phase: str) -> str | None:
     """Return the next phase, or ``None`` for delivery or an unknown phase."""
