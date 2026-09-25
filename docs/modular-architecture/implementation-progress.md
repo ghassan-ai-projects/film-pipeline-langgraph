@@ -79,7 +79,7 @@ Enola filter or threshold changed.
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | PASS — committed-tree check at 22:06 UTC; clean, C3 removed (2→1 cycles), no new findings; 113 total / 112 heuristic vs. pinned 115 / 110 | `1e3bf33` | Complete |
-| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Behavior plan lens passes; boundary found one release-doc consumer to include; quality review pending | Pending | Pending | Current: 1 cycle finding (C2); target after slice: 0 | Pending | Plan review |
+| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Behavior and boundary plan lenses pass; quality found one relative-import test example to correct; re-review pending | Pending | Pending | Current: 1 cycle finding (C2); target after slice: 0 | Pending | Plan review |
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -207,12 +207,14 @@ follow C-04; completing the graph slice alone is not migration completion.
   paths. Update the focused test command in `documentation/release-process.md`
   to the new test path. Remove `app/product_gate.py` without a forwarding shim,
   which would restore the cycle.
-- **Boundary guard:** add an app-package AST guard that forbids imports from
-  `film_pipeline.mcp` anywhere under `src/film_pipeline/app`. Resolve absolute,
-  relative, and package-re-export forms, including `from film_pipeline import
-  mcp as ...` and `from .. import mcp` in a nested app package. Exercise these
-  forms in focused resolver cases. This pins the single dependency direction
-  needed to close C2; it does not add a general architecture framework.
+- **Boundary guard:** add an app-package AST guard forbidding
+  `film_pipeline.mcp` imports across `src/film_pipeline/app`. Resolve absolute,
+  relative, and package-re-export forms, including
+  `from film_pipeline import mcp as module`. For a nested app package, parse
+  `from ... import mcp` from `film_pipeline.app.services` and assert it resolves
+  to `film_pipeline.mcp`. Exercise these forms in focused resolver cases. This
+  pins the single dependency direction needed to close C2; it does not add a
+  general architecture framework.
 - **Scope discipline:** do not alter MCP startup, tool schemas, runtime
   creation, operator service behavior, or the current test-visible injection
   hooks. The existing imports from MCP into app remain the established
@@ -227,10 +229,11 @@ follow C-04; completing the graph slice alone is not migration completion.
   total cycle findings. Search `src`, `tests`, `Makefile`, and the active
   release process for the old module/test paths. Keep the pinned receipt,
   filters, and thresholds unchanged.
-- **Plan review:** behavior lens passes. Boundary review found the active
-  release-process test command, which is now included in the migration;
-  boundary re-review and quality review are pending. No production changes
-  have started.
+- **Plan review:** behavior and boundary lenses pass. Boundary review found the
+  active release-process test command, which is now included. Quality review
+  found a relative-import example one level too shallow; the plan now specifies
+  the correct nested target and requires asserting its resolution. Quality
+  re-review is pending. No production changes have started.
 
 ## V-01 plan
 
