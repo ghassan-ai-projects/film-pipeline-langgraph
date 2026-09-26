@@ -18,7 +18,7 @@ from film_pipeline.providers.failure_classifier import (
     compress_prompt_for_retry,
     is_token_limit_exceeded,
 )
-from film_pipeline.schemas.handoff import AgentHandoff, AgentRegistration
+from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 
 if TYPE_CHECKING:
@@ -445,27 +445,3 @@ class PromptRunner:
         if not isinstance(raw, dict):
             raise ValueError(f"Model output is not a dict: {type(raw)}")
         return raw
-
-    def create_handoff(
-        self,
-        contract: AgentRegistration,
-        handoff_id: str,
-        project_id: str,
-        task: str,
-        kb_context: KBContextPacket,
-        input_artifact_refs: list[str] | None = None,
-    ) -> AgentHandoff:
-        """Create a handoff record for this agent invocation."""
-        return AgentHandoff(
-            handoff_id=handoff_id,
-            from_agent=contract.agent_id,
-            to_agent="orchestrator-agent",
-            project_id=project_id,
-            input_artifact_refs=input_artifact_refs or [],
-            kb_context_ref=kb_context.kb_context_id,
-            task=task,
-            expected_output_schema=(
-                contract.output_artifacts[0] if contract.output_artifacts else "any"
-            ),
-            validation_required=contract.reviewed_by,
-        )
