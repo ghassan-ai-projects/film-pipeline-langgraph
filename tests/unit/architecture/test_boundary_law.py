@@ -47,11 +47,23 @@ _SRC = _REPO_ROOT / "src" / "film_pipeline"
 # `06` section 4 endorses tightening these ("unsafe reach-in"). Lower a count
 # when you remove one; delete the row at zero. Never raise one.
 KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
-    # `_persistence` and `_operator_runtime` are the composition root's private
-    # modules. `mcp` reaches them for root resolution and for building an
-    # OperatorService. Both should route through a public seam; neither is
-    # urgent, and `06` says not to invent an abstraction without a current need.
+    # `_persistence` — investigated 2026-09-26 and kept, with a reason tighter than
+    # "not urgent". `mcp/server.py` needs the configured runtime root to place its
+    # log file before any runtime exists. The function it calls has since been
+    # reshaped (`configured_runtime_root` -> `Path | None`, plus
+    # `runtime_root_from_config`), which removed a duplicated env read, but the
+    # import still names a private module. Moving the resolver to a public module is
+    # a real option; it is left here because the reach-in is one call site at
+    # process start and no defect follows from it.
     ("mcp", "studio._persistence"): 1,
+    # `_operator_runtime` — provably irreducible. Building a wired `OperatorService`
+    # needs `StudioRuntimeProvider` and the provider composition, which is
+    # composition-root policy: `operations` cannot supply them without importing
+    # `studio`, which already imports `operations`, and that mutual dependency is
+    # the exact cycle `operations/ports.py` exists to prevent (Enola gates on it).
+    # The alternative is a DI container with no current second implementation, which
+    # `06` section 4 forbids. The `mcp`-side accessor already collapsed four
+    # importers into this one; that crossing is the minimum.
     ("mcp", "studio._operator_runtime"): 1,
 }
 
