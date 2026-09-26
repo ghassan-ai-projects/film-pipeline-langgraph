@@ -35,7 +35,6 @@ __all__ = [
     "get_all_revisions",
     "get_approved_refs",
     "get_blocked_providers",
-    "get_budget_snapshot",
     "get_candidate_refs",
     "get_convergence",
     "get_convergence_round",
@@ -105,10 +104,6 @@ _FAILURE_DECISIONS = f"{_ORCH_NS}__failure_decisions"
 # Provider health snapshot (cached, refreshed on provider interaction).
 # Shape: dict[provider_id → ProviderHealthState as dict]
 _PROVIDER_HEALTH_SNAPSHOT = f"{_ORCH_NS}__provider_health_snapshot"
-
-# Budget state snapshot for routing awareness.
-# Shape: dict with keys: cap_usd, spent_usd, remaining_usd, blocking_threshold_exceeded
-_BUDGET_SNAPSHOT = f"{_ORCH_NS}__budget_snapshot"
 
 # Execution brief: the orchestrator's structural contract for the film.
 # Populated by StructureExtractorAgent after script phase. Used by Gate A/B/C
@@ -199,11 +194,6 @@ ORCH_CHANNELS: tuple[OrchChannelSpec, ...] = (
         _PROVIDER_HEALTH_SNAPSHOT,
         "explicit",
         "dormant writer; wiring decided in D13/P1 (provider health)",
-    ),
-    OrchChannelSpec(
-        _BUDGET_SNAPSHOT,
-        "explicit",
-        "dormant writer; wiring decided in D13/P1 (budget recording)",
     ),
     OrchChannelSpec(
         _EXECUTION_BRIEF,
@@ -552,26 +542,6 @@ def get_healthy_providers(state: dict[str, Any]) -> list[str]:
     ]
 
 
-# --- Budget snapshot ---------------------------------------------------------
-
-
-def get_budget_snapshot(state: dict[str, Any]) -> dict[str, Any]:
-    """Return the cached budget snapshot.
-
-    Read-only since the Rule 4 deletion: ``update_budget_snapshot`` was its only
-    writer and had zero callers in ``src/``, so the snapshot is always the
-    default below. Kept because two operator read paths project it
-    (``mcp.tools.state.get_film_state`` and ``operations.operator``).
-    """
-    return cast(
-        dict[str, Any],
-        state.get(
-            _BUDGET_SNAPSHOT,
-            {"cap_usd": 0.0, "spent_usd": 0.0, "remaining_usd": 0.0, "threshold_exceeded": False},
-        ),
-    )
-
-
 # --- Execution brief ---------------------------------------------------------
 
 
@@ -618,13 +588,4 @@ def ensure_orchestrator_state(state: dict[str, Any]) -> None:
     state.setdefault(_ROUTING_DECISIONS, [])
     state.setdefault(_FAILURE_DECISIONS, [])
     state.setdefault(_PROVIDER_HEALTH_SNAPSHOT, {})
-    state.setdefault(
-        _BUDGET_SNAPSHOT,
-        {
-            "cap_usd": 0.0,
-            "spent_usd": 0.0,
-            "remaining_usd": 0.0,
-            "threshold_exceeded": False,
-        },
-    )
     state.setdefault(_CONVERGENCE, {})

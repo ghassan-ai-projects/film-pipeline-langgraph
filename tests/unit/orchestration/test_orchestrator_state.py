@@ -235,17 +235,6 @@ def test_get_healthy_providers() -> None:
     assert healthy == ["veo"]
 
 
-# --- Budget snapshot ---------------------------------------------------------
-
-
-def test_budget_snapshot_defaults() -> None:
-    state = _empty_state()
-    snap = ostate.get_budget_snapshot(state)
-    assert snap["cap_usd"] == 0.0
-    assert snap["spent_usd"] == 0.0
-    assert snap["threshold_exceeded"] is False
-
-
 def test_ensure_orchestrator_state_idempotent() -> None:
     state: dict[str, Any] = {"project_id": "p1"}
     ostate.ensure_orchestrator_state(state)

@@ -324,7 +324,6 @@ class OperatorService:
             pending_revisions=list(ostate.get_pending_revisions(state)),
             candidate_refs=dict(ostate.get_candidate_refs(state)),
             approved_refs=dict(ostate.get_approved_refs(state)),
-            budget_snapshot=dict(ostate.get_budget_snapshot(state)),
             provider_blocked=list(ostate.get_blocked_providers(state)),
             issue_count=len(cast(list[Any], state.get("issues", []))),
             artifact_count=len(self.list_artifacts(project_id_value)),

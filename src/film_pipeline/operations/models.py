@@ -61,7 +61,6 @@ class DashboardSummary:
     pending_revisions: list[dict[str, Any]] = field(default_factory=list)
     candidate_refs: dict[str, Any] = field(default_factory=dict)
     approved_refs: dict[str, Any] = field(default_factory=dict)
-    budget_snapshot: dict[str, Any] = field(default_factory=dict)
     provider_blocked: list[str] = field(default_factory=list)
     issue_count: int = 0
     artifact_count: int = 0

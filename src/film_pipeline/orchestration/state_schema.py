@@ -179,7 +179,6 @@ class StudioGraphState(TypedDict, total=False):
     shot_matrix_ref: str
     visual_refs: str
     execution_brief_ref: str
-    cost_estimate_ref: str
     consensus_report_ref: str
     assembly_manifest_ref: str
     prompt_registry_ref: str
@@ -200,7 +199,6 @@ class StudioGraphState(TypedDict, total=False):
     generation_requests: Annotated[list[dict[str, object]], merge_generation_requests]
 
     # ── Snapshot channels ─────────────────────────────────────────────────
-    budget_snapshot: dict[str, object]
     provider_health_snapshot: dict[str, object]
     resolved_config: dict[str, object]
     profile_stack: dict[str, str]
@@ -222,7 +220,6 @@ class StudioGraphState(TypedDict, total=False):
     _orchestrator__convergence: dict[str, dict[str, Any]]
     _orchestrator__failure_decisions: list[dict[str, Any]]
     _orchestrator__provider_health_snapshot: dict[str, dict[str, Any]]
-    _orchestrator__budget_snapshot: dict[str, Any]
     _orchestrator__execution_brief: dict[str, Any]
 
     # ── Internal routing / repair flags ───────────────────────────────────

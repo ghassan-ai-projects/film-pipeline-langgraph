@@ -280,7 +280,6 @@ def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
         "shot_matrix_ref",
         "visual_refs",
         "execution_brief_ref",
-        "cost_estimate_ref",
     ]
     built_from: dict[str, str] = {}
     for key in ref_keys:

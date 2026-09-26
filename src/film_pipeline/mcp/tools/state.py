@@ -51,7 +51,6 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
         pending_revisions=ostate.get_pending_revisions(state),
         active_review_cycle=review_cycle,
         provider_blocked=ostate.get_blocked_providers(state),
-        budget_snapshot=ostate.get_budget_snapshot(state),
         has_blocking_failures=ostate.has_blocking_failure(state),
     )
 

@@ -114,12 +114,6 @@ def _base_state(*, phase: str = "intake", approved: bool = False) -> dict[str, A
         "_orchestrator__convergence": {},
         "_orchestrator__failure_decisions": [],
         "_orchestrator__provider_health_snapshot": {},
-        "_orchestrator__budget_snapshot": {
-            "cap_usd": 0.0,
-            "spent_usd": 0.0,
-            "remaining_usd": 0.0,
-            "threshold_exceeded": False,
-        },
         "_orchestrator__execution_brief": {},
     }
 
