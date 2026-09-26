@@ -54,6 +54,21 @@ Rules for using it:
 - **Use the docs-local baseline.** `docs/modular-architecture/enola-out` plus
   `docs/modular-architecture/enola-config.yaml` is the comparable pair. The root
   `.enola` baseline is stale; a check against it is not a pass.
+- **Check the baseline's age before believing a FAIL.** `enola check` grades the
+  working tree against a *pinned snapshot*, so a snapshot older than the branch it
+  grades reports the branch's own renames as regressions. This actually happened:
+  a 2026-09-25 baseline still held 703 facts for `src/film_pipeline/app`, 935 for
+  `graph`, and 396 for `artifacts` — packages renamed away on this branch — and it
+  promoted a pre-existing `agents <-> agents/prompt_templates` cycle to
+  "regression" the moment an unrelated back-edge was removed. Regenerate from
+  **clean** HEAD (`enola --generate`, then `enola baseline clear` + `baseline pin`)
+  and confirm the fresh snapshot holds 0 facts for packages that no longer exist.
+  Never fix a FAIL by editing a filter or threshold; fix the baseline's currency.
+- **A freshly pinned baseline cannot catch new cycles.** It grades against a
+  snapshot, not the working tree: with the baseline regenerated from the current
+  commit, an injected `schemas -> orchestration` back-edge still exits 0. That check
+  lives in `tests/unit/architecture/test_package_acyclicity.py` — keep it, and keep
+  it scoped to cycles. It is not a duplicate of this gate.
 - **Exit codes:** `0` clean, `1` regression (policy violated), `2` error
   (gate could not run — no baseline, bad flag), `3` declined (baseline not
   comparable). Anything but `0` must be resolved or explained, not ignored.
