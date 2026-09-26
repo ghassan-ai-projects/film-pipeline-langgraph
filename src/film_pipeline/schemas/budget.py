@@ -1,4 +1,8 @@
-"""Budget state, cost estimates, and spend records."""
+"""Budget state and spend records.
+
+The `CostEstimate` record was removed with the cost feature: its only reader
+was the planning gate, which now sources its clip count from the shot matrix.
+"""
 
 from __future__ import annotations
 
@@ -6,18 +10,7 @@ from datetime import datetime
 
 from pydantic import Field
 
-from film_pipeline.schemas.base import MutableSchemaBase, SchemaBase
-
-
-class CostEstimate(SchemaBase):
-    """Estimated cost for one generation batch."""
-
-    project_id: str
-    batch_id: str
-    provider: str
-    estimated_cost_usd: float = Field(ge=0)
-    clip_count: int = Field(ge=0)
-    notes: str = ""
+from film_pipeline.schemas.base import MutableSchemaBase
 
 
 class SpendRecord(MutableSchemaBase):

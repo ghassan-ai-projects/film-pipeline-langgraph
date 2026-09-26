@@ -303,7 +303,6 @@ _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
     "StoryBible": "script",
     "Script": "script",
     "MasterFilmMatrix": "shot_bible",
-    "CostEstimate": "cost_estimate_bom",
     "ConsensusReport": "consensus_report",
     "AssemblyManifest": "assembly_manifest",
 }

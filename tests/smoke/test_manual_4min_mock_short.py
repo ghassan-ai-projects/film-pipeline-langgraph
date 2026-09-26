@@ -59,10 +59,11 @@ class TestManualFourMinuteMockShort:
             assert phase_result["ok"] is True
             assert phase_result["current_phase"] == expected_phase
 
-        result = invoke_tool(
-            rt, "inspect_artifact", artifact_id="cost_estimate", phase="gen_planning"
-        )
-        assert result["ok"] is True, f"inspect_artifact cost_estimate failed: {result}"
+        # The cost_estimate artifact was removed with the cost feature. The
+        # planning gate now sources its clip count from the shot matrix, so the
+        # proof that gen_planning produced something is the matrix it consumed.
+        result = invoke_tool(rt, "inspect_artifact", artifact_id="shot_matrix", phase="shot_bible")
+        assert result["ok"] is True, f"inspect_artifact shot_matrix failed: {result}"
 
         result = invoke_tool(
             rt,
