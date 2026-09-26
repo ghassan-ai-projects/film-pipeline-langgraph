@@ -1135,3 +1135,76 @@ The advisory output includes findings under `.pre-commit-cache/`, because
 `PRE_COMMIT_HOME` is set to a workspace-local directory during commits and
 `enola-config.yaml` does not ignore it. Harmless to the gate (advisory only) but
 noise; adding it to the ignore list is a one-line follow-up.
+
+## AGENT-12 — correcting the dependency-law premise (2026-09-26)
+
+**This round's central claim was wrong, and the correction matters more than the
+work it produced.**
+
+`AGENT-10a` built `test_dependency_law.py` to grade every import against the
+per-package **Allowed outbound** sets in `03-target-architecture.md`, freezing 73
+edges as debt, and every round since reported "debt paid 73 → 70" as progress.
+That premise does not hold:
+
+- `03`'s **own header**, eight lines above the "Status: authoritative target
+  design" line quoted when building the guard, reads: *"Review status
+  (2026-09-25): **superseded proposal.** The independent review in 06 does not
+  adopt the 20-module catalog or its dependency law as an implementation
+  mandate."*
+- `06-independent-review-and-decision.md` — the document
+  `docs/modular-architecture/README.md` says to read **first** — decided: *"This
+  is an ownership map, **not a prohibition on ordinary package imports**. Tighten
+  a dependency only when it removes a proven cycle or unsafe reach-in."* It also
+  explicitly rejects renaming packages to satisfy a layer diagram.
+
+So the guard was enforcing a **rejected proposal**, and the burndown number was
+measuring a target that does not exist. Several of the 70 remaining "violations"
+are ordinary package imports `06` says to leave alone.
+
+**How the mistake happened, recorded so it is not repeated.** `03` contains both
+headers: a superseded-proposal warning and an "authoritative target design"
+status. I read the latter and quoted it to justify the guard, without reading the
+top of the file. `README.md` already told me to read `06` first; I did not.
+
+### The correction (`a3d9d6e`)
+
+Re-scoped to the boundaries the project actually adopted — which is also exactly
+what `06` endorses: *"a small AST test is appropriate for a stable, concrete
+boundary … it must allow existing debt explicitly and ratchet it down."*
+
+| Guard | Status |
+|---|---|
+| Cross-package **private** reach-in | **Enforced.** `06` names "unsafe reach-in" as worth tightening. Debt: `mcp -> studio._persistence`, `mcp -> studio._operator_runtime`, ratcheted. |
+| Port's mirrored privates (`_persist_project_state`, `_record_audit`) | **Enforced.** `operations/ports.py` names them deliberately and documents it as O7 debt; seven outside caller files frozen, matching that file's own record. |
+| `03`'s layer law | **Observation only.** Census reported (70 imports), never asserted. A test asserts the document *still says it is superseded*, so re-adopting the law requires re-scoping this file deliberately. |
+
+Both new guards are falsifiable — verified by injecting `import
+film_pipeline.checkpoints._invalidation_probe`, which fails with `not recorded:
+[(mcp, checkpoints._invalidation_probe)]`.
+
+`AGENTS.md` was corrected in the same commit: it now separates what is enforced
+from what is deliberately not, quotes `06`'s decision, and records this mistake.
+Its Sub-Package Boundaries section no longer presents `03`'s law as binding.
+
+### What survives, and why
+
+The **code** changes this round produced were each verified independently of any
+law, so they stand:
+
+- the prompt-reference bug (MCP sent `artifact:gen_planning:prompt_package:v1` to
+  providers instead of prompt text — real, uncovered, fixed);
+- the failed-row `next_action`, the CANCELLED leak, terminality triplication, and
+  the status read that wrote an artifact;
+- the `_register_active_artifact_ref` dedup, the provider-default fix, the three
+  dead registry aggregates, and the `mcp -> studio` private-import cleanup.
+
+What does **not** survive is the *framing*: these were not "debt paid against the
+layer law". They were real bugs, real duplication, and real reach-in cleanup,
+which is a better justification than the one I gave them.
+
+### The lesson, stated for the next agent
+
+`docs/modular-architecture/README.md` already gives the read order: `06` first,
+then `00`, then `01`/`02`, and `03`–`05` last as *historical proposals*. Follow
+it. A document that contradicts itself in its first ten lines should be read from
+the top, not quoted from the middle.
