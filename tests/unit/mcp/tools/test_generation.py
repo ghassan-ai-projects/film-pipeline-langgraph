@@ -654,3 +654,96 @@ def test_the_mock_literals_are_gone_from_the_handler() -> None:
         "the generation planning handler hardcodes provider/model again: "
         f"{offenders}. Use rt.default_video_provider()."
     )
+
+
+def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) -> None:
+    """The prompt handed to the provider must be resolved, not the raw ref.
+
+    `GenerationLedgerRow.prompt_ref` is an artifact *reference* string. The
+    handler passed it straight to `adapter.build_payload(prompt=...)`, so every
+    MCP-driven generation submitted a literal like
+    "artifact:gen_planning:prompt_package:v1" — or an empty string — as the
+    prompt. GenerationExecutor resolves it through `resolve_prompt` first; the
+    MCP path did not.
+
+    No test covered this: the existing start tests assert only counts and ids,
+    never payload content, so the divergence was invisible.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+
+    sent: list[str] = []
+
+    class _SpyAdapter:
+        def build_payload(
+            self, *, prompt: str, references: object = None, duration: object = None
+        ) -> dict[str, object]:
+            sent.append(prompt)
+            return {"prompt": prompt}
+
+        def submit(self, payload: object, shot_id: str) -> object:
+            class _Job:
+                job_id = "job-spy"
+
+            return _Job()
+
+    rt.register_provider("mock-video-provider", _SpyAdapter())
+    ledger = mgr.plan_batch(
+        "gen-start-test",
+        ["S001"],
+        "mock-video-provider",
+        "mock-fast",
+        prompt_ref="artifact:gen_planning:prompt_package:v1",
+    )
+    mgr.update_row(
+        "gen-start-test",
+        ledger.rows[0].generation_id,
+        status=GenerationStatus.SUBMITTED.value,
+    )
+
+    result = asyncio.run(start_generation_batch({}))
+    assert result["ok"] is True, result.get("error")
+    assert result["submitted"] == 1, result
+
+    assert sent, "no payload was built"
+    assert sent[0] != "artifact:gen_planning:prompt_package:v1", (
+        "the artifact reference was sent as the prompt text"
+    )
+    assert not sent[0].startswith("artifact:"), f"prompt is still a ref: {sent[0]!r}"
+    assert sent[0].strip(), "the prompt sent to the provider is empty"
+
+
+def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
+    """A FAILED row must not tell the operator to keep polling.
+
+    The MCP failure path left `next_action` at its previous value (`poll`) while
+    `GenerationExecutor._fail_row` sets `wait_human`. A failed row can never
+    advance by polling.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    ledger = mgr.plan_batch("gen-start-test", ["S001"], "unregistered-provider", "m")
+    mgr.update_row(
+        "gen-start-test",
+        ledger.rows[0].generation_id,
+        status=GenerationStatus.SUBMITTED.value,
+    )
+
+    result = asyncio.run(start_generation_batch({}))
+    assert result["failed"] == 1, result
+
+    rows = mgr.list_rows("gen-start-test", status=GenerationStatus.FAILED)
+    assert rows, "the row was not marked FAILED"
+    assert rows[0].next_action == "wait_human", (
+        f"a failed row should wait for a human, got {rows[0].next_action!r}"
+    )

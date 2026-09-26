@@ -182,10 +182,18 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
 def _sync_generation_requests_from_ledger(
     active: dict[str, Any], rows: list[GenerationLedgerRow]
 ) -> None:
-    """Publish dispatchable generation requests from ledger rows into graph state."""
+    """Publish dispatchable generation requests from ledger rows into graph state.
+
+    CANCELLED rows are skipped, matching
+    ``GenerationExecutor.dispatchable_requests``. This function was a
+    line-for-line copy of that method minus the CANCELLED filter, so a cancelled
+    request leaked into graph state and the generation-phase gate counted it.
+    """
+    from film_pipeline.schemas.base import GenerationStatus
+
     requests: list[dict[str, object]] = []
     for row in rows:
-        if not row.shot_id:
+        if not row.shot_id or row.status is GenerationStatus.CANCELLED:
             continue
         requests.append(
             {
