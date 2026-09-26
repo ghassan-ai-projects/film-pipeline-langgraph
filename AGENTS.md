@@ -68,6 +68,34 @@ Rules for using it:
 
 Record the Enola result next to `make ci-check` for every migration slice.
 
+### Dependency boundaries — what is enforced, and what is not
+
+`tests/unit/architecture/test_boundary_law.py` guards the boundaries this project
+has **adopted**:
+
+- **No cross-package private reach-in** — importing another package's
+  underscore-prefixed module. Guarded, with existing debt in
+  `KNOWN_PRIVATE_REACH_INS`, ratcheted down.
+- **The port's mirrored privates stay mirrored** — `operations/ports.py`
+  deliberately names `_persist_project_state` and `_record_audit` so the port can
+  describe the runtime surface it adapts. `KNOWN_MIRRORED_PRIVATE_CALLS` records
+  the remaining outside callers.
+
+**What is deliberately NOT enforced.** `docs/modular-architecture/03-target-architecture.md`
+declares a per-package "Allowed outbound" set, but its own header calls it a
+**superseded proposal**, and `06-independent-review-and-decision.md` §4 decided:
+
+> This is an ownership map, **not a prohibition on ordinary package imports**.
+> Tighten a dependency only when it removes a proven cycle or unsafe reach-in.
+
+Do **not** treat `03`'s layer law as a burndown target, and do not contort code to
+satisfy it. The guard reports that law's census as an observation only.
+
+An earlier round of this program did exactly the wrong thing here: it graded every
+import against `03` and froze 73 edges as debt to eliminate, which is enforcing a
+rejected proposal. That was re-scoped. **Read `06` before `03`** — which
+`docs/modular-architecture/README.md` already instructs.
+
 ## Python Standards
 
 - Add type hints to public functions, methods, and module-level constants.
@@ -80,10 +108,9 @@ Record the Enola result next to `make ci-check` for every migration slice.
 ## Sub-Package Boundaries
 
 The packages under `src/film_pipeline/` map to implementation phases and to the
-ownership boundaries in `docs/modular-architecture/03-target-architecture.md`.
-`orchestration` and `mcp` may import across all sub-packages; domain modules must
-not import each other directly — they communicate through `storage` (the owner
-of artifact identity and layout).
+ownership map in `06-independent-review-and-decision.md` §4. That review decided
+the package layout is an **ownership map, not an import prohibition** — see
+"Dependency boundaries" above for what is actually enforced.
 
 The migration is complete: every package under `src/film_pipeline/` is a target
 module that owns its concern. The pre-migration names — `artifacts`, `graph`,
