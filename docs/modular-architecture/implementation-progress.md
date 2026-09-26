@@ -1538,3 +1538,52 @@ Both mistakes were caught by running the guard, not by reading it. That is now
 four times in this program that checking beat reasoning, and it is the argument
 for falsifying every guard at the moment it is written rather than trusting it
 until it is audited.
+
+## AGENT-19 — a silently-swallowed failure that reported success (2026-09-26)
+
+New sweep axis: **over-broad `except` handlers that swallow silently** — the shape
+that hid the JSON bug in AGENT-16.
+
+**48 sites across 30 files.** Most are legitimate: an MCP handler must return an
+error envelope rather than crash, so `except Exception: return _error(str(e))` is
+correct and appears throughout `mcp/tools/`. The sweep was a candidate generator,
+not a defect list — the value was in reading the few that *hide* rather than
+*report*.
+
+### The one that mattered
+
+`mcp/tools/bibles/shot.py::_generate_continuity_ledger` caught every exception and
+returned `None`, so a ledger that **failed to persist** was indistinguishable from
+one that was never needed. The tool then reported an unqualified success:
+
+```
+ok: True
+continuity_ledger_ref: None
+```
+
+while its own docstring promises "MasterFilmMatrix + ContinuityLedger" and
+`CONTINUITY_LEDGER` is a declared artifact kind. Verified by monkeypatching the
+persist call to raise — the response still said `ok: True`.
+
+**Fixed, not made fatal.** The matrix is the primary deliverable and failing the
+whole call over a ledger problem would be worse. Instead the failure is logged
+with a traceback and the response carries
+`warnings=["continuity_ledger_not_persisted"]`. A caller checking only `ok` is
+still told the matrix is there; a caller reading the envelope can see half the
+promised output is missing. Two tests pin both paths, and removing the warning
+branch fails one.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Silent successes hiding a failed promised artifact | 1 | **0** |
+| Sweep candidates reviewed | 48 sites / 30 files | — |
+| Sites changed | — | **1** |
+
+The ratio is the honest headline: 48 candidates, 1 defect. That is what a sweep
+looks like when the codebase is mostly healthy — the sweeps in AGENT-14/15/16 had
+better ratios because those axes (exact duplicates, re-derived policy) select for
+defects directly, while "broad except" selects for a *style* that is usually
+correct. Worth recording so the next round picks axes by expected yield, not by
+how interesting the pattern sounds.
