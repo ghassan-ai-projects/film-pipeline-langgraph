@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from film_pipeline.agents._prompt_template import PromptTemplate as PromptTemplate
+from film_pipeline.agents.prompt_templates.template import PromptTemplate
 
 
 @dataclass
@@ -47,17 +47,16 @@ _registry: PromptTemplateRegistry | None = None
 
 
 def get_registry() -> PromptTemplateRegistry:
-    """Return the session-scoped prompt template registry."""
+    """Return the session-scoped prompt template registry.
+
+    Empty by default. The defaults are registered by
+    ``prompt_templates.get_registry``, which owns the wiring: the registry must
+    not know its own contents, because importing ``defaults`` from here closes a
+    cycle (`prompt_templates -> registry -> defaults`, where ``defaults`` is a
+    child of ``prompt_templates``). Call that package-level function rather than
+    this one when you want the shipped templates.
+    """
     global _registry
     if _registry is None:
         _registry = PromptTemplateRegistry()
-        _load_defaults(_registry)
     return _registry
-
-
-def _load_defaults(reg: PromptTemplateRegistry) -> None:
-    """Load the default prompt templates for all critical-path agents and validators."""
-    from film_pipeline.agents.prompt_templates.defaults import load_all, load_validator_templates
-
-    load_all(reg)
-    load_validator_templates(reg)

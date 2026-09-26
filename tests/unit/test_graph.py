@@ -102,19 +102,6 @@ class TestRouter:
         r = compute_actions(state)
         assert r.next_action == "advance_to_visual_dev"
 
-    def test_budget_blocked_escalates_to_human(self) -> None:
-        """When budget threshold is exceeded, escalate to human."""
-        state: dict[str, object] = {
-            "current_phase": "gen_planning",
-            "approved": True,
-            "human_approval_required": False,
-            "issues": [],
-        }
-        ostate.ensure_orchestrator_state(state)
-        ostate.update_budget_snapshot(state, cap_usd=50.0, spent_usd=50.0, threshold_exceeded=True)
-        r = compute_actions(state)
-        assert r.next_action == "escalate_to_human"
-
     def test_blocking_failure_routes_to_failure_handler(self) -> None:
         """Blocking failure decision should route to failure handler."""
         state: dict[str, object] = {

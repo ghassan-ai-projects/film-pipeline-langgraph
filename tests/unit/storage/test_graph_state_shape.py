@@ -11,24 +11,25 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from film_pipeline.orchestration.state_schema import undeclared_state_keys
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 from film_pipeline.studio.runtime import StudioRuntime
 
 
 class TestCheckStateKeys:
     def test_declared_keys_pass(self) -> None:
-        assert GraphStateSnapshot.check_state_keys({"project_id": "p1", "issues": []}) == []
+        assert undeclared_state_keys({"project_id": "p1", "issues": []}) == []
 
     def test_undeclared_key_is_reported(self) -> None:
-        found = GraphStateSnapshot.check_state_keys({"project_id": "p1", "not_a_real_key": 1})
+        found = undeclared_state_keys({"project_id": "p1", "not_a_real_key": 1})
         assert found == ["not_a_real_key"]
 
     def test_reports_every_undeclared_key_sorted(self) -> None:
-        found = GraphStateSnapshot.check_state_keys({"zeta": 1, "alpha": 2})
+        found = undeclared_state_keys({"zeta": 1, "alpha": 2})
         assert found == ["alpha", "zeta"]
 
     def test_empty_state_is_clean(self) -> None:
-        assert GraphStateSnapshot.check_state_keys({}) == []
+        assert undeclared_state_keys({}) == []
 
 
 class TestRealGraphStateConforms:
@@ -36,7 +37,7 @@ class TestRealGraphStateConforms:
         root = Path(tempfile.mkdtemp()) / "runtime"
         rt = StudioRuntime(server_mode="mock", runtime_root=root)
         state = rt.create_project("p1", "T", "p1")
-        assert GraphStateSnapshot.check_state_keys(state) == []
+        assert undeclared_state_keys(state) == []
 
     def test_state_after_a_graph_run_is_declared(self) -> None:
         """The schema must cover what the graph actually produces.
@@ -51,7 +52,7 @@ class TestRealGraphStateConforms:
         state["idea"] = "a lighthouse keeper"
         result = rt.run_graph(state)
         assert len(result) > len(state), "expected the graph to add state"
-        assert GraphStateSnapshot.check_state_keys(result) == []
+        assert undeclared_state_keys(result) == []
 
     def test_persisted_snapshot_round_trips(self) -> None:
         root = Path(tempfile.mkdtemp()) / "runtime"
@@ -64,4 +65,4 @@ class TestRealGraphStateConforms:
         snapshot_path = rt.project_roots["p1"] / "state" / "graph-state.json"
         assert snapshot_path.exists()
         snapshot = GraphStateSnapshot.model_validate_json(snapshot_path.read_text())
-        assert GraphStateSnapshot.check_state_keys(snapshot.state) == []
+        assert undeclared_state_keys(snapshot.state) == []

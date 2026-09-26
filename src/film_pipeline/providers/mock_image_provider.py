@@ -88,8 +88,3 @@ class MockImageProvider(BaseProviderAdapter):
             "size_bytes": path.stat().st_size if path.exists() else 0,
             "placeholder": True,
         }
-
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        _ = duration
-        _ = model
-        return 0.0

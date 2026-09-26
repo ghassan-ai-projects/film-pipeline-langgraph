@@ -118,12 +118,6 @@ def _blocked_provider_state() -> dict[str, Any]:
         "_orchestrator__provider_health_snapshot": {
             "mock-video-provider": {"status": "blocked_quota"},
         },
-        "_orchestrator__budget_snapshot": {
-            "cap_usd": 100.0,
-            "spent_usd": 0.0,
-            "remaining_usd": 100.0,
-            "threshold_exceeded": False,
-        },
         "_orchestrator__execution_brief": {},
     }
 

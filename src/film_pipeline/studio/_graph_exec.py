@@ -136,7 +136,9 @@ def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) 
     # A key the state schema does not declare means a writer added state
     # without a contract. Warn rather than raise: crash recovery must not fail
     # on state content, but the drift must be visible.
-    undeclared = GraphStateSnapshot.check_state_keys(safe)
+    from film_pipeline.orchestration.state_schema import undeclared_state_keys
+
+    undeclared = undeclared_state_keys(safe)
     if undeclared:
         _logger.warning("Graph state for %s carries undeclared keys: %s", project_id, undeclared)
     try:

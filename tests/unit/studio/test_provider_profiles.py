@@ -1,4 +1,4 @@
-"""Tests for app composition of profile-selected provider adapters."""
+"""Tests for composition of profile-selected provider adapters."""
 
 from __future__ import annotations
 
@@ -6,7 +6,12 @@ import pytest
 
 from film_pipeline.providers.credentials import MissingProviderCredential
 from film_pipeline.studio import _provider_factory as provider_factory
-from film_pipeline.studio._provider_profiles import (
+
+# Retargeted from `studio._provider_profiles`, which was a byte-identical dead
+# duplicate of these two functions in `studio._operator_runtime` — nothing in
+# src/ imported it, only this file did. The behaviour asserted below is the
+# same; the implementation now under test is the live one.
+from film_pipeline.studio._operator_runtime import (
     missing_profile_credentials,
     register_profile_providers,
 )

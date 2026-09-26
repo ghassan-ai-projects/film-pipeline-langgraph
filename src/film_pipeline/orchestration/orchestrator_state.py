@@ -35,7 +35,6 @@ __all__ = [
     "get_all_revisions",
     "get_approved_refs",
     "get_blocked_providers",
-    "get_budget_snapshot",
     "get_candidate_refs",
     "get_convergence",
     "get_convergence_round",
@@ -53,7 +52,6 @@ __all__ = [
     "increment_convergence_round",
     "init_convergence",
     "init_refs",
-    "is_budget_blocked",
     "is_provider_blocked",
     "is_stalled",
     "mark_stalled",
@@ -65,7 +63,6 @@ __all__ = [
     "set_candidate_ref",
     "set_execution_brief",
     "start_review_cycle",
-    "update_budget_snapshot",
     "update_provider_health",
 ]
 
@@ -107,10 +104,6 @@ _FAILURE_DECISIONS = f"{_ORCH_NS}__failure_decisions"
 # Provider health snapshot (cached, refreshed on provider interaction).
 # Shape: dict[provider_id → ProviderHealthState as dict]
 _PROVIDER_HEALTH_SNAPSHOT = f"{_ORCH_NS}__provider_health_snapshot"
-
-# Budget state snapshot for routing awareness.
-# Shape: dict with keys: cap_usd, spent_usd, remaining_usd, blocking_threshold_exceeded
-_BUDGET_SNAPSHOT = f"{_ORCH_NS}__budget_snapshot"
 
 # Execution brief: the orchestrator's structural contract for the film.
 # Populated by StructureExtractorAgent after script phase. Used by Gate A/B/C
@@ -201,11 +194,6 @@ ORCH_CHANNELS: tuple[OrchChannelSpec, ...] = (
         _PROVIDER_HEALTH_SNAPSHOT,
         "explicit",
         "dormant writer; wiring decided in D13/P1 (provider health)",
-    ),
-    OrchChannelSpec(
-        _BUDGET_SNAPSHOT,
-        "explicit",
-        "dormant writer; wiring decided in D13/P1 (budget recording)",
     ),
     OrchChannelSpec(
         _EXECUTION_BRIEF,
@@ -554,42 +542,6 @@ def get_healthy_providers(state: dict[str, Any]) -> list[str]:
     ]
 
 
-# --- Budget snapshot ---------------------------------------------------------
-
-
-def update_budget_snapshot(
-    state: dict[str, Any],
-    *,
-    cap_usd: float = 0.0,
-    spent_usd: float = 0.0,
-    threshold_exceeded: bool = False,
-) -> None:
-    """Cache budget awareness for routing decisions."""
-    state[_BUDGET_SNAPSHOT] = {
-        "cap_usd": cap_usd,
-        "spent_usd": spent_usd,
-        "remaining_usd": max(0.0, cap_usd - spent_usd),
-        "threshold_exceeded": threshold_exceeded,
-        "cached_at": datetime.now().isoformat(),
-    }
-
-
-def get_budget_snapshot(state: dict[str, Any]) -> dict[str, Any]:
-    """Return the cached budget snapshot."""
-    return cast(
-        dict[str, Any],
-        state.get(
-            _BUDGET_SNAPSHOT,
-            {"cap_usd": 0.0, "spent_usd": 0.0, "remaining_usd": 0.0, "threshold_exceeded": False},
-        ),
-    )
-
-
-def is_budget_blocked(state: dict[str, Any]) -> bool:
-    """Return True if the budget threshold has been exceeded."""
-    return cast(bool, get_budget_snapshot(state).get("threshold_exceeded", False))
-
-
 # --- Execution brief ---------------------------------------------------------
 
 
@@ -636,13 +588,4 @@ def ensure_orchestrator_state(state: dict[str, Any]) -> None:
     state.setdefault(_ROUTING_DECISIONS, [])
     state.setdefault(_FAILURE_DECISIONS, [])
     state.setdefault(_PROVIDER_HEALTH_SNAPSHOT, {})
-    state.setdefault(
-        _BUDGET_SNAPSHOT,
-        {
-            "cap_usd": 0.0,
-            "spent_usd": 0.0,
-            "remaining_usd": 0.0,
-            "threshold_exceeded": False,
-        },
-    )
     state.setdefault(_CONVERGENCE, {})

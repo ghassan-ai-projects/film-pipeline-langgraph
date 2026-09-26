@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults._quality import (
     _QUALITY_DIRECTIVE,
 )
+from film_pipeline.agents.prompt_templates.template import PromptTemplate
 
 
 def _visual_development_creator() -> PromptTemplate:
@@ -184,57 +184,43 @@ def _generation_planner() -> PromptTemplate:
         "respecting the structural requirements in the Execution Brief.",
         core_task=(
             "Create a generation plan from the shot matrix. "
-            "Group shots by provider compatibility, estimate cost, "
+            "Group shots by provider compatibility, "
             "prioritize by dependency, and flag risky shots.\n\n"
             "IMPORTANT: The Execution Brief defines the film's structure. "
             "Every shot row in the matrix must have a complete generation plan. "
-            "Do not skip rows. Your cost estimate must reflect the ACTUAL "
-            "number of shots — not a placeholder."
+            "Do not skip rows; the plan must cover the ACTUAL number of shots "
+            "— not a placeholder."
         ),
         context_template=(
             "{constraints}\n\n" + "Execution Brief (film structure):\n{execution_brief_content}\n\n"
             "Shot matrix ref: {shot_matrix_ref}\n"
             "Shot matrix content:\n{shot_matrix_content}\n"
-            "Budget cap: {budget_cap}\n"
             "Preferred providers: {preferred_providers}\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"
         ),
         constraints=(
             "Shots must be grouped by provider compatibility. "
-            "{provider_pricing}\n"
             "Dependency ordering must prevent generation of a shot before "
-            "its prerequisites. Flag shots that exceed budget or require "
-            "unavailable providers.\n"
+            "its prerequisites. Flag shots that require unavailable providers.\n"
             "Every shot in the matrix must have a plan entry. "
-            "Count your planned entries against the matrix row count. "
-            "Cost estimate must have clip_count matching the total shots."
+            "Count your planned entries against the matrix row count."
         ),
         output_format=(
             "Respond with valid JSON:\n"
             "{\n"
             '  "generation_plan": {\n'
             '    "project_id": "...",\n'
-            '    "cost_estimate": {\n'
-            '      "project_id": "...",\n'
-            '      "batch_id": "batch-001",\n'
-            '      "provider": "seedance",\n'
-            '      "estimated_cost_usd": 12.50,\n'
-            '      "clip_count": 20,\n'
-            '      "notes": "20 shots at $0.18/s avg 12s = $43.20"\n'
-            "    },\n"
             '    "shot_groups": [\n'
             "      {\n"
             '        "shot_id": "s_001",\n'
             '        "provider": "seedance",\n'
             '        "model": "2.0",\n'
             '        "mode": "test",\n'
-            '        "priority": 1,\n'
-            '        "estimated_cost_usd": 2.16\n'
+            '        "priority": 1\n'
             "      }\n"
             "    ],\n"
-            '    "total_shots": 20,\n'
-            '    "total_cost_usd": 43.20\n'
+            '    "total_shots": 20\n'
             "  }\n"
             "}"
         ),

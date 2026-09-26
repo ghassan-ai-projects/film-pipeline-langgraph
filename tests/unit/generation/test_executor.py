@@ -15,7 +15,6 @@ from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -49,7 +48,6 @@ def entry() -> ProviderRegistryEntry:
             supports_audio=True,
             supports_seed=True,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
     )
 
 
@@ -135,15 +133,6 @@ class TestGenerationExecutor:
         assert result.processed == 2
         assert result.details[0]["shot_id"] == "S001"
         assert executor.shot_ids("proj") == ["S001", "S002"]
-
-    def test_plan_records_catalog_estimated_costs(self, store: ArtifactStore) -> None:
-        _save_shot_matrix(store, "proj")
-        executor = GenerationExecutor(store, providers={})
-
-        executor.plan("proj", provider="seedance-openrouter", model="seedance-2.0")
-
-        rows = executor.status_rows("proj")
-        assert [row["cost_usd"] for row in rows] == pytest.approx([0.9, 0.54])
 
     def test_plan_idempotent(self, store: ArtifactStore) -> None:
         _save_shot_matrix(store, "proj")
@@ -264,9 +253,6 @@ class TestGenerationExecutor:
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
 
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
-
         executor = GenerationExecutor(
             store,
             providers={"fail-provider": FailAdapter(entry=reg_entry)},
@@ -279,10 +265,9 @@ class TestGenerationExecutor:
         assert result.failed == 2
         assert executor.status_rows("proj")[0]["status"] == "failed"
 
-    def test_status_rows_and_estimated_cost_empty(self, store: ArtifactStore) -> None:
+    def test_status_rows_and_ledger_absent(self, store: ArtifactStore) -> None:
         executor = GenerationExecutor(store, providers={})
         assert executor.status_rows("proj") == []
-        assert executor.estimated_cost("proj") == 0.0
         assert not executor.has_ledger("proj")
 
     def test_dispatchable_requests(self, store: ArtifactStore) -> None:
@@ -352,9 +337,6 @@ class TestGenerationExecutor:
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
 
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
-
         executor = GenerationExecutor(
             store,
             providers={"error-provider": SubmitErrorAdapter(entry=reg_entry)},
@@ -399,9 +381,6 @@ class TestGenerationExecutor:
 
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
-
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
 
         executor = GenerationExecutor(
             store,

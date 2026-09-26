@@ -164,7 +164,7 @@ def _generate_model_output(
     contract = cast("AgentRegistration", routing.contract)
 
     if routing.impl is not None:
-        from film_pipeline.agents.prompt_templates.registry import get_registry
+        from film_pipeline.agents.prompt_templates import get_registry
 
         prompt_registry = get_registry()
         template = prompt_registry.get_required(agent_id)

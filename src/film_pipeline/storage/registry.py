@@ -116,12 +116,10 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "shot_matrix": _spec("shot_matrix", renderer=rendering.render_shot_matrix),
         "shot_bible": _spec("shot_bible"),
         # planning / generation
-        "cost_estimate": _spec("cost_estimate"),
         "generation_plan": _spec("generation_plan"),
         "generation_ledger": _spec(
             "generation_ledger", payload_model=GenerationLedger, mutable=True
         ),
-        "budget_state": _spec("budget_state"),
         "prompt_package": _spec("prompt_package"),
         "prompt_registry": _spec("prompt_registry"),
         "coverage_group": _spec("coverage_group"),

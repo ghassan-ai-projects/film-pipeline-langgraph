@@ -133,7 +133,7 @@ def _run_bible_agent(
         KeyError: the agent is not on the roster or has no dedicated template.
         ValueError: the agent rejected the model output.
     """
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
     from film_pipeline.agents.registry import get_agent_class
 
     services = _services(rt)
@@ -246,13 +246,3 @@ def _save_visual_dev_candidate(
     )
     ref: ArtifactRef = store.save(bible, meta)
     return ref.to_string()
-
-
-def _register_active_artifact_ref(
-    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
-) -> None:
-    """Record an artifact reference on the active project and persist state."""
-    active[state_key] = ref
-    active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt._persist_project_state(project_id)

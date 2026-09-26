@@ -641,7 +641,6 @@ class TestTextOnlyGeneration:
         workspace = service.plan_generation("text-only")
         assert workspace.completed == 1
         assert workspace.next_step == "approve_phase"
-        assert workspace.estimated_cost_usd == 0.0
 
         state = service.runtime.projects["text-only"]
         assert state.get("_text_only_generation_completed") is True

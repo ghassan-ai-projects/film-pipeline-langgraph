@@ -349,3 +349,61 @@ def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
     active = rt.get_active()
     assert active is not None
     assert active["shot_matrix_ref"] == result["shot_matrix_ref"]
+
+
+def test_shot_bible_reports_success_with_a_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The happy path still returns both promised artifacts, unwarned."""
+    rt = StudioRuntime(runtime_root=tmp_path / "runtime")
+    rt.create_project("bible-shot-ok", "Shot Bible")
+    rt.set_active("bible-shot-ok")
+    state = rt._run_phase_node(rt.get_active() or {}, "intake")
+    for phase in ("constitution", "development", "script", "visual_dev"):
+        state = rt._run_phase_node(state, phase)
+    rt.projects["bible-shot-ok"] = state
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(generate_shot_bible({}))
+
+    assert result["ok"] is True
+    assert result["continuity_ledger_ref"], "the ledger ref must be present"
+    assert "warnings" not in result
+
+
+def test_shot_bible_flags_a_ledger_that_failed_to_persist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A missing ledger must not look like an unqualified success.
+
+    `_generate_continuity_ledger` caught every exception and returned None, so a
+    ledger that failed to persist was indistinguishable from one that was never
+    needed: the tool still answered `ok: True` with a null ref, while its own
+    docstring promises "MasterFilmMatrix + ContinuityLedger". The matrix is still
+    the deliverable, so the call stays non-fatal — but it now logs the failure and
+    names it in the response.
+    """
+    from film_pipeline.mcp.tools.bibles import shot as shot_module
+
+    rt = StudioRuntime(runtime_root=tmp_path / "runtime")
+    rt.create_project("bible-shot-fail", "Shot Bible")
+    rt.set_active("bible-shot-fail")
+    state = rt._run_phase_node(rt.get_active() or {}, "intake")
+    for phase in ("constitution", "development", "script", "visual_dev"):
+        state = rt._run_phase_node(state, phase)
+    rt.projects["bible-shot-fail"] = state
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    def _explode(*args: object, **kwargs: object) -> str:
+        raise RuntimeError("simulated storage failure")
+
+    monkeypatch.setattr(shot_module, "_persist_continuity_ledger", _explode)
+
+    result = asyncio.run(generate_shot_bible({}))
+
+    assert result["ok"] is True, "the matrix is still the deliverable"
+    assert result["shot_matrix_ref"], "the matrix must still be persisted"
+    assert result["continuity_ledger_ref"] is None
+    assert result["warnings"] == ["continuity_ledger_not_persisted"], (
+        "the response must name the missing artifact rather than reporting an unqualified success"
+    )

@@ -26,7 +26,6 @@ from film_pipeline.schemas import (
     AudioPlan,
     AuditLogEntry,
     BranchMetadata,
-    BudgetState,
     CameraLanguageBible,
     CameraProfile,
     ChainingConfig,
@@ -91,7 +90,6 @@ from film_pipeline.schemas import (
     SceneList,
     SchemaBase,
     SetupPayoffEntry,
-    SpendRecord,
     StateRecord,
     StoryBible,
     TransitionPlan,
@@ -107,13 +105,9 @@ from film_pipeline.schemas import (
     WardrobeRules,
 )
 from film_pipeline.schemas.registries import (
-    CostProfile,
-    ModelRegistry,
     ModelRegistryEntry,
     ProviderCapabilities,
-    ProviderRegistry,
     ProviderRegistryEntry,
-    ValidatorRegistry,
     ValidatorRegistryEntry,
     ValidatorThresholds,
 )
@@ -621,7 +615,6 @@ def test_audit_log_entry() -> None:
         actor_type="orchestrator",
         actor_id="orchestrator-agent",
         action="phase_advanced",
-        cost_estimate_usd=2.5,
     )
     assert e.action == "phase_advanced"
 
@@ -661,27 +654,6 @@ def test_kb_conflict_record() -> None:
         detected_at=_ts(),
     )
     assert c.resolved is False
-
-
-# --- Budget ---------------------------------------------------------------
-
-
-def test_budget_state_remaining() -> None:
-    b = BudgetState(project_id="p", cap_usd=10.0, spent_usd=3.0)
-    assert b.remaining_usd == 7.0
-
-
-def test_spend_record() -> None:
-    s = SpendRecord(
-        spend_id="s1",
-        project_id="p",
-        generation_id="g1",
-        provider="seedance",
-        amount_usd=1.0,
-        mode="test",
-        created_at=_ts(),
-    )
-    assert s.amount_usd == 1.0
 
 
 # --- Provider health ------------------------------------------------------
@@ -950,11 +922,9 @@ def test_provider_registry_entry() -> None:
             return_last_frame=True,
             max_duration_seconds=30,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
         failure_modes=["timeout", "quota"],
     )
     assert e.capabilities.return_last_frame is True
-    assert e.cost_profile.estimated_rate_usd == 0.0
 
 
 def test_validator_registry_entry() -> None:
@@ -1050,12 +1020,3 @@ def test_reference_index_aggregate() -> None:
     )
     idx = ReferenceIndex(project_id="p", entries=[e])
     assert idx.entries[0].reference_id == "ref:1"
-
-
-def test_registries_aggregates() -> None:
-    p_reg = ProviderRegistry(providers=[])
-    v_reg = ValidatorRegistry(validators=[])
-    m_reg = ModelRegistry(models=[])
-    assert p_reg.providers == []
-    assert v_reg.validators == []
-    assert m_reg.models == []

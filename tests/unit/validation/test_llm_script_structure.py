@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from film_pipeline.agents.prompt_templates.registry import PromptTemplate
+from film_pipeline.agents.prompt_templates import PromptTemplate
 from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 

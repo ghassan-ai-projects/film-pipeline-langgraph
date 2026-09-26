@@ -39,7 +39,6 @@ from film_pipeline.mcp.tools.config import get_runtime_mode as get_runtime_mode
 from film_pipeline.mcp.tools.config import inspect_profile as inspect_profile
 from film_pipeline.mcp.tools.config import list_profiles as list_profiles
 from film_pipeline.mcp.tools.config import propose_profile_change as propose_profile_change
-from film_pipeline.mcp.tools.generation import approve_generation_spend as approve_generation_spend
 from film_pipeline.mcp.tools.generation import (
     cancel_generation_request as cancel_generation_request,
 )
@@ -66,7 +65,6 @@ from film_pipeline.mcp.tools.kb import kb_search as kb_search
 from film_pipeline.mcp.tools.operator import add_operator_comment as add_operator_comment
 from film_pipeline.mcp.tools.operator import list_operator_comments as list_operator_comments
 from film_pipeline.mcp.tools.planning import generate_plan as generate_plan
-from film_pipeline.mcp.tools.planning import initialize_budget as initialize_budget
 from film_pipeline.mcp.tools.projects import create_film_project as create_film_project
 from film_pipeline.mcp.tools.projects import find_project as find_project
 from film_pipeline.mcp.tools.projects import get_active_project as get_active_project

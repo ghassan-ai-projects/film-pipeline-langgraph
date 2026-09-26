@@ -264,7 +264,7 @@ def _record_validation_results(
     active["_validation_reports"] = reports
     active.setdefault("validation_refs", []).extend(saved_refs)
     rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    rt.persist_project_state(project_id)
 
 
 async def run_validation(args: dict[str, object]) -> dict[str, object]:

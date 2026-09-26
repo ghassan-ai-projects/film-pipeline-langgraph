@@ -30,11 +30,7 @@ review:
     - assembly
     - final_delivery
 
-budget:
-  project_cap_usd: 100
-  per_phase_cap_usd: 25
-  max_auto_approved_cost_usd: 1.0
-  human_approval_above_usd: 5.0
+
 
 # Model policy — override individual profiles in a project/quality profile.
 # Provider adapters are selected by the model id prefix; adding an adapter does

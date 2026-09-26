@@ -11,7 +11,6 @@ from film_pipeline.config.profile_resolver import (
     resolved_config_state_keys,
 )
 from film_pipeline.operations.operator import OperatorService
-from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -20,6 +19,7 @@ from .helpers import (
     _error,
     _ok,
     _services,
+    operator_service,
     require_project_state,
 )
 
@@ -129,7 +129,7 @@ def _populate_project_state(
 
 def _audit_project_creation(rt: Any, project_id: str, runtime_mode: str, server_mode: str) -> None:
     """Record the project creation in the runtime audit trail."""
-    rt._record_audit(
+    rt.record_audit(
         "system",
         "create_film_project",
         project_id=project_id,

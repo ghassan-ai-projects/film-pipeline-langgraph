@@ -75,7 +75,6 @@ def test_export_delivery_package_success(tmp_path: Path, monkeypatch: pytest.Mon
                 "audio_stems_dir": "/out/audio",
                 "stills_dir": "/out/stills",
                 "validation_report_path": "/out/val.json",
-                "cost_report_path": "/out/cost.json",
                 "credits_path": "/out/credits.txt",
                 "confirmed": True,
             }

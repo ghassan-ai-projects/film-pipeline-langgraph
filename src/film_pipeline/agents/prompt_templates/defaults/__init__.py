@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults.production import (
     _assembly_agent,
     _camera_bible_creator,
@@ -39,6 +38,7 @@ from film_pipeline.agents.prompt_templates.defaults.validators import (
     _scene_continuity_validator,
     _script_structure_validator,
 )
+from film_pipeline.agents.prompt_templates.template import PromptTemplate
 
 
 class _TemplateRegistrar(Protocol):

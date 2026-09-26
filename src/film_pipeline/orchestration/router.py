@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
+from film_pipeline.filmspec import is_blocking_issue
 from film_pipeline.governance.action_routing import RouterResult
 from film_pipeline.governance.action_routing import compute_actions as _compute_actions
 from film_pipeline.orchestration._agent_routing import (
@@ -67,13 +68,7 @@ def get_blockers_for_state(
     ]
     issues = state.get("issues", [])
     blocking_issues = (
-        [
-            issue
-            for issue in issues
-            if isinstance(issue, dict) and issue.get("severity") == "blocking"
-        ]
-        if isinstance(issues, list)
-        else []
+        [issue for issue in issues if is_blocking_issue(issue)] if isinstance(issues, list) else []
     )
 
     # Replace the router's generic issue entries with useful issue-specific

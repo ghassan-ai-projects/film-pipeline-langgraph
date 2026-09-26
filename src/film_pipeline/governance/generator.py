@@ -31,7 +31,7 @@ class ReviewPackageGenerator:
 
     Inputs:
     - project_id, phase, current_artifacts, previous_approved_artifacts
-    - validation_results, open_issues, risks, cost_impact
+    - validation_results, open_issues, risks
     - whether blocking issues exist, whether a checkpoint exists
     """
 
@@ -46,7 +46,6 @@ class ReviewPackageGenerator:
         validation_results: list[str] | None = None,
         open_issues: list[str] | None = None,
         risks: list[str] | None = None,
-        cost_impact: dict[str, str] | None = None,
         orchestrator_recommendation: str = "review",
         has_blocking_issues: bool = False,
         has_checkpoint: bool = False,
@@ -73,7 +72,6 @@ class ReviewPackageGenerator:
             validation_results=validation_results or [],
             open_issues=open_issues or [],
             risks=risks or [],
-            cost_impact=cost_impact or {},
             orchestrator_recommendation=orchestrator_recommendation,
             available_actions=actions.available,
             blocked_actions=actions.blocked,

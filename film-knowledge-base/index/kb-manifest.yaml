@@ -65,7 +65,7 @@ items:
     source_refs: ["film-knowledge-base/prompt-framework.md"]
     supersedes: []
     conflicts_with: []
-    summary: "Every provider must implement build_payload, submit, poll, download, extract_metadata, estimate_cost."
+    summary: "Every provider must implement build_payload, submit, poll, download, extract_metadata."
     last_reviewed: "2026-06-19"
 
   - id: "kb.policy.human.approval_gates.v1"
@@ -173,7 +173,7 @@ items:
     authority: case_study
     status: active
     version: 1
-    domains: [budget, operations]
+    domains: [operations]
     applies_to_phases: [gen_planning, generation]
     applies_to_agents: [generation-agent, orchestrator]
     modalities: [video]
@@ -181,7 +181,7 @@ items:
     source_refs: ["film-knowledge-base/learnings/"]
     supersedes: []
     conflicts_with: []
-    summary: "Previous films exceeded budget when generation was not pre-approved per batch. Require spend approval per batch."
+    summary: "Previous films ran generation that had not been approved per batch. Require explicit approval of each planned batch before submission."
     last_reviewed: "2026-06-19"
 
   - id: "kb.lesson.moderation_failure.postmortem.v1"

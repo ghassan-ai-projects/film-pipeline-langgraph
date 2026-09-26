@@ -222,6 +222,7 @@ WRITER_DISPOSITIONS: dict[tuple[str, str], str] = {
     ("_repair_loop.py", "_repair_feedback"): "propagated",
     ("_repair_loop.py", "_orchestrator__pending_revisions"): "explicit-writer",
     ("_repair_loop.py", "issues"): "explicit-writer",
+    ("_shared.py", "artifact_refs"): "explicit-writer",
     ("_shared.py", "generation_requests"): "explicit-writer",
     ("_shared.py", "issues"): "explicit-writer",
     ("approval.py", "_repair_feedback"): (
@@ -233,10 +234,8 @@ WRITER_DISPOSITIONS: dict[tuple[str, str], str] = {
     ("generation.py", "issues"): "explicit-writer",
     ("prep.py", "artifact_refs"): "explicit-writer",
     ("prep.py", "issues"): "explicit-writer",
-    ("qc.py", "artifact_refs"): "explicit-writer",
     ("qc.py", "issues"): "explicit-writer",
     ("visual.py", "artifact_refs"): "explicit-writer",
-    ("visual.py", "issues"): "explicit-writer",
     ("visual.py", "generation_requests"): (
         "known-dropped:gen_planning request write dies at the boundary; deferred to D13/P1#12"
     ),

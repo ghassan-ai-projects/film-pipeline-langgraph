@@ -30,8 +30,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
         "provider_type",
         "adapter_type",
         "default_model",
-        "cost_unit",
-        "estimated_rate_usd",
         "capabilities",
     ),
     [
@@ -40,8 +38,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "video",
             SeedanceOpenRouterProvider,
             "bytedance/seedance-2.0",
-            "second",
-            0.18,
             ProviderCapabilities(
                 text_to_video=True,
                 image_to_video=True,
@@ -57,8 +53,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "video",
             VeoFastProvider,
             "veo-3.1-fast",
-            "second",
-            0.10,
             ProviderCapabilities(
                 text_to_video=True,
                 image_to_video=True,
@@ -74,8 +68,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "video",
             VeoFastProvider,
             "veo-3.1-fast",
-            "second",
-            0.10,
             ProviderCapabilities(
                 text_to_video=True,
                 image_to_video=True,
@@ -91,8 +83,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "image",
             Imagen4GeminiProvider,
             "imagen-4.0-fast-generate-001",
-            "image",
-            0.05,
             ProviderCapabilities(
                 text_to_image=True,
                 image_to_image=True,
@@ -113,8 +103,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "image",
             Imagen4GeminiProvider,
             "imagen-4.0-fast-generate-001",
-            "image",
-            0.05,
             ProviderCapabilities(
                 text_to_image=True,
                 image_to_image=True,
@@ -135,8 +123,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "video",
             MockVideoProvider,
             "mock-fast",
-            "second",
-            0.0,
             ProviderCapabilities(
                 text_to_video=True,
                 image_to_video=True,
@@ -152,8 +138,6 @@ def isolate_adapter_credential_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
             "image",
             MockImageProvider,
             "mock-fast",
-            "image",
-            0.0,
             ProviderCapabilities(
                 text_to_image=True,
                 image_to_image=True,
@@ -171,8 +155,6 @@ def test_build_provider_adapter_uses_default_catalog_entry(
     provider_type: str,
     adapter_type: type[BaseProviderAdapter],
     default_model: str,
-    cost_unit: str,
-    estimated_rate_usd: float,
     capabilities: ProviderCapabilities,
 ) -> None:
     adapter = build_provider_adapter(provider_id, provider_type=provider_type)
@@ -181,8 +163,6 @@ def test_build_provider_adapter_uses_default_catalog_entry(
     assert adapter.entry.provider_id == provider_id
     assert adapter.entry.provider_type == provider_type
     assert adapter.entry.models == [default_model]
-    assert adapter.entry.cost_profile.unit == cost_unit
-    assert adapter.entry.cost_profile.estimated_rate_usd == estimated_rate_usd
     assert adapter.entry.capabilities == capabilities
 
 

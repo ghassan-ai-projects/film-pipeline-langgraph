@@ -12,7 +12,6 @@ from film_pipeline.providers.mock_provider import (
     ScenarioStep,
 )
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -33,7 +32,6 @@ def entry() -> ProviderRegistryEntry:
             supports_audio=True,
             supports_seed=True,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
         failure_modes=[
             "timeout",
             "quota",
@@ -90,11 +88,6 @@ class TestMockVideoProvider:
             meta = provider.extract_metadata(path)
             assert meta["shot_id"] == "S001-01"
             assert meta["resolution"] == "1280x720"
-
-    def test_estimate_cost_zero(self, entry: ProviderRegistryEntry) -> None:
-        provider = MockVideoProvider(entry=entry)
-        assert provider.estimate_cost(10.0) == 0.0
-        assert provider.estimate_cost(60.0) == 0.0
 
     def test_cancel(self, entry: ProviderRegistryEntry) -> None:
         provider = MockVideoProvider(entry=entry)
@@ -236,7 +229,6 @@ class TestMockImageProvider:
             provider_type="image",
             models=["mock-fast"],
             capabilities=ProviderCapabilities(text_to_image=True),
-            cost_profile=CostProfile(unit="image", estimated_rate_usd=0.0),
         )
 
     def test_build_payload(self, img_entry: ProviderRegistryEntry) -> None:
@@ -286,12 +278,6 @@ class TestMockImageProvider:
             meta = provider.extract_metadata(path)
             assert meta["placeholder"] is True
             assert meta["size_bytes"] > 0
-
-    def test_estimate_cost_zero(self, img_entry: ProviderRegistryEntry) -> None:
-        from film_pipeline.providers.mock_image_provider import MockImageProvider
-
-        provider = MockImageProvider(entry=img_entry)
-        assert provider.estimate_cost(0.0) == 0.0
 
     def test_extract_metadata_missing_file(self, img_entry: ProviderRegistryEntry) -> None:
         from film_pipeline.providers.mock_image_provider import MockImageProvider

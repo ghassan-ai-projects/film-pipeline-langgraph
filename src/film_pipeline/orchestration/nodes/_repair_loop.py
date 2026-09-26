@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _save_artifact
 from film_pipeline.orchestration.nodes.generation import generation_node
 from film_pipeline.orchestration.nodes.prep import (
@@ -88,7 +89,7 @@ def _classify_findings(
     """Split blocking+warning findings into row-keyed issues and global issues."""
     from film_pipeline.schemas.repair import GlobalRepairIssue
 
-    blocking = [i for i in issues if i.get("severity") == "blocking"]
+    blocking = blocking_issues(issues)
     all_findings = blocking + [i for i in issues if i.get("severity") == "warning"]
 
     row_issues: dict[str, list[dict[str, str]]] = {}

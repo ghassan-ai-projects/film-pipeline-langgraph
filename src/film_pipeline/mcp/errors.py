@@ -18,7 +18,6 @@ class MCPErrorCode(StrEnum):
     NOT_FOUND = "not_found"
     CONFLICT = "conflict"
     INTERNAL_ERROR = "internal_error"
-    BUDGET_EXCEEDED = "budget_exceeded"
     PROVIDER_BLOCKED = "provider_blocked"
     CONFIRMATION_REQUIRED = "confirmation_required"
 

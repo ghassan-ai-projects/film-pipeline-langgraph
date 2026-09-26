@@ -38,15 +38,6 @@ def test_human_approval_issue_is_specific_and_not_duplicated() -> None:
     ]
 
 
-def test_budget_blocker_is_reported_from_router() -> None:
-    state = {"current_phase": "gen_planning", "approved": True, "issues": []}
-    ostate.update_budget_snapshot(state, cap_usd=10.0, spent_usd=10.0, threshold_exceeded=True)
-
-    assert {"action": "advance_phase", "reason": "budget threshold exceeded"} in (
-        get_blockers_for_state(state)
-    )
-
-
 def test_provider_blocker_is_reported_from_router() -> None:
     state = {"current_phase": "generation", "approved": True, "issues": []}
     ostate.update_provider_health(state, "seedance-openrouter", {"status": "blocked_quota"})

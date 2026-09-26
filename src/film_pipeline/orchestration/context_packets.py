@@ -108,7 +108,7 @@ def build_shot_bible_context(state: dict[str, Any], services: _ContextPacketSour
 
 
 def build_gen_planning_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
-    """Gen planning phase: row count summary + budget + provider policy."""
+    """Gen planning phase: row count summary + provider policy."""
     parts: list[str] = []
     matrix = _load_state_ref(state, services, "shot_matrix_ref")
     if matrix:
@@ -118,9 +118,6 @@ def build_gen_planning_context(state: dict[str, Any], services: _ContextPacketSo
             f"Shot matrix: {len(rows)} rows across {len(rows_per_act)} acts\n"
             + "\n".join(f"  {k}: {v} rows" for k, v in sorted(rows_per_act.items()))
         )
-    budget = state.get("budget_snapshot", {})
-    cap = budget.get("cap_usd", 0) if isinstance(budget, dict) else 0
-    parts.append(f"Budget cap: ${cap}")
     return "\n\n".join(parts)
 
 

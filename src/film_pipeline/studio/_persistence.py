@@ -37,10 +37,26 @@ if TYPE_CHECKING:
 set_git_backend_type(GitBackend)
 
 
-def configured_runtime_root() -> Path:
-    """Return the runtime root selected by the environment or default config."""
+def configured_runtime_root() -> Path | None:
+    """Return the runtime root the environment explicitly asks for, or None.
+
+    ``None`` means unconfigured, so the *caller* decides what that implies. It
+    previously returned the default in that case, which forced
+    `StudioRuntime.__post_init__` to read the same environment variable again and
+    repeat the empty-string check to tell "explicitly configured" from "persistent
+    default" from "throwaway" — one env read written twice, free to drift.
+    """
     raw_root = os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip()
-    return Path(raw_root) if raw_root else default_runtime_root()
+    return Path(raw_root) if raw_root else None
+
+
+def runtime_root_from_config() -> Path:
+    """The configured runtime root, or the default when none is configured.
+
+    For callers that need a root unconditionally — `mcp/server.py` chooses the log
+    directory before any runtime exists.
+    """
+    return configured_runtime_root() or default_runtime_root()
 
 
 def use_persistent_runtime() -> bool:

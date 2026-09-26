@@ -20,7 +20,6 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.mcp.tools import (
-    approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
     list_active_generations,
@@ -61,10 +60,20 @@ def rt(tmp_path: Path) -> Generator[StudioRuntime, None, None]:
 
 
 async def _plan_and_approve(shot_ids: list[str]) -> dict[str, object]:
+    """Plan, then approve via the operator use case.
+
+    The MCP `approve_generation_spend` tool was removed with the cost feature.
+    The PREPARED -> SUBMITTED transition it performed survives as the operator
+    use case, which is what this setup helper now calls.
+    """
     await plan_generation_batch(
         {"shot_ids": shot_ids, "provider": "mock-video-provider", "model": "mock-fast"}
     )
-    return await approve_generation_spend({"confirmed": True})
+    from film_pipeline.mcp.tools import get_runtime
+    from film_pipeline.studio._operator_runtime import operator_service
+
+    operator_service(get_runtime()).approve_generation_spend()
+    return {"ok": True}
 
 
 def test_start_generation_batch_no_submitted_rows(rt: StudioRuntime) -> None:
@@ -82,7 +91,10 @@ def test_start_generation_batch_unknown_provider(rt: StudioRuntime) -> None:
     asyncio.run(
         plan_generation_batch({"shot_ids": ["S001"], "provider": "no-such-provider", "model": "m"})
     )
-    asyncio.run(approve_generation_spend({"confirmed": True}))
+    from film_pipeline.mcp.tools import get_runtime
+    from film_pipeline.studio._operator_runtime import operator_service
+
+    operator_service(get_runtime()).approve_generation_spend()
 
     result = asyncio.run(start_generation_batch({}))
     assert result["ok"] is True
@@ -165,7 +177,7 @@ def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
     assert result["planned"] == 2
 
 
-def test_plan_generation_batch_records_catalog_estimated_cost(rt: StudioRuntime) -> None:
+def test_plan_generation_batch_creates_ledger_rows(rt: StudioRuntime) -> None:
     result = asyncio.run(
         plan_generation_batch(
             {
@@ -180,8 +192,11 @@ def test_plan_generation_batch_records_catalog_estimated_cost(rt: StudioRuntime)
     assert rt.services is not None
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
+    # Cost recording was removed with the cost feature; the row itself is the
+    # observable outcome of planning.
     rows = GenerationLedgerManager(rt.services.artifact_store).list_rows("gen-start-test")
-    assert rows[0].estimated_cost_usd == pytest.approx(0.9)
+    assert [row.shot_id for row in rows] == ["S001"]
+    assert rows[0].provider == "seedance-openrouter"
 
 
 def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
@@ -194,30 +209,6 @@ def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
     )
     assert result["ok"] is False
     assert "No shot IDs to plan" in cast(str, result["error"])
-
-
-def test_approve_generation_spend_value_error(
-    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import asyncio
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-
-    asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
-    )
-    monkeypatch.setattr(
-        GenerationLedgerManager,
-        "approve_spend",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            ValueError("Total estimated cost $10.00 exceeds budget $5.00.")
-        ),
-    )
-    result = asyncio.run(approve_generation_spend({"max_cost_usd": 5.0, "confirmed": True}))
-    assert result["ok"] is False
-    assert "exceeds budget" in cast(str, result["error"])
 
 
 def test_get_generation_status_missing_id() -> None:
@@ -605,10 +596,206 @@ class TestTextOnlyGenerationPolicy:
         active["current_phase"] = "generation"
         asyncio.run(plan_generation_batch({}))
 
-        result = asyncio.run(approve_generation_spend({}))
-        assert result["ok"] is True
-        assert result.get("text_only") is True
+        # Approve via the operator use case: the MCP cost tool was removed, but
+        # the text-only no-op it performed is real behaviour and is still asserted.
+        from film_pipeline.mcp.tools import get_runtime
+        from film_pipeline.studio._operator_runtime import operator_service
+
+        workspace = operator_service(get_runtime()).approve_generation_spend()
+        assert workspace is not None
 
         result = asyncio.run(start_generation_batch({}))
         assert result["ok"] is True
         assert result.get("text_only") is True
+
+
+def test_plan_generation_batch_defaults_provider_through_the_runtime(
+    rt: StudioRuntime,
+) -> None:
+    """Omitting provider/model must use the runtime's default pair, not a literal.
+
+    The handler hardcoded ("mock-video-provider", "mock-fast") while seven other
+    call sites used `rt.default_video_provider()`, whose answer depends on the
+    runtime mode. In real mode that meant planning a real run against the mock
+    provider. No existing test covered the default branch — every one passed
+    provider and model explicitly — so the divergence was invisible.
+    """
+    import asyncio
+
+    expected_provider, expected_model = rt.default_video_provider()
+
+    result = asyncio.run(plan_generation_batch({"shot_ids": ["S001"]}))
+    assert result["ok"] is True, result.get("error")
+
+    # Assert on the durable ledger row, not the response envelope: the row is
+    # what generation later executes against.
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    assert rt.services is not None
+    ledger_row = GenerationLedgerManager(rt.services.artifact_store).list_rows("gen-start-test")[0]
+    assert (ledger_row.provider, ledger_row.model) == (expected_provider, expected_model)
+
+
+def test_the_mock_literals_are_gone_from_the_handler() -> None:
+    """The literal pair must not reappear; the owner is the only source."""
+    import inspect
+    import re
+
+    from film_pipeline.mcp.tools.generation import planning as generation_planning
+
+    source = inspect.getsource(generation_planning)
+    offenders = re.findall(r'"(?:mock-video-provider|mock-fast)"', source)
+    assert not offenders, (
+        "the generation planning handler hardcodes provider/model again: "
+        f"{offenders}. Use rt.default_video_provider()."
+    )
+
+
+def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) -> None:
+    """The prompt handed to the provider must be resolved, not the raw ref.
+
+    `GenerationLedgerRow.prompt_ref` is an artifact *reference* string. The
+    handler passed it straight to `adapter.build_payload(prompt=...)`, so every
+    MCP-driven generation submitted a literal like
+    "artifact:gen_planning:prompt_package:v1" — or an empty string — as the
+    prompt. GenerationExecutor resolves it through `resolve_prompt` first; the
+    MCP path did not.
+
+    No test covered this: the existing start tests assert only counts and ids,
+    never payload content, so the divergence was invisible.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+
+    sent: list[str] = []
+
+    class _SpyAdapter:
+        def build_payload(
+            self, *, prompt: str, references: object = None, duration: object = None
+        ) -> dict[str, object]:
+            sent.append(prompt)
+            return {"prompt": prompt}
+
+        def submit(self, payload: object, shot_id: str) -> object:
+            class _Job:
+                job_id = "job-spy"
+
+            return _Job()
+
+    rt.register_provider("mock-video-provider", _SpyAdapter())
+    ledger = mgr.plan_batch(
+        "gen-start-test",
+        ["S001"],
+        "mock-video-provider",
+        "mock-fast",
+        prompt_ref="artifact:gen_planning:prompt_package:v1",
+    )
+    mgr.update_row(
+        "gen-start-test",
+        ledger.rows[0].generation_id,
+        status=GenerationStatus.SUBMITTED.value,
+    )
+
+    result = asyncio.run(start_generation_batch({}))
+    assert result["ok"] is True, result.get("error")
+    assert result["submitted"] == 1, result
+
+    assert sent, "no payload was built"
+    assert sent[0] != "artifact:gen_planning:prompt_package:v1", (
+        "the artifact reference was sent as the prompt text"
+    )
+    assert not sent[0].startswith("artifact:"), f"prompt is still a ref: {sent[0]!r}"
+    assert sent[0].strip(), "the prompt sent to the provider is empty"
+
+
+def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
+    """A FAILED row must not tell the operator to keep polling.
+
+    The MCP failure path left `next_action` at its previous value (`poll`) while
+    `GenerationExecutor._fail_row` sets `wait_human`. A failed row can never
+    advance by polling.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    ledger = mgr.plan_batch("gen-start-test", ["S001"], "unregistered-provider", "m")
+    mgr.update_row(
+        "gen-start-test",
+        ledger.rows[0].generation_id,
+        status=GenerationStatus.SUBMITTED.value,
+    )
+
+    result = asyncio.run(start_generation_batch({}))
+    assert result["failed"] == 1, result
+
+    rows = mgr.list_rows("gen-start-test", status=GenerationStatus.FAILED)
+    assert rows, "the row was not marked FAILED"
+    assert rows[0].next_action == "wait_human", (
+        f"a failed row should wait for a human, got {rows[0].next_action!r}"
+    )
+
+
+def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> None:
+    """A status read must not write an artifact.
+
+    The ledger manager's `load()` persists a new empty ledger when none exists,
+    so an unguarded read on an unplanned project turns every status refresh into
+    an artifact write. `GenerationExecutor.has_ledger` exists for this reason;
+    the MCP handler did not use it.
+    """
+    import asyncio
+
+    from film_pipeline.schemas.base import FilmPhase
+
+    assert rt.services is not None
+    store = rt.services.artifact_store
+    assert not store.mutable_exists("gen-start-test", FilmPhase.GENERATION, "generation_ledger")
+
+    result = asyncio.run(list_active_generations({}))
+    assert result["ok"] is True
+    assert result["count"] == 0
+
+    assert not store.mutable_exists("gen-start-test", FilmPhase.GENERATION, "generation_ledger"), (
+        "listing active generations created a ledger artifact"
+    )
+
+
+def test_active_generations_excludes_terminal_and_keeps_waiting_rows(
+    rt: StudioRuntime,
+) -> None:
+    """Terminality is the ledger's rule, and blocked rows are still active.
+
+    The handler used to hand-roll a four-member terminal set from a ten-member
+    enum. A row blocked on a provider or budget is waiting on something that can
+    still change, so it must still be listed as active.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    ledger = mgr.plan_batch(
+        "gen-start-test", ["S001", "S002", "S003"], "mock-video-provider", "mock-fast"
+    )
+    by_shot = {r.shot_id: r.generation_id for r in ledger.rows}
+    mgr.update_row("gen-start-test", by_shot["S001"], status=GenerationStatus.COMPLETED.value)
+    mgr.update_row(
+        "gen-start-test", by_shot["S002"], status=GenerationStatus.BLOCKED_PROVIDER.value
+    )
+
+    result = asyncio.run(list_active_generations({}))
+    assert result["ok"] is True
+    listed = {row["shot_id"] for row in cast(list[dict[str, object]], result["rows"])}
+    assert "S001" not in listed, "a COMPLETED row is terminal and must not be active"
+    assert "S002" in listed, "a provider-blocked row is still active"

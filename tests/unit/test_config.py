@@ -197,7 +197,6 @@ def test_validator_no_conflicts_on_valid_config() -> None:
     cfg = {
         "quality_profile": "studio",
         "providers": {"order": ["seedance-openrouter"]},
-        "budget": {"project_cap_usd": 50},
         "generation": {"expected_shot_count": 8},
         "film_type": "narrative",
         "writing_style": "",
@@ -227,17 +226,6 @@ def test_validator_detects_poetry_dialogue_conflict() -> None:
     conflicts = v.validate(cfg)
     assert len(conflicts) == 1
     assert conflicts[0].code == "poetry_dialogue_conflict"
-
-
-def test_validator_detects_budget_shot_mismatch() -> None:
-    v = ConfigValidator()
-    cfg = {"budget": {"project_cap_usd": 5}, "generation": {"expected_shot_count": 30}}
-    conflicts = v.validate(cfg)
-    assert len(conflicts) == 1
-    assert conflicts[0].code == "budget_shot_mismatch"
-
-
-# --- Resolver tests ------------------------------------------------------
 
 
 def test_resolver_no_conflicts_happy_path() -> None:

@@ -24,7 +24,7 @@ The only tolerated non-real external behavior is costly video generation itself.
 surrounding runtime behavior must be real and behavior-tested:
 
 - planning
-- spend approval
+- generation approval
 - job submission bookkeeping
 - polling/resume
 - duplicate-prevention

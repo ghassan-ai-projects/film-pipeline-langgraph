@@ -161,7 +161,7 @@ class SchemaBase(BaseModel):
 
 
 class MutableSchemaBase(BaseModel):
-    """Schema base for objects that mutate during a run (e.g. budgets)."""
+    """Schema base for objects that mutate during a run (e.g. issue lists)."""
 
     model_config = ConfigDict(frozen=False, extra="ignore", populate_by_name=True)
     schema_version: str = Field(default="v1", description="Schema version identifier.")

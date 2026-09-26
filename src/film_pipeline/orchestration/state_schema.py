@@ -179,7 +179,6 @@ class StudioGraphState(TypedDict, total=False):
     shot_matrix_ref: str
     visual_refs: str
     execution_brief_ref: str
-    cost_estimate_ref: str
     consensus_report_ref: str
     assembly_manifest_ref: str
     prompt_registry_ref: str
@@ -200,7 +199,6 @@ class StudioGraphState(TypedDict, total=False):
     generation_requests: Annotated[list[dict[str, object]], merge_generation_requests]
 
     # ── Snapshot channels ─────────────────────────────────────────────────
-    budget_snapshot: dict[str, object]
     provider_health_snapshot: dict[str, object]
     resolved_config: dict[str, object]
     profile_stack: dict[str, str]
@@ -222,7 +220,6 @@ class StudioGraphState(TypedDict, total=False):
     _orchestrator__convergence: dict[str, dict[str, Any]]
     _orchestrator__failure_decisions: list[dict[str, Any]]
     _orchestrator__provider_health_snapshot: dict[str, dict[str, Any]]
-    _orchestrator__budget_snapshot: dict[str, Any]
     _orchestrator__execution_brief: dict[str, Any]
 
     # ── Internal routing / repair flags ───────────────────────────────────
@@ -238,3 +235,25 @@ class StudioGraphState(TypedDict, total=False):
     # Written concurrently by the QC fan-out workers — must be reducers.
     _qc_reports: Annotated[list[dict[str, Any]], add]
     _qc_raw_reports: Annotated[list[dict[str, Any]], add]
+
+
+def undeclared_state_keys(state: dict[str, Any]) -> list[str]:
+    """Return the state keys that :class:`StudioGraphState` does not declare.
+
+    The state schema declares every graph-state key with a type, but nothing
+    checked a *persisted* snapshot against it: ``GraphStateSnapshot.state`` is a
+    bare ``dict[str, Any]``, so an undeclared key could reach disk and be read
+    back without anything noticing. A key appearing here means a writer added
+    state without adding a contract.
+
+    Deliberately a *shape* check, not a full model validation. Values degrade
+    through ``str()`` on the write path so crash recovery never fails on content,
+    and a snapshot is a recovery artifact rather than a contract other modules
+    consume. Callers warn on a non-empty result; they must not raise.
+
+    Lives here rather than on ``GraphStateSnapshot`` because this module owns
+    ``StudioGraphState``: the check belongs with the contract it enforces.
+    ``schemas`` importing ``orchestration`` would be a back-edge, since
+    ``orchestration`` already imports ``schemas``.
+    """
+    return sorted(key for key in state if key not in StudioGraphState.__annotations__)

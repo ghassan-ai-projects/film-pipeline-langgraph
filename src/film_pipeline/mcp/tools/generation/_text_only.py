@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import (
+    is_text_only_policy as is_text_only_policy,
+)
 from film_pipeline.filmspec import text_only_generation_requests
 
 from ..helpers import _ok, _services
-
-
-def _is_text_only_policy(state: dict[str, Any]) -> bool:
-    return str(state.get("generation_policy", "")).lower() == "text_only"
 
 
 def _text_only_requests(
@@ -75,5 +74,5 @@ def _complete_text_only_generation(
     _ensure_text_only_manifest_entry(store, project_id)
 
     rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    rt.persist_project_state(project_id)
     return _ok(text_only=True, completed=len(requests), rows=[])

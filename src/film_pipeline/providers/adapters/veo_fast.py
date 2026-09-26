@@ -63,9 +63,3 @@ class VeoFastProvider(BaseProviderAdapter):
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
         path = Path(file_path)
         return {"file": file_path, "size_bytes": path.stat().st_size if path.exists() else 0}
-
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        _ = model
-        from film_pipeline.providers.pricing import rate_for
-
-        return duration * rate_for("veo-3.1-fast")

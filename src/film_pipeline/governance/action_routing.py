@@ -17,7 +17,7 @@ from film_pipeline.filmspec import (
 )
 from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHASES
 from film_pipeline.filmspec import PHASE_GATES as _APPROVAL_GATES
-from film_pipeline.filmspec import next_phase
+from film_pipeline.filmspec import is_blocking_issue, next_phase
 from film_pipeline.governance.gate_facts import GateFacts
 from film_pipeline.schemas.base import ValidationStatus
 
@@ -54,7 +54,7 @@ def _status_from_value(value: str) -> ValidationStatus:
 
 def _is_blocking_issue(issue: Any) -> bool:
     """True when an issue's severity blocks phase approval."""
-    return isinstance(issue, dict) and issue.get("severity") == "blocking"
+    return is_blocking_issue(issue)
 
 
 def _blocking_issue_count(issues: list[dict[str, Any]]) -> int:
@@ -204,22 +204,6 @@ def _blocked_providers_result(
     )
 
 
-def _budget_blocked_result(state: dict[str, Any], facts: GateFacts) -> RouterResult | None:
-    """Rule 4: budget threshold exceeded → escalate to human."""
-    if not facts.is_budget_blocked(state):
-        return None
-    return RouterResult(
-        eligible=["escalate_to_human"],
-        next_action="escalate_to_human",
-        blocked=[
-            {
-                "action": "advance_phase",
-                "reason": "budget threshold exceeded",
-            }
-        ],
-    )
-
-
 def _blocking_issues_result(issues: list[dict[str, Any]]) -> RouterResult | None:
     """Rule 5: blocking issues → repair or escalate."""
     blocking = [issue for issue in issues if _is_blocking_issue(issue)]
@@ -317,7 +301,7 @@ def _advance_result(
 
 def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     """Compute eligible actions from current state including provider health,
-    budget, failure decisions, and revision state.
+    failure decisions, and revision state.
 
     ``facts`` supplies the orchestrator reads this law depends on. `governance`
     sits below `orchestration` in the layer order, so the orchestrator facts are
@@ -327,7 +311,6 @@ def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     1. Human approval required → wait for human
     2. Blocking failure decision → escalate_to_failure_handler or continue_unrelated_work
     3. Provider-blocked generation → continue_unrelated_work (if non-gen phase possible)
-    4. Budget blocked → escalate_to_human
     5. Blocking issues → repair or escalate
     6. Pending revision → revise
     7. Not approved → present review package
@@ -347,9 +330,6 @@ def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     if routed is not None:
         return routed
     routed = _blocked_providers_result(state, phase, facts)
-    if routed is not None:
-        return routed
-    routed = _budget_blocked_result(state, facts)
     if routed is not None:
         return routed
     routed = _blocking_issues_result(issues)

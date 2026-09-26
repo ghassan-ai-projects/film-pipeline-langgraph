@@ -989,3 +989,1273 @@ earlier corrections in this file exist to catch. Gates are otherwise as stated:
 strict clean; `enola check` exit 0. The unit-scope figure for the same tree is 2181
 passed / 3 skipped / 1 xfailed; the two differ because the full scope includes the
 integration and e2e suites with their own skip marks.
+
+## AGENT-10 — dependency law enforced, and four debt slices (2026-09-26)
+
+Branch `modular-app-4` off merged `main` (`45ba45f`). Four commits, all
+subtractive; the round's theme was the owner's ask: improvement, modularization,
+cut dependencies.
+
+### The round's central measurement
+
+The per-package **Allowed outbound** sets in `03-target-architecture.md` were
+documentation only. Nothing failed when an import crossed them, so **73 edges
+across 12 package pairs** had accumulated while `enola check` reported PASS —
+Enola grades *cycles*, not declared layers. `mcp` alone accounted for 68 of them,
+against a law reading "`filmspec`, `schemas`, `projects`, `governance`,
+`validation`, `operations`. **Nothing else.**" The worst were upward imports of
+`studio` **private** modules (`_operator_runtime`), forbidden twice over.
+
+| Slice | Scope | Evidence | Gates | Commit |
+|---|---|---|---|---|
+| AGENT-10a | Make the law executable: a guard that parses the allowed sets out of the architecture document and grades every import, freezing existing debt by pair and count | Fails on any increase, any new pair, and any stale row too high to catch a regression. Falsified both ways: adding one edge fails with `debt grew (recorded -> actual): {(mcp, generation): (23, 24)}`; a new pair fails with `not recorded as known debt: [(mcp, constraints)]` | PASS — 2,333 passed; ruff, mypy clean; enola exit 0 | `b028bda` |
+| AGENT-10b | One definition of the active-artifact-ref write: it was byte-identical in two modules and inlined in two more | Drift proven test-invisible — removing the `artifact_refs` append from one copy failed **0** tests across unit, smoke, integration and e2e. Also routed four modules through one `helpers.operator_service` seam instead of importing `studio._operator_runtime` | PASS — 2,335 passed; debt 73 -> 70; baseline tightened to match, which the guard demanded | `4d89c40` |
+| AGENT-10c | Default the generation provider through its owner, not hardcoded literals | **A real bug, not just duplication:** the owner's answer depends on runtime mode, so a real-mode run omitting `provider`/`model` planned against the mock provider. Verified live: owner says `seedance-openrouter` where the literals said `mock-video-provider`. The default branch had **no coverage** — every test passed both explicitly | PASS — 2,336 passed | `696533b` |
+| AGENT-10d | Deleted three dead aggregate schemas (`ModelRegistry`, `ProviderRegistry`, `ValidatorRegistry`) and their one self-referential test | AST sweep: zero `src/` references outside their own package; every `src/` hit was a *different* class in the package owning the concern. Entry schemas stay (13–42 refs each). This — not "parallel registries that must agree" — is C-14's real defect | PASS — 2,336 passed | `696533b` |
+
+### Corrections this round forced
+
+**C-03's "pure duplicate; delete it and read the profile file" framing in `12` is wrong.** The
+byte-identity claim holds (8/8 keys, values equal), but emptying `_FALLBACK_PROFILES`
+breaks **2182 of 2182** unit tests through one root cause: the table is the
+*vocabulary source* for `AgentRegistry.known_model_profiles` (`registry.py:63-65`),
+so the roster's profile names stop validating. It also needs
+`config/loader.py:30`'s cwd-relative `Path("profiles")` fixed first — reading the
+YAML from `ModelRouter()` would otherwise make routing depend on process cwd
+(measured: `cwd=/tmp` raises `FileNotFoundError`). Medium risk, low value; left open.
+
+**C-09's deferral premise is now false, but the split is still wrong.** Consumers moved:
+inline `rt.get_active()` 25 -> 4, the three "No active project" wordings -> one
+constant, and `RuntimePort` already matches 24 of 27 methods. But `runtime.py` is
+now a thin delegation shell over three collaborators, so a delegation split would
+re-create the facade that failed in `08` §1. The honest step is **subtraction**:
+delete the four zero-caller methods and add `get_provider` to the port.
+
+### Debt paid
+
+| Measure | Before | After |
+|---|---:|---:|
+| Dependency-law violations | 73 edges / 12 pairs | **70 / 12** |
+| `mcp -> studio` edges | 10 | **7** |
+| Definitions of the active-artifact-ref write | 2 defs + 2 inlines | **1** |
+| Cross-package private reaches (`_persist_project_state`/`_record_audit`) | 11 | **8** |
+| Dead registry aggregate schemas | 3 | **0** |
+
+Still open, ranked: 3b-style literal defaults elsewhere, C-09's four zero-caller
+methods, the remaining 70 law edges (23 of them `mcp -> generation`), C-03, and
+3e's latent budget-threshold divergence. The `mcp -> generation` group is the
+largest single target and needs the same treatment the bible tools got: route the
+handler to the owning domain module rather than importing it directly.
+
+**Process note carried forward from the investigation:** an in-process mutation
+proof must *assert the mutation applied* before trusting a null result. One probe
+silently failed to patch and reported a false "0 failures"; it was caught only by
+checking the patch was present.
+
+## AGENT-11 — three MCP generation divergences fixed, and two findings left open (2026-09-26)
+
+Two parallel investigations into the 23 `mcp -> generation` edges (the largest
+group in the frozen law debt). They produced **three real bugs** and **two
+decisions I deliberately did not make alone**.
+
+### The bugs, all fixed in `8792039`
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | **The prompt sent to providers was an artifact reference.** `dispatch.py` passed `prompt=row.prompt_ref`; the field is a *reference string*, and `GenerationExecutor._dispatch_row` resolves it via `resolve_shot_prompt` first. | Verified end to end: **before** `'artifact:gen_planning:prompt_package:v1'`, **after** `'Cinematic shot S001 for project p.'`. Every MCP-driven generation was submitting the literal, or an empty string. |
+| 2 | A FAILED row left `next_action='poll'` where the executor sets `wait_human` — telling the operator to keep polling a row that can never advance. | New test reads the persisted row; falsified by removing the field. |
+| 3 | `_sync_generation_requests_from_ledger` was a line-for-line copy of `GenerationExecutor.dispatchable_requests` **minus** its CANCELLED filter, so cancelled requests leaked into graph state. | Now skips CANCELLED, matching the owner. |
+
+**Why the suite was green.** All 27 existing start tests assert counts and ids,
+never payload content — so defect 1, the one that reaches real providers, had
+**zero** coverage. That is the same pattern as the AGENT-08 placeholders and the
+AGENT-10 provider default: the assertions were about shape, not meaning.
+
+### Finding A — an Enola cycle reported only when I removed a different edge
+
+While paying down the last non-`mcp` violation, `schemas -> orchestration`
+(`GraphStateSnapshot.check_state_keys` reached up into the graph layer, admitted
+in its own comment as inverting the order), I made the declared key set a
+parameter. The fix is correct — verified: `import film_pipeline.schemas` no
+longer loads `orchestration` at all.
+
+But `enola check` then failed with a **new** cycle:
+`agents -> agents/impl -> agents`. I established:
+
+- the cycle does **not** exist as a Python import problem: importing
+  `agents.impl.assembly_agent`, `agents.registry`, and `agents` first, each in a
+  fresh interpreter, all succeed;
+- it is **not** caused by the `agents` refactor either — reverting only the
+  `runtime_state` change while keeping every `agents` file at `main` still
+  reports it;
+- it is **absent from `main`'s report entirely**, because removing the
+  `schemas -> orchestration` edge changed which cluster Enola keys, and the
+  previously-masked cycle surfaced.
+
+**I reverted the fix.** A correct layer improvement is not worth a red gate, and
+pinning a fresh Enola baseline to hide the finding would violate the rule this
+repo wrote into `AGENTS.md` ("never lower the count by changing a filter or
+threshold"). The honest state: the layer violation is real and the fix is known,
+but it cannot land until the `agents` cycle is either genuinely broken or Enola's
+clustering is understood well enough to say the finding is spurious. **This needs
+an owner decision** — it is the one thing this round could not settle by
+measurement.
+
+### Finding B — fixed in `6de7be3`
+
+The two sibling defects the investigation named:
+
+- **Terminality had three definitions, not one.** `GenerationLedgerManager`, the
+  executor's cost sum, and the MCP status handler each hand-rolled the same
+  four-member set from a ten-member `GenerationStatus` enum. The ledger owns the
+  state machine, so `TERMINAL_GENERATION_STATUSES` and `is_terminal()` now live
+  there; the other two call them. The docstring records why
+  `requires_human_review`, `blocked_provider` and `blocked_budget` are *not*
+  terminal — each waits on something that can still change.
+- **A status read wrote an artifact.** `list_active_generations` called
+  `list_rows` with no existence check, and the ledger's `load()` persists an
+  empty ledger when none exists. Guarded with the same two store primitives
+  `GenerationExecutor.has_ledger` uses — inlined rather than calling that method,
+  because importing the executor here added an `mcp -> generation` edge and the
+  dependency-law guard caught it on the first attempt.
+
+### Deliberately not done
+
+Redirecting the five MCP generation handlers through `operations`. Three have no
+`operations` entry point (`operations.plan_generation` does not accept
+`shot_ids`/`provider`/`model`/`prompt_ref`/`mode`), so the redirect needs new
+surface **and** response-envelope mapping to satisfy a rule while increasing
+complexity. `cancel` and `promote` have no `operations`-side caller or test at
+all; adding one would create a second implementation of a lifecycle `AGENTS.md`
+says to remove. Those edges stay, recorded rather than papered over.
+
+### Also found: the Enola config scans build scratch
+
+The advisory output includes findings under `.pre-commit-cache/`, because
+`PRE_COMMIT_HOME` is set to a workspace-local directory during commits and
+`enola-config.yaml` does not ignore it. Harmless to the gate (advisory only) but
+noise; adding it to the ignore list is a one-line follow-up.
+
+## AGENT-12 — correcting the dependency-law premise (2026-09-26)
+
+**This round's central claim was wrong, and the correction matters more than the
+work it produced.**
+
+`AGENT-10a` built `test_dependency_law.py` to grade every import against the
+per-package **Allowed outbound** sets in `03-target-architecture.md`, freezing 73
+edges as debt, and every round since reported "debt paid 73 → 70" as progress.
+That premise does not hold:
+
+- `03`'s **own header**, eight lines above the "Status: authoritative target
+  design" line quoted when building the guard, reads: *"Review status
+  (2026-09-25): **superseded proposal.** The independent review in 06 does not
+  adopt the 20-module catalog or its dependency law as an implementation
+  mandate."*
+- `06-independent-review-and-decision.md` — the document
+  `docs/modular-architecture/README.md` says to read **first** — decided: *"This
+  is an ownership map, **not a prohibition on ordinary package imports**. Tighten
+  a dependency only when it removes a proven cycle or unsafe reach-in."* It also
+  explicitly rejects renaming packages to satisfy a layer diagram.
+
+So the guard was enforcing a **rejected proposal**, and the burndown number was
+measuring a target that does not exist. Several of the 70 remaining "violations"
+are ordinary package imports `06` says to leave alone.
+
+**How the mistake happened, recorded so it is not repeated.** `03` contains both
+headers: a superseded-proposal warning and an "authoritative target design"
+status. I read the latter and quoted it to justify the guard, without reading the
+top of the file. `README.md` already told me to read `06` first; I did not.
+
+### The correction (`a3d9d6e`)
+
+Re-scoped to the boundaries the project actually adopted — which is also exactly
+what `06` endorses: *"a small AST test is appropriate for a stable, concrete
+boundary … it must allow existing debt explicitly and ratchet it down."*
+
+| Guard | Status |
+|---|---|
+| Cross-package **private** reach-in | **Enforced.** `06` names "unsafe reach-in" as worth tightening. Debt: `mcp -> studio._persistence`, `mcp -> studio._operator_runtime`, ratcheted. |
+| Port's mirrored privates (`_persist_project_state`, `_record_audit`) | **Enforced.** `operations/ports.py` names them deliberately and documents it as O7 debt; seven outside caller files frozen, matching that file's own record. |
+| `03`'s layer law | **Observation only.** Census reported (70 imports), never asserted. A test asserts the document *still says it is superseded*, so re-adopting the law requires re-scoping this file deliberately. |
+
+Both new guards are falsifiable — verified by injecting `import
+film_pipeline.checkpoints._invalidation_probe`, which fails with `not recorded:
+[(mcp, checkpoints._invalidation_probe)]`.
+
+`AGENTS.md` was corrected in the same commit: it now separates what is enforced
+from what is deliberately not, quotes `06`'s decision, and records this mistake.
+Its Sub-Package Boundaries section no longer presents `03`'s law as binding.
+
+### What survives, and why
+
+The **code** changes this round produced were each verified independently of any
+law, so they stand:
+
+- the prompt-reference bug (MCP sent `artifact:gen_planning:prompt_package:v1` to
+  providers instead of prompt text — real, uncovered, fixed);
+- the failed-row `next_action`, the CANCELLED leak, terminality triplication, and
+  the status read that wrote an artifact;
+- the `_register_active_artifact_ref` dedup, the provider-default fix, the three
+  dead registry aggregates, and the `mcp -> studio` private-import cleanup.
+
+What does **not** survive is the *framing*: these were not "debt paid against the
+layer law". They were real bugs, real duplication, and real reach-in cleanup,
+which is a better justification than the one I gave them.
+
+### The lesson, stated for the next agent
+
+`docs/modular-architecture/README.md` already gives the read order: `06` first,
+then `00`, then `01`/`02`, and `03`–`05` last as *historical proposals*. Follow
+it. A document that contradicts itself in its first ten lines should be read from
+the top, not quoted from the middle.
+
+## AGENT-13 — declared module interfaces, guarded at the consumer (2026-09-26)
+
+Direct human instruction: *"let us define clear public interfaces for the modules."*
+Scoped to `06` §4, which asks for a single owner per rule and proof at the
+consumer boundary — **not** `03`'s superseded layer law (AGENT-12).
+
+### What was already there, and what was missing
+
+15 of ~20 packages already declared `__all__`. Nothing verified that consumers
+stayed inside the declared surface, which is the actual gap: an interface nobody
+checks is documentation.
+
+| Change | Detail |
+|---|---|
+| `budget` gained a surface | It declared nothing and leaked `Any`/`UTC`/`datetime`/`dataclass`/`field` into its namespace. `__all__` now names its 7 real exports. `BudgetState`/`SpendRecord` deliberately not re-declared — they belong to `schemas`. |
+| `filmspec` gained a surface | 18 names, all consumed, all genuinely public vocabulary. Declared in full. |
+| `orchestration` left **bare, on purpose** | Its root binds nothing. Measured: importing it loads no submodules and no `langgraph`. A root `__all__` naming its nine submodules would be a facade over the graph engine and risks making a deliberately lazy import eager. |
+| 3 consumers routed | `post/subtitle_agent.py` used a module alias when `schemas` already declared both classes; `studio/bootstrap.py` + `_provider_seeds.py` used the `credentials` module; `operations/operator.py` used the `profile_resolver` module. All now use declared names. `config` and `providers` declare the functions their consumers need. Declaring a *module object* was rejected as the weaker contract. |
+
+### The guard, and its stated limits
+
+`tests/unit/architecture/test_public_surface.py`: a consumer must not import an
+undeclared name from another package's root, and every declared name must resolve.
+Verified falsifiable — injecting `NonExistentSurfaceName` import into
+`cli/driver.py` fails naming that file and symbol.
+
+Documented limits, not glossed: it detects surface **bypass**, not shrinkage; it
+does not see submodule-path imports (`test_boundary_law.py`'s job); and it cannot
+see re-export wrappers added to satisfy it — which is why `AGENTS.md` bans that.
+
+### Corrections made while writing it
+
+- **My import census was wrong in shape, and a subagent caught it.** I had
+  classified several intra-package imports as cross-package gaps. The real
+  count of live gaps was 3, not 8.
+- **The subagent's census was also partly wrong**, and I verified rather than
+  accepting it: it claimed `storage.store → storage.paths` and
+  `storage.registry → storage.rendering` "do not match any package-root import".
+  They do — `storage/store.py:32`, `storage/registry.py:88`,
+  `storage/project_storage.py:35` — but all three are *intra*-package and
+  legitimate, which is the same conclusion by a different route.
+- **My own guard caught my first baseline as wrong.** I froze three rows for
+  modules reaching `orchestration.orchestrator_state`; the sweep skips packages
+  with no `__all__`, so it never measured them. The staleness check failed and I
+  emptied the baseline. Recording what a sweep does not measure is worse than
+  recording nothing.
+- **It found a real gap I had missed**: `mcp`/`operations` reach
+  `orchestration.orchestrator_state` through a root that declares nothing. Left
+  as-is deliberately, for the eager-import reason above.
+
+### Not done, deliberately
+
+The subagent measured a "declared surface is complete" check across all 19
+packages with `__all__` and found **zero** findings — every package already
+declares everything it defines. Building it would have been metadata for its own
+sake, so it was skipped. A `ModuleContract` in every `__init__.py` is explicitly
+rejected by `06`.
+
+## AGENT-14 — duplicated function bodies: 3 → 0 (2026-09-26)
+
+The sound clause of the standing objective — *"remove real duplication"* — pursued
+by measuring rather than searching: an AST sweep comparing normalized bodies of
+every module-level function. It found **exactly three** cross-file duplicates.
+
+| Duplicate | Finding | Resolution |
+|---|---|---|
+| `_collect_updates` — `nodes/qc.py` + `nodes/visual.py`, 19 lines byte-identical | The **node-boundary update rule**: which refs and issues cross the boundary, which keys carry. Two authors for one rule, nothing tying them together. | Moved to `nodes/_shared.py`, which already owned its `_is_new_ref`/`_is_new_issue` prerequisites. |
+| `missing_profile_credentials` — `studio/_provider_profiles.py` + `_operator_runtime.py` | **More than duplication:** `_provider_profiles.py` had **zero production importers** — only a test imported it — and its `register_profile_providers` was a narrower copy typed to `StudioRuntime` instead of `RuntimePort`. | Module deleted; the test retargeted at the live implementation. All three assertions passed unchanged, which is what proves the duplicate was redundant. |
+| `_is_text_only_policy` — `operations/_generation_ops.py` + `mcp/tools/generation/_text_only.py` | The literal `"text_only"` appeared in **three** places, across **12 call sites** in two packages. | The vocabulary owner is `filmspec`, so `TEXT_ONLY_POLICY` and `is_text_only_policy` live there now; the predicate also handles non-dict input instead of raising. |
+
+### The guard
+
+`tests/unit/architecture/test_no_duplicate_functions.py` — module-level functions
+only, exact body matches only. Methods are **excluded on purpose**: same-shaped
+methods on different classes are usually a real contract (two adapters
+implementing one port), not duplication. Near-duplicates are out of scope; they
+need judgement, not a string comparison.
+
+**Falsified properly.** My first attempt used a shell heredoc that silently failed
+to apply the mutation, so the guard appeared to pass — the same false-null trap
+recorded in AGENT-11. The working falsification copies `_collect_updates` under a
+new name into a second module of a **temp tree** and confirms the predicate
+reports both sites. (Temp-tree mutation is safe here because the predicate reads
+files by path rather than importing them; earlier rounds established that
+import-based mutation in a clone gives false results.)
+
+### Collateral the tests caught
+
+Moving `_collect_updates` correctly failed `test_channel_registry.py`, which
+requires every boundary-key writer to carry a recorded disposition. It checks
+**both** directions at once: the new `_shared.py` site was unaccounted *and* two
+old `qc.py`/`visual.py` rows had gone stale. One row added, two removed.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Cross-file duplicate function bodies | 3 | **0** |
+| Dead modules with no production importer | 1 | **0** |
+| Definitions of the text-only policy | 2 + 3 literals | **1 + 1** |
+
+## AGENT-15 — the blocking-issue rule had 19 sites and a live crash (2026-09-26)
+
+Found by extending AGENT-14's measurement from *function bodies* to *policy
+literals*: a sweep for string literals compared in 3+ files put `'blocking'` at
+the top (18 files). Classifying those precisely — readers versus producers —
+gave **19 reader sites across 16 files**.
+
+### The divergence was real, not theoretical
+
+Four readers were compared directly. Three guarded a malformed record; one did not:
+
+```
+governance predicate : False            (handles non-dict)
+cli (guarded)        : 1 blocking issue
+mcp (unguarded)      : AttributeError: 'NoneType' object has no attribute 'get'
+```
+
+The unguarded copy is a **live MCP handler** on the review path (`mcp/tools/review.py`),
+with no local `try`/`except`, reading persisted state. A single non-mapping entry
+in an issue list crashed it while every sibling skipped that entry and carried on.
+Fixed by routing it through the owner; verified it now returns the blocking issue
+instead of raising.
+
+### The consolidation
+
+`filmspec` already declares `IssueSeverity`, so it owns the predicate:
+`is_blocking_issue(issue)` and `blocking_issues(issues)`. Both tolerate malformed
+records rather than raising — an issue list is persisted state, and crash recovery
+must not depend on every entry being well-formed. **16 sites** across `cli`,
+`governance`, `mcp`, `operations`, `orchestration`, `studio` and `validation` now
+call them; the `governance` copy became a thin delegator.
+
+### What the consolidation deliberately excludes
+
+The guard lists its exemptions inline, which is the part worth keeping:
+
+- **Three sites compare `severity` on a different record type** — config
+  conflicts (`mcp/tools/projects.py`), a generated conflict list
+  (`operations/operator.py`), failure-decision records
+  (`orchestration/orchestrator_state.py`). Routing those through the issue
+  predicate would be wrong.
+- **Three read a typed attribute, not a mapping** — `ConfigConflict.severity`,
+  `ValidationIssue.severity`, and a validation finding object.
+- **~25 producer sites** write `{"severity": "blocking"}` into a new issue.
+  Building a record is not deciding whether one blocks.
+
+An earlier draft of the guard flagged those nine as violations. Distinguishing
+"same field name" from "same rule" is the difference between a useful guard and
+one that forces bad routing.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Sites re-deriving the issue-severity rule | 19 across 16 files | **0** |
+| Definitions of the predicate | 1 real + 6 ad-hoc readers | **2 in one owner** |
+| Live crashes on a malformed issue list | 1 | **0** |
+
+## AGENT-16 — a JSON array aborted the model-output extraction chain (2026-09-26)
+
+Found by sweeping for **structurally near-duplicate helpers** (AST bodies at ≥0.90
+similarity), a different axis from AGENT-14's exact-match sweep. It surfaced
+`agents/_json_extraction._parse_direct_json` and
+`validation/base._parse_json_dict_or_none` as byte-identical — and investigating
+*that* is what exposed the real defect underneath.
+
+### The bug
+
+`extract_json_object` is the four-strategy recovery chain behind
+`ModelAdapter.chat_json`, so every agent requesting structured output depends on
+it. Three of the four strategies caught only `json.JSONDecodeError`, but
+`dict(result)` raises **`ValueError`** — not `JSONDecodeError`, not `TypeError` —
+when the parsed JSON is an array:
+
+```
+extract_json_object('[{"e": 5}]')
+  -> ValueError: dictionary update sequence element #0 has length 1
+```
+
+The exception escaped the strategy and aborted the chain, so `chat_json`
+surfaced that dict-construction message instead of its intended actionable
+"not valid JSON after 4 extraction strategies" error with a response preview.
+**An array is a normal shape for a model to return.**
+
+All four strategies now catch `(JSONDecodeError, TypeError, ValueError)`. A
+single-element object array is recovered (`{"e": 5}`); other arrays and JSON
+scalars degrade to `None` so the caller reports its own error.
+
+### Why it survived
+
+`extract_json_object` had **zero direct tests**. The new
+`tests/unit/agents/test_json_extraction.py` covers all four strategies, the array
+and scalar shapes that crashed, and the public path; restoring the bug fails
+**10 of its 19 tests**.
+
+### A guard refused my first fix, and it was right
+
+I also tried to delete the duplicate chain in `validation/base.py` by importing
+the tested extractor. `test_boundary_law.py` rejected it:
+`validation -> agents._json_extraction` is a **cross-package private reach-in** —
+precisely the shape `06` §4 *does* endorse tightening, unlike the layer law that
+guard was re-scoped away from in AGENT-12.
+
+So I reverted the routing and kept only the bug fix. **The duplication is recorded
+rather than paid for with a worse dependency** — which is the right trade when one
+option removes a duplicate and the other adds a boundary violation.
+
+### Note on the measurement approach
+
+Two sweeps now, two real defects:
+
+| Sweep | Axis | Found |
+|---|---|---|
+| AGENT-14 | exact function-body matches | 3 duplicates, one a dead module |
+| AGENT-15 | string literals compared in 3+ files | 19 sites, one a live MCP crash |
+| AGENT-16 | structural similarity ≥0.90 | a duplicate *and* a crash behind it |
+
+The pattern worth keeping: the duplicate was the *lead*, not the finding. Each
+time, asking "why do these two exist and how do they differ?" surfaced a defect
+that neither a duplicate count nor a test run would have shown.
+
+## AGENT-17 — auditing my own guards, and a blind spot they had (2026-09-26)
+
+After five rounds of adversarially falsifying *other* things, this round did it to
+the guards this program itself added: inject each defect they claim to prevent,
+and check they fire.
+
+| Guard | Defect injected | Result |
+|---|---|---|
+| Mirrored private call | `rt._persist_project_state(pid)` in a new module | **FIRES** |
+| Undeclared root import | `from film_pipeline.filmspec import NotADeclaredName` | **FIRES** |
+| Issue-severity re-derivation | `i.get("severity") == "blocking"` in a new module | **FIRES** |
+| Duplicate function body | `_collect_updates` copied under a new name | **FIRES** |
+| **Private reach-in** | `from film_pipeline.storage import _layout` | **MISSED** |
+
+### The blind spot
+
+The detector inspected only the imported **module path**, so it required three
+dotted segments and could not see the name form at all:
+
+```python
+from film_pipeline.storage._layout import write_json   # caught
+from film_pipeline.storage import _layout              # missed entirely
+```
+
+The second form is used **five times** in the tree already —
+`studio/runtime.py` imports three of its own private modules that way, as do
+`studio/_graph_exec.py`, `logging_setup.py`, `operations/operator.py` and
+`storage/project_storage.py` — but all five are intra-package and legitimate, so
+no live violation had been missed. The guard simply **could not have caught one**.
+
+### What the fix found immediately
+
+Widening the detector to read imported *names* surfaced **five real reach-ins**
+that had been invisible:
+
+| Source | Target | Note |
+|---|---|---|
+| `agents` | `providers._accepts_timeout_kw`, `_open_timeout` | a deliberate historical-alias re-export |
+| `studio` | `orchestration._PHASE_NODES`, `_SERVICES_CTX`, `_run_validators` | the composition root driving the graph through private names |
+
+All five are private **symbols**, not private **modules**, so they went into a new
+`KNOWN_PRIVATE_SYMBOL_IMPORTS` baseline rather than being folded into the module
+one. Importing another package's whole private module is a larger encapsulation
+break than importing one private function from it; conflating the two would let
+the former hide inside the latter's count.
+
+**None was "fixed".** The `agents` pair is deliberate, and the `studio` trio is
+the composition root doing its job — it just does so through private names rather
+than a declared seam. Recorded with reasons, which is what `06` §4 asks for and
+what the standing instruction ("no abstraction without a current need") implies.
+
+### The lesson this round
+
+**A guard that has never been falsified is a hypothesis, not a guard.** Four of
+five fired, which is the reassuring half; the fifth had been reported as passing
+for four rounds. The cheap version of this audit — inject the defect, assert the
+guard fires — is worth running after adding any guard, and it is now the third
+time in this program that checking my own claim beat trusting it.
+
+## AGENT-18 — auditing the pre-existing guards: one resolver, four copies (2026-09-26)
+
+AGENT-17 audited the guards *this program added*. This round audited the
+**pre-existing** boundary guards, which is the riskier population because nobody
+had checked them.
+
+### The guards themselves are sound
+
+Injected each defect they claim to prevent:
+
+| Guard | Injected | Result |
+|---|---|---|
+| `providers/test_import_boundaries.py` | `from .adapters import Imagen4GeminiProvider` | **FIRES** |
+| `studio/test_app_boundaries.py` | `from ..mcp import server` | **FIRES** |
+| `schemas/test_import_boundaries.py` | (same resolver, same shape) | **FIRES** |
+
+They also sweep **recursively** (`rglob`), resolve relative and re-export forms
+correctly, and two of the three self-test their own resolver. This is good work
+from whoever wrote it.
+
+### The finding was underneath them
+
+`tests/unit/_import_guard.py` opens with *"It is one rule, so it lives here"* —
+and it is load-bearing for four boundary guards. Yet the same resolution algorithm
+existed **four times**: the shared helper plus one copy in each of three guard
+files. Three were **AST-identical** to the original, verified by comparing dumped
+function bodies rather than by eye.
+
+**Why it matters:** a divergence between the copies means one guard silently stops
+guarding, and nothing notices — each copy is only exercised by its own file's
+tests. That is the same failure mode AGENT-17 found in the reach-in detector, one
+level up: a guard that looks like a guard.
+
+Consolidated onto the shared helper. Both affected files' existing tests pass
+unchanged, **including the parametrised relative-import and re-export cases** —
+which is what proves equivalence rather than asserting it.
+
+### My own new guard was wrong twice
+
+The guard I added to prevent a fifth copy flagged the shared helper *itself* — the
+definition is the implementation, not a re-implementation. My first fix for that
+compared the path to `"_import_guard.py"` when the path is
+`"unit/_import_guard.py"`, so it still failed.
+
+Both mistakes were caught by running the guard, not by reading it. That is now
+four times in this program that checking beat reasoning, and it is the argument
+for falsifying every guard at the moment it is written rather than trusting it
+until it is audited.
+
+## AGENT-19 — a silently-swallowed failure that reported success (2026-09-26)
+
+New sweep axis: **over-broad `except` handlers that swallow silently** — the shape
+that hid the JSON bug in AGENT-16.
+
+**48 sites across 30 files.** Most are legitimate: an MCP handler must return an
+error envelope rather than crash, so `except Exception: return _error(str(e))` is
+correct and appears throughout `mcp/tools/`. The sweep was a candidate generator,
+not a defect list — the value was in reading the few that *hide* rather than
+*report*.
+
+### The one that mattered
+
+`mcp/tools/bibles/shot.py::_generate_continuity_ledger` caught every exception and
+returned `None`, so a ledger that **failed to persist** was indistinguishable from
+one that was never needed. The tool then reported an unqualified success:
+
+```
+ok: True
+continuity_ledger_ref: None
+```
+
+while its own docstring promises "MasterFilmMatrix + ContinuityLedger" and
+`CONTINUITY_LEDGER` is a declared artifact kind. Verified by monkeypatching the
+persist call to raise — the response still said `ok: True`.
+
+**Fixed, not made fatal.** The matrix is the primary deliverable and failing the
+whole call over a ledger problem would be worse. Instead the failure is logged
+with a traceback and the response carries
+`warnings=["continuity_ledger_not_persisted"]`. A caller checking only `ok` is
+still told the matrix is there; a caller reading the envelope can see half the
+promised output is missing. Two tests pin both paths, and removing the warning
+branch fails one.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Silent successes hiding a failed promised artifact | 1 | **0** |
+| Sweep candidates reviewed | 48 sites / 30 files | — |
+| Sites changed | — | **1** |
+
+The ratio is the honest headline: 48 candidates, 1 defect. That is what a sweep
+looks like when the codebase is mostly healthy — the sweeps in AGENT-14/15/16 had
+better ratios because those axes (exact duplicates, re-derived policy) select for
+defects directly, while "broad except" selects for a *style* that is usually
+correct. Worth recording so the next round picks axes by expected yield, not by
+how interesting the pattern sounds.
+
+## AGENT-20 — removing the cost feature: measured, not argued (2026-09-26)
+
+The cost feature is gone (no backward compatibility; it was never useful). It was
+removed in slices, each committed with both gates green. The measured burn-down,
+by `grep -rn` across `src/` and `tests/`:
+
+| Surface | Before | After |
+|---|---:|---:|
+| `providers/pricing.py` | 139 lines | **deleted** |
+| `estimate_cost` (port + impls) | 4 defs | **0** |
+| `CostProfile` / `cost_profile` / `cost_profile_ref` | 4 src sites | **0** |
+| `provider_pricing` prompt variable | 2 src sites | **0** |
+| `budget_snapshot` channel + accessor + projections | 6 src sites | **0** |
+| `cost_estimate_ref` | 2 src sites | **0** |
+| `cost_report*` (delivery + validator rule) | 13 src, 12 test | **0** |
+| `BUDGET_EXCEEDED`, `BLOCKED_BUDGET` | 2 enum members | **0** |
+| `blocked_kb_domains=["cost"]` (a domain that never existed) | 12 rows | **0** |
+
+### Kept deliberately — these are not the cost feature
+
+- `cli/run.py --confirm-real` — a real-mode *spend acknowledgment* gate. It is the
+  only thing standing between a headless run and paid providers.
+- `approve_spend` (ledger + executor) — the live `PREPARED -> SUBMITTED` ledger
+  transition, reachable in every generation test.
+- `providers/catalog.py` — provider *identity* (`is_known_provider`,
+  `supported_provider_ids`). The pricing table had been doing this job by
+  accident, so deleting cost required moving identity first.
+- `FailureClass.BUDGET` — a live member of the failure taxonomy.
+
+### Two lessons worth more than the deletion
+
+**A commit message is a claim, and claims need the same verification as code.**
+`e54dde1` is titled "remove provider pricing" and its body says it deleted
+`providers/pricing.py` "entirely". It never touched the file:
+`git show --name-status e54dde1` lists no such path and
+`git cat-file -e e54dde1:src/film_pipeline/providers/pricing.py` succeeds. The
+module was still present, still imported by 5 modules, and still injecting a USD
+rate table into every agent prompt. It took `grep` on the *working tree*, not a
+read of the log, to notice. The same happened to my own earlier commit message in
+this round, which claimed two deletions it did not make.
+
+**"Nothing writes it" is a claim about every writer, including dormant ones.** The
+`get_budget_snapshot` docstring asserted the snapshot was "always the default"
+because `update_budget_snapshot` (its only writer) had been deleted. That was
+false: `ensure_orchestrator_state` seeded it via `state.setdefault`, and it was
+registered as an `OrchChannelSpec` whose note read "dormant writer; wiring decided
+in D13/P1". A dormant writer is still a writer. Deleting both sites made the
+docstring's invariant true by construction rather than by assertion.
+
+### What this slice does not establish
+
+Cost arithmetic, provider billing rates, and spend ceilings are now absent from the
+system. That is a product decision made deliberately, not a refactor that preserved
+behaviour — nothing here guarantees the pipeline cannot overspend, because the
+mechanism that would have is deleted. `--confirm-real` remains as a human
+acknowledgment, not a limit.
+
+## AGENT-21 — the residue the cost removal exposed (2026-09-26)
+
+A sweep for what the deletions *revealed* rather than what they removed. Findings
+below are grep-proven; two candidate findings were withdrawn after checking the
+owner, which is the more useful result.
+
+### Removed
+
+| Item | Sites | Why it was dead |
+|---|---:|---|
+| Live LLM prompt cost instructions | 3 files | Asked the model for a field `_build_generation_requests` drops |
+| `_approve_spend` | 1 | One-line forward to `mgr.approve_spend`, plus a eulogy |
+| `cost_impact` | 4 | No `src/` call site passed it; always `{}` |
+| `cost_estimate_usd` | 2 | Field on audit + reference schemas, no reader |
+| `prompt_archive_dir` / `_included` | 5 | No caller passes it — including the MCP tool that forwards the other 6 args |
+| `_DEFAULT_CAP_USD` | 1 | Module constant, zero readers |
+| `ModelRouter.cost_ranked` | 1 (+4 tests) | Zero `src/` callers; kept alive by its own tests |
+| Redundant guard branch | 1 | See below |
+
+**The duplication worth naming.** `_known_provider` tested
+`runtime.get_provider(id) is not None` and then `id in runtime.list_providers()`.
+Those are the same expression: `get_provider` is `provider_adapters.get(...)` and
+`list_providers` is `list(provider_adapters.keys())` (`studio/runtime.py:374-378`).
+Two branches, one predicate. This is the AGENT-20 pattern again — a policy
+reimplemented at N sites, where the second copy was invisible because it was
+phrased differently.
+
+**A test that passed for the wrong reason.** `test_approve_spend_no_budget_limit`
+called `update_row(..., estimated_cost_usd=9999.0)`. That key is **not a field** on
+`GenerationLedgerRow` — verified by printing `model_fields`, not by reading the
+schema. `update_row` takes `**updates` and hands them to `model_copy`, so the
+kwarg was silently absorbed and the assertion (`status == SUBMITTED`) held anyway,
+because plan-then-approve produces that transition on its own. The test's name,
+docstring ("No budget limit: max_cost_usd=-1") and body all described a deleted
+policy while testing nothing about it. Deleted; `test_approve_spend_transitions_rows`
+covers the real behaviour.
+
+### Withdrawn after checking the owner — the more valuable half
+
+- **`FailureClass.BUDGET`** looked like cost residue: `grep -rn "FailureClass.BUDGET"`
+  returns only its definition. But that is the *normal* state of this enum — no
+  member is referenced anywhere in `src/`, because the whole `FailureClass`
+  taxonomy is declared-but-unwired vocabulary, and
+  `documentation/architecture-blueprint.md:659` lists "budget" as a legitimate
+  member ("classify provider, runtime, validation, budget, and continuity errors").
+  Deleting it would have been enforcing a rejected proposal. **Kept.**
+- **`ModelRouter.select(prefer_cheap=...)`** was bundled into the `cost_ranked`
+  finding on the strength of a similar grep shape. Unlike `cost_ranked` it is a
+  live parameter on a production-called method. **Kept.**
+- **`is_known_provider` / `KNOWN_PROVIDER_IDS`** have zero callers, but they are
+  identity vocabulary added deliberately when the pricing table was split. Whether
+  identity should be mode-scoped is a product question, not a cleanup. **Kept, and
+  flagged as an open decision rather than a defect.**
+
+The ratio: eight removals, three withdrawals. The withdrawals cost less than one
+wrong deletion would have — and the trigger for finding them was a rule this
+program had just written into `AGENTS.md` ("check the owner before deleting it"),
+which is the first time a rule from this ledger prevented a defect in the same
+session it was recorded.
+
+### What this does not establish
+
+The prompt-text change alters model input but is **not** covered by a test
+asserting the new wording — the removal is proven (the strings are gone), the
+behavioural effect on plan quality is not. `is_known_provider` remains unwired.
+
+## AGENT-22 — closing the identity question with a guard (2026-09-26)
+
+AGENT-21 left one item explicitly open: "`is_known_provider` remains unwired …
+whether identity should be mode-scoped is a product decision." Half of that was a
+product decision; the other half was not, and this round separates them.
+
+**Not a product decision, now guarded.** Whatever the identity policy is, the
+predicate must not *overstate* what it knows. `KNOWN_PROVIDER_IDS`'s own comment
+claims it is "every provider id the system knows how to build an adapter for", so
+`tests/unit/providers/test_catalog.py` pins six properties: every known id is
+buildable by `build_provider_adapter`; typos and near misses are rejected; matching
+is exact (not case-folded or stripped); every mode seeds only known ids; an unknown
+mode falls back to the mock set rather than an empty one; and real and mock modes
+do not overlap.
+
+**Still a product decision, left open.** `is_known_provider` has no caller. The
+tests pin its contract without asserting that anything uses it. That is the honest
+split: the guard makes the vocabulary safe to wire, and wiring it is a separate
+call.
+
+**A gap asserted as intentional rather than smoothed.** The factory builds all
+seven ids (verified by calling it, not by reading it); `real` seeds three. The
+alias ids `veo-3.1-fast` and `imagen-4` are buildable identities that no mode
+seeds, because seeding uses one canonical id per real provider. The reverse
+direction is guarded — a mode may not seed an unknown id — and the forward
+direction is deliberately *not* asserted, so the asymmetry is recorded rather than
+hidden behind a test that would have to be weakened later.
+
+**Falsification, per the standing rule.** Each guard was proven by injecting the
+defect it claims to prevent and confirming the failure:
+
+| Injected defect | Guard that failed |
+|---|---|
+| id listed with no adapter | `test_every_known_id_is_buildable` |
+| case-insensitive matching | 3 tests (exactness, `VEO-FAST`, `"imagen-4 "`) |
+| mode seeding an unknown id | `test_every_mode_seeds_only_known_ids` |
+| unknown mode returning `()` not mock | `test_supported_provider_ids_falls_back_to_mock` |
+| modes sharing an id | `test_real_and_mock_modes_do_not_overlap` |
+
+All five injections were reverted; `git diff --stat` on `catalog.py` is empty.
+
+### What this does not establish
+
+The guards constrain identity, not behaviour: they do not show that any production
+path calls `is_known_provider`, because none does. They also say nothing about
+whether mode-scoped identity is the right policy — only that if it is the policy,
+the catalogue cannot silently drift from it.
+
+## AGENT-23 — adversarial verification of the whole round (2026-09-26)
+
+An independent adversarial pass was run against all eight cost-removal commits,
+instructed to assume a defect existed and hunt for it. It found **no BROKEN
+defect**, and it disproved the author's own top suspicion: the `== 2` in
+`test_impl_validators.py` (changed by hand from `== 3` when a required-ref rule was
+deleted) was re-derived from the validator source — 5 required files all supplied
+by the test's fixture, both remaining required refs blanked, `0 + 2 = 2` — rather
+than accepted on the author's word. It is a re-measurement, not a weakened
+assertion.
+
+Verified clean, each with an explicit method rather than by reading:
+
+| Claim | How it was checked |
+|---|---|
+| All four keepers intact | Located each and ran its covering tests |
+| `_known_provider` branches equivalent | Read both bodies: `provider_adapters.get(x) is not None` ≡ `x in list(provider_adapters.keys())` |
+| No producer-less required delivery item | Cross-checked every required file/ref against its producer |
+| No remaining phantom-field kwargs | AST scan over all of `src/` + `tests/` against real model fields |
+| No test pins the deleted prompt text | Grep for the removed strings in `tests/` |
+
+### Fixed as a result
+
+Stale prose in six places, and one drifted test fixture. The fixture is the
+instructive one: `test_gen_planner_agent.py` still declared
+`capabilities=["provider_selection", "cost_estimation"]` after `roster.py` had been
+updated to `dispatch_planning`. It was inert, so nothing failed. **A fixture that
+duplicates production data and is never asserted on cannot detect drift — it only
+hides it.** That is the second instance of this class in one round, after the
+`estimated_cost_usd` test that passed for the wrong reason.
+
+The one user-visible fix: `mcp/tools/review.py` told the operator "budget,
+provider, or quality threshold reached" when triggering `escalate_to_human` — a
+concept that can no longer trigger it.
+
+### A false positive, recorded because it nearly caused a wrong fix
+
+The verifier reported `tests/unit/providers/test_catalog.py` as **untracked**, and
+recommended committing it. It was in fact tracked, in `HEAD`, and pushed — the file
+was created by `51cbf0a` *after* the revision the verifier had inspected (`b9f51f6`).
+The observation was stale, not wrong, and acting on it would have produced a
+no-op commit described as a fix. Checking the claim against `git ls-files` and
+`git cat-file` took one command.
+
+### Pre-existing defects this round did NOT introduce and did NOT fix
+
+Flagged, not repaired, because each is outside this objective and needs its own
+decision:
+
+- **The delivery validator and the packaging agent disagree about completeness.**
+  `REQUIRED_DELIVERY_FILES` matches `final_video.mp4` / `review_cut.mp4` by exact
+  basename, but `build_package` records whatever path the caller passed. Verified:
+  a package built from `video_path="final.mp4"` reports `is_complete=True` from the
+  agent while the validator scores it `0.0` and blocks with 5 missing assets. The
+  documented "happy path" test dodges this by hardcoding the exact basenames. A
+  package can therefore be complete by one definition and empty by another. This
+  survives the cost removal unchanged — notably, the `cost_report.json` rule
+  removed in `3fdd379` was the *only* required item with no producer at all.
+- **`devharness/mock_human.py`**'s `APPROVE_SPEND_UNDER_LIMIT` branch returns
+  "approve" unconditionally and never reads its own `spend_limit_usd` field, making
+  it identical to `APPROVE_ALL`. A surviving budget concept, predating this work.
+
+Both are recorded here so the next round does not rediscover them as new.
+
+## AGENT-24 — module interfaces, layer direction, and the last cycle (2026-09-26)
+
+The user asked to "define clear public interfaces for the modules, and check we
+have layers and the controls/data flows in one direction." Measured answer, by
+rebuilding the import graph from `ast` rather than reading the design docs.
+
+### The question has a mostly-negative answer, and that is the finding
+
+**Layers: 06's rejection of a layer law was correct, and is now provable rather
+than asserted.** The package graph contained exactly one mutual pair, and it is
+gone. Measured before this round: `orchestration -> schemas` from 41 files against
+`schemas -> orchestration` from one (`schemas/runtime_state.py`, importing
+`orchestration.state_schema` to check persisted graph-state keys — its own
+docstring conceded the inversion). After moving the check to the module that owns
+`StudioGraphState`, the graph is acyclic.
+
+The reason a layer law is the wrong frame is measurable: **201 of the cross-package
+imports are function-local**, deliberate lazy bindings (e.g. `mcp/tools/helpers.py`
+documents that `get_runtime` must be attribute-bound at call time so tests can
+monkeypatch). Enforcing a directional layer law would have outlawed the very
+mechanism that keeps the eager graph acyclic. The 720 cross-package imports are an
+ownership map, not defects.
+
+**Interfaces: they exist, are mostly unused, and that is fine.** Measured
+cross-package imports: **81 via package root** (guarded by
+`test_public_surface.py`) against **639 via submodule path** (unguarded). The
+existing guard therefore sees ~11% of import traffic and is honest about it in its
+own docstring. The conclusion is *not* to expand `__all__` or add facades — that is
+the rejected `03`/`05` program. `filmspec/__init__.py` is a genuine surface
+(definitions live there); `schemas/__init__.py`'s 107 names are a convenience
+aggregator. Both are fine as they are.
+
+**Flow direction: verified one-directional, with single-writer evidence:**
+- `mcp/server.py` is the single operator funnel (resolution, confirmation,
+  active-project precondition, dispatch, error mapping before any handler), and the
+  headless CLI deliberately reuses it (`cli/driver.py`) rather than bypassing it.
+- The active-project precondition is checked once at dispatch; the 48 handler-level
+  guards are gone.
+- `merge_issues` is the single implementation of issue semantics, with
+  `remove_issues_by_code` applying those same semantics to plain mappings for the
+  three non-graph callers that cannot use a reducer.
+- `project.json` and `graph-state.json` each have exactly one writer module, both
+  through `ProjectStorage`. Zero layout writes exist outside `storage/`.
+
+Verified empirically rather than by reading: duplicate-append dedupes, a shorter
+list cannot remove an issue, and removal requires the explicit
+`{"__remove_codes__": [...]}` command form.
+
+### The guard decision, and why the advice against it was wrong
+
+A subagent recommended **against** adding an acyclicity guard, on the grounds that
+"Enola's `cycles` policy already IS the gate." That reasoning fails on measurement:
+`enola check` grades the working tree against a **pinned snapshot**, so once the
+snapshot is regenerated from the current commit, an injected cycle does not fail it.
+Verified both directions:
+
+| Check | Injected `schemas -> orchestration` back-edge |
+|---|---|
+| `enola check` (freshly pinned baseline) | exit **0** — does not catch it |
+| `tests/unit/architecture/test_package_acyclicity.py` | `test_package_graph_is_acyclic` **FAILED** |
+
+So the pytest guard covers a real gap in the working-tree check rather than
+duplicating it. It is scoped to cycles only, at package granularity, and its
+docstring records why it must not be widened into `03`'s layer law.
+
+### The stale-baseline trap, recorded because it cost real time
+
+`docs/modular-architecture/enola-out/` is gitignored and was generated
+2026-09-25 — before this branch's renames. It held 703 facts for
+`src/film_pipeline/app`, 935 for `graph`, and 396 for `artifacts`, none of which
+exist any more, and **zero** `schemas/runtime_state -> orchestration` facts, because
+that import was function-local then. Consequence: removing the back-edge made
+enola recount and promote a **pre-existing** `agents <-> agents/prompt_templates`
+cycle from advisory to "regression". HEAD passed enola only because the stale
+baseline was hiding that cycle.
+
+Resolved by regenerating the snapshot and re-pinning from **clean** HEAD
+(`fae6f3e`, 9528 facts) — after confirming the fresh snapshot holds 0 facts for
+the removed packages. **No filter or threshold was changed.** Then re-pinned at
+`7677a7c` (9537 facts) once this round's work was committed.
+
+The lesson: a pinned baseline that is older than the branch it grades will report
+the branch's own renames as architectural regressions. Regenerate it from clean
+HEAD before believing a FAIL.
+
+### Still open, deliberately
+
+- `agents <-> agents/prompt_templates` is a real parent/subpackage cycle:
+  `prompt_templates/registry.py` imports `agents._prompt_template` while `agents`
+  reaches `prompt_templates`. It predates this round and is now visible in the
+  graph. Not fixed here — the natural fix moves `_prompt_template` into the
+  subpackage that uses it, which is a behaviour-preserving move worth its own
+  slice rather than a rider on this one.
+- The 9 frozen `rt._persist_project_state` / `rt.projects[id] = state` sites remain
+  recorded debt in `test_boundary_law.py`; routing them through `RuntimePort` is
+  opportunistic work, not a defect.
+
+## AGENT-25 — the agents cycle, the port bypass, and honest interfaces (2026-09-26)
+
+Three workstreams, four commits, each with both gates green.
+
+### 1. `agents <-> agents/prompt_templates` — and a second cycle the fix exposed
+
+`PromptTemplate` lived at `agents/_prompt_template.py`, one level *above* the
+subpackage that used it: **58 uses** inside `prompt_templates` against **3** in the
+parent (its own definition plus two `runner.py` type hints, one already
+`TYPE_CHECKING`-only). Moved to `prompt_templates/template.py`; all 7 consumers
+redirected; the `registry.py` re-export (`import ... as PromptTemplate`) that
+formed the cycle is gone.
+
+**That alone made the gate red.** Rather than guess, the gate was compared at HEAD
+against the working tree — HEAD PASS, with the change FAIL — and enola's own
+`facts.jsonl` was read to print every edge touching the cluster. The second cycle:
+
+```
+prompt_templates -> registry -> defaults      (defaults is a CHILD of prompt_templates)
+```
+
+`registry._load_defaults` imported the sibling `defaults` package, so with
+`template.py` now a child of `prompt_templates`, the loop closed. Verified by
+deleting the edge: `enola check` -> PASS.
+
+Fixed by moving the wiring to the package root, which may import its children:
+`registry.get_registry()` is now content-free and `prompt_templates.get_registry()`
+loads the defaults. Six consumers redirected. A test pins that the submodule stays
+empty — the guard against reintroduction, since loading defaults again requires
+importing `defaults`.
+
+### 2. The port bypassed by its own intended callers — cleared to zero
+
+`operations/ports.py` declared `_persist_project_state` by *mirroring the runtime's
+private spelling*, while 8 call sites in `operations/` and `mcp/tools/*` called the
+private names. `StudioRuntime` now exposes `persist_project_state` and
+`record_audit`; the underscore names remain as in-package aliases (24 internal
+`studio` call sites use them, legitimately), verified to be the *same function
+object* rather than a second definition.
+
+| | before | after |
+|---|---:|---:|
+| External private persist/audit call sites | 8 | **0** |
+| `KNOWN_MIRRORED_PRIVATE_CALLS` rows | 7 | **{}** |
+
+`rt.projects[id] = state` — the other half the objective named — turned out to have
+**zero** occurrences outside `studio`. Nothing to route; recorded rather than
+silently skipped.
+
+One correction to the guard's contract: it was briefly widened to count the
+*public* spellings, which flags the correct usage and would make the table grow
+whenever someone does the right thing. Reverted to counting private spellings only.
+
+### 3. Interfaces: measured first, and most of the work was *not* needed
+
+| Measure | Result |
+|---|---|
+| Declared `__all__` names that fail to resolve | **0** (all 20 packages imported and checked) |
+| Packages with no `__all__` | **3** — `cli`, `orchestration`, `studio`, each deliberate |
+| Package-root cross-package imports | 66 (guarded) |
+| Submodule-path cross-package imports | 455 (unguarded, and fine) |
+
+So there was no mass rewrite to do, and doing one would be the rejected `03`/`05`
+program. What was genuinely missing was enforceability of the one claim that lived
+only in prose: that `orchestration` must stay bare so `import
+film_pipeline.orchestration` does not eagerly load the graph and `langgraph`.
+`test_bare_package_roots.py` turns it into a property, measured in a **fresh
+interpreter** (a subprocess — in-process the module is already imported and the
+measurement is meaningless): all three roots load no submodule of themselves and
+never pull in `langgraph`. Confirmed by running it.
+
+Falsified: adding an eager `__all__` plus a submodule import to
+`orchestration/__init__.py` — exactly what the prose warns against — fails
+`test_bare_roots_are_still_bare` and
+`test_bare_root_loads_no_submodule[orchestration]`.
+
+### A gap in my own verification, worth recording
+
+The pre-push hook rejected the first push attempt: four test modules still imported
+`PromptTemplate` from the old location. The tests **passed** (Python resolves the
+attribute at runtime; only mypy's `attr-defined` sees an undeclared re-export), and
+I had been running `mypy src` locally while the hook runs mypy over **src and
+tests** — 505 files against 297. The narrower command cannot see a break that is
+confined to test imports. Run `mypy src tests`.
+
+### What this round does not establish
+
+- Still open from AGENT-24: the 5 `KNOWN_PRIVATE_SYMBOL_IMPORTS` rows and the 2
+  `mcp -> studio._persistence` / `_operator_runtime` module reach-ins. The
+  persist/audit work removed the *call-site* debt those reach-ins were entangled
+  with, but the module-level reach-ins themselves remain and were not in scope.
+- The three bare roots still have no `__all__`. That is now a checked property
+  rather than an assumption, but it is still a choice, not an enforced interface.
+
+## AGENT-26 — public interfaces, and the honest limits of enforcing them (2026-09-26)
+
+The user asked: "make sure we have public interfaces for the modules, and nothing
+outside those interfaces is accessible, enforced by tool or script." Measured
+answer, including the part that is not possible.
+
+### The measurement, before any change
+
+| Property | Result |
+|---|---|
+| Declared `__all__` names that fail to resolve | **0** |
+| Public symbols reachable off a package root but undeclared | **0** |
+| Packages declaring no `__all__` | **3** (`cli`, `orchestration`, `studio`) |
+| Cross-package private-module reach-in | **2**, both already recorded debt |
+
+The roots were already closed. Two count conventions were also reconciled: my
+earlier "66 root / 454 submodule" figures count import **statements**, while
+counting imported **names** gives **81 / 639**. Both are correct at different
+granularities; quotes should say which.
+
+### What Python cannot do, stated plainly
+
+There is no package-level access control. A submodule is importable if it exists on
+disk, so "nothing outside the interface is accessible" **cannot be a runtime
+property** — only a convention enforced by static guards. The two mechanisms that
+would make it real are both rejections:
+
+- **Underscore-prefix every non-public module** — would require renaming and
+  rewriting the import sites of ~247 of 269 imported module paths (~766 src + ~895
+  test sites). Enormous churn, no defect removed; those imports are ordinary
+  Python.
+- **A custom import hook** — breaks mypy strict and IDE navigation, adds runtime
+  machinery to production code, and enforces at runtime what a static guard
+  already catches.
+
+This is why the honest deliverable is a ratchet, not a wall.
+
+### A real bug found in an existing guard
+
+`test_public_surface.py` parsed `__all__` from AST and accepted only a literal
+`ast.List`. `mcp/tools/__init__.py` declares
+`__all__ = sorted((*_TOOL_MODULES, "get_runtime"))` — an `ast.Call` — so the guard
+read that package's surface as `None` and **silently skipped all 77 names it
+declares**. A silent skip in a guard is worse than no guard: it reports clean while
+measuring nothing.
+
+Fixed by resolving surfaces from the imported module. That also handles the PEP 562
+`__getattr__` lazy re-exports in `mcp/__init__.py` and `operations/__init__.py`,
+where names like `MCPServer` are absent from `vars(module)` but resolve fine — a
+`vars()`-based checker would have reported them missing and invented a false bug.
+Verified: `mcp.tools` resolves **77** names now; the AST parser gave `None`.
+
+### What was built
+
+- `tests/unit/architecture/_surface_scan.py` — one runtime resolver
+  (`importlib` + `hasattr`; `dir()` for reachable symbols; filesystem walk for
+  public modules). One owner, so the two guards cannot disagree about a surface.
+- `tests/unit/architecture/_surface_baseline.py` — `SURFACE_BASELINE` (declared
+  names + public-module count per package), `BARE_ROOT_REASONS`, `ARTIFACT_NAMES`.
+- `tests/unit/architecture/test_surface_ratchet.py` — 7 guards.
+
+Growth is not forbidden; it must be a deliberate baseline edit in the same commit,
+where a reviewer sees it.
+
+`BARE_ROOT_REASONS` is the direct answer to "why do three packages have no
+interface": the absence is now a **stated, checked decision** rather than an
+omission. A package with no `__all__` and no recorded reason fails. Forcing a root
+`__all__` on `orchestration` would eagerly load the graph and `langgraph` —
+`test_bare_package_roots.py` measures exactly that — so the sanctioned path if one
+ever needs to export is a module-level `__getattr__`.
+
+### Falsified, all four
+
+| Injected defect | Guard that failed |
+|---|---|
+| undeclared re-export on `kb`'s root | `test_no_package_leaks_an_undeclared_symbol_off_its_root` |
+| widened `constraints.__all__` | `test_exported_name_count_has_not_grown` |
+| removed `cli`'s recorded reason | `test_every_package_declares_a_surface_or_a_reason` + `test_declared_reasons_are_still_needed` |
+| new public module under `orchestration` | `test_module_count_has_not_grown` + `test_undeclared_public_module_count_has_not_grown` |
+
+Each restored; all green afterwards.
+
+### Corrections to my own reporting
+
+- Two baseline entries were hand-typed wrong (`devharness` 5→4, `providers`
+  17→18). Corrected against the resolver, which regenerates the table rather than
+  relying on transcription.
+- The ratchet's own first version had a mypy error: comparing `len(declared)` to a
+  `baseline.names` that is `int | None`. That would also have raised `TypeError` at
+  runtime for a package transitioning from bare to declared. Fixed by handling the
+  transition explicitly and pointing at the guard that owns it.
+
+### Deliberately not done
+
+No `ModuleContract`, no per-package contract objects, no layer-law burndown, no
+mass import rewrite, no `__all__` forced onto the three bare roots, no runtime
+import hook. `03`'s layer law remains a superseded proposal; `06` §4's ownership-map
+decision stands.
+
+### What this does not establish
+
+The ratchet catches **growth**, not shrinkage: deleting a name from `__all__` is a
+public-API narrowing that no guard currently reports, and a rename that keeps the
+count equal passes. Recording that honestly is preferable to implying the surface
+is fully pinned. `ARTIFACT_NAMES` is also an allow-list (~16 names) excluded from
+the leak check, so a real symbol named `Field` or `datetime` would escape it —
+unlikely, but it is a documented hole rather than an oversight.
+
+### AGENT-26 addendum — three defects an adversarial audit found (2026-09-26)
+
+The ratchet shipped, then an independent adversarial review of it returned
+**3 BROKEN**. All three were real, and the first was a false claim in the commit
+message itself. Fixed in `dfc59e0`.
+
+**The false claim.** The first commit said the rewrite "recovers 77 silently-skipped
+names" and blamed an `ast.List`-only parser. Wrong: `packages()` scanned top-level
+directories only, so `mcp/tools/__init__.py` was never read by the old parser *or*
+the new one. The AST limitation was real but had nothing to do with those names —
+**scan scope** was the cause. This is the second time in this program that a commit
+message asserted something its own diff did not deliver (cf. `e54dde1`), and the
+same fix applies: read the measurement, not the intent.
+
+| | before | after |
+|---|---:|---:|
+| Packages graded | 20 | **37** |
+| Nested packages graded | 0 | **17** |
+| `mcp.tools` names resolved | never scanned | **77** |
+
+**A new package escaped every guard.** The count guards `continue` when a package is
+missing from `SURFACE_BASELINE`, and the guard-the-guard asserted only
+`len(...) >= 15`. A package with a 500-name `__all__` and 30 public modules passed
+all seven guards. Now set equality is asserted in both directions.
+
+**Shrinkage and renames were invisible.** The comparisons used `>`, catching only
+growth. Changed to `!=`, which closes both directions at no cost; the tests and
+messages were renamed from `has_not_grown` to `is_unchanged` so they describe what
+they do.
+
+**What the widened scan found immediately** — three undeclared names reachable off
+package roots, invisible before because those packages were not scanned:
+
+- `mcp.tools.generation` re-exported `is_text_only_policy` via the deliberate
+  `import ... as` idiom and never declared it. That module's docstring says it
+  "preserves the original import surface", so the omission was an oversight, not a
+  decision. Declared, with the baseline row raised in the same commit.
+- `PromptTemplate` and `import_module` are import artifacts — a `Protocol`
+  annotation and a PEP 562 implementation detail.
+
+`ARTIFACT_NAMES` was pruned from 16 entries to **7**; 11 were dead, and a long
+allow-list is a wider loophole than a short one.
+
+Six packages now carry a recorded reason for having no `__all__`, up from three.
+Two are honest findings rather than exemptions: `agents.model_routing` and
+`validation.validators` define public names in their `__init__` and export nothing
+— a *missing* surface, recorded rather than silently blessed.
+
+**Three limits left documented rather than hidden:** counts are compared, not names,
+so a rename keeping the count equal still passes; the leak guard reads `dir()`, so a
+name servable only via PEP 562 (`mcp` has `__getattr__` but no `__dir__`) would be
+missed; and the cached resolver keys on package name, so mutating a package's
+`__all__` after first read goes unnoticed. None is currently reachable.
+
+**Verdict on the audit itself:** it confirmed the baseline numbers independently
+(all 20 original entries matched exactly, written from its own resolver), confirmed
+the `test_public_surface.py` rewrite is behaviour-preserving, and confirmed the claim
+that Python cannot enforce module privacy without an import hook. Grader ratio:
+3 BROKEN, 4 SUSPICIOUS, 1 COSMETIC against a change that had already passed every
+gate — which is the argument for auditing guards as adversarially as the code they
+guard.
+
+## AGENT-27 — the last two surfaces, and the last reach-in (2026-09-26)
+
+Two slices closing what AGENT-26 recorded rather than fixed.
+
+### 1. The two missing surfaces
+
+AGENT-26 listed `agents.model_routing` and `validation.validators` as packages that
+define public names in their `__init__` and export nothing — "a missing surface
+rather than a deliberate absence". Declared from the **measured consumer set**:
+
+| Package | Declared | Root importers |
+|---|---|---:|
+| `agents.model_routing` | `ModelRouter`, `ModelResolutionError` | 9 |
+| `validation.validators` | `MVP_VALIDATORS` | 4 |
+
+Nothing reachable-but-unused was exported to quiet the guard.
+
+**Declaring them brought them under grading for the first time**, because the leak
+guard skips packages whose surface is `None` — and it immediately reported 6
+undeclared public names: `dataclass`, `field` (used by `model_routing`'s own
+`@dataclass`) and four schema names (used to build `MVP_VALIDATORS`). Verified none
+is API — no consumer imports any of them through those roots — so they went into
+`ARTIFACT_NAMES`, not into `__all__`, which would have published six names nobody
+wants.
+
+Bare roots needing a recorded reason: **6 -> 4**, and the remaining four
+(`cli`, `orchestration`, `orchestration.subgraphs`, `studio`) are genuinely
+deliberate.
+
+### 2. The last reach-in: one fixed, one provably irreducible
+
+`mcp -> studio._persistence` and `mcp -> studio._operator_runtime`.
+
+**`_persistence` was not merely an encapsulation break — it hid a duplicated read.**
+`FILM_PIPELINE_RUNTIME_ROOT` had two readers and the second repeated the first's
+empty-string check, because `configured_runtime_root()` collapsed "explicitly
+configured" into "default" and left `StudioRuntime.__post_init__` unable to tell
+that case from "throwaway tempdir". It now returns `Path | None`, so the caller's
+three-way choice is explicit and the env var is read once. Proven
+behaviour-preserving across all 8 combinations of {unset, blank, whitespace, set} x
+{persist, no-persist}.
+
+**`_operator_runtime` is irreducible and stays frozen.** Building a wired
+`OperatorService` needs `StudioRuntimeProvider` and the provider composition, which
+is composition-root policy; `operations` cannot supply them without importing
+`studio`, which already imports `operations` — the exact cycle the port exists to
+prevent and Enola gates on. The alternative is a DI container with no current second
+implementation, which `06` §4 forbids. The existing `mcp`-side accessor already
+consolidated four importers into one; that crossing is the minimum.
+
+### The lesson: a green gate cannot see an uncovered path
+
+Refactoring `configured_runtime_root` to return `Path | None` broke
+`mcp/server.py`, which passed the value to `configure_logging`. With the env var
+unset — the normal case — that became `configure_logging(None)`, which installs **no
+file handler, silently**, losing the persistent server's log. **Every gate stayed
+green.** The single test covering that path sets `FILM_PIPELINE_RUNTIME_ROOT`
+explicitly, so it exercised a different branch and masked the break.
+
+An adversarial subagent reading the working tree mid-edit caught it. The path now
+has a test, falsified by restoring the buggy call.
+
+`AGENTS.md` already says a guard must be audited as adversarially as the code it
+guards. This adds the sibling rule for production changes: **a green suite is
+evidence about the paths it covers, and silence about the rest.** When a function's
+contract changes, `grep` its callers and ask which of them exercise the branch you
+just changed — the fix here was one call site, and it was the one no test reached.
+
+### What this does not establish
+
+`mcp -> studio._operator_runtime` remains recorded debt, now with a reason stronger
+than "not urgent" — it is a cycle-prevention constraint. `rt.runtime_root` is
+explicitly NOT a substitute for the configured root (three branches, including a
+throwaway tempdir; measured divergent), so the log-root question is settled by
+`runtime_root_from_config()`, not by asking a runtime that may not exist yet.

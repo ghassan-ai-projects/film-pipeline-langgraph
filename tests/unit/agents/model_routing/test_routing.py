@@ -59,26 +59,6 @@ class TestModelRouter:
         with pytest.raises(ModelResolutionError, match="not defined"):
             router.fallback("nonexistent")
 
-    def test_cost_ranked(self) -> None:
-        router = ModelRouter()
-        ranked = router.cost_ranked("creative_writer")
-        assert len(ranked) == 2
-        assert "google/gemini-3-flash-preview" in ranked
-        assert "deepseek/deepseek-chat" in ranked
-
-    def test_cost_ranked_unknown_profile_returns_empty(self) -> None:
-        router = ModelRouter()
-        assert router.cost_ranked("nonexistent") == []
-
-    def test_cost_ranked_same_primary_and_fallback(self) -> None:
-        router = ModelRouter(profiles={"solo": {"primary": "x/y", "fallback": "x/y"}})
-        assert router.cost_ranked("solo") == ["x/y"]
-
-    def test_cost_ranked_single(self) -> None:
-        router = ModelRouter()
-        ranked = router.cost_ranked("cheap_draft")
-        assert len(ranked) == 2
-
     def test_list_profiles(self) -> None:
         router = ModelRouter()
         profiles = router.list_profiles()

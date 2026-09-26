@@ -293,7 +293,7 @@ _NOT_PLACEHOLDERS = {"rrggbb"}
 def _template_placeholders(agent_id: str) -> set[str]:
     import re
 
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
 
     template = get_registry().get_required(agent_id)
     blob = "\n".join(
@@ -327,7 +327,7 @@ def test_templates_render_without_unfilled_braces(agent_id: str) -> None:
     """Render for real with the supplied variables and inspect the output."""
     import re
 
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
 
     supplied = _CALL_SITE_VARS[agent_id] | _HELPER_SUPPLIED
     rendered = (
@@ -477,3 +477,43 @@ def test_every_bible_tool_handles_the_invalid_output_exception() -> None:
             f"{filename} does not catch InvalidBibleOutput, so its specific "
             "message can never be returned"
         )
+
+
+def test_the_active_artifact_ref_write_has_one_definition() -> None:
+    """One persisted-project write, one author.
+
+    This body was defined byte-identically in two modules and inlined a third
+    time. An independent probe removed the ``artifact_refs`` append from one
+    copy and ran every suite — unit, smoke, integration and e2e — and **zero**
+    tests failed, so the copies could drift apart unnoticed. It now lives once,
+    in ``helpers``, and this pins that.
+    """
+    defining: list[str] = []
+    for path in _BIBLES_DIR.parent.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        tree = ast.parse(path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_register_active_artifact_ref":
+                defining.append(str(path.relative_to(_BIBLES_DIR.parent.parent.parent)))
+
+    assert defining == ["mcp/tools/helpers.py"], (
+        "the active-artifact-ref write must be defined exactly once, in "
+        f"mcp/tools/helpers.py; found {defining}"
+    )
+
+
+def test_no_mcp_tool_inlines_the_active_artifact_ref_write() -> None:
+    """Call the owner; do not re-derive its two lines."""
+    offenders: list[str] = []
+    for path in _BIBLES_DIR.parent.rglob("*.py"):
+        if "__pycache__" in path.parts or path.name == "helpers.py":
+            continue
+        text = path.read_text()
+        if 'setdefault("artifact_refs", []).append(' in text:
+            offenders.append(str(path.relative_to(_BIBLES_DIR.parent)))
+
+    assert not offenders, (
+        "these MCP modules inline the active-artifact-ref write instead of "
+        f"calling helpers._register_active_artifact_ref: {offenders}"
+    )

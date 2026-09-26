@@ -37,6 +37,13 @@ make test-e2e
 
 The full pipeline runs `make ci-check`: ruff format, ruff lint, mypy strict, pytest with 90% coverage, and `uv build`.
 
+**Type-check `src` and `tests` together.** The pre-push hook runs mypy over both
+(505 files), while `mypy src` alone checks 297. The narrower command cannot see a
+break confined to test imports: a test that imports a name a package stopped
+re-exporting still *passes at runtime* (Python resolves the attribute), and only
+`attr-defined` over `tests` reports it. This cost a rejected push — run
+`uv run mypy src tests` before pushing, not `mypy src`.
+
 ### Architecture gate (Enola)
 
 `make ci-check` does **not** grade architecture. Enola is a second, required gate,
@@ -54,6 +61,21 @@ Rules for using it:
 - **Use the docs-local baseline.** `docs/modular-architecture/enola-out` plus
   `docs/modular-architecture/enola-config.yaml` is the comparable pair. The root
   `.enola` baseline is stale; a check against it is not a pass.
+- **Check the baseline's age before believing a FAIL.** `enola check` grades the
+  working tree against a *pinned snapshot*, so a snapshot older than the branch it
+  grades reports the branch's own renames as regressions. This actually happened:
+  a 2026-09-25 baseline still held 703 facts for `src/film_pipeline/app`, 935 for
+  `graph`, and 396 for `artifacts` — packages renamed away on this branch — and it
+  promoted a pre-existing `agents <-> agents/prompt_templates` cycle to
+  "regression" the moment an unrelated back-edge was removed. Regenerate from
+  **clean** HEAD (`enola --generate`, then `enola baseline clear` + `baseline pin`)
+  and confirm the fresh snapshot holds 0 facts for packages that no longer exist.
+  Never fix a FAIL by editing a filter or threshold; fix the baseline's currency.
+- **A freshly pinned baseline cannot catch new cycles.** It grades against a
+  snapshot, not the working tree: with the baseline regenerated from the current
+  commit, an injected `schemas -> orchestration` back-edge still exits 0. That check
+  lives in `tests/unit/architecture/test_package_acyclicity.py` — keep it, and keep
+  it scoped to cycles. It is not a duplicate of this gate.
 - **Exit codes:** `0` clean, `1` regression (policy violated), `2` error
   (gate could not run — no baseline, bad flag), `3` declined (baseline not
   comparable). Anything but `0` must be resolved or explained, not ignored.
@@ -68,6 +90,38 @@ Rules for using it:
 
 Record the Enola result next to `make ci-check` for every migration slice.
 
+### Dependency boundaries — what is enforced, and what is not
+
+`tests/unit/architecture/test_boundary_law.py` guards the boundaries this project
+has **adopted**:
+
+- **No cross-package private reach-in** — importing another package's
+  underscore-prefixed module. Guarded, with existing debt in
+  `KNOWN_PRIVATE_REACH_INS`, ratcheted down.
+- **No external call to the runtime's private persist/audit methods.**
+  `StudioRuntime` exposes `persist_project_state` and `record_audit`; the
+  underscore spellings survive only as in-package aliases for the 24 call sites
+  inside `studio`, where a private name is legitimate. `RuntimePort` declares the
+  public names. `KNOWN_MIRRORED_PRIVATE_CALLS` is now **empty** — all 8 outside
+  call sites were routed — and the guard counts the *private* spellings only, so
+  it does not flag the correct public usage. If an external private call
+  reappears, record it in that table rather than allowing it silently.
+
+**What is deliberately NOT enforced.** `docs/modular-architecture/03-target-architecture.md`
+declares a per-package "Allowed outbound" set, but its own header calls it a
+**superseded proposal**, and `06-independent-review-and-decision.md` §4 decided:
+
+> This is an ownership map, **not a prohibition on ordinary package imports**.
+> Tighten a dependency only when it removes a proven cycle or unsafe reach-in.
+
+Do **not** treat `03`'s layer law as a burndown target, and do not contort code to
+satisfy it. The guard reports that law's census as an observation only.
+
+An earlier round of this program did exactly the wrong thing here: it graded every
+import against `03` and froze 73 edges as debt to eliminate, which is enforcing a
+rejected proposal. That was re-scoped. **Read `06` before `03`** — which
+`docs/modular-architecture/README.md` already instructs.
+
 ## Python Standards
 
 - Add type hints to public functions, methods, and module-level constants.
@@ -80,10 +134,9 @@ Record the Enola result next to `make ci-check` for every migration slice.
 ## Sub-Package Boundaries
 
 The packages under `src/film_pipeline/` map to implementation phases and to the
-ownership boundaries in `docs/modular-architecture/03-target-architecture.md`.
-`orchestration` and `mcp` may import across all sub-packages; domain modules must
-not import each other directly — they communicate through `storage` (the owner
-of artifact identity and layout).
+ownership map in `06-independent-review-and-decision.md` §4. That review decided
+the package layout is an **ownership map, not an import prohibition** — see
+"Dependency boundaries" above for what is actually enforced.
 
 The migration is complete: every package under `src/film_pipeline/` is a target
 module that owns its concern. The pre-migration names — `artifacts`, `graph`,
@@ -107,7 +160,6 @@ compatibility shims, and all consumers import the owners directly.
 | `post` | 14 — Post-production | |
 | `operations` | — | Operator use cases, view models, runtime ports |
 | `projects` | — | Project identity, classification, resolution |
-| `budget` | — | Spend cap policy and refusal |
 | `studio` | — | Composition root; formerly `app` |
 | `devharness` | — | Test doubles and scenarios; formerly `testing` |
 
@@ -155,6 +207,48 @@ modules happening to write the same value the same way is *not* an ownership
 seam; a partial edit there produces an obvious bug, not divergent behaviour.
 Under `docs/modular-architecture/00-methodology-and-quality-bar.md` §1.3, only
 the latter justifies a boundary.
+
+### Verify claims against the tree, not against the log or a docstring
+
+Two failures in the cost-removal round came from trusting a written claim:
+
+- A commit titled "remove provider pricing" never touched `providers/pricing.py`.
+  `git show --name-status` on it lists no such path; the module was still present
+  and still imported by five modules. **A commit message is a claim, not
+  evidence.** Before building on a prior slice, `grep` the working tree.
+- A docstring asserted a state channel was "always the default" because its only
+  writer had been deleted. It had a second, dormant writer (`state.setdefault` in
+  `ensure_orchestrator_state`, plus a registered `OrchChannelSpec` noted "dormant
+  writer"). **"Nothing writes it" is a claim about every writer, including dormant
+  ones.** A dormant writer is still a writer.
+- A guard's commit message claimed it "recovers 77 silently-skipped names" and
+  blamed an AST parser limitation. The real cause was **scan scope**: the helper
+  walked top-level directories only, so the package in question was never read at
+  all by either the old or the new parser. **Name the mechanism you measured, not
+  the one you assumed** — two of this program's commit messages have now asserted
+  what their own diffs did not deliver.
+
+**A guard must be audited as adversarially as the code it guards.** The surface
+ratchet above passed every gate and still had three defects: a *newly added* package
+escaped the count guards entirely (they `continue` on a missing baseline row), the
+comparisons used `>` so a shrinking or renamed public surface passed silently, and
+the guard-the-guard asserted container sizes rather than set equality. Ask of every
+guard: what change would make this pass while being wrong? Then inject it.
+
+**A green suite is evidence about the paths it covers, and silence about the rest.**
+When you change a function's contract, `grep` its callers and ask which of them
+exercise the branch you changed. A refactor once made `configured_runtime_root()`
+return `Path | None`; one call site still passed the result to `configure_logging`,
+which silently installs **no** file handler when given `None` — so the persistent MCP
+server lost its log. **Every gate stayed green**, because the single test covering
+that path set the environment variable explicitly and therefore took a different
+branch. One call site, and it was the one no test reached.
+
+Corollary, learned the hard way in both directions: when a deletion removes an
+item from a rule set, a test asserting `count(...) == N` was derived from that set
+and must be re-measured, not edited to match. And when a sweep finds a suspicious
+name — `FailureClass.BUDGET` looked like a cost leftover — check the owner before
+deleting it; it was a live member of the failure taxonomy.
 
 ### How to run a decomposition slice
 

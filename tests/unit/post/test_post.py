@@ -123,7 +123,6 @@ class TestDelivery:
             subtitle_path="subs.srt",
             audio_stems_dir="stems/",
             validation_report_path="report.json",
-            cost_report_path="cost.json",
             credits_path="credits.json",
         )
         assert package.is_complete is True
@@ -210,7 +209,6 @@ class TestValidators:
             subtitle_path="s.srt",
             audio_stems_dir="a/",
             validation_report_path="r.json",
-            cost_report_path="c.json",
             credits_path="cr.json",
         )
         issues = validator.validate_delivery(package)
@@ -270,7 +268,6 @@ class TestValidators:
             subtitles_included=True,
             audio_stems_included=True,
             validation_report_included=True,
-            cost_report_included=True,
             credits_included=True,
         )
         issues = validator.validate_delivery(package)
@@ -333,7 +330,6 @@ class TestDeliveryPersist:
             subtitle_path="subs.srt",
             audio_stems_dir="stems/",
             validation_report_path="report.json",
-            cost_report_path="cost.json",
             credits_path="credits.json",
         )
         ref = agent.persist(package, store)
@@ -353,7 +349,6 @@ class TestDeliveryPersist:
             subtitle_path="subtitles.srt",
             audio_stems_dir="stems/",
             validation_report_path="validation_report.json",
-            cost_report_path="cost_report.json",
             credits_path="credits.txt",
         )
         # Also add review_cut for completeness

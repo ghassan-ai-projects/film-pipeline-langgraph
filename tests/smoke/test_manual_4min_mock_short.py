@@ -59,10 +59,11 @@ class TestManualFourMinuteMockShort:
             assert phase_result["ok"] is True
             assert phase_result["current_phase"] == expected_phase
 
-        result = invoke_tool(
-            rt, "inspect_artifact", artifact_id="cost_estimate", phase="gen_planning"
-        )
-        assert result["ok"] is True, f"inspect_artifact cost_estimate failed: {result}"
+        # The cost_estimate artifact was removed with the cost feature. The
+        # planning gate now sources its clip count from the shot matrix, so the
+        # proof that gen_planning produced something is the matrix it consumed.
+        result = invoke_tool(rt, "inspect_artifact", artifact_id="shot_matrix", phase="shot_bible")
+        assert result["ok"] is True, f"inspect_artifact shot_matrix failed: {result}"
 
         result = invoke_tool(
             rt,
@@ -75,9 +76,10 @@ class TestManualFourMinuteMockShort:
         assert result["ok"] is True, f"plan_generation_batch failed: {result}"
         assert result.get("planned", 0) >= 1
 
-        result = invoke_tool(rt, "approve_generation_spend", max_cost_usd=25.0, confirmed=True)
-        assert result["ok"] is True, f"approve_generation_spend failed: {result}"
-        assert result.get("approved", 0) >= 1
+        from film_pipeline.studio._operator_runtime import operator_service
+
+        workspace = operator_service(rt).approve_generation_spend()
+        assert workspace.submitted >= 1, f"approval did not submit rows: {workspace}"
 
         result = invoke_tool(rt, "approve_phase", confirmed=True)
         assert result["ok"] is True, f"approve_phase gen_planning->generation failed: {result}"

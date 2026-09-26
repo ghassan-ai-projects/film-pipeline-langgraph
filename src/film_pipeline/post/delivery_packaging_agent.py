@@ -12,7 +12,6 @@ _COMPLETION_REQUIREMENTS: tuple[tuple[str, str], ...] = (
     ("subtitles_included", "subtitles"),
     ("audio_stems_included", "audio_stems"),
     ("validation_report_included", "validation_report"),
-    ("cost_report_included", "cost_report"),
     ("credits_included", "credits"),
 )
 
@@ -28,9 +27,7 @@ class DeliveryPackage:
     subtitles_included: bool = False
     audio_stems_included: bool = False
     stills_included: bool = False
-    prompt_archive_included: bool = False
     validation_report_included: bool = False
-    cost_report_included: bool = False
     credits_included: bool = False
     notes: list[str] = field(default_factory=list)
 
@@ -57,7 +54,6 @@ def _completeness_check_artifact(package: DeliveryPackage) -> dict[str, Any]:
             "subtitles": [],
             "stills": [],
             "validation_report_ref": "",
-            "cost_report_ref": "",
             "credits_ref": "",
         }
     }
@@ -69,8 +65,6 @@ def _completeness_check_artifact(package: DeliveryPackage) -> dict[str, Any]:
         artifact_dict["manifest"]["stills"] = ["still_01.png"]
     if package.validation_report_included:
         artifact_dict["manifest"]["validation_report_ref"] = "validation_report.json"
-    if package.cost_report_included:
-        artifact_dict["manifest"]["cost_report_ref"] = "cost_report.json"
     if package.credits_included:
         artifact_dict["manifest"]["credits_ref"] = "credits.txt"
 
@@ -91,9 +85,7 @@ class DeliveryPackagingAgent:
         subtitle_path: str = "",
         audio_stems_dir: str = "",
         stills_dir: str = "",
-        prompt_archive_dir: str = "",
         validation_report_path: str = "",
-        cost_report_path: str = "",
         credits_path: str = "",
     ) -> DeliveryPackage:
         """Build a delivery package manifest."""
@@ -113,15 +105,9 @@ class DeliveryPackagingAgent:
         if stills_dir:
             package.files.append({"path": stills_dir, "type": "stills"})
             package.stills_included = True
-        if prompt_archive_dir:
-            package.files.append({"path": prompt_archive_dir, "type": "prompt_archive"})
-            package.prompt_archive_included = True
         if validation_report_path:
             package.files.append({"path": validation_report_path, "type": "validation_report"})
             package.validation_report_included = True
-        if cost_report_path:
-            package.files.append({"path": cost_report_path, "type": "cost_report"})
-            package.cost_report_included = True
         if credits_path:
             package.files.append({"path": credits_path, "type": "credits"})
             package.credits_included = True
@@ -155,9 +141,7 @@ class DeliveryPackagingAgent:
             subtitles_included=package.subtitles_included,
             audio_stems_included=package.audio_stems_included,
             stills_included=package.stills_included,
-            prompt_archive_included=package.prompt_archive_included,
             validation_report_included=package.validation_report_included,
-            cost_report_included=package.cost_report_included,
             credits_included=package.credits_included,
             is_complete=package.is_complete,
             missing_items=package.missing_items,

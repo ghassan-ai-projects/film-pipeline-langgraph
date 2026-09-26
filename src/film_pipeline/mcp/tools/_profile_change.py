@@ -25,13 +25,13 @@ from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeP
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage.contract import sanitize_artifact_id
-from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_id,
     _error,
     _ok,
     _services,
+    operator_service,
     require_project_id,
     require_project_state,
 )
@@ -326,8 +326,8 @@ def _finalize_approval(
 ) -> None:
     """Mark the proposal approved, persist project state, and record the audit entry."""
     _save_proposal_artifact(rt, project_id, proposal.model_copy(update={"status": "approved"}))
-    rt._persist_project_state(project_id)
-    rt._record_audit(
+    rt.persist_project_state(project_id)
+    rt.record_audit(
         approval.approved_by,
         "approve_profile_change",
         project_id=project_id,

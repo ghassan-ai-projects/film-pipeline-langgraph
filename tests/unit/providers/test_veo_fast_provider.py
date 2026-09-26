@@ -8,7 +8,6 @@ import pytest
 
 from film_pipeline.providers.adapters.veo_fast import VeoFastProvider
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -26,7 +25,6 @@ def entry() -> ProviderRegistryEntry:
             max_duration_seconds=8,
             aspect_ratios=["16:9", "9:16"],
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.10),
     )
 
 
@@ -99,7 +97,6 @@ def test_submit_poll_download_metadata_and_cost(
         "file": str(tmp_path / "missing.mp4"),
         "size_bytes": 0,
     }
-    assert provider.estimate_cost(12.5, model="ignored") == 1.25
 
 
 def test_submit_uses_default_model_when_entry_has_no_models() -> None:

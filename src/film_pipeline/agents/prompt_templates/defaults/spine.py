@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults._quality import (
     _QUALITY_DIRECTIVE,
     _SCREENWRITER_QUALITY,
 )
+from film_pipeline.agents.prompt_templates.template import PromptTemplate
 
 
 def _structure_extractor() -> PromptTemplate:
@@ -124,7 +124,7 @@ def _intake_classifier() -> PromptTemplate:
             "decision, not yours. Only when it is blank do you estimate a realistic "
             "runtime from the story's scope. "
             "Identify any ambiguities and flag risks: IP conflicts, "
-            "sensitivity concerns, budget concerns, production complexity."
+            "sensitivity concerns, production complexity."
         ),
         context_template=(
             "{constraints}\n\n" + "User idea: {idea}\n"
@@ -167,7 +167,6 @@ def _intake_classifier() -> PromptTemplate:
             '  "target_runtime_seconds": ...,\n'
             '  "aspect_ratio": "...",\n'
             '  "delivery_modes": ["mp4"],\n'
-            '  "budget_cap_usd": null,\n'
             '  "provider_preferences": [],\n'
             '  "human_owner": null,\n'
             '  "classified_input": "...",\n'

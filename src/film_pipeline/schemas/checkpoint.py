@@ -40,7 +40,6 @@ class CheckpointMetadata(SchemaBase):
     graph_state_ref: str = ""
     approval_refs: list[str] = Field(default_factory=list)
     validation_refs: list[str] = Field(default_factory=list)
-    budget_state_ref: str = ""
     git_commit: str = ""
     git_tag: str = ""
     git_branch: str = ""

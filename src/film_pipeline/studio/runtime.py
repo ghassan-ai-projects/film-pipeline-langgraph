@@ -56,8 +56,12 @@ class StudioRuntime:
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
         if self.runtime_root is None:
-            if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
-                self.runtime_root = configured_runtime_root()
+            # The env var is read once, in `configured_runtime_root`. This used to
+            # re-read it and repeat the empty-string check to distinguish the same
+            # three cases.
+            configured_root = configured_runtime_root()
+            if configured_root is not None:
+                self.runtime_root = configured_root
             elif use_persistent_runtime():
                 self.runtime_root = default_runtime_root()
                 self.runtime_root.mkdir(parents=True, exist_ok=True)
@@ -93,8 +97,18 @@ class StudioRuntime:
     def _persist_audit_events(self, project_id: str) -> None:
         _persistence.persist_audit_events(self, project_id)
 
-    def _persist_project_state(self, project_id: str) -> None:
+    def persist_project_state(self, project_id: str) -> None:
+        """Persist a project's in-memory state to durable storage.
+
+        Public because the operator surface calls it: `mcp` and `operations` are
+        outside this package and must not reach a private name. `RuntimePort`
+        declares it.
+        """
         _persistence.persist_project_state(self, project_id)
+
+    # Retained for callers inside this package, which may use the private spelling.
+    # External callers use `persist_project_state`.
+    _persist_project_state = persist_project_state
 
     # --- Project management ---
 
@@ -288,7 +302,13 @@ class StudioRuntime:
 
     # --- Audit ---
 
-    def _record_audit(self, actor: str, action: str, **details: str) -> None:
+    def record_audit(self, actor: str, action: str, **details: str) -> None:
+        """Append an audit event and persist it when the project is live.
+
+        Public because the operator surface calls it: `mcp` and `operations` are
+        outside this package and must not reach a private name. `RuntimePort`
+        declares it.
+        """
         self.audit_events.append(
             {
                 "event_id": f"audit:{action}:{uuid4().hex[:8]}",
@@ -301,6 +321,10 @@ class StudioRuntime:
         project_id = str(details.get("project_id", ""))
         if project_id and project_id in self.project_roots:
             self._persist_audit_events(project_id)
+
+    # Retained for callers inside this package, which may use the private spelling.
+    # External callers use `record_audit`.
+    _record_audit = record_audit
 
     def get_audit_log(
         self, project_id: str | None = None, limit: int = 100

@@ -3,7 +3,7 @@
 The gate law (`governance.actions`) decides which actions are eligible for a
 phase. That decision legitimately depends on orchestrator facts — whether a
 blocking failure exists, which providers are blocked, whether a revision is
-pending, whether the budget threshold tripped.
+pending.
 
 Those facts live in orchestrator state, which is `orchestration` (L9), while
 `governance` sits below it (L8) and must not import it. This module declares the
@@ -38,10 +38,6 @@ class GateFacts(Protocol):
 
     def blocked_providers(self, state: dict[str, Any]) -> list[str]:
         """Return the ids of providers currently blocked."""
-        ...
-
-    def is_budget_blocked(self, state: dict[str, Any]) -> bool:
-        """Return whether the budget threshold has been exceeded."""
         ...
 
     def has_pending_revision(self, state: dict[str, Any]) -> bool:

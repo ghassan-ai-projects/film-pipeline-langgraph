@@ -28,7 +28,6 @@ class AuditLogEntry(SchemaBase):
     output_artifact_refs: list[str] = Field(default_factory=list)
     validation_refs: list[str] = Field(default_factory=list)
     provider_job_id: str | None = None
-    cost_estimate_usd: float | None = None
     approval_ref: str | None = None
     checkpoint_ref: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)

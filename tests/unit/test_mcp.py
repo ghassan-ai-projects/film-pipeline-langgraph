@@ -534,7 +534,7 @@ def test_server_handles_mcp_error() -> None:
     server = MCPServer(tools=ToolRegistry())
 
     async def raise_mcp(_args: dict[str, object]) -> dict[str, object]:
-        raise MCPError(code=MCPErrorCode.BUDGET_EXCEEDED, message="over budget")
+        raise MCPError(code=MCPErrorCode.PROVIDER_BLOCKED, message="provider is blocked")
 
     server.tools.register(
         ToolContract(name="over", description="x", group=ToolGroup.STATE, mutates_state=True),
@@ -543,7 +543,7 @@ def test_server_handles_mcp_error() -> None:
     resp = asyncio.run(server.call("over", {}))
     assert resp.success is False
     assert resp.error is not None
-    assert resp.error.code == MCPErrorCode.BUDGET_EXCEEDED
+    assert resp.error.code == MCPErrorCode.PROVIDER_BLOCKED
 
 
 def test_server_catalog_returns_full_toolset() -> None:

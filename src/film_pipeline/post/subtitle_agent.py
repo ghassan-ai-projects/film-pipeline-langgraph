@@ -78,20 +78,19 @@ class SubtitleAgent:
         """
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas import subtitle as subtitle_schema
+        from film_pipeline.schemas import SubtitleArtifact, SubtitleCue
         from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
         from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
         artifact_id = "subtitles"
-        model = subtitle_schema.SubtitleArtifact(
+        model = SubtitleArtifact(
             plan_id=plan.plan_id,
             project_id=plan.project_id,
             language=plan.language,
             cue_count=plan.cue_count,
             srt_content=plan.to_srt(),
             cues=[
-                subtitle_schema.SubtitleCue(index=c.index, start=c.start, end=c.end, text=c.text)
-                for c in plan.cues
+                SubtitleCue(index=c.index, start=c.start, end=c.end, text=c.text) for c in plan.cues
             ],
         )
         meta = ArtifactMetadata(

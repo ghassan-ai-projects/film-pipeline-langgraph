@@ -383,7 +383,7 @@ class TestPromptRunner:
         """run_from_template renders quality_instructions into the prompt."""
         from unittest.mock import MagicMock
 
-        from film_pipeline.agents.prompt_templates.registry import PromptTemplate
+        from film_pipeline.agents.prompt_templates import PromptTemplate
 
         template = PromptTemplate(
             template_id="test-tpl",

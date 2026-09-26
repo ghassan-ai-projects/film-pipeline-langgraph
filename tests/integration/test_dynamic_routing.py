@@ -65,13 +65,6 @@ class TestComputeActions:
         assert result.next_action == "continue_unrelated_work"
         assert "advance_to_generation" in {b["action"] for b in result.blocked}
 
-    def test_budget_blocked_escalates(self) -> None:
-        state = _base_state(phase="generation", approved=True)
-        state["_orchestrator__budget_snapshot"]["threshold_exceeded"] = True
-        result = compute_actions(state)
-        assert result.next_action == "escalate_to_human"
-        assert "advance_phase" in {b["action"] for b in result.blocked}
-
     def test_blocking_issues_route_to_repair(self) -> None:
         state = _base_state(phase="shot_bible")
         state["issues"].append(
@@ -121,12 +114,6 @@ def _base_state(*, phase: str = "intake", approved: bool = False) -> dict[str, A
         "_orchestrator__convergence": {},
         "_orchestrator__failure_decisions": [],
         "_orchestrator__provider_health_snapshot": {},
-        "_orchestrator__budget_snapshot": {
-            "cap_usd": 0.0,
-            "spent_usd": 0.0,
-            "remaining_usd": 0.0,
-            "threshold_exceeded": False,
-        },
         "_orchestrator__execution_brief": {},
     }
 

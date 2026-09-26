@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.filmspec import blocking_issues as _blocking_issues_of
 
 from .helpers import (
     _error,
@@ -66,8 +67,13 @@ def _build_review_package(
 
 
 def _blocking_issues(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return the open issues whose severity is blocking."""
-    return [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
+    """Return the open issues whose severity is blocking.
+
+    Routed through `filmspec.blocking_issues`: this copy omitted the
+    `isinstance(issue, dict)` guard its siblings had, so a malformed issue
+    raised AttributeError on this path while every other one skipped it.
+    """
+    return _blocking_issues_of(state.get("issues", []))
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
@@ -75,7 +81,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
 
     Returns a structured ReviewPackage instead of a plain artifact list.
     The package includes candidate vs approved diffs, validation results,
-    open issues, risks, cost impact, and recommended next actions.
+    open issues, risks, and recommended next actions.
     """
     rt = tools_pkg.get_runtime()
     state = require_project_state(args)
@@ -128,7 +134,7 @@ def _build_orchestrator_recommendation(state: dict[str, Any], router_result: Any
     if action == "handle_blockers":
         return "Blocking issues detected. Resolve before advancing."
     if action == "escalate_to_human":
-        return "Pipeline requires human decision — budget, provider, or quality threshold reached."
+        return "Pipeline requires human decision — provider or quality threshold reached."
     if action == "escalate_to_failure_handler":
         return "Provider error requires triage by failure-handling agent."
     if action == "continue_unrelated_work":

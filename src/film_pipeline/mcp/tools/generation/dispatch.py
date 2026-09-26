@@ -5,9 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.mcp.tools.generation._text_only import (
-    _is_text_only_policy,
-)
+from film_pipeline.filmspec import is_text_only_policy
 
 from ..helpers import (
     _error,
@@ -30,7 +28,13 @@ def _submit_failure(
     error_code: str,
     reason: str,
 ) -> dict[str, str]:
-    """Mark a ledger row FAILED and build its failure record."""
+    """Mark a ledger row FAILED and build its failure record.
+
+    ``next_action`` is set to ``wait_human`` to match
+    ``GenerationExecutor._fail_row``: a failed row needs a human decision, and
+    leaving the pre-existing ``poll`` in place told the operator to keep polling
+    a row that can never advance.
+    """
     from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
@@ -39,6 +43,7 @@ def _submit_failure(
         status=GenerationStatus.FAILED,
         error_code=error_code,
         blocking_reason=reason,
+        next_action="wait_human",
     )
     return {
         "generation_id": row.generation_id,
@@ -53,6 +58,8 @@ def _submit_one_row(
     project_id: str,
     row: GenerationLedgerRow,
     duration_seconds: float,
+    shot_row: dict[str, Any],
+    executor: Any,
 ) -> tuple[bool, dict[str, str]]:
     """Submit one SUBMITTED ledger row to its provider.
 
@@ -76,10 +83,16 @@ def _submit_one_row(
         reason = f"Provider '{row.provider}' not registered."
         return False, _submit_failure(mgr, project_id, row, "unknown_provider", reason)
 
-    # Build payload and submit
+    # Build payload and submit. The prompt is RESOLVED, not the raw
+    # ``prompt_ref``: that field is an artifact reference string, so passing it
+    # straight to ``build_payload`` submitted a literal like
+    # "artifact:gen_planning:prompt_package:v1" — or an empty string — as the
+    # prompt text for every MCP-driven generation. GenerationExecutor resolves
+    # it through this same method; the two surfaces now agree.
+    prompt = executor.resolve_prompt(project_id, row.shot_id, shot_row, row.prompt_ref)
     try:
         payload = adapter.build_payload(
-            prompt=row.prompt_ref,
+            prompt=prompt,
             references=row.reference_refs or None,
             duration=duration_seconds,
         )
@@ -125,7 +138,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = require_project_state(args)
     project_id = str(active["project_id"])
-    if _is_text_only_policy(active):
+    if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
 
     from film_pipeline.generation.executor import GenerationExecutor
@@ -139,15 +152,12 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
     successes: list[dict[str, str]] = []
     failures: list[dict[str, str]] = []
-    shot_rows = {
-        str(shot.get("shot_id", "")): shot
-        for shot in GenerationExecutor(
-            _services(rt).artifact_store, rt.provider_adapters
-        ).load_shot_rows(project_id)
-    }
+    executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
+    shot_rows = {str(shot.get("shot_id", "")): shot for shot in executor.load_shot_rows(project_id)}
     for row in submitted_rows:
-        duration = float(shot_rows.get(row.shot_id, {}).get("duration_seconds", 5) or 5)
-        succeeded, entry = _submit_one_row(rt, mgr, project_id, row, duration)
+        shot_row = shot_rows.get(row.shot_id, {})
+        duration = float(shot_row.get("duration_seconds", 5) or 5)
+        succeeded, entry = _submit_one_row(rt, mgr, project_id, row, duration, shot_row, executor)
         (successes if succeeded else failures).append(entry)
 
     return _ok(

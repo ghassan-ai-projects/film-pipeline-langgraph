@@ -56,15 +56,14 @@ class GraphStateSnapshot(BaseModel):
     """Machine state snapshot persisted as ``state/graph-state.json``.
 
     ``state`` holds the graph state, whose shape is declared once in
-    `orchestration.state_schema.StudioGraphState`. That contract was previously
-    unenforced at this boundary: the field was a bare ``dict[str, Any]``, so a
-    key the schema did not declare could be persisted and read back without
-    anything noticing.
+    `orchestration.state_schema.StudioGraphState`. This model deliberately does
+    not enforce that shape: the owner of ``StudioGraphState`` is `orchestration`,
+    and `orchestration` imports `schemas`, so a check here would have to import
+    back into `orchestration` and invert the layer order. The check lives with the
+    contract it enforces — see `orchestration.state_schema.undeclared_state_keys`.
 
-    :meth:`check_state_keys` enforces it. It is deliberately a *shape* check and
-    not a full model validation: values degrade through ``str()`` on the write
-    path so crash recovery never fails on content, and a snapshot is a recovery
-    artifact rather than a contract consumed by other modules.
+    A snapshot is a recovery artifact rather than a contract consumed by other
+    modules, so this model stays a plain carrier.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -72,15 +71,3 @@ class GraphStateSnapshot(BaseModel):
     schema_version: int = 1
     saved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     state: dict[str, Any] = Field(default_factory=dict)
-
-    @staticmethod
-    def check_state_keys(state: dict[str, Any]) -> list[str]:
-        """Return the state keys that `StudioGraphState` does not declare.
-
-        Imported lazily: `orchestration` imports `schemas`, so a module-level
-        import here would invert the layer order.
-        """
-        from film_pipeline.orchestration.state_schema import StudioGraphState
-
-        declared = set(StudioGraphState.__annotations__)
-        return sorted(key for key in state if key not in declared)

@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+__all__ = [
+    "ModelResolutionError",
+    "ModelRouter",
+]
+
 # Last-resort profiles for direct router users without resolved project config.
 # The project-facing source of truth is profiles/base.studio.yaml. Provider
 # adapters do not change this policy; a z.ai model is selected only when
@@ -118,17 +123,6 @@ class ModelRouter:
         if profile is None:
             raise ModelResolutionError(f"Model profile '{profile_name}' is not defined.")
         return str(profile.get("fallback", profile["primary"]))
-
-    def cost_ranked(self, profile_name: str) -> list[str]:
-        """Return models for this profile in cost order (cheapest first)."""
-        profile = self.profiles.get(profile_name)
-        if profile is None:
-            return []
-        primary = str(profile.get("primary", ""))
-        fallback = str(profile.get("fallback", ""))
-        if primary == fallback:
-            return [primary]
-        return [fallback, primary]
 
     def list_profiles(self) -> list[str]:
         return list(self.profiles.keys())

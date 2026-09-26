@@ -20,7 +20,6 @@ from film_pipeline.schemas.base import (
     GenerationStatus,
 )
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -46,7 +45,6 @@ def entry() -> ProviderRegistryEntry:
             supports_audio=True,
             supports_seed=True,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
     )
 
 
@@ -85,9 +83,6 @@ class DownloadErrorAdapter(BaseProviderAdapter):
 
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
         return {}
-
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        return 0.0
 
 
 def test_download_failed_marks_row_failed(

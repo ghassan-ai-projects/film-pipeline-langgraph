@@ -16,7 +16,7 @@ class CheckpointManager:
     """Manages semantic checkpoints backed by git.
 
     Every checkpoint creates a git commit + annotated tag with metadata
-    that links artifact versions, approvals, validations, and budget state.
+    that links artifact versions, approvals, and validations.
     """
 
     git: GitBackend
@@ -30,7 +30,6 @@ class CheckpointManager:
         artifact_versions: dict[str, str] | None = None,
         approval_refs: list[str] | None = None,
         validation_refs: list[str] | None = None,
-        budget_state_ref: str = "",
         graph_state_ref: str = "",
     ) -> CheckpointMetadata:
         checkpoint_id = f"checkpoint:{project_id}:{phase.value}:{uuid4().hex[:8]}"
@@ -49,7 +48,6 @@ class CheckpointManager:
             artifact_versions=artifact_versions or {},
             approval_refs=approval_refs or [],
             validation_refs=validation_refs or [],
-            budget_state_ref=budget_state_ref,
             graph_state_ref=graph_state_ref,
             git_commit=commit_hash,
             git_tag=tag_name,

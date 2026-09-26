@@ -79,7 +79,7 @@ def _demo_shot_groups() -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
     order = 0
     for _movement_id, durations in _DEMO_MOVEMENT_DURATIONS:
-        for seconds in durations:
+        for _seconds in durations:
             groups.append(
                 {
                     "shot_id": f"shot_{order + 1:04d}",
@@ -87,7 +87,6 @@ def _demo_shot_groups() -> list[dict[str, Any]]:
                     "model": "2.0",
                     "mode": "test",
                     "priority": order,
-                    "estimated_cost_usd": round(seconds * _SEEDANCE_RATE_USD_PER_SECOND, 2),
                 }
             )
             order += 1
@@ -356,14 +355,8 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
         },
         "provider-planning-agent": {
             "generation_plan": {
-                "cost_estimate": {
-                    "project_id": "demo",
-                    "batch_id": "batch-001",
-                    "provider": "seedance",
-                    "estimated_cost_usd": 18.72,
-                    "clip_count": 16,
-                    "notes": "16 demo clips at $0.18/s (Seedance), 104s total runtime.",
-                },
+                # The cost_estimate block was removed with the cost feature; the
+                # planner agent no longer produces or validates one.
                 "shot_groups": _demo_shot_groups(),
             }
         },

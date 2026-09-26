@@ -17,7 +17,7 @@ _logger = logging.getLogger(__name__)
 
 def _get_template_registry() -> Any:
     """Return the session-scoped prompt template registry."""
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
 
     return get_registry()
 
@@ -280,7 +280,6 @@ def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
         "shot_matrix_ref",
         "visual_refs",
         "execution_brief_ref",
-        "cost_estimate_ref",
     ]
     built_from: dict[str, str] = {}
     for key in ref_keys:
@@ -303,7 +302,6 @@ _ARTIFACT_TYPE_BY_CLASS: dict[str, str] = {
     "StoryBible": "script",
     "Script": "script",
     "MasterFilmMatrix": "shot_bible",
-    "CostEstimate": "cost_estimate_bom",
     "ConsensusReport": "consensus_report",
     "AssemblyManifest": "assembly_manifest",
 }
@@ -416,13 +414,6 @@ def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) 
     resolved_config = state.get("resolved_config", {})
     if not isinstance(resolved_config, dict):
         return
-    budget = resolved_config.get("budget", {})
-    if isinstance(budget, dict):
-        for key in ("project_cap_usd", "max_total_usd"):
-            value = budget.get(key)
-            if value is not None:
-                context_vars["budget_cap"] = str(value)
-                break
     preferred = _preferred_providers(resolved_config.get("providers", {}))
     if preferred:
         context_vars["preferred_providers"] = ", ".join(preferred)

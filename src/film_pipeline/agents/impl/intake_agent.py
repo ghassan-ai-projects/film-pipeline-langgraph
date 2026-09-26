@@ -46,7 +46,6 @@ class IntakeAgent(BaseAgent):
             target_runtime_seconds=_coerce_runtime_seconds(data),
             aspect_ratio=str(data.get("aspect_ratio", "16:9") or "16:9"),
             delivery_modes=_coerce_delivery_modes(data.get("delivery_modes")),  # type: ignore[arg-type]
-            budget_cap_usd=_coerce_budget_cap(data.get("budget_cap_usd")),
             provider_preferences=[str(p) for p in data.get("provider_preferences", []) if str(p)],
             human_owner=_coerce_human_owner(data.get("human_owner")),
         )
@@ -95,16 +94,6 @@ def _coerce_delivery_modes(value: object) -> list[str]:
         if modes:
             return modes
     return ["mp4"]
-
-
-def _coerce_budget_cap(value: object) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        parsed = float(str(value))
-    except ValueError:
-        return None
-    return parsed if parsed >= 0 else None
 
 
 def _coerce_human_owner(value: object) -> str | None:

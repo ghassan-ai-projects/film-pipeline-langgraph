@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.mcp.tools import generate_plan, generate_shot_bible, initialize_budget
+from film_pipeline.mcp.tools import generate_plan, generate_shot_bible
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -33,69 +33,6 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
         mcp_tools.get_runtime = original_get_runtime
     assert result["ok"] is True, result
     return rt
-
-
-def test_initialize_budget_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-1")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-
-    result = asyncio.run(initialize_budget({"cap_usd": 50.0}))
-    assert result["ok"] is True
-    assert result["cap_usd"] == 50.0
-    assert result["remaining_usd"] == 50.0
-    active = rt.get_active()
-    assert active is not None
-    assert active["budget_state_ref"] == result["budget_state_ref"]
-
-
-@pytest.mark.parametrize("bad_cap", [float("inf"), float("nan"), -5.0])
-def test_initialize_budget_rejects_bad_cap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_cap: float
-) -> None:
-    """A non-finite or negative cap must be refused before it reaches storage.
-
-    A non-finite cap would otherwise poison ``budget_state`` with a value the
-    store can never read back (see the store's non-finite guard).
-    """
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-bad")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-
-    result = asyncio.run(initialize_budget({"cap_usd": bad_cap}))
-    assert result["ok"] is False
-    assert "cap_usd" in str(result["error"])
-
-
-def test_initialize_budget_rejects_non_numeric_cap(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-nan-str")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-
-    result = asyncio.run(initialize_budget({"cap_usd": "not-a-number"}))
-    assert result["ok"] is False
-
-
-def test_initialize_budget_creates_new_version(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    project_id = "plan-budget-version"
-    rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-    rt.create_project(project_id, "Budget Version Test")
-    rt.set_active(project_id)
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-
-    result1 = asyncio.run(initialize_budget({"cap_usd": 10.0}))
-    assert result1["ok"] is True
-
-    result2 = asyncio.run(initialize_budget({"cap_usd": 20.0}))
-    assert result2["ok"] is True
-
-    assert rt.services is not None
-    store = rt.services.artifact_store
-    meta1 = store.load_metadata(project_id, "gen_planning", "budget_state", 1)
-    meta2 = store.load_metadata(project_id, "gen_planning", "budget_state", 2)
-    assert meta1.version == 1
-    assert meta2.version == 2
 
 
 def test_generate_plan_requires_shot_matrix(
@@ -130,26 +67,7 @@ def test_generate_plan_validates_raw_persisted_matrix(
     )
     assert stored["shots"][0]["provider_id"] == "mock-video-provider"
     assert stored["shots"][0]["model_id"] == "mock-fast"
-    assert stored["shots"][0]["estimated_cost"] == 0.0
     assert stored["provider_utilization"] == {"mock-video-provider": result["shot_count"]}
-
-
-def test_initialize_budget_save_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    rt = StudioRuntime(runtime_root=tmp_path / "runtime")
-    rt.create_project("plan-budget-fail", "Budget Fail")
-    rt.set_active("plan-budget-fail")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-
-    assert rt.services is not None
-    store = rt.services.artifact_store
-
-    def _raise(*_args: object, **_kwargs: object) -> None:
-        raise RuntimeError("save boom")
-
-    monkeypatch.setattr(store, "save", _raise)
-    result = asyncio.run(initialize_budget({}))
-    assert result["ok"] is False
-    assert "Budget initialization failed" in cast(str, result["error"])
 
 
 def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -198,18 +116,20 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert result["ok"] is True
     assert "generation_plan_ref" in result
     assert result["shot_count"] == 1
-    # Fallback plan follows the active project's configured zero-cost provider.
-    from film_pipeline.providers.pricing import rate_for
-
-    provider_id, model_id = rt.default_video_provider()
-    expected = round(5 * rate_for(provider_id, model_id), 2)
-    assert result["total_estimated_cost"] == pytest.approx(expected)
+    # Cost reporting was removed with the cost feature; the plan itself is the
+    # deliverable and its shape is asserted from the stored artifact.
+    assert "total_estimated_cost" not in result
 
 
-def test_generate_plan_uses_configured_seedance_rate_and_route(
+def test_generate_plan_uses_configured_seedance_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rt = _build_runtime_with_shot_bible(tmp_path, "plan-seedance-1")
+    # This test configures a REAL provider, so the runtime must be in real mode for
+    # that id to be one the runtime knows. It previously passed in mock mode only
+    # because the provider pricing table was mode-agnostic (and was doubling as the
+    # unknown-provider catalogue); that table is gone with the cost feature.
+    rt.server_mode = "real"
     active = rt.get_active()
     assert active is not None
     active["resolved_config"] = {
@@ -228,7 +148,6 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     result = asyncio.run(generate_plan({}))
 
     assert result["ok"] is True
-    assert cast(float, result["total_estimated_cost"]) > 0.0
     assert rt.services is not None
     from film_pipeline.schemas.base import FilmPhase
 
@@ -239,7 +158,6 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     assert shots
     assert {shot["provider_id"] for shot in shots} == {"seedance-openrouter"}
     assert {shot["model_id"] for shot in shots} == {"bytedance/seedance-2.0"}
-    assert all(float(shot["estimated_cost"]) > 0.0 for shot in shots)
     assert stored["provider_utilization"] == {"seedance-openrouter": len(shots)}
 
 

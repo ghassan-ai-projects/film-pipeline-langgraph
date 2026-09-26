@@ -20,7 +20,7 @@ The following behavior may not remain stubbed:
 - project lookup and summary needed by operators
 - intake analysis and approval
 - generation planning
-- spend approval
+- generation approval
 - job submission bookkeeping
 - status polling and resume
 - duplicate-prevention
@@ -77,7 +77,7 @@ When this phase is complete:
 ## Mandatory Behavior Tests
 
 - planning a generation batch creates persistent ledger rows
-- approving spend changes runtime state and audit trail
+- approving a planned batch changes runtime state and audit trail
 - polling/resume after partial failure does not duplicate submit
 - cancellation updates the stored request state
 - promotion bookkeeping updates the correct artifact lineage

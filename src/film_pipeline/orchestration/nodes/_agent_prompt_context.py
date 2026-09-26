@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[str, str]:
-    """Seed template variables with defaults plus live provider pricing."""
+    """Seed template variables with defaults before upstream state is copied in."""
     context_vars: dict[str, str] = {
         "project_id": str(state.get("project_id", "")),
         "idea": str(state.get("idea", state.get("input", ""))),
@@ -43,14 +43,9 @@ def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[
         "target_scene_count": "",
         "min_scene_count": "",
         "target_shot_count": "",
-        "budget_cap": "",
         "preferred_providers": "",
-        "provider_pricing": "",
         "constraints": "",
     }
-    from film_pipeline.providers.pricing import pricing_prompt_block
-
-    context_vars["provider_pricing"] = pricing_prompt_block()
     return context_vars
 
 

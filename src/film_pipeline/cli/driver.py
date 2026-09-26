@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from film_pipeline.cli.io import read_idea_file
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -218,7 +219,7 @@ def _phase_order_index(phase: str) -> int:
 
 def _blocker_summary(state: dict[str, Any]) -> str:
     issues = state.get("issues", [])
-    blockers = [i for i in issues if isinstance(i, dict) and i.get("severity") == "blocking"]
+    blockers = blocking_issues(issues)
     if not blockers:
         return "none"
     return "; ".join(str(b.get("message", b.get("code", "unknown"))) for b in blockers)

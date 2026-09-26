@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from film_pipeline.storage.envelope import SchemaTooNewError, payload_checksum
 
@@ -17,7 +17,12 @@ if TYPE_CHECKING:
     from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.devharness.storage import make_store
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.base import (
+    ArtifactStatus,
+    ArtifactType,
+    FilmPhase,
+    MutableSchemaBase,
+)
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.script import Script, ScriptScene
 from film_pipeline.storage.registry import (
@@ -422,6 +427,18 @@ class TestListOrdering:
         ]
 
 
+class _NumericPayload(MutableSchemaBase):
+    """A minimal mutable artifact carrying a float, for serialization tests.
+
+    This replaced ``schemas.budget.BudgetState`` as the vehicle for these tests
+    when the cost feature (and with it that schema) was removed. The behaviour
+    under test is storage integrity, not budget, so the payload is local.
+    """
+
+    project_id: str
+    amounts: dict[str, float] = Field(default_factory=dict)
+
+
 class TestNonFinitePayloads:
     """A stored artifact must always be readable by the store that wrote it.
 
@@ -433,40 +450,41 @@ class TestNonFinitePayloads:
 
     @pytest.mark.parametrize("bad", [float("inf"), float("-inf"), float("nan")])
     def test_save_rejects_non_finite_payload(self, tmp_path: Path, bad: float) -> None:
-        from film_pipeline.schemas.budget import BudgetState
         from film_pipeline.storage.serialization import NonFiniteNumberError
 
         store = make_store(tmp_path / "store")
-        budget = BudgetState(project_id="p1", per_phase_caps_usd={"script": bad})
+        payload = _NumericPayload(project_id="p1", amounts={"script": bad})
         with pytest.raises(NonFiniteNumberError):
             store.save(
-                budget, _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE)
+                payload,
+                _meta(
+                    artifact_id="checkpoint_numeric_payload", artifact_type=ArtifactType.CHECKPOINT
+                ),
             )
 
     def test_rejected_write_leaves_no_artifact_behind(self, tmp_path: Path) -> None:
         """A failed save must not leave a half-written, unreadable version."""
-        from film_pipeline.schemas.budget import BudgetState
         from film_pipeline.storage.serialization import NonFiniteNumberError
 
         root = tmp_path / "store"
         store = make_store(root)
         with pytest.raises(NonFiniteNumberError):
             store.save(
-                BudgetState(project_id="p1", per_phase_caps_usd={"script": float("inf")}),
-                _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE),
+                _NumericPayload(project_id="p1", amounts={"script": float("inf")}),
+                _meta(
+                    artifact_id="checkpoint_numeric_payload", artifact_type=ArtifactType.CHECKPOINT
+                ),
             )
         assert store.list_artifacts("p1") == []
 
     def test_finite_payload_round_trips(self, tmp_path: Path) -> None:
         """The guard must not reject ordinary finite floats."""
-        from film_pipeline.schemas.budget import BudgetState
-
         store = make_store(tmp_path / "store")
         ref = store.save(
-            BudgetState(project_id="p1", per_phase_caps_usd={"script": 12.5}),
-            _meta(artifact_id="budget_state", artifact_type=ArtifactType.BUDGET_STATE),
+            _NumericPayload(project_id="p1", amounts={"script": 12.5}),
+            _meta(artifact_id="checkpoint_numeric_payload", artifact_type=ArtifactType.CHECKPOINT),
         )
-        assert store.load_ref("p1", ref)["per_phase_caps_usd"] == {"script": 12.5}
+        assert store.load_ref("p1", ref)["amounts"] == {"script": 12.5}
 
     def test_dump_json_rejects_nested_non_finite(self) -> None:
         """The guard is recursive, so nesting cannot smuggle a bad float in."""

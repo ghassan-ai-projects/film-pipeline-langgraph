@@ -1,7 +1,7 @@
 """Config conflict detection.
 
 Detects irreconcilable combinations such as:
-- festival quality + free_only budget
+- festival quality + free_only provider routing
 - visual_poetry film type + heavy dialogue requirements
 """
 
@@ -48,21 +48,6 @@ def _detect_poetry_dialogue_conflict(resolved: dict[str, Any]) -> ConfigConflict
     return None
 
 
-def _detect_budget_shot_mismatch(resolved: dict[str, Any]) -> ConfigConflict | None:
-    """A small project cap may not stretch across many expected shots."""
-    budget = resolved.get("budget", {}) or {}
-    generation = resolved.get("generation", {}) or {}
-    cap: float = float(budget.get("project_cap_usd", 0))
-    shot_count: int = int(generation.get("expected_shot_count", 0))
-    if cap < 10 and shot_count > 20:
-        return ConfigConflict(
-            code="budget_shot_mismatch",
-            message=f"Budget ${cap} may not cover {shot_count} shots",
-            severity="warning",
-        )
-    return None
-
-
 @dataclass
 class ConfigValidator:
     """Validate resolved configs for known conflicts."""
@@ -73,7 +58,6 @@ class ConfigValidator:
         for detect_conflict in (
             _detect_festival_free_conflict,
             _detect_poetry_dialogue_conflict,
-            _detect_budget_shot_mismatch,
         ):
             conflict = detect_conflict(resolved)
             if conflict is not None:
