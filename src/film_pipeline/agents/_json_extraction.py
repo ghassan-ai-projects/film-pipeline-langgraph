@@ -30,7 +30,7 @@ def _parse_direct_json(text: str) -> dict[str, Any] | None:
     """Strategy 1: direct JSON parse."""
     try:
         return dict(json.loads(text))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError, ValueError):
         return None
 
 
@@ -53,7 +53,7 @@ def _parse_fenced_json(text: str) -> dict[str, Any] | None:
         try:
             result: Any = json.loads(candidate)
             return dict(result)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     return None
 
@@ -67,13 +67,22 @@ def _parse_braced_json(text: str) -> dict[str, Any] | None:
         try:
             result = json.loads(candidate)
             return dict(result)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     return None
 
 
 def _parse_bracketed_json(text: str) -> dict[str, Any] | None:
-    """Strategy 4: find outermost bracket pair (for array responses)."""
+    """Strategy 4: find outermost bracket pair (for array responses).
+
+    ``dict(result)`` is guarded against ``ValueError`` as well as the JSON and
+    type errors: a parsed JSON *array* (``[{"a": 1}]``) makes ``dict()`` raise
+    ``ValueError: dictionary update sequence element #0 has length 1``, which
+    escaped this strategy and aborted ``extract_json_object`` entirely instead of
+    falling through. An array response is a normal thing for a model to return;
+    the caller's intended failure was the actionable "not valid JSON" error from
+    ``chat_json``, not a dict-construction message.
+    """
     bracket_start = text.find("[")
     bracket_end = text.rfind("]")
     if bracket_start != -1 and bracket_end != -1 and bracket_end > bracket_start:
@@ -81,6 +90,6 @@ def _parse_bracketed_json(text: str) -> dict[str, Any] | None:
         try:
             result = json.loads(candidate)
             return dict(result)
-        except (json.JSONDecodeError, TypeError):
+        except (json.JSONDecodeError, TypeError, ValueError):
             pass
     return None
