@@ -179,11 +179,6 @@ class MockVideoProvider(BaseProviderAdapter):
 
         return {"file": file_path, "size_bytes": path.stat().st_size, "placeholder": True}
 
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        _ = duration
-        _ = model
-        return 0.0
-
     def cancel(self, job: ProviderJob) -> bool:
         job.status = ProviderJobStatus.CANCELLED
         return True

@@ -130,7 +130,6 @@ def test_generate_plan_validates_raw_persisted_matrix(
     )
     assert stored["shots"][0]["provider_id"] == "mock-video-provider"
     assert stored["shots"][0]["model_id"] == "mock-fast"
-    assert stored["shots"][0]["estimated_cost"] == 0.0
     assert stored["provider_utilization"] == {"mock-video-provider": result["shot_count"]}
 
 
@@ -198,18 +197,20 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert result["ok"] is True
     assert "generation_plan_ref" in result
     assert result["shot_count"] == 1
-    # Fallback plan follows the active project's configured zero-cost provider.
-    from film_pipeline.providers.pricing import rate_for
-
-    provider_id, model_id = rt.default_video_provider()
-    expected = round(5 * rate_for(provider_id, model_id), 2)
-    assert result["total_estimated_cost"] == pytest.approx(expected)
+    # Cost reporting was removed with the cost feature; the plan itself is the
+    # deliverable and its shape is asserted from the stored artifact.
+    assert "total_estimated_cost" not in result
 
 
-def test_generate_plan_uses_configured_seedance_rate_and_route(
+def test_generate_plan_uses_configured_seedance_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     rt = _build_runtime_with_shot_bible(tmp_path, "plan-seedance-1")
+    # This test configures a REAL provider, so the runtime must be in real mode for
+    # that id to be one the runtime knows. It previously passed in mock mode only
+    # because the provider pricing table was mode-agnostic (and was doubling as the
+    # unknown-provider catalogue); that table is gone with the cost feature.
+    rt.server_mode = "real"
     active = rt.get_active()
     assert active is not None
     active["resolved_config"] = {
@@ -228,7 +229,6 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     result = asyncio.run(generate_plan({}))
 
     assert result["ok"] is True
-    assert cast(float, result["total_estimated_cost"]) > 0.0
     assert rt.services is not None
     from film_pipeline.schemas.base import FilmPhase
 
@@ -239,7 +239,6 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     assert shots
     assert {shot["provider_id"] for shot in shots} == {"seedance-openrouter"}
     assert {shot["model_id"] for shot in shots} == {"bytedance/seedance-2.0"}
-    assert all(float(shot["estimated_cost"]) > 0.0 for shot in shots)
     assert stored["provider_utilization"] == {"seedance-openrouter": len(shots)}
 
 

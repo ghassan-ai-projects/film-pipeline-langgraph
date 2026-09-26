@@ -91,11 +91,6 @@ class TestMockVideoProvider:
             assert meta["shot_id"] == "S001-01"
             assert meta["resolution"] == "1280x720"
 
-    def test_estimate_cost_zero(self, entry: ProviderRegistryEntry) -> None:
-        provider = MockVideoProvider(entry=entry)
-        assert provider.estimate_cost(10.0) == 0.0
-        assert provider.estimate_cost(60.0) == 0.0
-
     def test_cancel(self, entry: ProviderRegistryEntry) -> None:
         provider = MockVideoProvider(entry=entry)
         job = provider.submit(provider.build_payload("test"), "S001-01")
@@ -286,12 +281,6 @@ class TestMockImageProvider:
             meta = provider.extract_metadata(path)
             assert meta["placeholder"] is True
             assert meta["size_bytes"] > 0
-
-    def test_estimate_cost_zero(self, img_entry: ProviderRegistryEntry) -> None:
-        from film_pipeline.providers.mock_image_provider import MockImageProvider
-
-        provider = MockImageProvider(entry=img_entry)
-        assert provider.estimate_cost(0.0) == 0.0
 
     def test_extract_metadata_missing_file(self, img_entry: ProviderRegistryEntry) -> None:
         from film_pipeline.providers.mock_image_provider import MockImageProvider

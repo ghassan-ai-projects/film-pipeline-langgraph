@@ -43,21 +43,12 @@ def seed_default_provider_adapters(rt: StudioRuntime) -> None:
     Project profiles can replace these via ``register_provider``; seeding
     only fills providers that are not registered yet.
     """
+    from film_pipeline.providers import supported_provider_ids
     from film_pipeline.studio._provider_factory import build_provider_adapter
 
-    specs: tuple[tuple[str, str], ...]
-    if rt.server_mode == "real":
-        specs = (
-            ("seedance-openrouter", "video"),
-            ("veo-fast", "video"),
-            ("gemini-imagen-4", "image"),
-        )
-    else:
-        specs = (
-            ("mock-video-provider", "video"),
-            ("mock-image-provider", "image"),
-        )
-    for provider_id, provider_type in specs:
+    # The mode's provider set has one definition, in the providers catalogue.
+    for provider_id in supported_provider_ids(rt.server_mode):
+        provider_type = "image" if "image" in provider_id else "video"
         if provider_id not in rt.provider_adapters:
             rt.register_provider(
                 provider_id,

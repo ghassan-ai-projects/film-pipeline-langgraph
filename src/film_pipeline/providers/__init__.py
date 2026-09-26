@@ -13,6 +13,12 @@ re-exported here so the declared interface matches how the package is used.
 from __future__ import annotations
 
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
+from film_pipeline.providers.catalog import (
+    KNOWN_PROVIDER_IDS,
+    PROVIDER_IDS_BY_MODE,
+    is_known_provider,
+    supported_provider_ids,
+)
 from film_pipeline.providers.credentials import (
     MissingProviderCredential,
     env_or_dotenv,
@@ -27,6 +33,8 @@ from film_pipeline.providers.mock_provider import MockVideoProvider, ScenarioSte
 from film_pipeline.providers.registry import ProviderRegistry
 
 __all__ = [
+    "KNOWN_PROVIDER_IDS",
+    "PROVIDER_IDS_BY_MODE",
     "BaseProviderAdapter",
     "MissingProviderCredential",
     "MockImageProvider",
@@ -38,7 +46,9 @@ __all__ = [
     "ScenarioStep",
     "env_or_dotenv",
     "is_configured",
+    "is_known_provider",
     "lookup",
     "missing_provider_credentials",
     "redact",
+    "supported_provider_ids",
 ]

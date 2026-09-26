@@ -41,7 +41,6 @@ class BaseProviderAdapter(ABC):
 
     Every provider — mock or real — implements:
     - build_payload → submit → poll → download → extract_metadata
-    - estimate_cost
     - cancel (when supported)
     """
 
@@ -80,11 +79,6 @@ class BaseProviderAdapter(ABC):
     @abstractmethod
     def extract_metadata(self, file_path: str) -> dict[str, Any]:
         """Extract duration, resolution, frame count, etc. from output."""
-        ...
-
-    @abstractmethod
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        """Estimate the USD cost for generating a clip of given duration."""
         ...
 
     def cancel(self, job: ProviderJob) -> bool:

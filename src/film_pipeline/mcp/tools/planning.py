@@ -127,6 +127,32 @@ def _load_master_matrix(store: Any, project_id: str) -> Any:
         raise ValueError(f"Persisted MasterFilmMatrix is invalid: {exc}") from exc
 
 
+def _known_provider(runtime: Any, provider_id: str) -> bool:
+    """True when ``provider_id`` names a provider this runtime can reach.
+
+    This guard was a membership test against the provider *pricing* catalogue,
+    which made a cost table the authority for provider identity. Cost is gone; the
+    authority that remains is the runtime's own provider set — the adapters it has
+    registered plus the ids its server mode supports. That is the same kind of
+    check the pricing table was standing in for, without the cost data.
+
+    Registered adapters cover the configured and seeded providers; the mode's
+    default ids cover the case where seeding has not run yet, which is how the
+    planning tests build a runtime. A provider named only in project config is NOT
+    accepted: being requested is not the same as existing, which is the behaviour
+    the pricing check had and the behaviour its test still asserts.
+    """
+    if not provider_id:
+        return False
+    if runtime.get_provider(provider_id) is not None:
+        return True
+    if provider_id in runtime.list_providers():
+        return True
+    from film_pipeline.providers import supported_provider_ids
+
+    return provider_id in supported_provider_ids(runtime.server_mode)
+
+
 def _fallback_video_route(rt: Any, state: dict[str, Any]) -> tuple[str, str]:
     """Resolve the fallback plan's video provider and model from live state."""
     resolved_config = state.get("resolved_config", {})
@@ -161,18 +187,20 @@ def _build_generation_plan(
     *,
     runtime: Any,
     state: dict[str, Any],
-) -> tuple[Any, float]:
-    """Derive the GenerationPlan and its estimated cost from the shot matrix."""
-    from film_pipeline.providers.pricing import (
-        PROVIDER_PRICING,
-        estimate_cost_for_duration,
-        tier_for,
-    )
+) -> Any:
+    """Derive the GenerationPlan from the shot matrix.
+
+    Cost estimation was removed as a feature. This function used a lookup in the
+    provider *pricing* table as its unknown-provider guard, which meant a cost
+    table was the authority for whether a provider id was valid. The guard now
+    checks the resolved config's own video-provider route, which is where the id
+    came from and which survives the removal.
+    """
     from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
 
     provider_id, model_id = _fallback_video_route(runtime, state)
-    if provider_id not in PROVIDER_PRICING:
-        raise ValueError(f"Cannot estimate generation cost for unknown provider '{provider_id}'.")
+    if not _known_provider(runtime, provider_id):
+        raise ValueError(f"Cannot create generation plan for unknown provider '{provider_id}'.")
     if not model_id:
         raise ValueError(f"Cannot create generation plan for '{provider_id}' without a model.")
     shots = [
@@ -180,31 +208,19 @@ def _build_generation_plan(
             shot_id=row.shot_id,
             priority=3,
             risk=str(getattr(row, "risk_level", "medium")),
-            tier=tier_for(provider_id, model_id),
             provider_id=provider_id,
             model_id=model_id,
-            estimated_cost=round(
-                estimate_cost_for_duration(
-                    provider_id,
-                    model_id,
-                    float(getattr(row, "duration_seconds", 5)),
-                ),
-                4,
-            ),
             estimated_duration=float(getattr(row, "duration_seconds", 5)),
             generation_order=i,
         )
         for i, row in enumerate(matrix.rows)
     ]
 
-    total_cost = round(sum(s.estimated_cost for s in shots), 2)
-    plan = GenerationPlan(
+    return GenerationPlan(
         project_id=project_id,
         shots=shots,
-        total_estimated_cost=total_cost,
         provider_utilization={provider_id: len(shots)},
     )
-    return plan, total_cost
 
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
@@ -239,7 +255,7 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
         return _error("MasterFilmMatrix not found. Run generate_shot_bible first.")
 
     try:
-        plan, total_cost = _build_generation_plan(
+        plan = _build_generation_plan(
             project_id,
             matrix,
             runtime=rt,
@@ -253,7 +269,6 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
         return _ok(
             generation_plan_ref=ref,
             shot_count=len(plan.shots),
-            total_estimated_cost=total_cost,
         )
     except Exception as exc:
         return _error(f"Plan generation failed: {exc}")
