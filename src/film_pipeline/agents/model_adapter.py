@@ -1,4 +1,4 @@
-"""Model adapter — calls an LLM via OpenRouter or z.ai for agent execution.
+"""Model adapter — calls an LLM via OpenRouter, z.ai, or Gemini for agent execution.
 
 Same pattern as ``SeedanceOpenRouterProvider``: constructor-injected HTTP opener
 so tests can mock the network without any test-only dependency.
@@ -10,22 +10,23 @@ dispatched by id prefix: ``zai/`` goes to z.ai's OpenAI-compatible endpoint
 API (``GOOGLE_API_KEY``), everything else goes to OpenRouter
 (``OPENROUTER_API_KEY``).
 
-Transport concerns live in ``providers.http_transport`` and model-text JSON recovery in
-``_json_extraction``; this module stays with request shaping, key resolution,
-and provider payload/response mapping.
+This module owns dispatch and request shaping only. Per-provider wire formats
+live in ``agents.transports``; the network boundary lives in
+``providers.http_transport``. Model-text JSON recovery lives in
+``_json_extraction``.
 """
 
 from __future__ import annotations
 
-import json
-import logging
-from dataclasses import dataclass, replace
 from typing import Any
-from urllib.parse import urlsplit
 
 from film_pipeline.agents._json_extraction import extract_json_object
-from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
-from film_pipeline.providers.credentials import env_or_dotenv, lookup
+from film_pipeline.agents.transports import chat_completions, gemini, zai
+from film_pipeline.agents.transports.chat_completions import (
+    ChatRequest as _ChatRequest,
+)
+from film_pipeline.agents.transports.gemini import GeminiRequest as _GeminiRequest
+from film_pipeline.agents.transports.zai import ZAI_MODEL_PREFIX
 
 # Historical import paths kept stable for callers and tests (explicit alias
 # form so mypy strict's no_implicit_reexport passes them through).
@@ -35,45 +36,30 @@ from film_pipeline.providers.http_transport import (
 from film_pipeline.providers.http_transport import (
     _open_with_timeout as _open_with_timeout,
 )
-from film_pipeline.providers.http_transport import post_json
+from film_pipeline.providers.http_transport import post_json as post_json
 
-ZAI_MODEL_PREFIX = "zai/"
-ZAI_API_BASE = "https://api.z.ai/api/paas/v4"
-ZAI_CODING_API_BASE = "https://api.z.ai/api/coding/paas/v4"
-_ALLOWED_ZAI_BASE_URLS = frozenset({ZAI_API_BASE, ZAI_CODING_API_BASE})
+_ZAI_MODEL_PREFIX = ZAI_MODEL_PREFIX
+_GEMINI_MODEL_PREFIX = "google/"
 
 
-@dataclass(frozen=True)
-class _GeminiRequest:
-    """Parameters for a single Gemini generateContent call."""
+def _warn_dropped_images(count: int, model: str) -> None:
+    import logging
 
-    prompt: str
-    model: str
-    images_b64: list[str]
-    mime_type: str
-    max_tokens: int
-    temperature: float
-
-
-@dataclass(frozen=True)
-class _ChatRequest:
-    """Request-shaping parameters for an OpenAI-compatible chat completion.
-
-    Shared by the OpenRouter and z.ai transports — both accept this body.
-    """
-
-    messages: list[dict[str, Any]]
-    model: str
-    max_tokens: int = 4096
-    temperature: float = 0.7
-    top_p: float = 0.95
-    frequency_penalty: float = 0.0
+    logging.warning(
+        "chat_multimodal: dropping %d images for non-Google model '%s'",
+        count,
+        model,
+    )
 
 
 class ModelAdapter:
-    """Call a chat model through OpenRouter or z.ai (prefix-routed).
+    """Call a chat model through OpenRouter, z.ai, or Gemini (prefix-routed).
 
     Testable: pass ``_http_opener`` to inject a mock HTTP handler.
+
+    This class is dispatch plus request shaping: it decides which transport a
+    model id targets, builds that transport's value object, and normalizes the
+    text response. Each provider's wire format lives in ``agents.transports``.
     """
 
     def __init__(
@@ -91,42 +77,17 @@ class ModelAdapter:
         self.request_timeout_seconds = request_timeout_seconds
 
     def _api_key(self) -> str:
-        key = self._configured_api_key or lookup("seedance-openrouter")
-        if not key:
-            raise RuntimeError(
-                "OPENROUTER_API_KEY is not set. Set it in the environment or in a local .env file."
-            )
-        return key
+        return chat_completions.openrouter_api_key(self._configured_api_key)
 
     def _gemini_api_key(self) -> str:
-        key = self._configured_gemini_api_key or lookup("gemini-imagen-4")
-        if not key:
-            raise RuntimeError("GOOGLE_API_KEY is not set. Set it in the environment or .env file.")
-        return key
+        return gemini.gemini_api_key(self._configured_gemini_api_key)
 
     def _zai_api_key(self) -> str:
-        key = self._configured_zai_api_key or lookup("zai")
-        if not key:
-            raise RuntimeError(
-                "ZAI_API_KEY is not set. Set it in the environment or in a local .env file."
-            )
-        return key
+        return zai.zai_api_key(self._configured_zai_api_key)
 
     def _zai_base_url(self) -> str:
-        """Resolve the z.ai API base URL.
-
-        ``ZAI_BASE_URL`` (environment or local ``.env``) overrides the default.
-        Coding-plan keys only work against the coding endpoint:
-        ``https://api.z.ai/api/coding/paas/v4`` — against the standard endpoint
-        they fail with error 1113 (insufficient balance).
-        """
-        override = env_or_dotenv("ZAI_BASE_URL")
-        base_url = (override or ZAI_API_BASE).rstrip("/")
-        parsed = urlsplit(base_url)
-        if base_url not in _ALLOWED_ZAI_BASE_URLS or parsed.scheme != "https":
-            allowed = " or ".join(sorted(_ALLOWED_ZAI_BASE_URLS))
-            raise RuntimeError(f"ZAI_BASE_URL must be {allowed}.")
-        return base_url
+        """Resolve the z.ai API base URL (see ``transports.zai.zai_base_url``)."""
+        return zai.zai_base_url()
 
     def _request(self, request: _ChatRequest) -> dict[str, Any]:
         """Post a chat-completion request to the model's provider endpoint.
@@ -136,35 +97,22 @@ class ModelAdapter:
         is REQUIRED — no hardcoded default. The caller must resolve the model
         through config/routing before invoking.
         """
-        if request.model.startswith(ZAI_MODEL_PREFIX):
+        if _is_zai_model(request.model):
             return self._zai_request(request)
-        return post_json(
-            f"{OPENROUTER_API}/chat/completions",
-            _chat_completions_payload(request),
+        return chat_completions.send_chat_completion(
+            request,
             http_opener=self._http_opener,
             timeout_seconds=self.request_timeout_seconds,
-            headers={
-                "Authorization": f"Bearer {self._api_key()}",
-                "Content-Type": "application/json",
-            },
-            error_prefix="OpenRouter chat completions failed",
-            redact_body=True,
+            api_key=self._api_key(),
         )
 
     def _zai_request(self, request: _ChatRequest) -> dict[str, Any]:
         """Post a chat-completion request to z.ai, stripping the ``zai/`` prefix."""
-        wire_request = replace(request, model=request.model.removeprefix(ZAI_MODEL_PREFIX))
-        return post_json(
-            f"{self._zai_base_url()}/chat/completions",
-            _chat_completions_payload(wire_request, include_frequency_penalty=False),
+        return zai.send_zai_chat_completion(
+            request,
             http_opener=self._http_opener,
             timeout_seconds=self.request_timeout_seconds,
-            headers={
-                "Authorization": f"Bearer {self._zai_api_key()}",
-                "Content-Type": "application/json",
-            },
-            error_prefix="z.ai chat completions failed",
-            redact_body=True,
+            api_key=self._zai_api_key(),
         )
 
     def chat(
@@ -197,14 +145,7 @@ class ModelAdapter:
                 frequency_penalty=frequency_penalty,
             )
         )
-        choices: list[dict[str, Any]] = response.get("choices", [])
-        if not choices:
-            provider = "z.ai" if model.startswith(ZAI_MODEL_PREFIX) else "OpenRouter"
-            raise RuntimeError(f"{provider} returned no choices.")
-        msg: dict[str, Any] = choices[0].get("message", {})
-        # ``or ""`` guards content: null — some providers send it when the
-        # whole completion budget went to reasoning_content.
-        return str(msg.get("content") or "")
+        return _first_message_content(response, provider=_provider_label(model))
 
     def chat_multimodal(
         self,
@@ -238,7 +179,7 @@ class ModelAdapter:
         if not images_b64:
             return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
 
-        if model.startswith("google/"):
+        if _is_gemini_model(model):
             return self._call_gemini_api(
                 _GeminiRequest(
                     prompt=prompt,
@@ -250,7 +191,7 @@ class ModelAdapter:
                 )
             )
 
-        if model.startswith(ZAI_MODEL_PREFIX):
+        if _is_zai_model(model):
             content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
             content.extend(
                 {
@@ -267,36 +208,23 @@ class ModelAdapter:
                     temperature=temperature,
                 )
             )
-            choices: list[dict[str, Any]] = response.get("choices", [])
-            if not choices:
-                raise RuntimeError("z.ai returned no choices.")
-            msg: dict[str, Any] = choices[0].get("message", {})
-            return str(msg.get("content") or "")
+            return _first_message_content(response, provider=_provider_label(model))
 
         _warn_dropped_images(len(images_b64), model)
         return self.chat(prompt, model=model, max_tokens=max_tokens, temperature=temperature)
 
     def _call_gemini_api(self, request: _GeminiRequest) -> str:
         """Call Gemini's generateContent API with text + inline images."""
-        response = post_json(
-            self._gemini_url(request.model),
-            json.dumps(_build_gemini_payload(request)).encode("utf-8"),
+        return gemini.send_generate_content(
+            request,
             http_opener=self._http_opener,
             timeout_seconds=self.request_timeout_seconds,
-            headers={"Content-Type": "application/json"},
-            error_prefix="Gemini generateContent failed",
-            redact_body=False,
+            api_key=self._gemini_api_key(),
         )
-        return _first_candidate_text(response)
 
     def _gemini_url(self, model: str) -> str:
         """Build the generateContent endpoint URL after resolving the API key."""
-        key = self._gemini_api_key()
-        gemini_model = model.removeprefix("google/")
-        return (
-            "https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{gemini_model}:generateContent?key={key}"
-        )
+        return gemini.gemini_url(model, self._gemini_api_key())
 
     def chat_json(
         self,
@@ -336,48 +264,27 @@ class ModelAdapter:
         return extracted
 
 
-def _chat_completions_payload(
-    request: _ChatRequest, *, include_frequency_penalty: bool = True
-) -> bytes:
-    """Build an OpenAI-compatible chat body for OpenRouter or z.ai."""
-    body: dict[str, Any] = {
-        "model": request.model,
-        "messages": request.messages,
-        "max_tokens": request.max_tokens,
-        "temperature": request.temperature,
-        "top_p": request.top_p,
-    }
-    if include_frequency_penalty:
-        body["frequency_penalty"] = request.frequency_penalty
-    return json.dumps(body).encode()
+def _is_zai_model(model: str) -> bool:
+    """Whether ``model`` targets the z.ai OpenAI-compatible endpoint."""
+    return model.startswith(_ZAI_MODEL_PREFIX)
 
 
-def _build_gemini_payload(request: _GeminiRequest) -> dict[str, Any]:
-    parts: list[dict[str, Any]] = [{"text": request.prompt}]
-    for img in request.images_b64:
-        parts.append({"inline_data": {"mime_type": request.mime_type, "data": img}})
-    return {
-        "contents": [{"parts": parts}],
-        "generationConfig": {
-            "temperature": request.temperature,
-            "maxOutputTokens": request.max_tokens,
-        },
-    }
+def _is_gemini_model(model: str) -> bool:
+    """Whether ``model`` targets Gemini's generateContent API."""
+    return model.startswith(_GEMINI_MODEL_PREFIX)
 
 
-def _first_candidate_text(response: dict[str, Any]) -> str:
-    candidates: list[dict[str, Any]] = response.get("candidates", [])
-    if not candidates:
-        raise RuntimeError("Gemini returned no candidates.")
-    parts_out: list[dict[str, Any]] = candidates[0].get("content", {}).get("parts", [])
-    if not parts_out:
-        raise RuntimeError("Gemini returned no content parts.")
-    return str(parts_out[0].get("text", ""))
+def _provider_label(model: str) -> str:
+    """Human-readable provider name for error messages."""
+    return "z.ai" if _is_zai_model(model) else "OpenRouter"
 
 
-def _warn_dropped_images(count: int, model: str) -> None:
-    logging.warning(
-        "chat_multimodal: dropping %d images for non-Google model '%s'",
-        count,
-        model,
-    )
+def _first_message_content(response: dict[str, Any], *, provider: str) -> str:
+    """Return the first choice's text content, or raise for the provider."""
+    choices: list[dict[str, Any]] = response.get("choices", [])
+    if not choices:
+        raise RuntimeError(f"{provider} returned no choices.")
+    msg: dict[str, Any] = choices[0].get("message", {})
+    # ``or ""`` guards content: null — some providers send it when the
+    # whole completion budget went to reasoning_content.
+    return str(msg.get("content") or "")

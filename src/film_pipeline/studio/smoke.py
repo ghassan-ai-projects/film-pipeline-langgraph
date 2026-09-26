@@ -22,7 +22,7 @@ def check_graph_compiles() -> tuple[bool, str]:
 def check_agent_registry() -> tuple[bool, str]:
     """Verify the wired MVP agents are registered."""
     try:
-        from film_pipeline.agents.mvp import MVP_AGENTS
+        from film_pipeline.agents.roster import MVP_AGENTS
 
         count = len(MVP_AGENTS)
         if count == 0:

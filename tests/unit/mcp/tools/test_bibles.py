@@ -16,6 +16,7 @@ from film_pipeline.mcp.tools import (
     generate_style_bible,
 )
 from film_pipeline.mcp.tools.bibles import _extract_script_text
+from film_pipeline.studio.mock_responses import default_mock_responses
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -151,6 +152,85 @@ def test_generate_character_bible_success(tmp_path: Path, monkeypatch: pytest.Mo
     assert active["character_bible_ref"] == result["character_bible_ref"]
 
 
+def test_saved_character_bible_is_about_the_requested_character(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The persisted artifact's identity must be the request, not the mock's.
+
+    A registered mock is static and cannot interpolate the requested character,
+    so nothing stopped a mock-mode run from persisting a bible identified as the
+    mock's subject while the response echoed the request. The response asserted
+    the right id; the artifact on disk did not. Two different characters
+    previously both persisted ``character_id: "lead"``.
+    """
+    import json
+
+    project_id = "bible-char-identity"
+    rt = _build_runtime_through_script(tmp_path, project_id)
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    saved: list[str] = []
+    for character_id in ("hero", "villain"):
+        result = asyncio.run(
+            generate_character_bible({"character_id": character_id, "character_name": character_id})
+        )
+        assert result["ok"] is True
+        assert result["character_id"] == character_id
+
+        versions = sorted(
+            (
+                tmp_path
+                / "runtime"
+                / project_id
+                / "artifacts"
+                / "04-visual-dev"
+                / "character_bible"
+                / "versions"
+            ).glob("v*.json")
+        )
+        envelope = json.loads(versions[-1].read_text())
+        body = envelope.get("payload", envelope)
+        saved.append(str(body.get("character_id")))
+
+    assert saved == ["hero", "villain"], (
+        f"each character's saved bible must be identified as that character; found {saved}"
+    )
+
+
+def test_saved_environment_bible_is_about_the_requested_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same rule for the environment bible, whose id the response also echoes."""
+    import json
+
+    project_id = "bible-env-identity"
+    rt = _build_runtime_through_script(tmp_path, project_id)
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    result = asyncio.run(
+        generate_environment_bible({"environment_id": "neon_market", "environment_name": "Neon"})
+    )
+    assert result["ok"] is True
+
+    versions = sorted(
+        (
+            tmp_path
+            / "runtime"
+            / project_id
+            / "artifacts"
+            / "04-visual-dev"
+            / "environment_bible"
+            / "versions"
+        ).glob("v*.json")
+    )
+    envelope = json.loads(versions[-1].read_text())
+    body = envelope.get("payload", envelope)
+    assert body.get("environment_id") == "neon_market", (
+        "the saved environment bible must be identified as the requested "
+        f"environment; found {body.get('environment_id')!r}"
+    )
+
+
 def test_generate_character_bible_creates_new_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -259,7 +339,13 @@ def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     result = asyncio.run(generate_shot_bible({}))
     assert result["ok"] is True
-    assert cast(int, result["shot_count"]) >= 1
+    # Pinned rather than `>= 1`: this tool used to fall back to a hand-written
+    # single-row matrix, and now takes the same registered mock the graph path
+    # uses. That swap is a real change in mock output, so the count is asserted
+    # and cannot drift silently in either direction.
+    mock_rows = default_mock_responses()["shot-design-agent"]["shot_matrix"]["rows"]
+    assert cast(int, result["shot_count"]) == len(mock_rows)
+    assert len(mock_rows) > 1
     active = rt.get_active()
     assert active is not None
     assert active["shot_matrix_ref"] == result["shot_matrix_ref"]

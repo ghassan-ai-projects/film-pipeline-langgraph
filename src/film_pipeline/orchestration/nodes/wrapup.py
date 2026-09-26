@@ -9,6 +9,7 @@ from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
     _save_artifact,
+    produced_artifact,
 )
 from film_pipeline.orchestration.nodes._shared import (
     _phase_gate_updates,
@@ -27,7 +28,7 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
         phase="post",
         task="Create the assembly manifest from generated media and the shot matrix.",
     )
-    manifest = result.get("assembly_manifest")
+    manifest = produced_artifact(new_state, "failure-handling-agent", result)
     if manifest is not None:
         ref = _save_artifact(new_state, manifest, "assembly_manifest", "post")
         if ref:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
 _NUMBER_WORDS: dict[str, int] = {
     "one": 1,
@@ -116,7 +116,7 @@ def _phase_gate_updates(state: dict[str, Any], *, phase: str, gate: str) -> dict
     With ``require_human_approval=False`` (auto-approve profiles) the gate is
     pre-approved so the graph advances without pausing.
     """
-    auto = not _require_human_approval(state)
+    auto = not require_human_approval(state)
     return {
         "current_phase": phase,
         "approved": auto,

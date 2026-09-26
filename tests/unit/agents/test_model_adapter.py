@@ -1,4 +1,10 @@
-"""Tests for model adapter — OpenRouter calls with mock HTTP."""
+"""Tests for the model adapter — dispatch, request shaping, and the transports.
+
+``ModelAdapter`` is tested through its public ``chat`` / ``chat_multimodal`` /
+``chat_json`` surface plus the dispatch policy in ``TestDispatchPolicy``.
+Per-provider wire-format details are tested against ``agents.transports``
+directly in ``TestTransportModules``, which is where that code now lives.
+"""
 
 from __future__ import annotations
 
@@ -147,10 +153,10 @@ class TestModelAdapter:
             adapter.chat("Hello", model="test-model")
 
     def test_no_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """When no key is configured, _api_key() raises RuntimeError."""
-        import film_pipeline.agents.model_adapter as ma
+        """When no key is configured, the OpenRouter transport raises."""
+        import film_pipeline.agents.transports.chat_completions as cc
 
-        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        monkeypatch.setattr(cc, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(api_key=None)
         with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY is not set"):
             adapter.chat("Hello", model="test-model")
@@ -234,9 +240,9 @@ class TestModelAdapter:
         assert body["generationConfig"] == {"temperature": 0.4, "maxOutputTokens": 123}
 
     def test_gemini_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import film_pipeline.agents.model_adapter as ma
+        import film_pipeline.agents.transports.gemini as gemini
 
-        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        monkeypatch.setattr(gemini, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(api_key="openrouter", gemini_api_key=None)
 
         with pytest.raises(RuntimeError, match="GOOGLE_API_KEY is not set"):
@@ -366,9 +372,9 @@ class TestZaiProvider:
         assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
 
     def test_zai_missing_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import film_pipeline.agents.model_adapter as ma
+        import film_pipeline.agents.transports.zai as zai
 
-        monkeypatch.setattr(ma, "lookup", lambda _provider_id: None)
+        monkeypatch.setattr(zai, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(zai_api_key=None)
 
         with pytest.raises(RuntimeError, match="ZAI_API_KEY is not set"):
@@ -462,6 +468,254 @@ class TestZaiProvider:
 
         with pytest.raises(RuntimeError, match="ZAI_BASE_URL must be"):
             adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+
+class TestDispatchPolicy:
+    """The model-id → transport policy, pinned in exactly one place.
+
+    Every assertion here is about *which* transport a model id selects, not
+    about what that transport does. That policy lives in ``ModelAdapter``; the
+    per-provider behaviour is tested against ``agents.transports`` directly.
+    """
+
+    @staticmethod
+    def _spy(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        """Record which transport each send path selects.
+
+        ``ModelAdapter`` resolves its sends through the transport *modules* at
+        call time, so patching the module attributes is exactly the seam the
+        adapter uses.
+        """
+        import film_pipeline.agents.transports.chat_completions as cc
+        import film_pipeline.agents.transports.gemini as gemini
+        import film_pipeline.agents.transports.zai as zai
+
+        selected: list[str] = []
+        real_openrouter = cc.send_chat_completion
+        real_zai = zai.send_zai_chat_completion
+        real_gemini = gemini.send_generate_content
+
+        def _openrouter(*args: Any, **kwargs: Any) -> Any:
+            selected.append("openrouter")
+            return real_openrouter(*args, **kwargs)
+
+        def _zai(*args: Any, **kwargs: Any) -> Any:
+            selected.append("zai")
+            return real_zai(*args, **kwargs)
+
+        def _gemini(*args: Any, **kwargs: Any) -> Any:
+            selected.append("gemini")
+            return real_gemini(*args, **kwargs)
+
+        monkeypatch.setattr(cc, "send_chat_completion", _openrouter)
+        monkeypatch.setattr(zai, "send_zai_chat_completion", _zai)
+        monkeypatch.setattr(gemini, "send_generate_content", _gemini)
+        return selected
+
+    @pytest.mark.parametrize(
+        ("model", "expected"),
+        [
+            ("zai/glm-5.3-flash", "zai"),
+            ("glm-5.3-flash", "openrouter"),
+            ("openai/gpt-5", "openrouter"),
+            ("anthropic/claude-sonnet-5", "openrouter"),
+            # ``zai`` without the slash is a bare model id — not a z.ai route.
+            ("zaikey/model", "openrouter"),
+        ],
+    )
+    def test_chat_dispatches_by_model_prefix(
+        self, monkeypatch: pytest.MonkeyPatch, model: str, expected: str
+    ) -> None:
+        selected = self._spy(monkeypatch)
+        opener = _make_opener({"choices": [{"message": {"content": "ok"}}]})
+        # Both keys configured: selection must depend on the model id alone.
+        adapter = ModelAdapter(http_opener=opener, api_key="openrouter-key", zai_api_key="zai-key")
+
+        assert adapter.chat("Hello", model=model) == "ok"
+        assert selected == [expected]
+
+    def test_zai_model_never_reaches_openrouter(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        selected = self._spy(monkeypatch)
+        opener = _make_opener({"choices": [{"message": {"content": "ok"}}]})
+        adapter = ModelAdapter(http_opener=opener, api_key="openrouter-key", zai_api_key="zai-key")
+
+        adapter.chat("Hello", model="zai/glm-5.3-flash")
+
+        assert "zai" in selected
+        assert "openrouter" not in selected
+
+    def test_bare_model_never_reaches_zai(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        selected = self._spy(monkeypatch)
+        opener = _make_opener({"choices": [{"message": {"content": "ok"}}]})
+        adapter = ModelAdapter(http_opener=opener, api_key="openrouter-key", zai_api_key="zai-key")
+
+        adapter.chat("Hello", model="glm-5.3-flash")
+
+        assert selected == ["openrouter"]
+
+    @pytest.mark.parametrize(
+        ("model", "expected"),
+        [
+            ("google/gemini-test", "gemini"),
+            ("zai/glm-5v-turbo", "zai"),
+            ("openai/gpt-5", "openrouter"),
+        ],
+    )
+    def test_chat_multimodal_dispatches_by_model_prefix(
+        self, monkeypatch: pytest.MonkeyPatch, model: str, expected: str
+    ) -> None:
+        selected = self._spy(monkeypatch)
+        body: dict[str, Any] = {"choices": [{"message": {"content": "ok"}}]}
+        if expected == "gemini":
+            body = {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+        adapter = ModelAdapter(
+            http_opener=_make_opener(body),
+            api_key="openrouter-key",
+            gemini_api_key="gemini-key",
+            zai_api_key="zai-key",
+        )
+
+        assert adapter.chat_multimodal("Describe", model=model, images_b64=["abc"]) == "ok"
+        assert selected == [expected]
+
+    def test_google_model_without_images_does_not_reach_gemini(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Text-only calls use the chat transport even for a Gemini model id."""
+        selected = self._spy(monkeypatch)
+        opener = _make_opener({"choices": [{"message": {"content": "ok"}}]})
+        adapter = ModelAdapter(
+            http_opener=opener, api_key="openrouter-key", gemini_api_key="gemini-key"
+        )
+
+        adapter.chat_multimodal("Describe", model="google/gemini-test", images_b64=None)
+
+        assert selected == ["openrouter"]
+
+    def test_non_google_model_drops_images_and_uses_chat(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A model with no multimodal transport falls back to text-only chat."""
+        selected = self._spy(monkeypatch)
+        opener = _make_opener({"choices": [{"message": {"content": "ok"}}]})
+        adapter = ModelAdapter(http_opener=opener, api_key="openrouter-key")
+
+        adapter.chat_multimodal("Describe", model="openai/gpt-5", images_b64=["abc"])
+
+        assert selected == ["openrouter"]
+
+
+class TestTransportModules:
+    """The extracted transports, tested where they now live."""
+
+    def test_zai_base_url_defaults_without_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import film_pipeline.providers.credentials as creds
+        from film_pipeline.agents.transports.zai import zai_base_url
+
+        monkeypatch.delenv("ZAI_BASE_URL", raising=False)
+        monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
+
+        assert zai_base_url() == "https://api.z.ai/api/paas/v4"
+
+    def test_zai_base_url_rejects_untrusted_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from film_pipeline.agents.transports.zai import zai_base_url
+
+        monkeypatch.setenv("ZAI_BASE_URL", "https://attacker.example/api")
+
+        with pytest.raises(RuntimeError, match="ZAI_BASE_URL must be"):
+            zai_base_url()
+
+    def test_zai_base_url_rejects_http_scheme(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An allowlisted host over plain http is still refused."""
+        from film_pipeline.agents.transports.zai import zai_base_url
+
+        monkeypatch.setenv("ZAI_BASE_URL", "http://api.z.ai/api/paas/v4")
+
+        with pytest.raises(RuntimeError, match="ZAI_BASE_URL must be"):
+            zai_base_url()
+
+    def test_zai_payload_omits_frequency_penalty(self) -> None:
+        from film_pipeline.agents.transports.chat_completions import (
+            ChatRequest,
+            chat_completions_payload,
+        )
+
+        payload = json.loads(
+            chat_completions_payload(
+                ChatRequest(messages=[{"role": "user", "content": "hi"}], model="glm"),
+                include_frequency_penalty=False,
+            )
+        )
+
+        assert "frequency_penalty" not in payload
+        assert payload["model"] == "glm"
+
+    def test_openrouter_payload_includes_frequency_penalty(self) -> None:
+        from film_pipeline.agents.transports.chat_completions import (
+            ChatRequest,
+            chat_completions_payload,
+        )
+
+        payload = json.loads(
+            chat_completions_payload(
+                ChatRequest(messages=[{"role": "user", "content": "hi"}], model="m")
+            )
+        )
+
+        assert payload["frequency_penalty"] == 0.0
+
+    def test_gemini_url_strips_google_prefix_and_carries_key(self) -> None:
+        from film_pipeline.agents.transports.gemini import gemini_url
+
+        url = gemini_url("google/gemini-3-flash", "secret-key")
+
+        assert url == (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-3-flash:generateContent?key=secret-key"
+        )
+
+    def test_gemini_payload_builds_inline_image_parts(self) -> None:
+        from film_pipeline.agents.transports.gemini import (
+            GeminiRequest,
+            build_gemini_payload,
+        )
+
+        payload = build_gemini_payload(
+            GeminiRequest(
+                prompt="Describe",
+                model="google/gemini",
+                images_b64=["abc", "def"],
+                mime_type="image/jpeg",
+                max_tokens=64,
+                temperature=0.5,
+            )
+        )
+
+        assert payload["contents"][0]["parts"] == [
+            {"text": "Describe"},
+            {"inline_data": {"mime_type": "image/jpeg", "data": "abc"}},
+            {"inline_data": {"mime_type": "image/jpeg", "data": "def"}},
+        ]
+        assert payload["generationConfig"] == {"temperature": 0.5, "maxOutputTokens": 64}
+
+    def test_first_candidate_text_raises_without_candidates_or_parts(self) -> None:
+        from film_pipeline.agents.transports.gemini import first_candidate_text
+
+        assert (
+            first_candidate_text({"candidates": [{"content": {"parts": [{"text": "x"}]}}]}) == "x"
+        )
+        with pytest.raises(RuntimeError, match="Gemini returned no candidates"):
+            first_candidate_text({"candidates": []})
+        with pytest.raises(RuntimeError, match="Gemini returned no content parts"):
+            first_candidate_text({"candidates": [{"content": {"parts": []}}]})
+
+    def test_transports_package_surface_is_importable(self) -> None:
+        """``agents.transports`` is the declared package surface."""
+        from film_pipeline.agents import transports
+
+        missing = [name for name in transports.__all__ if not hasattr(transports, name)]
+
+        assert not missing, f"transports.__all__ names unknown symbols: {missing}"
 
 
 def _make_gemini_opener(response_body: dict[str, Any]) -> MagicMock:

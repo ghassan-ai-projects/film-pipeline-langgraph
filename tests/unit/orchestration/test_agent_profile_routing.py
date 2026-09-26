@@ -34,7 +34,7 @@ class TestAgentProfileMap:
 
     def test_all_mvp_agents_have_profile_entries(self) -> None:
         """Every MVP-registered agent must have an entry in _AGENT_PROFILE_MAP."""
-        from film_pipeline.agents.mvp import MVP_AGENTS
+        from film_pipeline.agents.roster import MVP_AGENTS
 
         for agent in MVP_AGENTS:
             assert agent.agent_id in _AGENT_PROFILE_MAP, f"Missing profile for {agent.agent_id}"

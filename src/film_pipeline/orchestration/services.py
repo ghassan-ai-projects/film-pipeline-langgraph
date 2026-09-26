@@ -38,7 +38,7 @@ def _default_artifact_root() -> Path:
 
 def _mvp_agent_registry() -> AgentRegistry:
     """Register every MVP agent into a fresh registry."""
-    from film_pipeline.agents.mvp import MVP_AGENTS
+    from film_pipeline.agents.roster import MVP_AGENTS
 
     registry = AgentRegistry()
     registry.register_many(MVP_AGENTS)

@@ -20,8 +20,8 @@ from film_pipeline.studio.mock_responses import default_mock_responses
 
 @pytest.fixture()
 def registry() -> Any:
-    from film_pipeline.agents.mvp import MVP_AGENTS
     from film_pipeline.agents.registry import AgentRegistry
+    from film_pipeline.agents.roster import MVP_AGENTS
 
     reg = AgentRegistry()
     reg.register_many(MVP_AGENTS)

@@ -11,6 +11,7 @@ from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
     _save_artifact,
+    produced_artifact,
 )
 from film_pipeline.orchestration.nodes._context import (
     _parse_ref,
@@ -65,7 +66,7 @@ def _classify_film_idea(state: dict[str, Any], user_runtime: int) -> Any:
             "Identify risks and produce a structured project profile."
         ),
     )
-    return result.get("profile")
+    return produced_artifact(state, "intake-classifier-agent", result)
 
 
 def _lock_profile_runtime(profile: Any, user_runtime: int) -> Any:
@@ -202,7 +203,7 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
             "and quality standards. This governs every downstream decision."
         ),
     )
-    constitution = result.get("constitution")
+    constitution = produced_artifact(new_state, "film-constitution-agent", result)
     if constitution is not None:
         ref = _save_artifact(new_state, constitution, "film_constitution", "constitution")
         if ref:
@@ -233,7 +234,9 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
             "with dramatic function, emotional shift, conflict, and outcome."
         ),
     )
-    treatment = result.get("treatment")
+    # ``scene_list`` (and ``story_bible`` below) are secondary keys of the same
+    # result, not the contract's ``produces`` key, so they stay literal here.
+    treatment = produced_artifact(new_state, "treatment-agent", result)
     scene_list = result.get("scene_list")
     if treatment is not None:
         ref = _save_artifact(new_state, treatment, "treatment", "development")
@@ -283,7 +286,7 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
         ),
     )
     story_bible = result.get("story_bible")
-    script = result.get("script")
+    script = produced_artifact(new_state, "screenwriter-agent", result)
     if story_bible is not None:
         ref = _save_artifact(new_state, story_bible, "story_bible", "script")
         if ref:

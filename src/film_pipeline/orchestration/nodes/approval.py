@@ -11,7 +11,7 @@ from film_pipeline.orchestration.nodes._repair_loop import (
     repair_phase_node,
 )
 from film_pipeline.orchestration.nodes._shared import _apply_external_state
-from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+from film_pipeline.orchestration.orchestrator_state import require_human_approval
 from film_pipeline.orchestration.services import _get_services
 
 # The bounded repair loop lives in ``_repair_loop``; these re-exports keep the
@@ -212,7 +212,7 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
 
     phase = str(state.get("current_phase", ""))
     stalled = is_stalled(state, phase)
-    require_human = _require_human_approval(state)
+    require_human = require_human_approval(state)
 
     # ── Headless / auto-approve mode ───────────────────────────────────
     if not require_human:
@@ -250,6 +250,7 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # Promote all candidate refs to approved
     from film_pipeline.orchestration.orchestrator_state import (
+        get_approved_refs,
         get_candidate_refs,
         set_approved_ref,
     )
@@ -262,7 +263,7 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
         "approved": True,
         "human_approval_required": False,
         "_approval_blocked_by_issues": False,
-        "_orchestrator__approved_refs": working.get("_orchestrator__approved_refs", {}),
+        "_orchestrator__approved_refs": get_approved_refs(working),
     }
 
 
@@ -270,7 +271,10 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
     """Route the current phase to revision. Returns a partial state update."""
     revision_note = str(state.get("_revision_note", ""))
     # Record durable revision request via orchestrator state helpers
-    from film_pipeline.orchestration.orchestrator_state import add_revision_request
+    from film_pipeline.orchestration.orchestrator_state import (
+        add_revision_request,
+        get_all_revisions,
+    )
 
     working = _orchestrator_working_state(state)
     artifact_refs = list(state.get("artifact_refs", []) or [])
@@ -288,5 +292,5 @@ def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
                 "message": revision_note or "Human requested revision.",
             }
         ],
-        "_orchestrator__pending_revisions": working.get("_orchestrator__pending_revisions", []),
+        "_orchestrator__pending_revisions": get_all_revisions(working),
     }

@@ -98,13 +98,122 @@ def _constitution_camera_philosophy(constitution: Any) -> str:
     return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
 
 
-def _chat_json_or_mock(rt: Any, prompt: str, mock_payload: dict[str, Any]) -> dict[str, Any]:
-    """Chat reply parsed as a mapping; mock_payload when no model adapter is configured."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return mock_payload
-    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
-    return raw if isinstance(raw, dict) else {}
+def _run_bible_agent(
+    rt: Any,
+    agent_id: str,
+    task: str,
+    context_vars: dict[str, str],
+    *,
+    subject_key: str = "",
+    subject_id: str = "",
+) -> dict[str, Any]:
+    """Produce one bible by running its roster agent through the shared path.
+
+    This is the MCP counterpart of ``orchestration.nodes._agent``: the contract
+    comes from the roster, the prompt from the dedicated template registry, the
+    model call and its retry ladder from ``PromptRunner``, the mock from
+    ``studio.mock_responses``, and the parse from the agent's own ``execute()``.
+
+    The tool layer previously assembled prompts by hand and called
+    ``model_adapter.chat`` directly, which was a second agent lifecycle: the
+    model id was resolved through a method that did not exist, and the reply was
+    tested with ``isinstance(raw, dict)`` against a ``-> str`` return, so the
+    real-model path both raised and could never have produced a bible.
+
+    ``subject_key``/``subject_id`` name the subject the operator asked for (a
+    ``character_id`` or ``environment_id``). They are written over the model
+    output before the agent parses it, because the request is the authority for
+    which subject an artifact is about. A registered mock is static and cannot
+    interpolate the request, so without this a mock-mode run would persist an
+    artifact identified as the mock's subject rather than the requested one. The
+    bible schemas are frozen, so the value is set on the input rather than
+    patched onto the parsed artifact.
+
+    Raises:
+        KeyError: the agent is not on the roster or has no dedicated template.
+        ValueError: the agent rejected the model output.
+    """
+    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.registry import get_agent_class
+
+    services = _services(rt)
+    registry = services.agent_registry
+    contract = registry.lookup_by_id(agent_id) if registry is not None else None
+    if contract is None:
+        raise KeyError(f"Agent '{agent_id}' is not registered on the roster.")
+
+    impl_class = get_agent_class(agent_id)
+    if impl_class is None:
+        raise KeyError(f"Agent '{agent_id}' has no implementation class.")
+
+    runner = services.prompt_runner
+    project_id = str(context_vars.get("project_id", ""))
+    kb = services.kb_for(
+        project_id=project_id,
+        phase="visual_dev",
+        agent_id=agent_id,
+        task=task,
+    )
+    # The graph's context builder supplies these two on every template it
+    # renders; the bible templates declare them too, so supply them here rather
+    # than leaving "{constraints}" / "{kb_refs}" to render literally.
+    context_vars.setdefault("constraints", "")
+    context_vars.setdefault("kb_refs", kb.kb_context_id)
+
+    template = get_registry().get_required(agent_id)
+    model_output, _, _ = runner.run_from_template(
+        template,
+        kb,
+        task,
+        model_profile=contract.default_model_profile,
+        context_vars=context_vars,
+        agent_id=agent_id,
+    )
+
+    if subject_key and subject_id:
+        model_output = _with_subject(model_output, subject_key, subject_id)
+
+    agent = impl_class(contract)
+    result = agent.execute(model_output)
+    if not agent.validate(result):
+        raise InvalidBibleOutput(agent_id)
+    return result
+
+
+class InvalidBibleOutput(ValueError):
+    """Raised when a bible agent rejects its own model output.
+
+    Carries the agent id so a tool can report its own operator-facing message
+    ("CameraBible agent produced invalid output.") rather than only a generic
+    one, while the ``validate()`` call itself stays in one place.
+    """
+
+    def __init__(self, agent_id: str) -> None:
+        super().__init__(f"Agent '{agent_id}' produced invalid output.")
+        self.agent_id = agent_id
+
+
+def _with_subject(model_output: Any, subject_key: str, subject_id: str) -> Any:
+    """Return the model output with ``subject_key`` forced to ``subject_id``.
+
+    The key is set at the top level *and* inside the artifact payload, since
+    agents read identity from whichever level their schema lives at. A copy is
+    returned so the caller's payload is not mutated.
+    """
+    from copy import deepcopy
+
+    if not isinstance(model_output, dict):
+        return model_output
+    patched: dict[str, Any] = deepcopy(model_output)
+    patched[subject_key] = subject_id
+    for wrapper in ("character_bible", "environment_bible"):
+        nested = patched.get(wrapper)
+        if isinstance(nested, dict):
+            nested[subject_key] = subject_id
+            identity = nested.get("visual_identity")
+            if isinstance(identity, dict):
+                identity[subject_key] = subject_id
+    return patched
 
 
 def _save_visual_dev_candidate(

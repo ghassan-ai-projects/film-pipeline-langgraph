@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
+from film_pipeline.orchestration.orchestrator_state import get_convergence_round
 from film_pipeline.orchestration.services import GraphServices, _get_services
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 from film_pipeline.schemas.base import ArtifactType as _ArtifactType
@@ -30,7 +31,10 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
     "reference-strategy-planner": "visual_reasoner",
     "visual-dev-agent": "visual_reasoner",
     "character-dossier-agent": "creative_writer",
+    "camera-bible-agent": "creative_writer",
+    "character-bible-agent": "creative_writer",
     "environment-bible-agent": "creative_writer",
+    "style-bible-agent": "creative_writer",
     "prompt-composition-agent": "creative_writer",
     # Analytical/structural agents → strict profiles
     "structure-extractor-agent": "strict_validator",
@@ -75,11 +79,7 @@ def _initial_phase_context(state: dict[str, Any]) -> dict[str, str]:
         "consistency_warnings": "(none)",
     }
 
-    conv = state.get("_orchestrator__convergence", {})
-    if isinstance(conv, dict):
-        phase_conv = conv.get(ctx["current_phase"], {})
-        if isinstance(phase_conv, dict):
-            ctx["convergence_round"] = str(phase_conv.get("round_count", 1))
+    ctx["convergence_round"] = str(get_convergence_round(state, ctx["current_phase"]))
 
     return ctx
 

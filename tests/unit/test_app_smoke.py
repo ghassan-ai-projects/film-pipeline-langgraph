@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.studio.smoke import (
     check_agent_registry,
     check_graph_compiles,
@@ -19,7 +20,9 @@ class TestSmokeChecks:
     def test_agent_registry(self) -> None:
         ok, detail = check_agent_registry()
         assert ok is True, detail
-        assert "11" in detail
+        # Compared against the roster, not a literal: the smoke check's job is
+        # to report the registered roster, not to pin its size.
+        assert str(len(MVP_AGENTS)) in detail
 
     def test_validator_registry(self) -> None:
         ok, detail = check_validator_registry()

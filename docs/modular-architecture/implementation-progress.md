@@ -833,3 +833,159 @@ and `qc_patch_ref`) as an explicit R-01 API target; the established script
 response remains separately frozen. The project-resolution probes cover all
 four mutating operator actions, and the stdio expected failure is isolated from
 process-startup and malformed-response failures.
+
+## AGENT-01..07 — the agents-module round (2026-09-26)
+
+Seven slices against the candidates triaged in
+[12 — file inventory and candidates](12-file-inventory-and-candidates.md). The
+round's method was the one `11` §6 asked for: pick the narrowest change a test
+can falsify, and let the measurement decide the rest. Both gates ran on every
+slice; the tree was at 2,106 unit tests / 3 skipped / 1 xfailed by the end.
+
+| Slice | Scope | Method note | Behavior evidence | Gates | Enola | Commit |
+|---|---|---|---|---|---|---|
+| AGENT-01 | Delete `schemas/registries/agent_registry.py`: `AgentRegistryEntry` duplicated `AgentRegistration` (12 of 13 fields; the 13th, `enabled`, had no production reader) | Measured first: every reference in `src/` was its own definition plus two re-exports; the only real user was one construction test | New guard `TestSingleAgentRegistrationModel` pins exactly one registration model under `src/` and its roster fields | PASS — 514 passed; ruff, mypy clean | PASS — exit 0 | `911ff4f` |
+| AGENT-02 | Delete `agents/handoff.py` (`HandoffManager`) and `PromptRunner.create_handoff` — no production caller | The graph records handoffs on state channels via `orchestration.nodes._agent_handoff`; `AgentHandoff` stays in `schemas.handoff`. Also retires one of the two production readers of the field F-AGENT-02 shows is a lie | Full suite; no behavior changed because nothing reachable called it | PASS — 2,057 passed / 3 skipped / 1 xfailed; ruff, mypy clean | PASS — exit 0 | `12263f8` |
+| AGENT-03 | Move `agents/mvp/__init__.py` -> `agents/roster.py`; `mvp` named a release scope, not a concern, and implied an implementation package next to the real `agents/impl/` | Mechanical: 11 import sites, `MVP_AGENTS` name unchanged | Full suite | PASS — 2,057 passed; ruff, mypy clean | PASS — exit 0 | `dda3afb` |
+| AGENT-04 | F-AGENT-02: add `produces` to `AgentRegistration`, set it on all 11 roster rows, move `AGENT_CLASS_BY_ID` into `agents/registry.py`, delete `agents/impl/registry.py` and the orphan `visual-dev-agent` key, and route 10 node call sites through the contract | Measured by **runtime** call, not the audit's AST scan: the AST technique reports `[]` for `orchestrator-agent` (it returns `model_dump()`), which would have fabricated a second divergence. `produces` is present in `execute()`'s result for 11/11 (15/15 after AGENT-08). **Correction (`8a9aa53`, adversarial review):** the earlier "1 exact -> 11 exact" framing compared two different predicates — the before-figure was `output_artifacts` set-equality, the after-figure only asks whether `produces` is *a* key — so it read as a larger repair than it is. The repair is real and measured; the comparison was not like-for-like. | `TestRosterDeclaresWhatItsAgentsProduce` instantiates each row's real impl with the row as contract and asserts `produces in execute({})`; falsified by restoring the old `validation_report` claim (fails for all 10) | PASS — 2,080 passed; ruff, mypy clean | PASS — exit 0, cycle set identical | `9b0cfc0` |
+| AGENT-05 | `07` §4's "highest-confidence split": `model_adapter.py` 383 -> 290, new `agents/transports/{chat_completions,gemini,zai}.py`; `ModelAdapter` becomes dispatch; the two frozen request value objects **moved**, not reinvented | Public signature, the z.ai allowlist, error strings, `redact_body` flags, and headers are unchanged; `_zai_base_url`/`_gemini_url` kept as delegates for the tests that poke them (10 functions touch those two, per the review) | `test_model_adapter.py`: **collected** 40 -> 57 and **`def test_`** 36 -> 51 (the counts differ because of parametrization), including a dispatch-policy test pinning that a `zai/` model never reaches OpenRouter and a bare model never reaches z.ai | PASS — 2,106 passed; ruff, mypy clean | PASS — exit 0, no new cycle | `f55a23a` |
+| AGENT-06 | `07` §3/§6.4: `orchestrator_state` gains the `__all__` surface it lacked (the diagnosis was a surface problem, not a size one, so the file is **not** split) | Writing the guards found three real leaks, all fixed: `_context.py` and `approval.py` indexed orchestrator slices by hand while accessors existed; `_require_human_approval` was imported by three modules outside its owner (O7) and is now `require_human_approval`; `_repair_loop.py` hand-copied the convergence slice | New `test_orchestrator_state_surface.py`: declared surface matches definitions, no outside private import, no outside hand-built key **read**. Falsified by restoring one old `working.get("_orchestrator__approved_refs")` line | PASS — 2,106 passed; ruff, mypy clean | PASS — exit 0 | `860e041` |
+
+### What this round establishes, and what it does not
+
+**Establishes.** The agents module no longer declares the same concept twice.
+Three registries became two (`roster` declares, `registry` validates and binds),
+one duplicate schema is gone, one dead lifecycle is gone, and one provider seam
+is a package. Every change is pinned by a test that was shown to fail when the
+old state is restored.
+
+**Does not establish.** `output_artifacts` is still validated against nothing
+(F-AGENT-03), `_AGENT_PROFILE_MAP` keeps 10 orphan rows (F-AGENT-06), the
+prompt-template registry is still keyed from two id spaces (F-AGENT-05), and
+**F-AGENT-04 — the MCP bible second lifecycle — is still open** and is the
+Critical item this round did not reach.
+
+## AGENT-08 — F-AGENT-04 closed: one agent path, not two (2026-09-26)
+
+The Critical finding this round did not reach, now done in three commits. The
+MCP bible tools were a **second agent lifecycle**: local `AgentRegistration`
+literals, hand-assembled prompts, and a direct `model_adapter.chat` call.
+
+Two live defects made that path dead on arrival, both verified at HEAD before
+the fix:
+
+- `_shared.py:106` and `shot.py:195` resolved the model through
+  `model_router.resolve("creative_writer")`. `ModelRouter` has `select`,
+  `resolve_or_raise`, `fallback`, `cost_ranked`, `list_profiles`, and
+  `resolve_model_params` — **no `resolve`**. The real-model path raised
+  `AttributeError` before any request was made.
+- Even had it not, `_shared.py:107` tested `isinstance(raw, dict)` against
+  `ModelAdapter.chat`'s `-> str` return, so the result was always `{}`.
+
+Neither could be seen in mock mode, where `model_adapter is None` short-circuits
+before both lines. That is why the tests were green while the feature was dead.
+
+| Slice | Scope | Evidence | Gates | Enola | Commit |
+|---|---|---|---|---|---|
+| AGENT-08a | Register `camera/character/environment/style-bible-agent` on the roster; bind their classes; add their templates; move their mocks into `studio/mock_responses.py` | Contracts copied verbatim from the MCP literals so the later swap could not drift. Registration ≠ routing: `_PHASE_DEFAULT_AGENTS` untouched. Adds a guard that a registered mock must pass its own agent's `validate()` — falsified by emptying character's `identity_block` | PASS — 2,145 passed; ruff, mypy clean | PASS — exit 0 | `7d27083` |
+| AGENT-08b | Route the four visual-dev tools through `_run_bible_agent`, the MCP counterpart of `orchestration.nodes._agent` | Deletes `_chat_json_or_mock`, four `_request_*` / `_execute_*` pairs, four local contracts, and four hand-built prompt builders. Probed all four end-to-end: same `ok`, same response keys, same refs. **Correction (`8a9aa53`):** "same values" held for `camera` and `style` only. The old `environment` and `character` builders interpolated the requested name; a registered mock is static, so requesting `environment_name="Neon Market"` returned a wasteland description in the tool's own response. Mock-mode only (the real-model path is per-subject), now stated in the mocks themselves | PASS — 2,145 passed; ruff, mypy clean | PASS — exit 0 | `42f8d7a` |
+| AGENT-08c | Route `shot.py` the same way; delete its divergent `shot-design-agent` contract (`matrix_planning` vs the roster's `matrix_assembly`+`coverage_planning`, family `DEVELOPMENT` vs `DIRECTING`) | The series' one intended behaviour change: the mock matrix goes from a hand-written **1 row** to the registered **16-row** demo matrix. The test asserted only `>= 1`, so the test was tightened to compare against the registered mock | PASS — 2,162 passed; ruff, mypy clean | PASS — exit 0 | `39cb402` |
+
+**Measured.** `mcp/tools/bibles/` went 1,181 → **765 lines** while gaining a
+working real-model path. Zero `model_router.resolve(` or `model_adapter.chat(`
+calls remain anywhere under `src/`. The real-model path was exercised end-to-end
+through a stubbed transport and returns a valid bible (`ok=True`, `profiles=1`),
+where before it raised before the request.
+
+**Guard.** `tests/unit/mcp/tools/test_bible_shared_path.py` makes the second
+path structurally impossible: no module in the package may construct an
+`AgentRegistration`, name `model_adapter`/`model_router`, call
+`ModelRouter.resolve`, or drive an agent id absent from the roster. Verified
+falsifiable by injecting the original bug form into `camera.py`.
+
+**Why structural guards here.** The defect was a second *path*, not a wrong
+*value*. Every mock-mode test passed with the bug present, so only a structural
+rule can catch a recurrence.
+
+**Still open, deliberately.** `output_artifacts` remains unvalidated
+(F-AGENT-03); `_AGENT_PROFILE_MAP` keeps its orphan rows (F-AGENT-06); the
+prompt-template registry is still keyed from two id spaces (F-AGENT-05); and
+`StudioRuntime` is untouched (`11` §3 defers it until consumers move).
+
+## AGENT-09 — pre-merge review of the branch, and its three fixes (2026-09-26)
+
+An independent adversarial review of the whole branch (15 commits, `17dcca1..43dc866`)
+found no Critical or High code defect and judged the branch safe to merge. It found
+three real issues, all fixed here. Method followed this repo's hard-won rules:
+mutation testing **in-process** only — never by editing tracked files, and never in
+a clone, because the venv is an editable install that resolves to the real source
+and clone mutation returns false results.
+
+**1. The static mock rebound the persisted artifact to a foreign identity (Medium).**
+The most serious finding, and my earlier correction had understated it. I had
+documented that a registered mock "describes the mock rather than the character
+asked for", framing it as prose. It was stronger than that: the *artifact identity*
+was wrong. Measured before the fix:
+
+```
+generate_character_bible({"character_id":"hero"})    -> response "hero",    saved "lead"
+generate_character_bible({"character_id":"villain"}) -> response "villain", saved "lead"
+```
+
+Both characters persisted `character_id: "lead"`, on a version chain keyed by a
+constant artifact id — so the chain was same-subject only by accident. The response
+was right while the durable data was wrong, and no test compared them: the existing
+assertion checked the echoed request, never the saved artifact.
+
+The first fix attempt failed and the failure is worth recording: the bible schemas
+are frozen (`SchemaBase` uses `ConfigDict(frozen=True)`), so stamping the id onto
+the parsed artifact raised `frozen_instance`. The correct place is the **input**:
+`_run_bible_agent` now takes `subject_key`/`subject_id` and writes the requested id
+over the model output before the agent parses it, returning a deep copy so the
+caller's payload is untouched. Fixed for character and environment; verified that
+two characters now persist distinct ids.
+
+Guards: `test_saved_character_bible_is_about_the_requested_character` and
+`test_saved_environment_bible_is_about_the_requested_environment` read the payload
+off disk, not the response envelope. Both verified falsifiable — disabling the
+subject override fails them with `- neon_market / + wasteland`.
+
+**2. All five tools lost their distinct invalid-output message (Low).** Routing them
+through the shared helper collapsed five operator-facing strings into one generic
+wrapped message. Fixed with an `InvalidBibleOutput` exception carrying the agent id,
+which each tool translates into its own wording; all five now match `origin/main`
+byte-for-byte. Guards pin each literal and assert every tool catches the exception.
+
+**3. Stale and mixed-basis numbers in `12` (Low).** The branch's own standard is
+"record the measurement", and three rows had drifted: C-05 `runner.py` was listed at
+471 but is 447 (this branch deleted `create_handoff` from that exact file), C-02 said
+"all 11 rows" for a roster that is now 15, and the LOC column mixed before- and
+after-figures. The column is now explicitly `before` or `before -> after` and
+re-measured. AGENT-05's test count is stated as both collected (40 -> 57) and
+`def test_` (36 -> 51), since the two differ.
+
+**Confirmed clean by the review, tested rather than assumed:** all 11 `produced_artifact`
+sites resolve to exactly the key the old literal used (the contract read cannot
+drift, because routed agent == call-site literal at every site); the model-adapter
+split is byte-identical across eight edge-case model ids, headers, `redact_body`
+flags and the z.ai allowlist; `_run_bible_agent` returns a clean `{"ok": False}`
+envelope for every partial failure, including `validate()` raising; validation order
+is preserved; the shared-path guards fire on all five evasions attempted; and all
+deleted names are gone with no dangling references.
+
+**Noted, not fixed (both unreachable or pre-existing):** `produced_artifact` returns
+`None` where the old literal returned a value when services are absent — unreachable,
+since `_run_agent` short-circuits to `status: no_services` first. And the
+orchestrator-key guard's "reads" scope matches `state.get("<literal>")` but not
+subscript or variable-bound reads; the one live instance is present in `origin/main`,
+so it is not a regression.
+
+**Correction to the AGENT-09 commit body (`f5a3c53`).** It states the gate result as
+"2344 passed / 8 skipped / 10 xfailed". The measured figure is **2317 passed / 8
+skipped / 10 xfailed** (re-run over the full `ci-check` test scope). The 2344 was
+written without running that scope, which is the same class of error the two
+earlier corrections in this file exist to catch. Gates are otherwise as stated:
+`make ci-check` PASS, 91.98% coverage, builds and product gate PASS; ruff and mypy
+strict clean; `enola check` exit 0. The unit-scope figure for the same tree is 2181
+passed / 3 skipped / 1 xfailed; the two differ because the full scope includes the
+integration and e2e suites with their own skip marks.

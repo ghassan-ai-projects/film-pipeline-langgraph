@@ -1,8 +1,12 @@
-"""Registry entry schemas (agent, provider, validator, model)."""
+"""Registry entry schemas (provider, validator, model).
+
+The agent roster's registration model is :class:`AgentRegistration` in
+``film_pipeline.schemas.handoff`` — it is the single record for that concept and
+is what ``agents.registry`` validates and what ``agents.roster`` populates.
+"""
 
 from __future__ import annotations
 
-from film_pipeline.schemas.registries.agent_registry import AgentRegistryEntry
 from film_pipeline.schemas.registries.model_registry import ModelRegistry, ModelRegistryEntry
 from film_pipeline.schemas.registries.provider_registry import (
     CostProfile,
@@ -17,7 +21,6 @@ from film_pipeline.schemas.registries.validator_registry import (
 )
 
 __all__ = [
-    "AgentRegistryEntry",
     "CostProfile",
     "ModelRegistry",
     "ModelRegistryEntry",

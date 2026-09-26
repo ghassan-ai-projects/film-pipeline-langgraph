@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from film_pipeline.agents.impl.registry import get_agent_class
+from film_pipeline.agents.registry import get_agent_class
 from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
 from film_pipeline.orchestration.nodes._agent_handoff import (
     _capture_run_outcome,
@@ -45,6 +45,34 @@ __all__ = [
     "_run_agent",
     "_save_artifact",
 ]
+
+
+def produced_artifact(
+    scope: dict[str, Any],
+    agent_id: str,
+    result: dict[str, Any],
+) -> Any:
+    """Return the artifact an agent run produced, via its contract's ``produces`` key.
+
+    The roster row for ``agent_id`` is the single declaration of which key that
+    agent's ``execute()`` returns its primary artifact under, so call sites read
+    the result through the contract instead of hardcoding the key. A lookup that
+    finds no contract falls back to ``None``, matching the previous
+    ``result.get("<literal>")`` behaviour for unknown or unrouted agents.
+    """
+    contract = _contract_for(scope, agent_id)
+    if contract is None or not contract.produces:
+        return None
+    return result.get(contract.produces)
+
+
+def _contract_for(scope: dict[str, Any], agent_id: str) -> AgentRegistration | None:
+    """Look up a registered agent's contract; ``None`` when services are absent."""
+    services = _get_services(scope)
+    registry = services.agent_registry if services is not None else None
+    if registry is None:
+        return None
+    return registry.lookup_by_id(agent_id)
 
 
 @dataclass(frozen=True)

@@ -13,10 +13,14 @@ from typing import Protocol
 from film_pipeline.agents._prompt_template import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults.production import (
     _assembly_agent,
+    _camera_bible_creator,
+    _character_bible_creator,
+    _environment_bible_creator,
     _generation_planner,
     _orchestrator_review,
     _qc_synthesizer,
     _shot_bible_creator,
+    _style_bible_creator,
     _visual_development_creator,
 )
 from film_pipeline.agents.prompt_templates.defaults.spine import (
@@ -44,10 +48,13 @@ class _TemplateRegistrar(Protocol):
 __all__ = [
     "_assembly_agent",
     "_assembly_validator",
+    "_camera_bible_creator",
+    "_character_bible_creator",
     "_constitution_creator",
     "_delivery_completeness_validator",
     "_development_creator",
     "_dialogue_voice_validator",
+    "_environment_bible_creator",
     "_generation_planner",
     "_intake_classifier",
     "_orchestrator_review",
@@ -59,6 +66,7 @@ __all__ = [
     "_script_structure_validator",
     "_shot_bible_creator",
     "_structure_extractor",
+    "_style_bible_creator",
     "_visual_development_creator",
     "load_all",
     "load_validator_templates",
@@ -72,6 +80,10 @@ def load_all(reg: _TemplateRegistrar) -> None:
     reg.register(_development_creator())
     reg.register(_screenwriter())
     reg.register(_visual_development_creator())
+    reg.register(_camera_bible_creator())
+    reg.register(_character_bible_creator())
+    reg.register(_environment_bible_creator())
+    reg.register(_style_bible_creator())
     reg.register(_shot_bible_creator())
     reg.register(_generation_planner())
     reg.register(_qc_synthesizer())

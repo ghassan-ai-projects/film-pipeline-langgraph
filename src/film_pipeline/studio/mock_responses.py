@@ -432,4 +432,101 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
                 "duration_total_seconds": 20.0,
             }
         },
+        # --- Visual-development bible creators ---------------------------
+        # These four are invoked through MCP, not a graph phase, so their
+        # canned payloads are inert to the graph path. They are the single
+        # mock authority for those tools — the tools previously carried their
+        # own copies, keyed at call time by the ids below.
+        "camera-bible-agent": {
+            "camera_bible": {
+                "project_id": "demo",
+                "profiles": [
+                    {
+                        "profile_id": "default",
+                        "use_case": "General shots",
+                        "lens": "35mm prime",
+                        "framing": "Rule of thirds",
+                        "movement": "Static or slow push-in",
+                        "depth_of_field": "Shallow, f/2.0",
+                        "composition_rules": ["Rule of thirds"],
+                        "transition_rules": ["Cut on action"],
+                        "emotional_meaning": "Observational, intimate",
+                    }
+                ],
+                "default_profile_id": "default",
+            }
+        },
+        "character-bible-agent": {
+            # Static, like every other row here: a registered mock is keyed by
+            # agent id and cannot interpolate the requested character. The tool
+            # returns this identity_block as-is in mock mode, so it describes
+            # the mock rather than the character asked for. Real model output
+            # (the path that matters) is per-character.
+            "character_bible": {
+                "character_id": "lead",
+                "project_id": "demo",
+                "visual_identity": {
+                    "character_id": "lead",
+                    "name": "Lead",
+                    "role": "protagonist",
+                    "age": "unknown",
+                    "physical_description": "Generated in mock mode.",
+                    "identity_block": (
+                        "A wiry figure in their 30s with a scar over the left brow — "
+                        "generated in mock mode. Replace with real model output."
+                    ),
+                },
+                "voice_rules": {
+                    "cadence": "measured",
+                    "vocabulary": [],
+                    "forbidden_phrasings": [],
+                    "signature_moves": [],
+                },
+                "wardrobe_rules": {"baseline": "", "act_variants": {}},
+                "emotional_arc": {
+                    "start_state": "unknown",
+                    "midpoint_state": "unknown",
+                    "end_state": "unknown",
+                    "key_turning_points": [],
+                },
+                "relationship_map": [],
+                "reference_assets": [],
+                "must_not_change": ["identity_block"],
+            }
+        },
+        "environment-bible-agent": {
+            # Static, like the character row above and for the same reason: a
+            # registered mock is keyed by agent id and cannot interpolate the
+            # requested environment. The tool returns locked_prompt_block in its
+            # own response, so in mock mode it describes the mock rather than
+            # the environment asked for. Real model output is per-environment.
+            "environment_bible": {
+                "environment_id": "wasteland",
+                "project_id": "demo",
+                "name": "Wasteland",
+                "locked_prompt_block": (
+                    "A vast, empty wasteland at dawn — the canned environment "
+                    "bible used in mock mode. Replace with real model output."
+                ),
+                "invariants": [],
+                "zones": [],
+                "viewpoints": [],
+                "lighting_states": [],
+                "color_palette": ["#1a1a2e", "#e94560"],
+                "fingerprint": {"text": "The Wasteland — mock mode."},
+                "reference_assets": [],
+                "must_not_change": ["locked_prompt_block"],
+            }
+        },
+        "style-bible-agent": {
+            "style_bible": {
+                "project_id": "demo",
+                "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
+                "texture": "gritty, painterly",
+                "grain": "subtle 16mm grain",
+                "visual_mood": "melancholic, high-contrast",
+                "reference_stills": [],
+                "must_not_change": ["color_palette"],
+            }
+        },
     }

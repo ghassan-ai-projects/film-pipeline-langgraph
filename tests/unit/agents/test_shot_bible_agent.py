@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.agents.impl.registry import get_agent_class
 from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+from film_pipeline.agents.registry import get_agent_class
 from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket

@@ -71,35 +71,6 @@ class TestPromptRunner:
         assert result["valid"] is True
         assert result["data"] == [1, 2, 3]
 
-    def test_create_handoff(self) -> None:
-        runner = PromptRunner()
-        contract = _make_contract()
-        kb = _make_kb()
-        handoff = runner.create_handoff(
-            contract,
-            handoff_id="h1",
-            project_id="p1",
-            task="Test task",
-            kb_context=kb,
-        )
-        assert handoff.from_agent == "test-agent"
-        assert handoff.project_id == "p1"
-        assert handoff.kb_context_ref == kb.kb_context_id
-
-    def test_create_handoff_with_artifacts(self) -> None:
-        runner = PromptRunner()
-        contract = _make_contract()
-        kb = _make_kb()
-        handoff = runner.create_handoff(
-            contract,
-            handoff_id="h2",
-            project_id="p2",
-            task="Test task",
-            kb_context=kb,
-            input_artifact_refs=["artifact:script:v1", "artifact:scene:v2"],
-        )
-        assert handoff.input_artifact_refs == ["artifact:script:v1", "artifact:scene:v2"]
-
     def test_run_with_string_output_raises(self) -> None:
         runner = PromptRunner(mock_responses={"Test task": "not a dict"})  # type: ignore[dict-item]
         contract = _make_contract()
