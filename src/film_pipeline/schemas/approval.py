@@ -56,7 +56,6 @@ class ReviewPackage(SchemaBase):
     validation_results: list[str] = Field(default_factory=list)
     open_issues: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
-    cost_impact: dict[str, str] = Field(default_factory=dict)
     orchestrator_recommendation: str
     available_actions: list[str] = Field(default_factory=list)
     blocked_actions: list[str] = Field(default_factory=list)

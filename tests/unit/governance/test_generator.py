@@ -85,11 +85,9 @@ class TestGenerator:
             summary="Assembly ready.",
             open_issues=["missing_transition_S001_002"],
             risks=["Audio sync may drift in final export"],
-            cost_impact={"estimated_remaining": "$0.50", "within_budget": "true"},
         )
         assert len(pkg.open_issues) == 1
         assert len(pkg.risks) == 1
-        assert pkg.cost_impact["estimated_remaining"] == "$0.50"
 
     def test_build_with_validation_results(self) -> None:
         gen = ReviewPackageGenerator()

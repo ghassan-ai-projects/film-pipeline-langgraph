@@ -26,18 +26,6 @@ def _parse_generation_mode(mode_str: str) -> GenerationMode:
     return mode
 
 
-def _approve_spend(mgr: GenerationLedgerManager, project_id: str) -> None:
-    """Mark planned rows SUBMITTED so dispatch can pick them up.
-
-    This used to approve "under a ceiling" derived from the planner's own cost
-    estimate times 1.1. That ceiling could not refuse: the number it guarded
-    against was the number it was derived from, so the comparison was between a
-    value and itself plus ten percent. It was removed with the cost feature, and
-    what remains is the transition that actually mattered.
-    """
-    mgr.approve_spend(project_id)
-
-
 def _resolve_request_prompts(
     new_state: dict[str, Any],
     services: GraphServices,
@@ -130,5 +118,5 @@ def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices |
             mode=_parse_generation_mode(mode_str),
         )
 
-    _approve_spend(mgr, project_id)
+    mgr.approve_spend(project_id)
     _persist_planned_ledger(new_state, mgr, project_id)

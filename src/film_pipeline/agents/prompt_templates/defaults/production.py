@@ -184,12 +184,12 @@ def _generation_planner() -> PromptTemplate:
         "respecting the structural requirements in the Execution Brief.",
         core_task=(
             "Create a generation plan from the shot matrix. "
-            "Group shots by provider compatibility, estimate cost, "
+            "Group shots by provider compatibility, "
             "prioritize by dependency, and flag risky shots.\n\n"
             "IMPORTANT: The Execution Brief defines the film's structure. "
             "Every shot row in the matrix must have a complete generation plan. "
-            "Do not skip rows. Your cost estimate must reflect the ACTUAL "
-            "number of shots — not a placeholder."
+            "Do not skip rows; the plan must cover the ACTUAL number of shots "
+            "— not a placeholder."
         ),
         context_template=(
             "{constraints}\n\n" + "Execution Brief (film structure):\n{execution_brief_content}\n\n"

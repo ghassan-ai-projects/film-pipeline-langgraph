@@ -36,7 +36,6 @@ class DeliveryPackage(SchemaBase):
     subtitles_included: bool = False
     audio_stems_included: bool = False
     stills_included: bool = False
-    prompt_archive_included: bool = False
     validation_report_included: bool = False
     credits_included: bool = False
     is_complete: bool = False

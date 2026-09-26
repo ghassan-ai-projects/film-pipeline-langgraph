@@ -124,7 +124,7 @@ def _intake_classifier() -> PromptTemplate:
             "decision, not yours. Only when it is blank do you estimate a realistic "
             "runtime from the story's scope. "
             "Identify any ambiguities and flag risks: IP conflicts, "
-            "sensitivity concerns, budget concerns, production complexity."
+            "sensitivity concerns, production complexity."
         ),
         context_template=(
             "{constraints}\n\n" + "User idea: {idea}\n"

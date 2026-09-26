@@ -152,7 +152,6 @@ The first implementation should model state around these domains:
 - `validation`
 - `approvals`
 - `issues`
-- `budget`
 - `provider_health`
 - `runtime_errors`
 - `timeline`
@@ -177,7 +176,6 @@ Core fields:
 - `target_runtime`
 - `aspect_ratio`
 - `delivery_modes`
-- `budget`
 - `provider_preferences`
 - `human_owner`
 
@@ -1276,11 +1274,6 @@ human_review:
     - generation_plan
     - act_qc
     - final_delivery
-
-budget:
-  cap_usd: 120
-  require_approval_over_usd: 10
-  test_clip_seconds: 1
 
 delivery:
   modes:

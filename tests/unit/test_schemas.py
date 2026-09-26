@@ -615,7 +615,6 @@ def test_audit_log_entry() -> None:
         actor_type="orchestrator",
         actor_id="orchestrator-agent",
         action="phase_advanced",
-        cost_estimate_usd=2.5,
     )
     assert e.action == "phase_advanced"
 

@@ -1,11 +1,6 @@
 """The provider identity catalogue — which provider ids exist.
 
-This answers one question: *is this provider id real?* It deliberately holds no
-cost data. It previously lived inside `providers/pricing.py`, whose comment
-explained that the mock rows were there "so planning never treats an unknown
-provider as free" — meaning the pricing table was also serving as the unknown
-provider guard. When cost was removed, that identity list had to move rather than
-disappear, because otherwise nothing could tell a real provider id from a typo.
+This answers one question: *is this provider id real?* It holds no cost data.
 
 Kept in `providers` rather than `studio` because provider identity is this
 package's concern: `studio` only decides which of these a given server mode uses.

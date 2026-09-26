@@ -147,16 +147,6 @@ class TestGenerationLedgerManager:
         row = mgr.get_row("proj-14", "any")
         assert row is None
 
-    def test_approve_spend_no_budget_limit(self, tmp_path: Path) -> None:
-        """No budget limit: max_cost_usd=-1 passes everything."""
-        store = ArtifactStore(root=tmp_path / "artifacts")
-        mgr = GenerationLedgerManager(store)
-        mgr.plan_batch("proj-no-limit", ["S001"], "p", "m")
-        ledger = mgr.load("proj-no-limit")
-        mgr.update_row("proj-no-limit", ledger.rows[0].generation_id, estimated_cost_usd=9999.0)
-        ledger = mgr.approve_spend("proj-no-limit")
-        assert ledger.rows[0].status == GenerationStatus.SUBMITTED
-
     def test_approve_spend_skips_already_submitted(self, tmp_path: Path) -> None:
         """Duplicate-prevention: already-SUBMITTED rows stay as-is."""
         store = ArtifactStore(root=tmp_path / "artifacts")

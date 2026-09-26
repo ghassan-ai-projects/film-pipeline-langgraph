@@ -134,7 +134,6 @@ compatibility shims, and all consumers import the owners directly.
 | `post` | 14 — Post-production | |
 | `operations` | — | Operator use cases, view models, runtime ports |
 | `projects` | — | Project identity, classification, resolution |
-| `budget` | — | Spend cap policy and refusal |
 | `studio` | — | Composition root; formerly `app` |
 | `devharness` | — | Test doubles and scenarios; formerly `testing` |
 
@@ -182,6 +181,26 @@ modules happening to write the same value the same way is *not* an ownership
 seam; a partial edit there produces an obvious bug, not divergent behaviour.
 Under `docs/modular-architecture/00-methodology-and-quality-bar.md` §1.3, only
 the latter justifies a boundary.
+
+### Verify claims against the tree, not against the log or a docstring
+
+Two failures in the cost-removal round came from trusting a written claim:
+
+- A commit titled "remove provider pricing" never touched `providers/pricing.py`.
+  `git show --name-status` on it lists no such path; the module was still present
+  and still imported by five modules. **A commit message is a claim, not
+  evidence.** Before building on a prior slice, `grep` the working tree.
+- A docstring asserted a state channel was "always the default" because its only
+  writer had been deleted. It had a second, dormant writer (`state.setdefault` in
+  `ensure_orchestrator_state`, plus a registered `OrchChannelSpec` noted "dormant
+  writer"). **"Nothing writes it" is a claim about every writer, including dormant
+  ones.** A dormant writer is still a writer.
+
+Corollary, learned the hard way in both directions: when a deletion removes an
+item from a rule set, a test asserting `count(...) == N` was derived from that set
+and must be re-measured, not edited to match. And when a sweep finds a suspicious
+name — `FailureClass.BUDGET` looked like a cost leftover — check the owner before
+deleting it; it was a live member of the failure taxonomy.
 
 ### How to run a decomposition slice
 

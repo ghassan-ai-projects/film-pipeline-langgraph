@@ -42,23 +42,13 @@ _HERO_REQUEST: dict[str, Any] = {
     "model": "2.0",
     "mode": "quality",
     "priority": 0,
-    "estimated_cost_usd": 2.5,
 }
 
 _FILLER_REQUEST: dict[str, Any] = {
     "shot_id": "shot_0002",
-    "estimated_cost_usd": 2.0,
 }
 
 _VALID_OUTPUT: dict[str, Any] = {
-    "cost_estimate": {
-        "project_id": "test-project",
-        "batch_id": "batch-001",
-        "provider": "seedance",
-        "estimated_cost_usd": 4.5,
-        "clip_count": 2,
-        "notes": "hero shot first, then filler.",
-    },
     "shot_groups": [_HERO_REQUEST, _FILLER_REQUEST],
 }
 
@@ -70,9 +60,8 @@ class TestGenPlannerAgent:
     def test_execute_produces_generation_requests(self) -> None:
         """The planner's real output is the requests dispatch consumes.
 
-        It used to also emit a ``cost_estimate``; that artifact was removed with
-        the cost feature, and ``validate`` now checks the requests instead of the
-        estimate's type.
+        ``validate`` checks the requests; the estimator's output used to be
+        checked instead, and went with the cost feature.
         """
         agent = _make_agent()
         requests = agent.execute(_VALID_OUTPUT)["generation_requests"]

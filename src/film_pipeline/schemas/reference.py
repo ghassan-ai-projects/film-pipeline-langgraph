@@ -99,7 +99,6 @@ class ReferenceStrategy(SchemaBase):
     environment_priorities: list[str] = Field(default_factory=list)
     prop_priorities: list[str] = Field(default_factory=list)
     provider_plan: list[str] = Field(default_factory=list)
-    cost_estimate_usd: float = Field(default=0.0, ge=0)
     notes: str = ""
 
 

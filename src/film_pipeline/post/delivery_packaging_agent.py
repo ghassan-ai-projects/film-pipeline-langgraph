@@ -27,7 +27,6 @@ class DeliveryPackage:
     subtitles_included: bool = False
     audio_stems_included: bool = False
     stills_included: bool = False
-    prompt_archive_included: bool = False
     validation_report_included: bool = False
     credits_included: bool = False
     notes: list[str] = field(default_factory=list)
@@ -86,7 +85,6 @@ class DeliveryPackagingAgent:
         subtitle_path: str = "",
         audio_stems_dir: str = "",
         stills_dir: str = "",
-        prompt_archive_dir: str = "",
         validation_report_path: str = "",
         credits_path: str = "",
     ) -> DeliveryPackage:
@@ -107,9 +105,6 @@ class DeliveryPackagingAgent:
         if stills_dir:
             package.files.append({"path": stills_dir, "type": "stills"})
             package.stills_included = True
-        if prompt_archive_dir:
-            package.files.append({"path": prompt_archive_dir, "type": "prompt_archive"})
-            package.prompt_archive_included = True
         if validation_report_path:
             package.files.append({"path": validation_report_path, "type": "validation_report"})
             package.validation_report_included = True
@@ -146,7 +141,6 @@ class DeliveryPackagingAgent:
             subtitles_included=package.subtitles_included,
             audio_stems_included=package.audio_stems_included,
             stills_included=package.stills_included,
-            prompt_archive_included=package.prompt_archive_included,
             validation_report_included=package.validation_report_included,
             credits_included=package.credits_included,
             is_complete=package.is_complete,

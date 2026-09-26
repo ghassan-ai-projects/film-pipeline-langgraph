@@ -119,17 +119,6 @@ class ModelRouter:
             raise ModelResolutionError(f"Model profile '{profile_name}' is not defined.")
         return str(profile.get("fallback", profile["primary"]))
 
-    def cost_ranked(self, profile_name: str) -> list[str]:
-        """Return models for this profile in cost order (cheapest first)."""
-        profile = self.profiles.get(profile_name)
-        if profile is None:
-            return []
-        primary = str(profile.get("primary", ""))
-        fallback = str(profile.get("fallback", ""))
-        if primary == fallback:
-            return [primary]
-        return [fallback, primary]
-
     def list_profiles(self) -> list[str]:
         return list(self.profiles.keys())
 

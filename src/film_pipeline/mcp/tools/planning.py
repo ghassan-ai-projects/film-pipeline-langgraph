@@ -1,4 +1,4 @@
-"""Budget initialization and generation plan tools."""
+"""Generation plan tools."""
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from .helpers import (
 
 #: Fallback cap when neither the caller nor the project supplies one. Kept
 #: explicit and named so it is visible as the last-resort default it is.
-_DEFAULT_CAP_USD: float = 100.0
 
 
 def _save_gen_planning_candidate(
@@ -73,22 +72,13 @@ def _load_master_matrix(store: Any, project_id: str) -> Any:
 def _known_provider(runtime: Any, provider_id: str) -> bool:
     """True when ``provider_id`` names a provider this runtime can reach.
 
-    This guard was a membership test against the provider *pricing* catalogue,
-    which made a cost table the authority for provider identity. Cost is gone; the
-    authority that remains is the runtime's own provider set — the adapters it has
-    registered plus the ids its server mode supports. That is the same kind of
-    check the pricing table was standing in for, without the cost data.
-
-    Registered adapters cover the configured and seeded providers; the mode's
-    default ids cover the case where seeding has not run yet, which is how the
-    planning tests build a runtime. A provider named only in project config is NOT
-    accepted: being requested is not the same as existing, which is the behaviour
-    the pricing check had and the behaviour its test still asserts.
+    The runtime's registered adapters cover the configured and seeded providers;
+    the server mode's default ids cover a runtime where seeding has not run yet,
+    which is how the planning tests build one. A provider named only in project
+    config is NOT accepted: being requested is not the same as existing.
     """
     if not provider_id:
         return False
-    if runtime.get_provider(provider_id) is not None:
-        return True
     if provider_id in runtime.list_providers():
         return True
     from film_pipeline.providers import supported_provider_ids
@@ -133,11 +123,8 @@ def _build_generation_plan(
 ) -> Any:
     """Derive the GenerationPlan from the shot matrix.
 
-    Cost estimation was removed as a feature. This function used a lookup in the
-    provider *pricing* table as its unknown-provider guard, which meant a cost
-    table was the authority for whether a provider id was valid. The guard now
-    checks the resolved config's own video-provider route, which is where the id
-    came from and which survives the removal.
+    The provider guard checks the runtime's own provider set — see
+    ``_known_provider`` — rather than the resolved config's requested route.
     """
     from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
 

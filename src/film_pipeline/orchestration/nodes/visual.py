@@ -576,16 +576,15 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         phase="gen_planning",
         task=(
             "Plan generation for every shot: select providers and models, "
-            "estimate cost per shot and total, order by dependency. "
-            "Every row in the shot matrix must have a plan entry with "
-            "real (non-zero) cost estimates."
+            "order by dependency. Every row in the shot matrix must have "
+            "a plan entry."
         ),
     )
 
     # ``generation_requests``/``shot_groups`` are secondary keys of the plan
-    # result, not the contract's ``produces`` key (``cost_estimate``), so they
-    # stay literal here. Naming them on the roster would require a
-    # multi-artifact contract, which this slice deliberately does not add.
+    # result, not the contract's ``produces`` key, so they stay literal here.
+    # Naming them on the roster would require a multi-artifact contract, which
+    # this slice deliberately does not add.
     gen_requests = result.get("generation_requests")
     if gen_requests:
         new_state["generation_requests"] = gen_requests

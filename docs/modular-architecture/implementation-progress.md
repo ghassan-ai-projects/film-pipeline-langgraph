@@ -1587,3 +1587,60 @@ better ratios because those axes (exact duplicates, re-derived policy) select fo
 defects directly, while "broad except" selects for a *style* that is usually
 correct. Worth recording so the next round picks axes by expected yield, not by
 how interesting the pattern sounds.
+
+## AGENT-20 — removing the cost feature: measured, not argued (2026-09-26)
+
+The cost feature is gone (no backward compatibility; it was never useful). It was
+removed in slices, each committed with both gates green. The measured burn-down,
+by `grep -rn` across `src/` and `tests/`:
+
+| Surface | Before | After |
+|---|---:|---:|
+| `providers/pricing.py` | 139 lines | **deleted** |
+| `estimate_cost` (port + impls) | 4 defs | **0** |
+| `CostProfile` / `cost_profile` / `cost_profile_ref` | 4 src sites | **0** |
+| `provider_pricing` prompt variable | 2 src sites | **0** |
+| `budget_snapshot` channel + accessor + projections | 6 src sites | **0** |
+| `cost_estimate_ref` | 2 src sites | **0** |
+| `cost_report*` (delivery + validator rule) | 13 src, 12 test | **0** |
+| `BUDGET_EXCEEDED`, `BLOCKED_BUDGET` | 2 enum members | **0** |
+| `blocked_kb_domains=["cost"]` (a domain that never existed) | 12 rows | **0** |
+
+### Kept deliberately — these are not the cost feature
+
+- `cli/run.py --confirm-real` — a real-mode *spend acknowledgment* gate. It is the
+  only thing standing between a headless run and paid providers.
+- `approve_spend` (ledger + executor) — the live `PREPARED -> SUBMITTED` ledger
+  transition, reachable in every generation test.
+- `providers/catalog.py` — provider *identity* (`is_known_provider`,
+  `supported_provider_ids`). The pricing table had been doing this job by
+  accident, so deleting cost required moving identity first.
+- `FailureClass.BUDGET` — a live member of the failure taxonomy.
+
+### Two lessons worth more than the deletion
+
+**A commit message is a claim, and claims need the same verification as code.**
+`e54dde1` is titled "remove provider pricing" and its body says it deleted
+`providers/pricing.py` "entirely". It never touched the file:
+`git show --name-status e54dde1` lists no such path and
+`git cat-file -e e54dde1:src/film_pipeline/providers/pricing.py` succeeds. The
+module was still present, still imported by 5 modules, and still injecting a USD
+rate table into every agent prompt. It took `grep` on the *working tree*, not a
+read of the log, to notice. The same happened to my own earlier commit message in
+this round, which claimed two deletions it did not make.
+
+**"Nothing writes it" is a claim about every writer, including dormant ones.** The
+`get_budget_snapshot` docstring asserted the snapshot was "always the default"
+because `update_budget_snapshot` (its only writer) had been deleted. That was
+false: `ensure_orchestrator_state` seeded it via `state.setdefault`, and it was
+registered as an `OrchChannelSpec` whose note read "dormant writer; wiring decided
+in D13/P1". A dormant writer is still a writer. Deleting both sites made the
+docstring's invariant true by construction rather than by assertion.
+
+### What this slice does not establish
+
+Cost arithmetic, provider billing rates, and spend ceilings are now absent from the
+system. That is a product decision made deliberately, not a refactor that preserved
+behaviour — nothing here guarantees the pipeline cannot overspend, because the
+mechanism that would have is deleted. `--confirm-real` remains as a human
+acknowledgment, not a limit.
