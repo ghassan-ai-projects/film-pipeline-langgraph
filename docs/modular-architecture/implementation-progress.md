@@ -1919,3 +1919,97 @@ HEAD before believing a FAIL.
 - The 9 frozen `rt._persist_project_state` / `rt.projects[id] = state` sites remain
   recorded debt in `test_boundary_law.py`; routing them through `RuntimePort` is
   opportunistic work, not a defect.
+
+## AGENT-25 — the agents cycle, the port bypass, and honest interfaces (2026-09-26)
+
+Three workstreams, four commits, each with both gates green.
+
+### 1. `agents <-> agents/prompt_templates` — and a second cycle the fix exposed
+
+`PromptTemplate` lived at `agents/_prompt_template.py`, one level *above* the
+subpackage that used it: **58 uses** inside `prompt_templates` against **3** in the
+parent (its own definition plus two `runner.py` type hints, one already
+`TYPE_CHECKING`-only). Moved to `prompt_templates/template.py`; all 7 consumers
+redirected; the `registry.py` re-export (`import ... as PromptTemplate`) that
+formed the cycle is gone.
+
+**That alone made the gate red.** Rather than guess, the gate was compared at HEAD
+against the working tree — HEAD PASS, with the change FAIL — and enola's own
+`facts.jsonl` was read to print every edge touching the cluster. The second cycle:
+
+```
+prompt_templates -> registry -> defaults      (defaults is a CHILD of prompt_templates)
+```
+
+`registry._load_defaults` imported the sibling `defaults` package, so with
+`template.py` now a child of `prompt_templates`, the loop closed. Verified by
+deleting the edge: `enola check` -> PASS.
+
+Fixed by moving the wiring to the package root, which may import its children:
+`registry.get_registry()` is now content-free and `prompt_templates.get_registry()`
+loads the defaults. Six consumers redirected. A test pins that the submodule stays
+empty — the guard against reintroduction, since loading defaults again requires
+importing `defaults`.
+
+### 2. The port bypassed by its own intended callers — cleared to zero
+
+`operations/ports.py` declared `_persist_project_state` by *mirroring the runtime's
+private spelling*, while 8 call sites in `operations/` and `mcp/tools/*` called the
+private names. `StudioRuntime` now exposes `persist_project_state` and
+`record_audit`; the underscore names remain as in-package aliases (24 internal
+`studio` call sites use them, legitimately), verified to be the *same function
+object* rather than a second definition.
+
+| | before | after |
+|---|---:|---:|
+| External private persist/audit call sites | 8 | **0** |
+| `KNOWN_MIRRORED_PRIVATE_CALLS` rows | 7 | **{}** |
+
+`rt.projects[id] = state` — the other half the objective named — turned out to have
+**zero** occurrences outside `studio`. Nothing to route; recorded rather than
+silently skipped.
+
+One correction to the guard's contract: it was briefly widened to count the
+*public* spellings, which flags the correct usage and would make the table grow
+whenever someone does the right thing. Reverted to counting private spellings only.
+
+### 3. Interfaces: measured first, and most of the work was *not* needed
+
+| Measure | Result |
+|---|---|
+| Declared `__all__` names that fail to resolve | **0** (all 20 packages imported and checked) |
+| Packages with no `__all__` | **3** — `cli`, `orchestration`, `studio`, each deliberate |
+| Package-root cross-package imports | 66 (guarded) |
+| Submodule-path cross-package imports | 455 (unguarded, and fine) |
+
+So there was no mass rewrite to do, and doing one would be the rejected `03`/`05`
+program. What was genuinely missing was enforceability of the one claim that lived
+only in prose: that `orchestration` must stay bare so `import
+film_pipeline.orchestration` does not eagerly load the graph and `langgraph`.
+`test_bare_package_roots.py` turns it into a property, measured in a **fresh
+interpreter** (a subprocess — in-process the module is already imported and the
+measurement is meaningless): all three roots load no submodule of themselves and
+never pull in `langgraph`. Confirmed by running it.
+
+Falsified: adding an eager `__all__` plus a submodule import to
+`orchestration/__init__.py` — exactly what the prose warns against — fails
+`test_bare_roots_are_still_bare` and
+`test_bare_root_loads_no_submodule[orchestration]`.
+
+### A gap in my own verification, worth recording
+
+The pre-push hook rejected the first push attempt: four test modules still imported
+`PromptTemplate` from the old location. The tests **passed** (Python resolves the
+attribute at runtime; only mypy's `attr-defined` sees an undeclared re-export), and
+I had been running `mypy src` locally while the hook runs mypy over **src and
+tests** — 505 files against 297. The narrower command cannot see a break that is
+confined to test imports. Run `mypy src tests`.
+
+### What this round does not establish
+
+- Still open from AGENT-24: the 5 `KNOWN_PRIVATE_SYMBOL_IMPORTS` rows and the 2
+  `mcp -> studio._persistence` / `_operator_runtime` module reach-ins. The
+  persist/audit work removed the *call-site* debt those reach-ins were entangled
+  with, but the module-level reach-ins themselves remain and were not in scope.
+- The three bare roots still have no `__all__`. That is now a checked property
+  rather than an assumption, but it is still a choice, not an enforced interface.

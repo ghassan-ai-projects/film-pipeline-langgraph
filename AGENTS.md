@@ -37,6 +37,13 @@ make test-e2e
 
 The full pipeline runs `make ci-check`: ruff format, ruff lint, mypy strict, pytest with 90% coverage, and `uv build`.
 
+**Type-check `src` and `tests` together.** The pre-push hook runs mypy over both
+(505 files), while `mypy src` alone checks 297. The narrower command cannot see a
+break confined to test imports: a test that imports a name a package stopped
+re-exporting still *passes at runtime* (Python resolves the attribute), and only
+`attr-defined` over `tests` reports it. This cost a rejected push — run
+`uv run mypy src tests` before pushing, not `mypy src`.
+
 ### Architecture gate (Enola)
 
 `make ci-check` does **not** grade architecture. Enola is a second, required gate,
@@ -91,10 +98,14 @@ has **adopted**:
 - **No cross-package private reach-in** — importing another package's
   underscore-prefixed module. Guarded, with existing debt in
   `KNOWN_PRIVATE_REACH_INS`, ratcheted down.
-- **The port's mirrored privates stay mirrored** — `operations/ports.py`
-  deliberately names `_persist_project_state` and `_record_audit` so the port can
-  describe the runtime surface it adapts. `KNOWN_MIRRORED_PRIVATE_CALLS` records
-  the remaining outside callers.
+- **No external call to the runtime's private persist/audit methods.**
+  `StudioRuntime` exposes `persist_project_state` and `record_audit`; the
+  underscore spellings survive only as in-package aliases for the 24 call sites
+  inside `studio`, where a private name is legitimate. `RuntimePort` declares the
+  public names. `KNOWN_MIRRORED_PRIVATE_CALLS` is now **empty** — all 8 outside
+  call sites were routed — and the guard counts the *private* spellings only, so
+  it does not flag the correct public usage. If an external private call
+  reappears, record it in that table rather than allowing it silently.
 
 **What is deliberately NOT enforced.** `docs/modular-architecture/03-target-architecture.md`
 declares a per-package "Allowed outbound" set, but its own header calls it a
