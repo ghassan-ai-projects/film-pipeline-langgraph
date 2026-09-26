@@ -1644,3 +1644,69 @@ system. That is a product decision made deliberately, not a refactor that preser
 behaviour — nothing here guarantees the pipeline cannot overspend, because the
 mechanism that would have is deleted. `--confirm-real` remains as a human
 acknowledgment, not a limit.
+
+## AGENT-21 — the residue the cost removal exposed (2026-09-26)
+
+A sweep for what the deletions *revealed* rather than what they removed. Findings
+below are grep-proven; two candidate findings were withdrawn after checking the
+owner, which is the more useful result.
+
+### Removed
+
+| Item | Sites | Why it was dead |
+|---|---:|---|
+| Live LLM prompt cost instructions | 3 files | Asked the model for a field `_build_generation_requests` drops |
+| `_approve_spend` | 1 | One-line forward to `mgr.approve_spend`, plus a eulogy |
+| `cost_impact` | 4 | No `src/` call site passed it; always `{}` |
+| `cost_estimate_usd` | 2 | Field on audit + reference schemas, no reader |
+| `prompt_archive_dir` / `_included` | 5 | No caller passes it — including the MCP tool that forwards the other 6 args |
+| `_DEFAULT_CAP_USD` | 1 | Module constant, zero readers |
+| `ModelRouter.cost_ranked` | 1 (+4 tests) | Zero `src/` callers; kept alive by its own tests |
+| Redundant guard branch | 1 | See below |
+
+**The duplication worth naming.** `_known_provider` tested
+`runtime.get_provider(id) is not None` and then `id in runtime.list_providers()`.
+Those are the same expression: `get_provider` is `provider_adapters.get(...)` and
+`list_providers` is `list(provider_adapters.keys())` (`studio/runtime.py:374-378`).
+Two branches, one predicate. This is the AGENT-20 pattern again — a policy
+reimplemented at N sites, where the second copy was invisible because it was
+phrased differently.
+
+**A test that passed for the wrong reason.** `test_approve_spend_no_budget_limit`
+called `update_row(..., estimated_cost_usd=9999.0)`. That key is **not a field** on
+`GenerationLedgerRow` — verified by printing `model_fields`, not by reading the
+schema. `update_row` takes `**updates` and hands them to `model_copy`, so the
+kwarg was silently absorbed and the assertion (`status == SUBMITTED`) held anyway,
+because plan-then-approve produces that transition on its own. The test's name,
+docstring ("No budget limit: max_cost_usd=-1") and body all described a deleted
+policy while testing nothing about it. Deleted; `test_approve_spend_transitions_rows`
+covers the real behaviour.
+
+### Withdrawn after checking the owner — the more valuable half
+
+- **`FailureClass.BUDGET`** looked like cost residue: `grep -rn "FailureClass.BUDGET"`
+  returns only its definition. But that is the *normal* state of this enum — no
+  member is referenced anywhere in `src/`, because the whole `FailureClass`
+  taxonomy is declared-but-unwired vocabulary, and
+  `documentation/architecture-blueprint.md:659` lists "budget" as a legitimate
+  member ("classify provider, runtime, validation, budget, and continuity errors").
+  Deleting it would have been enforcing a rejected proposal. **Kept.**
+- **`ModelRouter.select(prefer_cheap=...)`** was bundled into the `cost_ranked`
+  finding on the strength of a similar grep shape. Unlike `cost_ranked` it is a
+  live parameter on a production-called method. **Kept.**
+- **`is_known_provider` / `KNOWN_PROVIDER_IDS`** have zero callers, but they are
+  identity vocabulary added deliberately when the pricing table was split. Whether
+  identity should be mode-scoped is a product question, not a cleanup. **Kept, and
+  flagged as an open decision rather than a defect.**
+
+The ratio: eight removals, three withdrawals. The withdrawals cost less than one
+wrong deletion would have — and the trigger for finding them was a rule this
+program had just written into `AGENTS.md` ("check the owner before deleting it"),
+which is the first time a rule from this ledger prevented a defect in the same
+session it was recorded.
+
+### What this does not establish
+
+The prompt-text change alters model input but is **not** covered by a test
+asserting the new wording — the removal is proven (the strings are gone), the
+behavioural effect on plan quality is not. `is_known_provider` remains unwired.
