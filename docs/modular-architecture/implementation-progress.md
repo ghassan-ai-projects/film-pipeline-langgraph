@@ -1489,3 +1489,52 @@ five fired, which is the reassuring half; the fifth had been reported as passing
 for four rounds. The cheap version of this audit — inject the defect, assert the
 guard fires — is worth running after adding any guard, and it is now the third
 time in this program that checking my own claim beat trusting it.
+
+## AGENT-18 — auditing the pre-existing guards: one resolver, four copies (2026-09-26)
+
+AGENT-17 audited the guards *this program added*. This round audited the
+**pre-existing** boundary guards, which is the riskier population because nobody
+had checked them.
+
+### The guards themselves are sound
+
+Injected each defect they claim to prevent:
+
+| Guard | Injected | Result |
+|---|---|---|
+| `providers/test_import_boundaries.py` | `from .adapters import Imagen4GeminiProvider` | **FIRES** |
+| `studio/test_app_boundaries.py` | `from ..mcp import server` | **FIRES** |
+| `schemas/test_import_boundaries.py` | (same resolver, same shape) | **FIRES** |
+
+They also sweep **recursively** (`rglob`), resolve relative and re-export forms
+correctly, and two of the three self-test their own resolver. This is good work
+from whoever wrote it.
+
+### The finding was underneath them
+
+`tests/unit/_import_guard.py` opens with *"It is one rule, so it lives here"* —
+and it is load-bearing for four boundary guards. Yet the same resolution algorithm
+existed **four times**: the shared helper plus one copy in each of three guard
+files. Three were **AST-identical** to the original, verified by comparing dumped
+function bodies rather than by eye.
+
+**Why it matters:** a divergence between the copies means one guard silently stops
+guarding, and nothing notices — each copy is only exercised by its own file's
+tests. That is the same failure mode AGENT-17 found in the reach-in detector, one
+level up: a guard that looks like a guard.
+
+Consolidated onto the shared helper. Both affected files' existing tests pass
+unchanged, **including the parametrised relative-import and re-export cases** —
+which is what proves equivalence rather than asserting it.
+
+### My own new guard was wrong twice
+
+The guard I added to prevent a fifth copy flagged the shared helper *itself* — the
+definition is the implementation, not a re-implementation. My first fix for that
+compared the path to `"_import_guard.py"` when the path is
+`"unit/_import_guard.py"`, so it still failed.
+
+Both mistakes were caught by running the guard, not by reading it. That is now
+four times in this program that checking beat reasoning, and it is the argument
+for falsifying every guard at the moment it is written rather than trusting it
+until it is audited.
