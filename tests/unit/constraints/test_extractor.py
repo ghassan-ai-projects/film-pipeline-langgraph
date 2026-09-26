@@ -86,12 +86,6 @@ def test_extract_language() -> None:
     assert result.dialogue_language == "French"
 
 
-def test_extract_budget() -> None:
-    idea = "Keep the budget under $500 for this social clip."
-    result = extract_constraints(idea, project_id="p1")
-    assert result.budget_cap_usd == 500
-
-
 def test_extract_delivery_modes() -> None:
     idea = "Deliver as mp4 and mov for the festival."
     result = extract_constraints(idea, project_id="p1")

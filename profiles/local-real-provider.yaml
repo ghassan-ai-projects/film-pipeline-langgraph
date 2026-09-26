@@ -33,10 +33,7 @@ validators:
   multi_review: true
   review_models: [gemini-flash, gpt-5-mini]
 
-budget:
-  max_total_usd: 100.0
-  auto_approve_up_to: 2.50
-  per_clip_limit: 10.0
+
 
 checkpoints:
   backend: git
@@ -44,4 +41,3 @@ checkpoints:
 generation:
   max_clips: 50
   max_duration_seconds: 15
-  require_spend_approval: true

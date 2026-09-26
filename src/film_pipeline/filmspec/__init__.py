@@ -76,7 +76,6 @@ class ArtifactType(StrEnum):
     PROMPT_REGISTRY = "prompt_registry"
     GENERATION_PLAN = "generation_plan"
     GENERATION_LEDGER = "generation_ledger"
-    BUDGET_STATE = "budget_state"
     CLIP = "clip"
     LAST_FRAME = "last_frame"
     MID_FRAME = "mid_frame"

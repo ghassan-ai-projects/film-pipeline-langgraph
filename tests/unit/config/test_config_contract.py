@@ -75,19 +75,6 @@ KNOWN_DEAD_GROUPS: tuple[_KnownDeadGroup, ...] = (
     ),
     (
         (
-            ("budget", "per_phase_cap_usd"),
-            ("budget", "max_auto_approved_cost_usd"),
-            ("budget", "human_approval_above_usd"),
-            ("budget", "auto_approve_up_to"),
-            ("budget", "per_clip_limit"),
-            ("generation", "require_spend_approval"),
-        ),
-        "Budget-gate knobs awaiting spend tracking (actual_cost_usd is never "
-        "written — O-F9); gates cannot fire until costs are recorded.",
-        f"{_INVENTORY}; O-F9",
-    ),
-    (
-        (
             ("generation", "re_anchor_every_n_clips"),
             ("generation", "re_anchor_on_scene_boundary"),
             ("generation", "re_anchor_on_drift_warning"),
@@ -177,14 +164,6 @@ READERS: dict[tuple[str, ...], tuple[str, str]] = {
         "src/film_pipeline/mcp/tools/helpers.py",
         "_collect_profile_models",
     ),
-    ("budget", "project_cap_usd"): (
-        "src/film_pipeline/orchestration/nodes/_context.py",
-        "_inject_config_context",
-    ),
-    ("budget", "max_total_usd"): (
-        "src/film_pipeline/orchestration/nodes/_context.py",
-        "_inject_config_context",
-    ),
     ("context", "max_chars_per_artifact"): (
         "src/film_pipeline/orchestration/nodes/_context.py",
         "_artifact_context_max_chars",
@@ -193,7 +172,6 @@ READERS: dict[tuple[str, ...], tuple[str, str]] = {
 
 _CONFIG_ROOTS = frozenset(
     {
-        "budget",
         "config",
         "resolved_config",
         "context_config",
@@ -368,7 +346,6 @@ def test_annotated_reader_paths_are_exercised() -> None:
                 },
                 "strict_validator": {"primary": "strict/model", "max_tokens": 456},
             },
-            "budget": {"project_cap_usd": 7, "max_total_usd": 8},
             "context": {"max_chars_per_artifact": 321},
         }
     }
@@ -391,15 +368,6 @@ def test_annotated_reader_paths_are_exercised() -> None:
     }
     context: dict[str, str] = {}
     _inject_config_context(state, context)
-    assert context["budget_cap"] == "7"
-    observed_paths.update({("budget", "project_cap_usd")})
-    context = {}
-    _inject_config_context(
-        {"resolved_config": {"budget": {"max_total_usd": 8}}},
-        context,
-    )
-    assert context["budget_cap"] == "8"
-    observed_paths.add(("budget", "max_total_usd"))
     assert _artifact_context_max_chars(state) == 321
     observed_paths.add(("context", "max_chars_per_artifact"))
     assert provider_specs_from_raw({"image": [{"provider_id": "mock-image-provider"}]})

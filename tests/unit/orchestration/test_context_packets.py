@@ -155,7 +155,7 @@ def test_shot_bible_context_summarizes_execution_brief_and_script() -> None:
     assert "Script has 2 scenes across 3 acts" in rendered
 
 
-def test_gen_planning_context_summarizes_matrix_rows_and_budget() -> None:
+def test_gen_planning_context_summarizes_matrix_rows() -> None:
     services = FakeServices(
         {
             "shot_matrix": {
@@ -172,7 +172,6 @@ def test_gen_planning_context_summarizes_matrix_rows_and_budget() -> None:
         {
             "project_id": "p1",
             "shot_matrix_ref": "artifact:shot_bible:shot_matrix:v1",
-            "budget_snapshot": {"cap_usd": 42},
         },
         services,
     )
@@ -180,7 +179,6 @@ def test_gen_planning_context_summarizes_matrix_rows_and_budget() -> None:
     assert "Shot matrix: 3 rows across 2 acts" in rendered
     assert "  act_1: 1 rows" in rendered
     assert "  act_2: 2 rows" in rendered
-    assert "Budget cap: $42" in rendered
 
 
 def test_load_ref_returns_none_for_malformed_missing_or_unresolved_refs() -> None:

@@ -130,7 +130,6 @@ class TestGenPlannerAgent:
             {
                 "project_id": "test-project",
                 "shot_matrix_ref": "master_film_matrix:v1",
-                "budget_cap": "25.0",
                 "preferred_providers": "seedance,kling",
             },
             _make_kb(),
@@ -139,7 +138,6 @@ class TestGenPlannerAgent:
         assert prepared == {
             "project_id": "test-project",
             "shot_matrix_ref": "master_film_matrix:v1",
-            "budget_cap": "25.0",
             "preferred_providers": "seedance,kling",
             "task": "Plan the generation batch.",
         }

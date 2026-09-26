@@ -167,7 +167,6 @@ def _intake_classifier() -> PromptTemplate:
             '  "target_runtime_seconds": ...,\n'
             '  "aspect_ratio": "...",\n'
             '  "delivery_modes": ["mp4"],\n'
-            '  "budget_cap_usd": null,\n'
             '  "provider_preferences": [],\n'
             '  "human_owner": null,\n'
             '  "classified_input": "...",\n'

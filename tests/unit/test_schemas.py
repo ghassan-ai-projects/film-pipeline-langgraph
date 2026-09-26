@@ -26,7 +26,6 @@ from film_pipeline.schemas import (
     AudioPlan,
     AuditLogEntry,
     BranchMetadata,
-    BudgetState,
     CameraLanguageBible,
     CameraProfile,
     ChainingConfig,
@@ -91,7 +90,6 @@ from film_pipeline.schemas import (
     SceneList,
     SchemaBase,
     SetupPayoffEntry,
-    SpendRecord,
     StateRecord,
     StoryBible,
     TransitionPlan,
@@ -658,27 +656,6 @@ def test_kb_conflict_record() -> None:
         detected_at=_ts(),
     )
     assert c.resolved is False
-
-
-# --- Budget ---------------------------------------------------------------
-
-
-def test_budget_state_remaining() -> None:
-    b = BudgetState(project_id="p", cap_usd=10.0, spent_usd=3.0)
-    assert b.remaining_usd == 7.0
-
-
-def test_spend_record() -> None:
-    s = SpendRecord(
-        spend_id="s1",
-        project_id="p",
-        generation_id="g1",
-        provider="seedance",
-        amount_usd=1.0,
-        mode="test",
-        created_at=_ts(),
-    )
-    assert s.amount_usd == 1.0
 
 
 # --- Provider health ------------------------------------------------------

@@ -151,7 +151,6 @@ class ConstraintExtractor:
             "target_audience": self._extract_audience(normalized),
             "themes": self._extract_themes(normalized),
             "dialogue_language": self._extract_language(normalized),
-            "budget_cap_usd": self._extract_budget(normalized),
             "delivery_modes": self._extract_delivery_modes(normalized),
             "forbidden_topics": self._extract_forbidden_topics(normalized),
             "required_elements": self._extract_required_elements(normalized),
@@ -281,16 +280,6 @@ class ConstraintExtractor:
             match = re.search(pattern, text)
             if match:
                 return match.group(1)
-        return None
-
-    def _extract_budget(self, text: str) -> float | None:
-        match = re.search(
-            r"(?:budget|spend|cost|under|max)\s*(?:of|is|up\s*to)?\s*[$]?\s*(\d+(?:\.\d+)?)",
-            text,
-            re.IGNORECASE,
-        )
-        if match:
-            return float(match.group(1))
         return None
 
     def _extract_delivery_modes(self, text: str) -> list[DeliveryMode]:

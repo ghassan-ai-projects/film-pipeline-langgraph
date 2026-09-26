@@ -415,13 +415,6 @@ def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) 
     resolved_config = state.get("resolved_config", {})
     if not isinstance(resolved_config, dict):
         return
-    budget = resolved_config.get("budget", {})
-    if isinstance(budget, dict):
-        for key in ("project_cap_usd", "max_total_usd"):
-            value = budget.get(key)
-            if value is not None:
-                context_vars["budget_cap"] = str(value)
-                break
     preferred = _preferred_providers(resolved_config.get("providers", {}))
     if preferred:
         context_vars["preferred_providers"] = ", ".join(preferred)

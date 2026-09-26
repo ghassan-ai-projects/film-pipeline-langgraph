@@ -195,7 +195,6 @@ def _generation_planner() -> PromptTemplate:
             "{constraints}\n\n" + "Execution Brief (film structure):\n{execution_brief_content}\n\n"
             "Shot matrix ref: {shot_matrix_ref}\n"
             "Shot matrix content:\n{shot_matrix_content}\n"
-            "Budget cap: {budget_cap}\n"
             "Preferred providers: {preferred_providers}\n"
             "Project ID: {project_id}\n"
             "KB refs: {kb_refs}"

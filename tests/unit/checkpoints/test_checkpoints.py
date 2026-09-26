@@ -76,7 +76,6 @@ class TestCheckpointManager:
                 reason="Script approved",
                 artifact_versions={"script": "v3"},
                 approval_refs=["approval:1"],
-                budget_state_ref="budget:v1",
             )
             assert cp.project_id == "p1"
             assert cp.phase == FilmPhase.SCRIPT

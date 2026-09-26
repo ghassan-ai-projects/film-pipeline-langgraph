@@ -7,5 +7,3 @@ providers:
       models: [imagen-4.0-fast-generate-001]
   fallback_allowed: false
   max_duration_seconds: 15
-budget:
-  project_cap_usd: 50

@@ -36,12 +36,10 @@ class GenPlannerAgent(BaseAgent):
         _ = kb_context
         project_id = str(state.get("project_id", ""))
         shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
-        budget_cap = str(state.get("budget_cap", "unlimited"))
         preferred_providers = str(state.get("preferred_providers", ""))
         return {
             "project_id": project_id,
             "shot_matrix_ref": shot_matrix_ref,
-            "budget_cap": budget_cap,
             "preferred_providers": preferred_providers,
             "task": task,
         }

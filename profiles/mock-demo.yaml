@@ -31,9 +31,7 @@ validators:
   strictness: lenient  # draft, internal_review, studio, festival
   multi_review: false
 
-budget:
-  max_total_usd: 0.0
-  auto_approve_up_to: 0.0
+
 
 checkpoints:
   backend: in-memory

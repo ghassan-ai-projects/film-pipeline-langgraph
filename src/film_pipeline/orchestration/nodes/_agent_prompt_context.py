@@ -43,7 +43,6 @@ def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[
         "target_scene_count": "",
         "min_scene_count": "",
         "target_shot_count": "",
-        "budget_cap": "",
         "preferred_providers": "",
         "provider_pricing": "",
         "constraints": "",

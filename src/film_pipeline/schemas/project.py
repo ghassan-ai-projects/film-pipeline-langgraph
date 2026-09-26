@@ -40,7 +40,6 @@ class ProjectProfile(SchemaBase):
         default_factory=lambda: cast(list[DeliveryMode], ["mp4"]),
         description="Container formats to produce at delivery.",
     )
-    budget_cap_usd: float | None = Field(default=None, ge=0, description="Hard spend cap.")
     provider_preferences: list[str] = Field(
         default_factory=list,
         description="Ordered provider preferences by id.",
