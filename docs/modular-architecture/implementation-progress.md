@@ -1430,3 +1430,62 @@ Two sweeps now, two real defects:
 The pattern worth keeping: the duplicate was the *lead*, not the finding. Each
 time, asking "why do these two exist and how do they differ?" surfaced a defect
 that neither a duplicate count nor a test run would have shown.
+
+## AGENT-17 — auditing my own guards, and a blind spot they had (2026-09-26)
+
+After five rounds of adversarially falsifying *other* things, this round did it to
+the guards this program itself added: inject each defect they claim to prevent,
+and check they fire.
+
+| Guard | Defect injected | Result |
+|---|---|---|
+| Mirrored private call | `rt._persist_project_state(pid)` in a new module | **FIRES** |
+| Undeclared root import | `from film_pipeline.filmspec import NotADeclaredName` | **FIRES** |
+| Issue-severity re-derivation | `i.get("severity") == "blocking"` in a new module | **FIRES** |
+| Duplicate function body | `_collect_updates` copied under a new name | **FIRES** |
+| **Private reach-in** | `from film_pipeline.storage import _layout` | **MISSED** |
+
+### The blind spot
+
+The detector inspected only the imported **module path**, so it required three
+dotted segments and could not see the name form at all:
+
+```python
+from film_pipeline.storage._layout import write_json   # caught
+from film_pipeline.storage import _layout              # missed entirely
+```
+
+The second form is used **five times** in the tree already —
+`studio/runtime.py` imports three of its own private modules that way, as do
+`studio/_graph_exec.py`, `logging_setup.py`, `operations/operator.py` and
+`storage/project_storage.py` — but all five are intra-package and legitimate, so
+no live violation had been missed. The guard simply **could not have caught one**.
+
+### What the fix found immediately
+
+Widening the detector to read imported *names* surfaced **five real reach-ins**
+that had been invisible:
+
+| Source | Target | Note |
+|---|---|---|
+| `agents` | `providers._accepts_timeout_kw`, `_open_timeout` | a deliberate historical-alias re-export |
+| `studio` | `orchestration._PHASE_NODES`, `_SERVICES_CTX`, `_run_validators` | the composition root driving the graph through private names |
+
+All five are private **symbols**, not private **modules**, so they went into a new
+`KNOWN_PRIVATE_SYMBOL_IMPORTS` baseline rather than being folded into the module
+one. Importing another package's whole private module is a larger encapsulation
+break than importing one private function from it; conflating the two would let
+the former hide inside the latter's count.
+
+**None was "fixed".** The `agents` pair is deliberate, and the `studio` trio is
+the composition root doing its job — it just does so through private names rather
+than a declared seam. Recorded with reasons, which is what `06` §4 asks for and
+what the standing instruction ("no abstraction without a current need") implies.
+
+### The lesson this round
+
+**A guard that has never been falsified is a hypothesis, not a guard.** Four of
+five fired, which is the reassuring half; the fifth had been reported as passing
+for four rounds. The cheap version of this audit — inject the defect, assert the
+guard fires — is worth running after adding any guard, and it is now the third
+time in this program that checking my own claim beat trusting it.
