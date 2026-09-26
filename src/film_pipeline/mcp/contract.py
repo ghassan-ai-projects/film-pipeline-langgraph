@@ -53,6 +53,7 @@ class ToolContract:
     output_schema: dict[str, Any] = field(default_factory=dict)
     mutates_state: bool = False
     requires_confirmation: bool = False
+    requires_active_project: bool = False
     creates_checkpoint: bool = False
     idempotency_key_field: str | None = None
 

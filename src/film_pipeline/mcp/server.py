@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from film_pipeline.filmspec import NO_ACTIVE_PROJECT
 from film_pipeline.mcp._stdio_transport import (
     _read_message as _read_message,
 )
@@ -64,6 +65,9 @@ class MCPServer:
         confirmation = self._check_confirmation(reg, tool_name, arguments, resolved_envelope)
         if confirmation is not None:
             return confirmation
+        missing_project = self._check_active_project(reg, resolved_envelope)
+        if missing_project is not None:
+            return missing_project
         return await self._dispatch_handler(reg.handler, arguments, resolved_envelope)
 
     def _resolve_tool_and_project(
@@ -103,8 +107,14 @@ class MCPServer:
         reg: ToolRegistration,
         envelope: RequestEnvelope,
     ) -> MCPResponse | RequestEnvelope:
-        """Resolve envelope.project_ref against the registry when present."""
+        """Resolve the request's project, explicit ref first, then the session's."""
         if not envelope.project_ref:
+            # No explicit ref: fall back to the session's active project. The
+            # field was previously write-only — set on a mutating call and
+            # never read — so the dispatch precondition had nothing to consult
+            # and every handler re-derived the active project for itself.
+            if self.active_project_id:
+                return _resolved_envelope(envelope, self.active_project_id)
             return envelope
         try:
             project = self.projects.resolve_or_raise(envelope.project_ref)
@@ -175,6 +185,37 @@ class MCPServer:
         )
         self.projects.register(record)
         return pid
+
+    def _check_active_project(
+        self,
+        registration: ToolRegistration,
+        envelope: RequestEnvelope,
+    ) -> MCPResponse | None:
+        """Return a NO_ACTIVE_PROJECT response, or None when the precondition holds.
+
+        The precondition — "is there a project to act on?" — was checked inside
+        48 handlers with three wordings and five different emptiness tests
+        (`if not active` and `if active is None` disagree on an empty dict).
+        Declaring it on the contract and checking it once at dispatch means the
+        condition has a single answer, and handlers state the requirement rather
+        than re-deriving it.
+
+        The envelope already carries the resolved project, so this needs no
+        resolution work of its own.
+        """
+        if not registration.contract.requires_active_project:
+            return None
+        if envelope.resolved_project_id:
+            return None
+        return MCPResponse(
+            success=False,
+            request_id=envelope.request_id,
+            error=MCPError(
+                code=MCPErrorCode.NO_ACTIVE_PROJECT,
+                message=NO_ACTIVE_PROJECT,
+                details={"tool": registration.contract.name},
+            ),
+        )
 
     def _check_confirmation(
         self,

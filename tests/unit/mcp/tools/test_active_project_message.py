@@ -53,16 +53,19 @@ def test_no_module_builds_the_error_message_inline() -> None:
     assert offenders == [], f"inline 'No active project' message: {offenders}"
 
 
-def test_helpers_is_the_only_definition() -> None:
+def test_filmspec_is_the_only_definition() -> None:
+    """The wording lives in the shared vocabulary module.
+
+    Both the dispatcher and the tool layer need it. A constant in either
+    package makes one import the other: `tools` already imports `studio`, and
+    `studio` imports `mcp`, so adding an `mcp`-internal import to `tools`
+    closed a five-module cycle that Enola reported as a gating failure.
+    `filmspec` is reachable from both without creating an edge.
+    """
     from pathlib import Path
 
-    helpers = (
-        Path(__file__).resolve().parents[4]
-        / "src"
-        / "film_pipeline"
-        / "mcp"
-        / "tools"
-        / "helpers.py"
+    filmspec = (
+        Path(__file__).resolve().parents[4] / "src" / "film_pipeline" / "filmspec" / "__init__.py"
     )
-    text = helpers.read_text(encoding="utf-8")
+    text = filmspec.read_text(encoding="utf-8")
     assert text.count('NO_ACTIVE_PROJECT = "No active project."') == 1

@@ -234,6 +234,15 @@ def text_only_generation_requests(
     return requests
 
 
+#: The one message for "this request has no project to act on". It lives in the
+#: shared vocabulary module because both the MCP dispatcher and the tool layer
+#: need it, and a constant in either package would import the other. It was
+#: previously written inline at 48 call sites in three different wordings, with
+#: five different emptiness tests — `if not active` and `if active is None`
+#: disagree on an empty dict — so one condition produced different answers.
+NO_ACTIVE_PROJECT = "No active project."
+
+
 def next_phase(phase: str) -> str | None:
     """Return the next phase, or ``None`` for delivery or an unknown phase."""
     try:

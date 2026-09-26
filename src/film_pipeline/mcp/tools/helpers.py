@@ -12,6 +12,7 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.filmspec import NO_ACTIVE_PROJECT as NO_ACTIVE_PROJECT
 from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.studio.runtime import StudioRuntime
 
@@ -51,13 +52,6 @@ def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
     if active is not None:
         return str(active["project_id"])
     return None
-
-
-#: The one message for "this request has no project to act on". The condition
-#: was previously re-derived at 45 call sites with three wordings and five
-#: emptiness tests — `if not active` and `if active is None` disagree on an
-#: empty dict — so one condition produced different answers.
-NO_ACTIVE_PROJECT = "No active project."
 
 
 def _no_active_project() -> dict[str, object]:
