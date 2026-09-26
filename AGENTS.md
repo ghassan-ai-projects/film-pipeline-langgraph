@@ -221,6 +221,19 @@ Two failures in the cost-removal round came from trusting a written claim:
   `ensure_orchestrator_state`, plus a registered `OrchChannelSpec` noted "dormant
   writer"). **"Nothing writes it" is a claim about every writer, including dormant
   ones.** A dormant writer is still a writer.
+- A guard's commit message claimed it "recovers 77 silently-skipped names" and
+  blamed an AST parser limitation. The real cause was **scan scope**: the helper
+  walked top-level directories only, so the package in question was never read at
+  all by either the old or the new parser. **Name the mechanism you measured, not
+  the one you assumed** — two of this program's commit messages have now asserted
+  what their own diffs did not deliver.
+
+**A guard must be audited as adversarially as the code it guards.** The surface
+ratchet above passed every gate and still had three defects: a *newly added* package
+escaped the count guards entirely (they `continue` on a missing baseline row), the
+comparisons used `>` so a shrinking or renamed public surface passed silently, and
+the guard-the-guard asserted container sizes rather than set equality. Ask of every
+guard: what change would make this pass while being wrong? Then inject it.
 
 Corollary, learned the hard way in both directions: when a deletion removes an
 item from a rule set, a test asserting `count(...) == N` was derived from that set

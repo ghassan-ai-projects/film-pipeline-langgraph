@@ -2121,3 +2121,65 @@ count equal passes. Recording that honestly is preferable to implying the surfac
 is fully pinned. `ARTIFACT_NAMES` is also an allow-list (~16 names) excluded from
 the leak check, so a real symbol named `Field` or `datetime` would escape it —
 unlikely, but it is a documented hole rather than an oversight.
+
+### AGENT-26 addendum — three defects an adversarial audit found (2026-09-26)
+
+The ratchet shipped, then an independent adversarial review of it returned
+**3 BROKEN**. All three were real, and the first was a false claim in the commit
+message itself. Fixed in `dfc59e0`.
+
+**The false claim.** The first commit said the rewrite "recovers 77 silently-skipped
+names" and blamed an `ast.List`-only parser. Wrong: `packages()` scanned top-level
+directories only, so `mcp/tools/__init__.py` was never read by the old parser *or*
+the new one. The AST limitation was real but had nothing to do with those names —
+**scan scope** was the cause. This is the second time in this program that a commit
+message asserted something its own diff did not deliver (cf. `e54dde1`), and the
+same fix applies: read the measurement, not the intent.
+
+| | before | after |
+|---|---:|---:|
+| Packages graded | 20 | **37** |
+| Nested packages graded | 0 | **17** |
+| `mcp.tools` names resolved | never scanned | **77** |
+
+**A new package escaped every guard.** The count guards `continue` when a package is
+missing from `SURFACE_BASELINE`, and the guard-the-guard asserted only
+`len(...) >= 15`. A package with a 500-name `__all__` and 30 public modules passed
+all seven guards. Now set equality is asserted in both directions.
+
+**Shrinkage and renames were invisible.** The comparisons used `>`, catching only
+growth. Changed to `!=`, which closes both directions at no cost; the tests and
+messages were renamed from `has_not_grown` to `is_unchanged` so they describe what
+they do.
+
+**What the widened scan found immediately** — three undeclared names reachable off
+package roots, invisible before because those packages were not scanned:
+
+- `mcp.tools.generation` re-exported `is_text_only_policy` via the deliberate
+  `import ... as` idiom and never declared it. That module's docstring says it
+  "preserves the original import surface", so the omission was an oversight, not a
+  decision. Declared, with the baseline row raised in the same commit.
+- `PromptTemplate` and `import_module` are import artifacts — a `Protocol`
+  annotation and a PEP 562 implementation detail.
+
+`ARTIFACT_NAMES` was pruned from 16 entries to **7**; 11 were dead, and a long
+allow-list is a wider loophole than a short one.
+
+Six packages now carry a recorded reason for having no `__all__`, up from three.
+Two are honest findings rather than exemptions: `agents.model_routing` and
+`validation.validators` define public names in their `__init__` and export nothing
+— a *missing* surface, recorded rather than silently blessed.
+
+**Three limits left documented rather than hidden:** counts are compared, not names,
+so a rename keeping the count equal still passes; the leak guard reads `dir()`, so a
+name servable only via PEP 562 (`mcp` has `__getattr__` but no `__dir__`) would be
+missed; and the cached resolver keys on package name, so mutating a package's
+`__all__` after first read goes unnoticed. None is currently reachable.
+
+**Verdict on the audit itself:** it confirmed the baseline numbers independently
+(all 20 original entries matched exactly, written from its own resolver), confirmed
+the `test_public_surface.py` rewrite is behaviour-preserving, and confirmed the claim
+that Python cannot enforce module privacy without an import hook. Grader ratio:
+3 BROKEN, 4 SUSPICIOUS, 1 COSMETIC against a change that had already passed every
+gate — which is the argument for auditing guards as adversarially as the code they
+guard.
