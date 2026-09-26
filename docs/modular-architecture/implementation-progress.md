@@ -2183,3 +2183,79 @@ that Python cannot enforce module privacy without an import hook. Grader ratio:
 3 BROKEN, 4 SUSPICIOUS, 1 COSMETIC against a change that had already passed every
 gate — which is the argument for auditing guards as adversarially as the code they
 guard.
+
+## AGENT-27 — the last two surfaces, and the last reach-in (2026-09-26)
+
+Two slices closing what AGENT-26 recorded rather than fixed.
+
+### 1. The two missing surfaces
+
+AGENT-26 listed `agents.model_routing` and `validation.validators` as packages that
+define public names in their `__init__` and export nothing — "a missing surface
+rather than a deliberate absence". Declared from the **measured consumer set**:
+
+| Package | Declared | Root importers |
+|---|---|---:|
+| `agents.model_routing` | `ModelRouter`, `ModelResolutionError` | 9 |
+| `validation.validators` | `MVP_VALIDATORS` | 4 |
+
+Nothing reachable-but-unused was exported to quiet the guard.
+
+**Declaring them brought them under grading for the first time**, because the leak
+guard skips packages whose surface is `None` — and it immediately reported 6
+undeclared public names: `dataclass`, `field` (used by `model_routing`'s own
+`@dataclass`) and four schema names (used to build `MVP_VALIDATORS`). Verified none
+is API — no consumer imports any of them through those roots — so they went into
+`ARTIFACT_NAMES`, not into `__all__`, which would have published six names nobody
+wants.
+
+Bare roots needing a recorded reason: **6 -> 4**, and the remaining four
+(`cli`, `orchestration`, `orchestration.subgraphs`, `studio`) are genuinely
+deliberate.
+
+### 2. The last reach-in: one fixed, one provably irreducible
+
+`mcp -> studio._persistence` and `mcp -> studio._operator_runtime`.
+
+**`_persistence` was not merely an encapsulation break — it hid a duplicated read.**
+`FILM_PIPELINE_RUNTIME_ROOT` had two readers and the second repeated the first's
+empty-string check, because `configured_runtime_root()` collapsed "explicitly
+configured" into "default" and left `StudioRuntime.__post_init__` unable to tell
+that case from "throwaway tempdir". It now returns `Path | None`, so the caller's
+three-way choice is explicit and the env var is read once. Proven
+behaviour-preserving across all 8 combinations of {unset, blank, whitespace, set} x
+{persist, no-persist}.
+
+**`_operator_runtime` is irreducible and stays frozen.** Building a wired
+`OperatorService` needs `StudioRuntimeProvider` and the provider composition, which
+is composition-root policy; `operations` cannot supply them without importing
+`studio`, which already imports `operations` — the exact cycle the port exists to
+prevent and Enola gates on. The alternative is a DI container with no current second
+implementation, which `06` §4 forbids. The existing `mcp`-side accessor already
+consolidated four importers into one; that crossing is the minimum.
+
+### The lesson: a green gate cannot see an uncovered path
+
+Refactoring `configured_runtime_root` to return `Path | None` broke
+`mcp/server.py`, which passed the value to `configure_logging`. With the env var
+unset — the normal case — that became `configure_logging(None)`, which installs **no
+file handler, silently**, losing the persistent server's log. **Every gate stayed
+green.** The single test covering that path sets `FILM_PIPELINE_RUNTIME_ROOT`
+explicitly, so it exercised a different branch and masked the break.
+
+An adversarial subagent reading the working tree mid-edit caught it. The path now
+has a test, falsified by restoring the buggy call.
+
+`AGENTS.md` already says a guard must be audited as adversarially as the code it
+guards. This adds the sibling rule for production changes: **a green suite is
+evidence about the paths it covers, and silence about the rest.** When a function's
+contract changes, `grep` its callers and ask which of them exercise the branch you
+just changed — the fix here was one call site, and it was the one no test reached.
+
+### What this does not establish
+
+`mcp -> studio._operator_runtime` remains recorded debt, now with a reason stronger
+than "not urgent" — it is a cycle-prevention constraint. `rt.runtime_root` is
+explicitly NOT a substitute for the configured root (three branches, including a
+throwaway tempdir; measured divergent), so the log-root question is settled by
+`runtime_root_from_config()`, not by asking a runtime that may not exist yet.

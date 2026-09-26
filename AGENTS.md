@@ -235,6 +235,15 @@ comparisons used `>` so a shrinking or renamed public surface passed silently, a
 the guard-the-guard asserted container sizes rather than set equality. Ask of every
 guard: what change would make this pass while being wrong? Then inject it.
 
+**A green suite is evidence about the paths it covers, and silence about the rest.**
+When you change a function's contract, `grep` its callers and ask which of them
+exercise the branch you changed. A refactor once made `configured_runtime_root()`
+return `Path | None`; one call site still passed the result to `configure_logging`,
+which silently installs **no** file handler when given `None` — so the persistent MCP
+server lost its log. **Every gate stayed green**, because the single test covering
+that path set the environment variable explicitly and therefore took a different
+branch. One call site, and it was the one no test reached.
+
 Corollary, learned the hard way in both directions: when a deletion removes an
 item from a rule set, a test asserting `count(...) == N` was derived from that set
 and must be re-measured, not edited to match. And when a sweep finds a suspicious
