@@ -1208,3 +1208,61 @@ which is a better justification than the one I gave them.
 then `00`, then `01`/`02`, and `03`–`05` last as *historical proposals*. Follow
 it. A document that contradicts itself in its first ten lines should be read from
 the top, not quoted from the middle.
+
+## AGENT-13 — declared module interfaces, guarded at the consumer (2026-09-26)
+
+Direct human instruction: *"let us define clear public interfaces for the modules."*
+Scoped to `06` §4, which asks for a single owner per rule and proof at the
+consumer boundary — **not** `03`'s superseded layer law (AGENT-12).
+
+### What was already there, and what was missing
+
+15 of ~20 packages already declared `__all__`. Nothing verified that consumers
+stayed inside the declared surface, which is the actual gap: an interface nobody
+checks is documentation.
+
+| Change | Detail |
+|---|---|
+| `budget` gained a surface | It declared nothing and leaked `Any`/`UTC`/`datetime`/`dataclass`/`field` into its namespace. `__all__` now names its 7 real exports. `BudgetState`/`SpendRecord` deliberately not re-declared — they belong to `schemas`. |
+| `filmspec` gained a surface | 18 names, all consumed, all genuinely public vocabulary. Declared in full. |
+| `orchestration` left **bare, on purpose** | Its root binds nothing. Measured: importing it loads no submodules and no `langgraph`. A root `__all__` naming its nine submodules would be a facade over the graph engine and risks making a deliberately lazy import eager. |
+| 3 consumers routed | `post/subtitle_agent.py` used a module alias when `schemas` already declared both classes; `studio/bootstrap.py` + `_provider_seeds.py` used the `credentials` module; `operations/operator.py` used the `profile_resolver` module. All now use declared names. `config` and `providers` declare the functions their consumers need. Declaring a *module object* was rejected as the weaker contract. |
+
+### The guard, and its stated limits
+
+`tests/unit/architecture/test_public_surface.py`: a consumer must not import an
+undeclared name from another package's root, and every declared name must resolve.
+Verified falsifiable — injecting `NonExistentSurfaceName` import into
+`cli/driver.py` fails naming that file and symbol.
+
+Documented limits, not glossed: it detects surface **bypass**, not shrinkage; it
+does not see submodule-path imports (`test_boundary_law.py`'s job); and it cannot
+see re-export wrappers added to satisfy it — which is why `AGENTS.md` bans that.
+
+### Corrections made while writing it
+
+- **My import census was wrong in shape, and a subagent caught it.** I had
+  classified several intra-package imports as cross-package gaps. The real
+  count of live gaps was 3, not 8.
+- **The subagent's census was also partly wrong**, and I verified rather than
+  accepting it: it claimed `storage.store → storage.paths` and
+  `storage.registry → storage.rendering` "do not match any package-root import".
+  They do — `storage/store.py:32`, `storage/registry.py:88`,
+  `storage/project_storage.py:35` — but all three are *intra*-package and
+  legitimate, which is the same conclusion by a different route.
+- **My own guard caught my first baseline as wrong.** I froze three rows for
+  modules reaching `orchestration.orchestrator_state`; the sweep skips packages
+  with no `__all__`, so it never measured them. The staleness check failed and I
+  emptied the baseline. Recording what a sweep does not measure is worse than
+  recording nothing.
+- **It found a real gap I had missed**: `mcp`/`operations` reach
+  `orchestration.orchestrator_state` through a root that declares nothing. Left
+  as-is deliberately, for the eager-import reason above.
+
+### Not done, deliberately
+
+The subagent measured a "declared surface is complete" check across all 19
+packages with `__all__` and found **zero** findings — every package already
+declares everything it defines. Building it would have been metadata for its own
+sake, so it was skipped. A `ModuleContract` in every `__init__.py` is explicitly
+rejected by `06`.
