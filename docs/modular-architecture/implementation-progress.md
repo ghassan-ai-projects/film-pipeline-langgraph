@@ -1309,3 +1309,61 @@ old `qc.py`/`visual.py` rows had gone stale. One row added, two removed.
 | Cross-file duplicate function bodies | 3 | **0** |
 | Dead modules with no production importer | 1 | **0** |
 | Definitions of the text-only policy | 2 + 3 literals | **1 + 1** |
+
+## AGENT-15 — the blocking-issue rule had 19 sites and a live crash (2026-09-26)
+
+Found by extending AGENT-14's measurement from *function bodies* to *policy
+literals*: a sweep for string literals compared in 3+ files put `'blocking'` at
+the top (18 files). Classifying those precisely — readers versus producers —
+gave **19 reader sites across 16 files**.
+
+### The divergence was real, not theoretical
+
+Four readers were compared directly. Three guarded a malformed record; one did not:
+
+```
+governance predicate : False            (handles non-dict)
+cli (guarded)        : 1 blocking issue
+mcp (unguarded)      : AttributeError: 'NoneType' object has no attribute 'get'
+```
+
+The unguarded copy is a **live MCP handler** on the review path (`mcp/tools/review.py`),
+with no local `try`/`except`, reading persisted state. A single non-mapping entry
+in an issue list crashed it while every sibling skipped that entry and carried on.
+Fixed by routing it through the owner; verified it now returns the blocking issue
+instead of raising.
+
+### The consolidation
+
+`filmspec` already declares `IssueSeverity`, so it owns the predicate:
+`is_blocking_issue(issue)` and `blocking_issues(issues)`. Both tolerate malformed
+records rather than raising — an issue list is persisted state, and crash recovery
+must not depend on every entry being well-formed. **16 sites** across `cli`,
+`governance`, `mcp`, `operations`, `orchestration`, `studio` and `validation` now
+call them; the `governance` copy became a thin delegator.
+
+### What the consolidation deliberately excludes
+
+The guard lists its exemptions inline, which is the part worth keeping:
+
+- **Three sites compare `severity` on a different record type** — config
+  conflicts (`mcp/tools/projects.py`), a generated conflict list
+  (`operations/operator.py`), failure-decision records
+  (`orchestration/orchestrator_state.py`). Routing those through the issue
+  predicate would be wrong.
+- **Three read a typed attribute, not a mapping** — `ConfigConflict.severity`,
+  `ValidationIssue.severity`, and a validation finding object.
+- **~25 producer sites** write `{"severity": "blocking"}` into a new issue.
+  Building a record is not deciding whether one blocks.
+
+An earlier draft of the guard flagged those nine as violations. Distinguishing
+"same field name" from "same rule" is the difference between a useful guard and
+one that forces bad routing.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Sites re-deriving the issue-severity rule | 19 across 16 files | **0** |
+| Definitions of the predicate | 1 real + 6 ad-hoc readers | **2 in one owner** |
+| Live crashes on a malformed issue list | 1 | **0** |
