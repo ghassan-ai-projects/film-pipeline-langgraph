@@ -293,7 +293,7 @@ _NOT_PLACEHOLDERS = {"rrggbb"}
 def _template_placeholders(agent_id: str) -> set[str]:
     import re
 
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
 
     template = get_registry().get_required(agent_id)
     blob = "\n".join(
@@ -327,7 +327,7 @@ def test_templates_render_without_unfilled_braces(agent_id: str) -> None:
     """Render for real with the supplied variables and inspect the output."""
     import re
 
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
 
     supplied = _CALL_SITE_VARS[agent_id] | _HELPER_SUPPLIED
     rendered = (

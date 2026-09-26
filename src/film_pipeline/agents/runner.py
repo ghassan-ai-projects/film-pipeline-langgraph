@@ -22,7 +22,7 @@ from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 
 if TYPE_CHECKING:
-    from film_pipeline.agents._prompt_template import PromptTemplate
+    from film_pipeline.agents.prompt_templates.template import PromptTemplate
 
 _logger = logging.getLogger(__name__)
 

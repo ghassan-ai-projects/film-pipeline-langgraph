@@ -5,12 +5,13 @@ from __future__ import annotations
 import pytest
 
 import film_pipeline.agents.prompt_templates.registry as registry_module
-from film_pipeline.agents._prompt_template import PromptTemplate as SharedPromptTemplate
 from film_pipeline.agents.prompt_templates import PromptTemplate as PublicPromptTemplate
+from film_pipeline.agents.prompt_templates import get_registry as package_get_registry
 from film_pipeline.agents.prompt_templates.registry import (
     PromptTemplate,
     PromptTemplateRegistry,
 )
+from film_pipeline.agents.prompt_templates.template import PromptTemplate as OwnerPromptTemplate
 
 
 def _template(agent_id: str = "test-agent") -> PromptTemplate:
@@ -28,19 +29,32 @@ def _template(agent_id: str = "test-agent") -> PromptTemplate:
 
 
 def test_prompt_template_public_imports_share_one_class() -> None:
-    assert PromptTemplate is PublicPromptTemplate is SharedPromptTemplate
+    """Every import path for ``PromptTemplate`` must resolve to one class.
+
+    This pins the ownership move that removed the `agents <->
+    agents/prompt_templates` cycle. The class used to live at
+    `agents/_prompt_template.py`, one level *above* the subpackage whose 58 uses
+    justified it, and `prompt_templates/registry.py` re-exported it. That re-export
+    was the cycle: `prompt_templates` depended on the parent package while the
+    parent's `registry` reached back into the subpackage.
+
+    It now lives in `prompt_templates/template.py` — the owner — and both the
+    package root and the registry import it from there. If a second definition or
+    a re-export shim is ever introduced, these identities diverge.
+    """
+    assert PromptTemplate is PublicPromptTemplate is OwnerPromptTemplate
 
 
-def test_get_registry_loads_validator_templates_and_reuses_registry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(registry_module, "_registry", None)
+def test_package_get_registry_loads_the_shipped_templates() -> None:
+    """The package-level entry point returns a registry with defaults loaded.
 
-    registry = registry_module.get_registry()
-    first_validator = registry.get_required("scene-writing-validator")
-
-    assert registry_module.get_registry() is registry
-    assert registry.get_required("scene-writing-validator") is first_validator
+    This is the function consumers call. `registry.get_registry` deliberately
+    returns an *empty* registry — see the test below — because loading `defaults`
+    from the `registry` submodule is the cycle that
+    `prompt_templates -> registry -> defaults` creates. Ownership of the wiring
+    sits at the package root.
+    """
+    registry = package_get_registry()
     assert {
         "scene-writing-validator",
         "dialogue-voice-validator",
@@ -50,6 +64,23 @@ def test_get_registry_loads_validator_templates_and_reuses_registry(
         "assembly-validator",
         "delivery-completeness-validator",
     } <= registry.templates.keys()
+
+
+def test_registry_submodule_returns_an_empty_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The submodule's factory must not load defaults, and must be idempotent.
+
+    Pinning the empty-by-default behaviour is what keeps the cycle from being
+    reintroduced: if `registry.get_registry` ever registers the shipped templates
+    again, it has to import `defaults` and the cycle returns.
+    """
+    monkeypatch.setattr(registry_module, "_registry", None)
+
+    registry = registry_module.get_registry()
+
+    assert registry.templates == {}
+    assert registry_module.get_registry() is registry
 
 
 class TestGet:

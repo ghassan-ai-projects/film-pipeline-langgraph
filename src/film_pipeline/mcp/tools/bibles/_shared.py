@@ -133,7 +133,7 @@ def _run_bible_agent(
         KeyError: the agent is not on the roster or has no dedicated template.
         ValueError: the agent rejected the model output.
     """
-    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.prompt_templates import get_registry
     from film_pipeline.agents.registry import get_agent_class
 
     services = _services(rt)
