@@ -1710,3 +1710,51 @@ session it was recorded.
 The prompt-text change alters model input but is **not** covered by a test
 asserting the new wording — the removal is proven (the strings are gone), the
 behavioural effect on plan quality is not. `is_known_provider` remains unwired.
+
+## AGENT-22 — closing the identity question with a guard (2026-09-26)
+
+AGENT-21 left one item explicitly open: "`is_known_provider` remains unwired …
+whether identity should be mode-scoped is a product decision." Half of that was a
+product decision; the other half was not, and this round separates them.
+
+**Not a product decision, now guarded.** Whatever the identity policy is, the
+predicate must not *overstate* what it knows. `KNOWN_PROVIDER_IDS`'s own comment
+claims it is "every provider id the system knows how to build an adapter for", so
+`tests/unit/providers/test_catalog.py` pins six properties: every known id is
+buildable by `build_provider_adapter`; typos and near misses are rejected; matching
+is exact (not case-folded or stripped); every mode seeds only known ids; an unknown
+mode falls back to the mock set rather than an empty one; and real and mock modes
+do not overlap.
+
+**Still a product decision, left open.** `is_known_provider` has no caller. The
+tests pin its contract without asserting that anything uses it. That is the honest
+split: the guard makes the vocabulary safe to wire, and wiring it is a separate
+call.
+
+**A gap asserted as intentional rather than smoothed.** The factory builds all
+seven ids (verified by calling it, not by reading it); `real` seeds three. The
+alias ids `veo-3.1-fast` and `imagen-4` are buildable identities that no mode
+seeds, because seeding uses one canonical id per real provider. The reverse
+direction is guarded — a mode may not seed an unknown id — and the forward
+direction is deliberately *not* asserted, so the asymmetry is recorded rather than
+hidden behind a test that would have to be weakened later.
+
+**Falsification, per the standing rule.** Each guard was proven by injecting the
+defect it claims to prevent and confirming the failure:
+
+| Injected defect | Guard that failed |
+|---|---|
+| id listed with no adapter | `test_every_known_id_is_buildable` |
+| case-insensitive matching | 3 tests (exactness, `VEO-FAST`, `"imagen-4 "`) |
+| mode seeding an unknown id | `test_every_mode_seeds_only_known_ids` |
+| unknown mode returning `()` not mock | `test_supported_provider_ids_falls_back_to_mock` |
+| modes sharing an id | `test_real_and_mock_modes_do_not_overlap` |
+
+All five injections were reverted; `git diff --stat` on `catalog.py` is empty.
+
+### What this does not establish
+
+The guards constrain identity, not behaviour: they do not show that any production
+path calls `is_known_provider`, because none does. They also say nothing about
+whether mode-scoped identity is the right policy — only that if it is the policy,
+the catalogue cannot silently drift from it.
