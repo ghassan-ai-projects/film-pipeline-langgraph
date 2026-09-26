@@ -16,6 +16,7 @@ from film_pipeline.mcp.tools import (
     generate_style_bible,
 )
 from film_pipeline.mcp.tools.bibles import _extract_script_text
+from film_pipeline.studio.mock_responses import default_mock_responses
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -259,7 +260,13 @@ def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     result = asyncio.run(generate_shot_bible({}))
     assert result["ok"] is True
-    assert cast(int, result["shot_count"]) >= 1
+    # Pinned rather than `>= 1`: this tool used to fall back to a hand-written
+    # single-row matrix, and now takes the same registered mock the graph path
+    # uses. That swap is a real change in mock output, so the count is asserted
+    # and cannot drift silently in either direction.
+    mock_rows = default_mock_responses()["shot-design-agent"]["shot_matrix"]["rows"]
+    assert cast(int, result["shot_count"]) == len(mock_rows)
+    assert len(mock_rows) > 1
     active = rt.get_active()
     assert active is not None
     assert active["shot_matrix_ref"] == result["shot_matrix_ref"]

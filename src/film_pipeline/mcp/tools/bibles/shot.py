@@ -13,10 +13,9 @@ from ..helpers import (
     _services,
     require_project_state,
 )
-from ._shared import _extract_script_text
+from ._shared import _extract_script_text, _run_bible_agent
 
 if TYPE_CHECKING:
-    from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
     from film_pipeline.schemas.base import ArtifactType
 
 from film_pipeline.schemas.continuity import (
@@ -133,70 +132,6 @@ def _reference_summary(ref_data: Any) -> str:
     )
 
 
-def _register_shot_agent() -> ShotBibleAgent:
-    """Create the shot-design agent with its handoff registration."""
-    from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
-    from film_pipeline.schemas.base import AgentFamily, AgentRole
-    from film_pipeline.schemas.handoff import AgentRegistration
-
-    return ShotBibleAgent(
-        AgentRegistration(
-            agent_id="shot-design-agent",
-            family=AgentFamily.DEVELOPMENT,
-            role=AgentRole.CREATOR,
-            capabilities=["shot_design", "matrix_planning"],
-            input_artifacts=["script", "visual_refs", "character_bible"],
-            output_artifacts=["master_film_matrix"],
-        )
-    )
-
-
-def _fallback_matrix_output(project_id: str) -> dict[str, Any]:
-    """Deterministic mock output used when no model adapter is configured."""
-    return {
-        "shot_matrix": {
-            "project_id": project_id,
-            "rows": [
-                {
-                    "shot_id": "S001",
-                    "act_id": "act1",
-                    "scene_id": "scene_01",
-                    "duration_seconds": 5,
-                    "characters": ["leo"],
-                    "environment": "studio",
-                    "camera_profile": "default",
-                    "priority": "standard",
-                    "risk_level": "low",
-                    "generation_order": 1,
-                }
-            ],
-            "coverage_groups": [],
-        }
-    }
-
-
-def _request_matrix_output(
-    runner: Any,
-    project_id: str,
-    script_text: str,
-    ref_summary: str,
-) -> dict[str, Any]:
-    """Ask the model for a MasterFilmMatrix, falling back to mock output."""
-    if runner.model_adapter is None:
-        return _fallback_matrix_output(project_id)
-
-    raw = runner.model_adapter.chat(
-        f"Create a MasterFilmMatrix from the script and visual references.\n\n"
-        f"Script:\n{script_text[:6000]}\n\n"
-        f"Visual references available:\n{ref_summary}\n\n"
-        "Return JSON with 'shot_matrix' containing 'rows' array of shot rows "
-        "(shot_id, act_id, scene_id, duration_seconds, characters, environment, "
-        "camera_profile, priority, risk_level) and 'coverage_groups' array.",
-        model=runner.model_router.resolve("creative_writer"),
-    )
-    return raw if isinstance(raw, dict) else {}
-
-
 def _persist_shot_matrix(store: Any, project_id: str, matrix: Any) -> str:
     """Save the matrix as a new master_film_matrix artifact version."""
     from film_pipeline.schemas.base import ArtifactType
@@ -227,13 +162,16 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
     ref_summary = _reference_summary(ref_data)
 
     try:
-        agent = _register_shot_agent()
-        runner = _services(rt).prompt_runner
-        model_output = _request_matrix_output(runner, project_id, script_text, ref_summary)
-
-        result = agent.execute(model_output)
-        if not agent.validate(result):
-            return _error("ShotBible agent produced invalid output.")
+        result = _run_bible_agent(
+            rt,
+            "shot-design-agent",
+            "Design the shot matrix for the film.",
+            {
+                "script_content": script_text,
+                "reference_summary": ref_summary,
+                "project_id": project_id,
+            },
+        )
         matrix = result["shot_matrix"]
 
         ref = _persist_shot_matrix(store, project_id, matrix)
