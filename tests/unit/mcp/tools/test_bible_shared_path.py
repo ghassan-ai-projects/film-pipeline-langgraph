@@ -118,3 +118,176 @@ def test_every_agent_id_the_tools_name_is_on_the_roster() -> None:
         f"these bible tools drive agents that are not on the roster: {unknown}. "
         "Add a roster row (contract, class, template, mock) or use the right id."
     )
+
+
+# Variables the shared helper supplies to every template it renders.
+_HELPER_SUPPLIED = {"constraints", "kb_refs"}
+
+# What each tool passes beyond those. Pinned here rather than introspected,
+# because the point is to pin the *tool/helper contract*: a template placeholder
+# that no call site supplies renders as literal "{name}" text in the prompt the
+# model receives, and no mock-mode test can see that.
+_CALL_SITE_VARS: dict[str, set[str]] = {
+    "camera-bible-agent": {"camera_philosophy", "project_id"},
+    "character-bible-agent": {
+        "character_id",
+        "character_name",
+        "constitution_content",
+        "script_content",
+        "project_id",
+    },
+    "environment-bible-agent": {
+        "environment_id",
+        "environment_name",
+        "theme",
+        "visual_language",
+        "script_content",
+        "project_id",
+    },
+    "style-bible-agent": {"visual_language", "tone", "palette_hint", "project_id"},
+}
+
+# Braces that are JSON structure in the output_format blocks, not placeholders.
+_NOT_PLACEHOLDERS = {"rrggbb"}
+
+
+def _template_placeholders(agent_id: str) -> set[str]:
+    import re
+
+    from film_pipeline.agents.prompt_templates.registry import get_registry
+
+    template = get_registry().get_required(agent_id)
+    blob = "\n".join(
+        [
+            template.role,
+            template.core_task,
+            template.context_template,
+            template.constraints,
+            template.output_format,
+            template.quality_instructions,
+        ]
+    )
+    return set(re.findall(r"\{([a-z_][a-z0-9_]*)\}", blob)) - _NOT_PLACEHOLDERS
+
+
+@pytest.mark.parametrize("agent_id", sorted(_CALL_SITE_VARS), ids=str)
+def test_every_template_placeholder_has_a_supplier(agent_id: str) -> None:
+    """Every placeholder the template declares must be supplied at render time."""
+    supplied = _CALL_SITE_VARS[agent_id] | _HELPER_SUPPLIED
+    unresolved = sorted(_template_placeholders(agent_id) - supplied)
+
+    assert not unresolved, (
+        f"{agent_id}'s template declares {unresolved}, which no call site "
+        "supplies — rendering leaves the literal text in the prompt. Supply it "
+        "from the tool or the helper, or drop it from the template."
+    )
+
+
+@pytest.mark.parametrize("agent_id", sorted(_CALL_SITE_VARS), ids=str)
+def test_templates_render_without_unfilled_braces(agent_id: str) -> None:
+    """Render for real with the supplied variables and inspect the output."""
+    import re
+
+    from film_pipeline.agents.prompt_templates.registry import get_registry
+
+    supplied = _CALL_SITE_VARS[agent_id] | _HELPER_SUPPLIED
+    rendered = (
+        get_registry().get_required(agent_id).render(**{name: f"<{name}>" for name in supplied})
+    )
+
+    leftovers = sorted(set(re.findall(r"\{([a-z_][a-z0-9_]*)\}", rendered)) - _NOT_PLACEHOLDERS)
+    assert not leftovers, (
+        f"{agent_id} rendered with an unfilled placeholder: {leftovers}. "
+        "The prompt sent to the model would contain literal braces."
+    )
+
+
+def test_the_camera_template_declares_no_placeholder_the_helper_cannot_fill() -> None:
+    """Guard the guard: the sweep must be looking at something real."""
+    assert _template_placeholders("camera-bible-agent"), (
+        "camera-bible-agent's template declares no placeholders at all, so the "
+        "two tests above cannot be checking anything"
+    )
+
+
+def test_the_helper_actually_supplies_the_vars_it_claims() -> None:
+    """``_HELPER_SUPPLIED`` is a claim about ``_run_bible_agent``; verify it.
+
+    The two render tests above trust a hardcoded set of variables the helper is
+    said to provide. If the helper stops providing one, those tests would still
+    pass while the prompt shipped a literal ``{name}``. This runs the helper's
+    own body against a stub runtime and reads the variables it actually passes
+    to ``run_from_template``.
+    """
+    from typing import Any
+
+    from film_pipeline.agents.registry import AgentRegistry
+    from film_pipeline.agents.roster import MVP_AGENTS
+    from film_pipeline.mcp.tools.bibles import _shared
+    from film_pipeline.schemas.kb import KBContextPacket
+
+    captured: dict[str, Any] = {}
+
+    class _StubRunner:
+        def run_from_template(self, template: Any, kb: Any, task: str, **kw: Any) -> Any:
+            captured.update(kw.get("context_vars") or {})
+            captured["_agent_id"] = kw.get("agent_id")
+            # Return a valid camera payload so the agent's validate() passes.
+            return (
+                {
+                    "camera_bible": {
+                        "project_id": "p",
+                        "profiles": [
+                            {
+                                "profile_id": "default",
+                                "use_case": "u",
+                                "lens": "l",
+                                "framing": "f",
+                                "movement": "m",
+                                "depth_of_field": "d",
+                                "composition_rules": [],
+                                "transition_rules": [],
+                                "emotional_meaning": "e",
+                            }
+                        ],
+                        "default_profile_id": "default",
+                    }
+                },
+                "tpl",
+                "creative_writer",
+            )
+
+    class _StubServices:
+        prompt_runner = _StubRunner()
+        agent_registry = AgentRegistry()
+
+        def kb_for(self, **_kw: Any) -> KBContextPacket:
+            return KBContextPacket(
+                kb_context_id="kbctx:test",
+                project_id="p",
+                phase="visual_dev",
+                agent_id="camera-bible-agent",
+                task="t",
+            )
+
+    class _StubRt:
+        services = _StubServices()
+
+    _StubServices.agent_registry.register_many(MVP_AGENTS)
+
+    _shared._run_bible_agent(
+        _StubRt(),
+        "camera-bible-agent",
+        "task",
+        {"camera_philosophy": "philosophy", "project_id": "p"},
+    )
+
+    missing = sorted(_HELPER_SUPPLIED - set(captured))
+    assert not missing, (
+        f"_run_bible_agent no longer supplies {missing}, which the templates "
+        "declare and these tests assume. The prompt would contain literal braces."
+    )
+    assert captured["_agent_id"] == "camera-bible-agent"
+    # And nothing the helper adds is a placeholder the template never declares,
+    # which would mean the two sides of this contract have drifted apart.
+    assert {"constraints", "kb_refs"} <= set(captured), captured

@@ -142,6 +142,12 @@ def _run_bible_agent(
         agent_id=agent_id,
         task=task,
     )
+    # The graph's context builder supplies these two on every template it
+    # renders; the bible templates declare them too, so supply them here rather
+    # than leaving "{constraints}" / "{kb_refs}" to render literally.
+    context_vars.setdefault("constraints", "")
+    context_vars.setdefault("kb_refs", kb.kb_context_id)
+
     template = get_registry().get_required(agent_id)
     model_output, _, _ = runner.run_from_template(
         template,

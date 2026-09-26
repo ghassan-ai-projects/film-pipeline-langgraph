@@ -457,6 +457,11 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
             }
         },
         "character-bible-agent": {
+            # Static, like every other row here: a registered mock is keyed by
+            # agent id and cannot interpolate the requested character. The tool
+            # returns this identity_block as-is in mock mode, so it describes
+            # the mock rather than the character asked for. Real model output
+            # (the path that matters) is per-character.
             "character_bible": {
                 "character_id": "lead",
                 "project_id": "demo",
