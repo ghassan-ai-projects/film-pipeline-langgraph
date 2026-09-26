@@ -2013,3 +2013,111 @@ confined to test imports. Run `mypy src tests`.
   with, but the module-level reach-ins themselves remain and were not in scope.
 - The three bare roots still have no `__all__`. That is now a checked property
   rather than an assumption, but it is still a choice, not an enforced interface.
+
+## AGENT-26 — public interfaces, and the honest limits of enforcing them (2026-09-26)
+
+The user asked: "make sure we have public interfaces for the modules, and nothing
+outside those interfaces is accessible, enforced by tool or script." Measured
+answer, including the part that is not possible.
+
+### The measurement, before any change
+
+| Property | Result |
+|---|---|
+| Declared `__all__` names that fail to resolve | **0** |
+| Public symbols reachable off a package root but undeclared | **0** |
+| Packages declaring no `__all__` | **3** (`cli`, `orchestration`, `studio`) |
+| Cross-package private-module reach-in | **2**, both already recorded debt |
+
+The roots were already closed. Two count conventions were also reconciled: my
+earlier "66 root / 454 submodule" figures count import **statements**, while
+counting imported **names** gives **81 / 639**. Both are correct at different
+granularities; quotes should say which.
+
+### What Python cannot do, stated plainly
+
+There is no package-level access control. A submodule is importable if it exists on
+disk, so "nothing outside the interface is accessible" **cannot be a runtime
+property** — only a convention enforced by static guards. The two mechanisms that
+would make it real are both rejections:
+
+- **Underscore-prefix every non-public module** — would require renaming and
+  rewriting the import sites of ~247 of 269 imported module paths (~766 src + ~895
+  test sites). Enormous churn, no defect removed; those imports are ordinary
+  Python.
+- **A custom import hook** — breaks mypy strict and IDE navigation, adds runtime
+  machinery to production code, and enforces at runtime what a static guard
+  already catches.
+
+This is why the honest deliverable is a ratchet, not a wall.
+
+### A real bug found in an existing guard
+
+`test_public_surface.py` parsed `__all__` from AST and accepted only a literal
+`ast.List`. `mcp/tools/__init__.py` declares
+`__all__ = sorted((*_TOOL_MODULES, "get_runtime"))` — an `ast.Call` — so the guard
+read that package's surface as `None` and **silently skipped all 77 names it
+declares**. A silent skip in a guard is worse than no guard: it reports clean while
+measuring nothing.
+
+Fixed by resolving surfaces from the imported module. That also handles the PEP 562
+`__getattr__` lazy re-exports in `mcp/__init__.py` and `operations/__init__.py`,
+where names like `MCPServer` are absent from `vars(module)` but resolve fine — a
+`vars()`-based checker would have reported them missing and invented a false bug.
+Verified: `mcp.tools` resolves **77** names now; the AST parser gave `None`.
+
+### What was built
+
+- `tests/unit/architecture/_surface_scan.py` — one runtime resolver
+  (`importlib` + `hasattr`; `dir()` for reachable symbols; filesystem walk for
+  public modules). One owner, so the two guards cannot disagree about a surface.
+- `tests/unit/architecture/_surface_baseline.py` — `SURFACE_BASELINE` (declared
+  names + public-module count per package), `BARE_ROOT_REASONS`, `ARTIFACT_NAMES`.
+- `tests/unit/architecture/test_surface_ratchet.py` — 7 guards.
+
+Growth is not forbidden; it must be a deliberate baseline edit in the same commit,
+where a reviewer sees it.
+
+`BARE_ROOT_REASONS` is the direct answer to "why do three packages have no
+interface": the absence is now a **stated, checked decision** rather than an
+omission. A package with no `__all__` and no recorded reason fails. Forcing a root
+`__all__` on `orchestration` would eagerly load the graph and `langgraph` —
+`test_bare_package_roots.py` measures exactly that — so the sanctioned path if one
+ever needs to export is a module-level `__getattr__`.
+
+### Falsified, all four
+
+| Injected defect | Guard that failed |
+|---|---|
+| undeclared re-export on `kb`'s root | `test_no_package_leaks_an_undeclared_symbol_off_its_root` |
+| widened `constraints.__all__` | `test_exported_name_count_has_not_grown` |
+| removed `cli`'s recorded reason | `test_every_package_declares_a_surface_or_a_reason` + `test_declared_reasons_are_still_needed` |
+| new public module under `orchestration` | `test_module_count_has_not_grown` + `test_undeclared_public_module_count_has_not_grown` |
+
+Each restored; all green afterwards.
+
+### Corrections to my own reporting
+
+- Two baseline entries were hand-typed wrong (`devharness` 5→4, `providers`
+  17→18). Corrected against the resolver, which regenerates the table rather than
+  relying on transcription.
+- The ratchet's own first version had a mypy error: comparing `len(declared)` to a
+  `baseline.names` that is `int | None`. That would also have raised `TypeError` at
+  runtime for a package transitioning from bare to declared. Fixed by handling the
+  transition explicitly and pointing at the guard that owns it.
+
+### Deliberately not done
+
+No `ModuleContract`, no per-package contract objects, no layer-law burndown, no
+mass import rewrite, no `__all__` forced onto the three bare roots, no runtime
+import hook. `03`'s layer law remains a superseded proposal; `06` §4's ownership-map
+decision stands.
+
+### What this does not establish
+
+The ratchet catches **growth**, not shrinkage: deleting a name from `__all__` is a
+public-API narrowing that no guard currently reports, and a rename that keeps the
+count equal passes. Recording that honestly is preferable to implying the surface
+is fully pinned. `ARTIFACT_NAMES` is also an allow-list (~16 names) excluded from
+the leak check, so a real symbol named `Field` or `datetime` would escape it —
+unlikely, but it is a documented hole rather than an oversight.

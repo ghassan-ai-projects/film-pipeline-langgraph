@@ -30,6 +30,7 @@ __all__ = [
     "_sync_generation_requests_from_ledger",
     "cancel_generation_request",
     "get_generation_status",
+    "is_text_only_policy",
     "list_active_generations",
     "plan_generation_batch",
     "preview_generation_prompts",

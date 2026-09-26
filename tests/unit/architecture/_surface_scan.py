@@ -40,10 +40,24 @@ _FILM_PIPELINE = _REPO_ROOT / "src" / "film_pipeline"
 
 @lru_cache(maxsize=1)
 def packages() -> tuple[str, ...]:
-    """Every package under ``film_pipeline``, sorted."""
-    return tuple(
-        sorted(p.name for p in _FILM_PIPELINE.iterdir() if p.is_dir() and p.name != "__pycache__")
-    )
+    """Every package under ``film_pipeline``, top-level **and nested**, sorted.
+
+    Nested packages are included because they declare surfaces consumers import
+    from: `agents.prompt_templates.defaults` declares 24 names,
+    `orchestration.nodes` 42, `mcp.tools` 77 (computed). An earlier version scanned
+    only top-level directories, so 14 nested packages and 162 declared names were
+    graded by nothing — and the docstring that blamed an `ast.List` limitation for
+    that gap was simply wrong: scope was the cause.
+    """
+    found: list[str] = []
+    for init in sorted(_FILM_PIPELINE.rglob("__init__.py")):
+        if "__pycache__" in init.parts:
+            continue
+        relative = init.parent.relative_to(_FILM_PIPELINE)
+        if not relative.parts:
+            continue
+        found.append(".".join(relative.parts))
+    return tuple(sorted(found))
 
 
 @cache
@@ -92,7 +106,7 @@ def public_module_names(package: str) -> tuple[str, ...]:
     A package with no ``__all__`` still has a surface: these. ``__init__`` is
     excluded because it *is* the root, not a module under it.
     """
-    root = _FILM_PIPELINE / package
+    root = _FILM_PIPELINE / package.replace(".", "/")
     names: list[str] = []
     for path in sorted(root.rglob("*.py")):
         if "__pycache__" in path.parts:

@@ -45,6 +45,11 @@ class Surface(NamedTuple):
 #: package -> (declared `__all__` size or None, public module count).
 SURFACE_BASELINE: dict[str, Surface] = {
     "agents": Surface(5, 28),
+    "agents.impl": Surface(14, 15),
+    "agents.model_routing": Surface(None, 0),
+    "agents.prompt_templates": Surface(3, 5),
+    "agents.prompt_templates.defaults": Surface(24, 3),
+    "agents.transports": Surface(20, 3),
     "checkpoints": Surface(8, 6),
     "cli": Surface(None, 4),
     "config": Surface(15, 6),
@@ -52,22 +57,42 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "devharness": Surface(4, 5),
     "filmspec": Surface(22, 0),
     "generation": Surface(18, 15),
+    "generation.compositor": Surface(6, 3),
     "governance": Surface(12, 11),
+    "governance.validators": Surface(8, 3),
     "kb": Surface(4, 6),
     "mcp": Surface(14, 37),
+    "mcp.tools": Surface(77, 31),
+    "mcp.tools.bibles": Surface(6, 5),
+    "mcp.tools.generation": Surface(11, 4),
+    "mcp.tools.reference_generation": Surface(14, 7),
     "operations": Surface(23, 5),
     "orchestration": Surface(None, 14),
+    "orchestration.nodes": Surface(42, 6),
+    "orchestration.subgraphs": Surface(None, 1),
     "post": Surface(13, 6),
     "projects": Surface(10, 2),
     "providers": Surface(18, 13),
+    "providers.adapters": Surface(3, 3),
     "schemas": Surface(107, 36),
+    "schemas.registries": Surface(5, 3),
     "storage": Surface(38, 12),
     "studio": Surface(None, 9),
     "validation": Surface(7, 11),
+    "validation.impl": Surface(7, 7),
+    "validation.validators": Surface(None, 0),
 }
 
 #: Package roots that deliberately declare no `__all__`, with the reason.
 BARE_ROOT_REASONS: dict[str, str] = {
+    "agents.model_routing": (
+        "Defines `ModelRouter` and `ModelResolutionError` in its `__init__` and "
+        "exports neither. Consumers import `ModelRouter` from the package root by "
+        "attribute, which works, but nothing is declared — so this is the one bare "
+        "package here that is arguably a *missing* surface rather than a deliberate "
+        "absence. Recorded instead of silently fixed because adding `__all__` is a "
+        "public-API change that belongs in its own slice."
+    ),
     "cli": (
         "A command-line entry package: consumers invoke console commands, not "
         "symbols from its root. It is imported by nothing in src/, so a root "
@@ -75,16 +100,23 @@ BARE_ROOT_REASONS: dict[str, str] = {
     ),
     "orchestration": (
         "The LangGraph execution engine. A root `__all__` naming its submodules "
-        "would make `import film_pipeline.orchestration` eagerly load the graph "
-        "and pull in `langgraph` — measured by `test_bare_package_roots.py`. 25 "
-        "cross-package imports reach its submodules directly, so a facade would "
-        "also have to re-export the engine it exists to keep lazy."
+        "would make `import film_pipeline.orchestration` eagerly load the graph and "
+        "pull in `langgraph` — measured by `test_bare_package_roots.py`. A facade "
+        "would also have to re-export the engine it exists to keep lazy."
+    ),
+    "orchestration.subgraphs": (
+        "A subpackage whose `__init__` is a docstring only; its one public module "
+        "(`qc`) is imported by path. There is nothing in the root to declare."
     ),
     "studio": (
         "The composition root: it wires other packages together and owns no "
         "vocabulary of its own. `__version__` is the only root binding, and it is "
-        "not part of any consumer's contract. 10 cross-package imports reach its "
-        "submodules directly."
+        "not part of any consumer's contract."
+    ),
+    "validation.validators": (
+        "Defines the 15-entry `MVP_VALIDATORS` registry and exports nothing. Like "
+        "`agents.model_routing`, the name is reachable by attribute but undeclared "
+        "— a missing surface rather than a deliberate absence, recorded here."
     ),
 }
 
@@ -94,21 +126,20 @@ BARE_ROOT_REASONS: dict[str, str] = {
 #: them by name rather than forcing them into `__all__`.
 ARTIFACT_NAMES: frozenset[str] = frozenset(
     {
-        "ABC",
-        "Any",
-        "Callable",
-        "Enum",
-        "Field",
-        "Iterable",
-        "Mapping",
-        "Protocol",
-        "Sequence",
-        "StrEnum",
-        "TYPE_CHECKING",
-        "UTC",
+        # `from __future__ import annotations` binds this in every module.
         "annotations",
-        "datetime",
-        "re",
-        "cast",
+        # Typing names imported for annotations or `TYPE_CHECKING` blocks.
+        "Any",
+        "Protocol",
+        "TYPE_CHECKING",
+        # `enum.StrEnum` — used as a base class, not re-exported.
+        "StrEnum",
+        # A module imported for the module's own use, not to re-export it. Listed
+        # because `import_module` is an implementation detail of `mcp.tools`'s
+        # PEP 562 `__getattr__`, and `PromptTemplate` is a `Protocol` annotation in
+        # `agents.prompt_templates.defaults`. Both are reachable as attributes and
+        # neither is API.
+        "PromptTemplate",
+        "import_module",
     }
 )

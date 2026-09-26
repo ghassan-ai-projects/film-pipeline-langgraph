@@ -134,7 +134,7 @@ def test_module_count_has_not_grown() -> None:
     grown = {
         package: (SURFACE_BASELINE[package].modules, count)
         for package, count in actual.items()
-        if package in SURFACE_BASELINE and count > SURFACE_BASELINE[package].modules
+        if package in SURFACE_BASELINE and count != SURFACE_BASELINE[package].modules
     }
     assert not grown, (
         f"public module count grew (baseline -> actual): {grown}. If the new module "
@@ -157,7 +157,7 @@ def test_exported_name_count_has_not_grown() -> None:
             # `test_declared_reasons_are_still_needed`, which owns it; comparing
             # counts here would be a type error and a duplicate report.
             continue
-        if len(declared) > baseline.names:
+        if len(declared) != baseline.names:
             grown[package] = (baseline.names, len(declared))
     assert not grown, (
         f"declared surface grew (baseline -> actual): {grown}. A widening of __all__ "
@@ -174,7 +174,7 @@ def test_undeclared_public_module_count_has_not_grown() -> None:
         if baseline is None:
             continue
         actual = len(public_module_names(package))
-        if actual > baseline.modules:
+        if actual != baseline.modules:
             grown[package] = (baseline.modules, actual)
     assert not grown, (
         f"a bare package root grew new public modules (baseline -> actual): {grown}. "
@@ -184,8 +184,28 @@ def test_undeclared_public_module_count_has_not_grown() -> None:
 
 
 def test_the_guard_has_something_to_check() -> None:
-    """Guard the guard: an empty sweep would pass while proving nothing."""
-    assert len(packages()) >= 15, "package discovery found too few packages"
-    assert len(SURFACE_BASELINE) >= 15, "the baseline covers too few packages"
-    assert len(BARE_ROOT_REASONS) >= 3, "the bare-root reasons went missing"
+    """Guard the guard, and close the escape hatch an absent baseline row opens.
+
+    The count guards look a package up in `SURFACE_BASELINE` and `continue` when
+    it is missing, so a **newly added package would be graded by nothing**. An
+    adversarial review demonstrated exactly that: a package with a 500-name
+    `__all__` and 30 public modules passed all seven guards. The size assertions
+    below would not have caught it either (`len(...) >= 15` still held), so the
+    set equality is the load-bearing part, not the lengths.
+    """
+    discovered = set(packages())
+    recorded = set(SURFACE_BASELINE)
+    ungraded = sorted(discovered - recorded)
+    assert not ungraded, (
+        f"{ungraded} exist under src/film_pipeline but are absent from SURFACE_BASELINE, "
+        "so no count guard grades them. Add a row for each — a package nobody records "
+        "is a package nobody checks."
+    )
+    stale = sorted(recorded - discovered)
+    assert not stale, f"SURFACE_BASELINE records {stale}, which no longer exist. Remove the rows."
+    assert set(BARE_ROOT_REASONS) <= recorded, (
+        "BARE_ROOT_REASONS names a package with no SURFACE_BASELINE row, so its "
+        "module count is never checked."
+    )
+    assert len(discovered) >= 15, "package discovery found too few packages"
     assert reachable_public_names("schemas"), "no names reachable on a known package"
