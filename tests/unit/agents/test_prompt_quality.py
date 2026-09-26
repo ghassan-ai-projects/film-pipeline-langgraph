@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from film_pipeline.agents.prompt_templates import PromptTemplate
 from film_pipeline.agents.prompt_templates.defaults import (
     _constitution_creator,
     _development_creator,
@@ -9,7 +10,6 @@ from film_pipeline.agents.prompt_templates.defaults import (
     _shot_bible_creator,
     _visual_development_creator,
 )
-from film_pipeline.agents.prompt_templates.registry import PromptTemplate
 
 
 class TestQualityInstructions:

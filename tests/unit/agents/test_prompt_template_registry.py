@@ -7,10 +7,8 @@ import pytest
 import film_pipeline.agents.prompt_templates.registry as registry_module
 from film_pipeline.agents.prompt_templates import PromptTemplate as PublicPromptTemplate
 from film_pipeline.agents.prompt_templates import get_registry as package_get_registry
-from film_pipeline.agents.prompt_templates.registry import (
-    PromptTemplate,
-    PromptTemplateRegistry,
-)
+from film_pipeline.agents.prompt_templates.registry import PromptTemplateRegistry
+from film_pipeline.agents.prompt_templates.template import PromptTemplate
 from film_pipeline.agents.prompt_templates.template import PromptTemplate as OwnerPromptTemplate
 
 
