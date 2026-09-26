@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.schemas.continuity import (
+    ContinuityLedger,
+    ContinuityLedgerEntry,
+    StateRecord,
+)
 
 from ..helpers import (
     _error,
@@ -16,14 +22,10 @@ from ..helpers import (
 )
 from ._shared import InvalidBibleOutput, _extract_script_text, _run_bible_agent
 
+_logger = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
     from film_pipeline.schemas.base import ArtifactType
-
-from film_pipeline.schemas.continuity import (
-    ContinuityLedger,
-    ContinuityLedgerEntry,
-    StateRecord,
-)
 
 
 def _character_state(chars: list[str]) -> StateRecord:
@@ -102,11 +104,28 @@ def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLe
 
 
 def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str | None:
-    """Generate a basic continuity ledger from the shot matrix."""
+    """Generate a basic continuity ledger from the shot matrix.
+
+    A failure here is **logged, not swallowed**. This previously caught every
+    exception and returned ``None``, so a ledger that failed to persist was
+    indistinguishable from one that was never needed: the tool still answered
+    ``ok: True`` with ``continuity_ledger_ref: None``, while its own docstring
+    promises "MasterFilmMatrix + ContinuityLedger" and ``CONTINUITY_LEDGER`` is a
+    declared artifact kind.
+
+    It stays non-fatal on purpose — the matrix is the primary deliverable and
+    losing it to a ledger problem would be worse — but the operator can now see
+    that half the promised output is missing, and the response says so.
+    """
     try:
         ledger = ContinuityLedger(project_id=project_id, entries=_continuity_entries(matrix))
         return _persist_continuity_ledger(store, project_id, ledger)
     except Exception:
+        _logger.exception(
+            "Continuity ledger generation failed for project %s; the shot matrix "
+            "was still persisted but the response carries no ledger ref.",
+            project_id,
+        )
         return None
 
 
@@ -180,6 +199,17 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
 
         ledger_ref = _generate_continuity_ledger(store, project_id, matrix)
 
+        # The docstring promises the matrix AND a ledger. When the ledger is
+        # missing the response says so rather than reporting an unqualified
+        # success, so a caller checking only `ok` is not misled about half the
+        # promised output. The matrix remains the deliverable either way.
+        if ledger_ref is None:
+            return _ok(
+                shot_matrix_ref=ref,
+                shot_count=len(matrix.rows),
+                continuity_ledger_ref=None,
+                warnings=["continuity_ledger_not_persisted"],
+            )
         return _ok(
             shot_matrix_ref=ref,
             shot_count=len(matrix.rows),
