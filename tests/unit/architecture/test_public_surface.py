@@ -56,27 +56,21 @@ KNOWN_UNDECLARED_ROOT_IMPORTS: dict[str, int] = {}
 
 
 def _declared_surface() -> dict[str, set[str] | None]:
-    """Map package name -> its ``__all__``, or None when it declares none."""
+    """Map package name -> its ``__all__``, or None when it declares none.
+
+    Resolved from the **imported module**, not by parsing AST. The original
+    implementation accepted only a literal ``ast.List``, which read
+    `mcp/tools/__init__.py`'s computed ``__all__ = sorted((*_TOOL_MODULES, ...))``
+    as ``None`` and silently skipped all 77 names it declares. A silent skip in a
+    guard is worse than no guard, because it reports clean while measuring
+    nothing. Packaged as `_surface_scan` so this logic has one owner.
+    """
+    from tests.unit.architecture._surface_scan import declared_surface, packages
+
     surfaces: dict[str, set[str] | None] = {}
-    for package_dir in sorted(p for p in _SRC.iterdir() if p.is_dir()):
-        init = package_dir / "__init__.py"
-        if not init.exists():
-            continue
-        declared: set[str] | None = None
-        for node in ast.parse(init.read_text()).body:
-            if not isinstance(node, ast.Assign):
-                continue
-            if not any(getattr(target, "id", None) == "__all__" for target in node.targets):
-                continue
-            value = node.value
-            if not isinstance(value, ast.List):
-                continue
-            declared = {
-                str(element.value)
-                for element in value.elts
-                if isinstance(element, ast.Constant) and isinstance(element.value, str)
-            }
-        surfaces[package_dir.name] = declared
+    for package in packages():
+        declared = declared_surface(package)
+        surfaces[package] = None if declared is None else set(declared)
     return surfaces
 
 
