@@ -66,7 +66,6 @@ async def export_delivery_package(args: dict[str, object]) -> dict[str, object]:
         audio_stems_dir=str(args.get("audio_stems_dir", "")),
         stills_dir=str(args.get("stills_dir", "")),
         validation_report_path=str(args.get("validation_report_path", "")),
-        cost_report_path=str(args.get("cost_report_path", "")),
         credits_path=str(args.get("credits_path", "")),
     )
     return _ok(

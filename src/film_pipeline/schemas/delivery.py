@@ -20,7 +20,6 @@ class DeliveryManifest(SchemaBase):
     audio_stems: list[str] = Field(default_factory=list)
     stills: list[str] = Field(default_factory=list)
     validation_report_ref: str = ""
-    cost_report_ref: str = ""
     credits_ref: str = ""
 
 
@@ -39,7 +38,6 @@ class DeliveryPackage(SchemaBase):
     stills_included: bool = False
     prompt_archive_included: bool = False
     validation_report_included: bool = False
-    cost_report_included: bool = False
     credits_included: bool = False
     is_complete: bool = False
     missing_items: list[str] = Field(default_factory=list)

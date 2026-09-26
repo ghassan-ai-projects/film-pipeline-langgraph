@@ -800,7 +800,6 @@ class TestDeliveryCompletenessValidator:
                 "subtitles": [],
                 "stills": [],
                 "validation_report_ref": "",
-                "cost_report_ref": "",
                 "credits_ref": "",
             }
         }
@@ -817,7 +816,6 @@ class TestDeliveryCompletenessValidator:
                 "subtitles": [],
                 "stills": ["still_01.png"],
                 "validation_report_ref": "validation_report.json",
-                "cost_report_ref": "cost_report.json",
                 "credits_ref": "credits.txt",
             }
         }
@@ -834,19 +832,17 @@ class TestDeliveryCompletenessValidator:
                     {"path": "delivery/subtitles.srt", "kind": "subtitle"},
                     {"path": "delivery/credits.txt", "kind": "text"},
                     {"path": "delivery/validation_report.json", "kind": "report"},
-                    {"path": "delivery/cost_report.json", "kind": "report"},
                 ],
                 "subtitles": ["subtitles.srt"],
                 "stills": ["still_01.png"],
                 "validation_report_ref": "",
-                "cost_report_ref": "",
                 "credits_ref": "",
             }
         }
         report = v.run(artifact)
-        # Should have 3 blocking issues for missing manifest refs (no missing files)
+        # Should have 2 blocking issues for missing manifest refs (no missing files)
         blocking_codes = [i.code for i in report.blocking_issues]
-        assert blocking_codes.count("missing_required_asset") == 3
+        assert blocking_codes.count("missing_required_asset") == 2
 
     def test_complete_package_passes(self) -> None:
         v = DeliveryCompletenessValidator()
@@ -858,12 +854,10 @@ class TestDeliveryCompletenessValidator:
                     {"path": "delivery/subtitles.srt", "kind": "subtitle"},
                     {"path": "delivery/credits.txt", "kind": "text"},
                     {"path": "delivery/validation_report.json", "kind": "report"},
-                    {"path": "delivery/cost_report.json", "kind": "report"},
                 ],
                 "subtitles": ["subtitles.srt"],
                 "stills": ["still_01.png"],
                 "validation_report_ref": "validation_report.json",
-                "cost_report_ref": "cost_report.json",
                 "credits_ref": "credits.txt",
             }
         }

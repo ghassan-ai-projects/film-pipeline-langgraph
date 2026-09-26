@@ -19,12 +19,10 @@ REQUIRED_DELIVERY_FILES = {
     "subtitles.srt",
     "credits.txt",
     "validation_report.json",
-    "cost_report.json",
 }
 
 _REQUIRED_MANIFEST_REFS: tuple[tuple[str, str], ...] = (
     ("validation_report_ref", "validation report"),
-    ("cost_report_ref", "cost report"),
     ("credits_ref", "credits"),
 )
 
