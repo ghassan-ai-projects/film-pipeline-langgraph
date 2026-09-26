@@ -5,12 +5,12 @@ from __future__ import annotations
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
-from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_id,
     _error,
     _ok,
+    operator_service,
     require_project_state,
 )
 

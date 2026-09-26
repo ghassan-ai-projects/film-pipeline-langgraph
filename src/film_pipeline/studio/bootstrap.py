@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from film_pipeline.kb.paths import kb_manifest_path
-from film_pipeline.providers import credentials
+from film_pipeline.providers import is_configured
 
 
 def validate_environment() -> list[str]:
@@ -73,6 +73,6 @@ def _missing_real_mode_credentials_issues() -> list[str]:
     if mcp_mode != "real":
         return []
     issues: list[str] = []
-    if not credentials.is_configured("seedance-openrouter"):
+    if not is_configured("seedance-openrouter"):
         issues.append("OPENROUTER_API_KEY is required when FILM_PIPELINE_MCP_MODE=real.")
     return issues

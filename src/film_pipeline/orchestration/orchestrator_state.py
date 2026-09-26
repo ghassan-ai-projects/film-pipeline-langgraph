@@ -53,7 +53,6 @@ __all__ = [
     "increment_convergence_round",
     "init_convergence",
     "init_refs",
-    "is_budget_blocked",
     "is_provider_blocked",
     "is_stalled",
     "mark_stalled",
@@ -65,7 +64,6 @@ __all__ = [
     "set_candidate_ref",
     "set_execution_brief",
     "start_review_cycle",
-    "update_budget_snapshot",
     "update_provider_health",
 ]
 
@@ -557,25 +555,14 @@ def get_healthy_providers(state: dict[str, Any]) -> list[str]:
 # --- Budget snapshot ---------------------------------------------------------
 
 
-def update_budget_snapshot(
-    state: dict[str, Any],
-    *,
-    cap_usd: float = 0.0,
-    spent_usd: float = 0.0,
-    threshold_exceeded: bool = False,
-) -> None:
-    """Cache budget awareness for routing decisions."""
-    state[_BUDGET_SNAPSHOT] = {
-        "cap_usd": cap_usd,
-        "spent_usd": spent_usd,
-        "remaining_usd": max(0.0, cap_usd - spent_usd),
-        "threshold_exceeded": threshold_exceeded,
-        "cached_at": datetime.now().isoformat(),
-    }
-
-
 def get_budget_snapshot(state: dict[str, Any]) -> dict[str, Any]:
-    """Return the cached budget snapshot."""
+    """Return the cached budget snapshot.
+
+    Read-only since the Rule 4 deletion: ``update_budget_snapshot`` was its only
+    writer and had zero callers in ``src/``, so the snapshot is always the
+    default below. Kept because two operator read paths project it
+    (``mcp.tools.state.get_film_state`` and ``operations.operator``).
+    """
     return cast(
         dict[str, Any],
         state.get(
@@ -583,11 +570,6 @@ def get_budget_snapshot(state: dict[str, Any]) -> dict[str, Any]:
             {"cap_usd": 0.0, "spent_usd": 0.0, "remaining_usd": 0.0, "threshold_exceeded": False},
         ),
     )
-
-
-def is_budget_blocked(state: dict[str, Any]) -> bool:
-    """Return True if the budget threshold has been exceeded."""
-    return cast(bool, get_budget_snapshot(state).get("threshold_exceeded", False))
 
 
 # --- Execution brief ---------------------------------------------------------

@@ -2,6 +2,30 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "GENERATION_DEPENDENT_PHASES",
+    "LEGACY_TRANSITION_ALIASES",
+    "NO_ACTIVE_PROJECT",
+    "PHASE_AGNOSTIC_PHASES",
+    "PHASE_GATES",
+    "PHASE_SEQUENCE",
+    "STALE_GENERATION_REQUEST_CODES",
+    "TEXT_ONLY_POLICY",
+    "TRANSITION_TYPES",
+    "AgentFamily",
+    "AgentRole",
+    "ArtifactType",
+    "FilmPhase",
+    "GenerationStatus",
+    "IssueSeverity",
+    "ValidationStatus",
+    "blocking_issues",
+    "is_blocking_issue",
+    "is_text_only_policy",
+    "next_phase",
+    "text_only_generation_request",
+    "text_only_generation_requests",
+]
 from enum import StrEnum
 from typing import Any
 
@@ -134,6 +158,32 @@ class IssueSeverity(StrEnum):
     BLOCKING = "blocking"
 
 
+def is_blocking_issue(issue: object) -> bool:
+    """Return whether an issue record's severity blocks phase advancement.
+
+    The single definition of "this issue blocks". It was re-derived at more than
+    a dozen call sites across eight packages as a bare
+    ``issue.get("severity") == "blocking"``, and they had already diverged: some
+    guarded against a malformed record with ``isinstance(issue, dict)`` and at
+    least one did not, so a non-mapping issue raised ``AttributeError`` on that
+    path while the others skipped it.
+
+    Non-mappings are never blocking rather than an error: an issue list is
+    persisted state, and crash recovery must not depend on every entry being
+    well-formed.
+    """
+    if not isinstance(issue, dict):
+        return False
+    return str(issue.get("severity", "")) == IssueSeverity.BLOCKING.value
+
+
+def blocking_issues(issues: object) -> list[dict[str, Any]]:
+    """Return the issues whose severity blocks advancement."""
+    if not isinstance(issues, (list, tuple)):
+        return []
+    return [issue for issue in issues if is_blocking_issue(issue)]
+
+
 PHASE_SEQUENCE: tuple[str, ...] = tuple(phase.value for phase in FilmPhase)
 
 PHASE_GATES: dict[str, str] = {
@@ -177,6 +227,22 @@ LEGACY_TRANSITION_ALIASES: dict[str, str] = {"fade": "fade_out"}
 STALE_GENERATION_REQUEST_CODES: frozenset[str] = frozenset(
     {"empty_generation_requests", "no_generation_requests"}
 )
+
+
+#: The ``generation_policy`` value that selects text-only delivery.
+#:
+#: The policy string is written by project creation and read by the generation
+#: paths in two packages. The predicate lived as two byte-identical copies — one
+#: in `operations._generation_ops`, one in `mcp.tools.generation._text_only` —
+#: with the literal in three places, so the vocabulary is owned here.
+TEXT_ONLY_POLICY = "text_only"
+
+
+def is_text_only_policy(state: object) -> bool:
+    """Return whether a project state selects the text-only generation policy."""
+    if not isinstance(state, dict):
+        return False
+    return str(state.get("generation_policy", "")).strip().lower() == TEXT_ONLY_POLICY
 
 
 def text_only_generation_request(

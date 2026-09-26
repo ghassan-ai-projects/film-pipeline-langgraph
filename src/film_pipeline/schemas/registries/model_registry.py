@@ -20,9 +20,3 @@ class ModelRegistryEntry(SchemaBase):
     preferred_tasks: list[str] = Field(default_factory=list)
     avoid_for: list[str] = Field(default_factory=list)
     enabled: bool = True
-
-
-class ModelRegistry(SchemaBase):
-    """Aggregate model registry."""
-
-    models: list[ModelRegistryEntry] = Field(default_factory=list)

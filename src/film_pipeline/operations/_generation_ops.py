@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.filmspec import text_only_generation_requests
+from film_pipeline.filmspec import is_text_only_policy, text_only_generation_requests
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import GenerationWorkspace
 from film_pipeline.storage.manifest import read_manifest
@@ -27,7 +27,7 @@ def get_generation_workspace(
     project_id_value = str(state["project_id"])
     provider, model = svc.runtime.default_video_provider()
 
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return _text_only_workspace(state, project_id_value, provider, model)
 
     executor = _generation_executor(svc)
@@ -38,7 +38,6 @@ def get_generation_workspace(
         phase=str(state.get("current_phase", "")),
         provider=provider,
         model=model,
-        estimated_cost_usd=executor.estimated_cost(project_id_value),
         rows=rows,
         planned=counts["prepared"],
         submitted=counts["submitted"],
@@ -53,7 +52,7 @@ def plan_generation(svc: OperatorService, project_id: str | None = None) -> Gene
     """Plan a generation batch for every shot in the approved shot matrix."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         _complete_text_only_generation(svc, state, project_id_value)
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
@@ -69,16 +68,22 @@ def plan_generation(svc: OperatorService, project_id: str | None = None) -> Gene
 def approve_generation_spend(
     svc: OperatorService,
     project_id: str | None = None,
-    max_cost_usd: float = -1.0,
 ) -> GenerationWorkspace:
-    """Approve spend for planned generation rows."""
+    """Approve planned generation rows by marking them SUBMITTED.
+
+    The cost ceiling that used to live here was self-referential — it was derived
+    from the planner's own estimate and compared against sums of that same
+    estimate, so it could not refuse a batch the planner itself had produced.
+    Removing it removes no real check; the PREPARED -> SUBMITTED transition it
+    guarded is the part that matters and is unchanged.
+    """
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     try:
-        executor.approve_spend(project_id_value, max_cost_usd=max_cost_usd)
+        executor.approve_spend(project_id_value)
     except ValueError as exc:
         raise BackendOperationError(str(exc)) from exc
     _sync_generation_requests(svc, state, project_id_value)
@@ -89,7 +94,7 @@ def start_generation(svc: OperatorService, project_id: str | None = None) -> Gen
     """Submit approved generation rows to their providers."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     executor.start(project_id_value)
@@ -101,7 +106,7 @@ def poll_generation(svc: OperatorService, project_id: str | None = None) -> Gene
     """Poll running generations once, delivering completed outputs."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     executor.poll_once(project_id_value)
@@ -201,10 +206,6 @@ def _shot_row_id(row: dict[str, Any]) -> str:
     return str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
 
 
-def _is_text_only_policy(state: dict[str, Any]) -> bool:
-    return str(state.get("generation_policy", "")).lower() == "text_only"
-
-
 def _complete_text_only_generation(
     svc: OperatorService, state: dict[str, Any], project_id: str
 ) -> None:
@@ -243,7 +244,6 @@ def _text_only_workspace(
         phase=str(state.get("current_phase", "")),
         provider=provider,
         model=model,
-        estimated_cost_usd=0.0,
         rows=[],
         planned=0,
         submitted=0,

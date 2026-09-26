@@ -73,71 +73,41 @@ def _incomplete_row_issues(rows: list[Any]) -> list[dict[str, Any]]:
     ]
 
 
-def _estimate_clip_count(cost_estimate: Any) -> int:
-    """Read the clip count from an object or dict cost estimate."""
-    if hasattr(cost_estimate, "clip_count"):
-        return int(getattr(cost_estimate, "clip_count", 0) or 0)
-    if isinstance(cost_estimate, dict):
-        raw_count = cost_estimate.get("clip_count", cost_estimate.get("total_clips", 0))
-        return int(raw_count) if raw_count is not None else 0
-    return 0
+def _clip_gate_issues(shot_matrix: Any) -> list[dict[str, Any]]:
+    """Blocking issue when the shot matrix has no rows to dispatch.
 
+    The clip count comes from the **shot matrix**, which is the authority for how
+    many clips a plan has. It used to be read from the `cost_estimate` artifact,
+    which made a cost record the gate's source of truth for a non-cost fact: a
+    plan could not be validated without a priced estimate, and deleting the cost
+    feature would have blocked every run here.
 
-def _estimate_total_cost(cost_estimate: Any) -> float:
-    """Read the estimated USD cost from an object or dict cost estimate."""
-    if hasattr(cost_estimate, "estimated_cost_usd"):
-        return float(getattr(cost_estimate, "estimated_cost_usd", 0.0) or 0.0)
-    if isinstance(cost_estimate, dict):
-        raw_cost = cost_estimate.get(
-            "estimated_cost_usd",
-            cost_estimate.get("total_cost_usd", cost_estimate.get("total_cost", 0.0)),
-        )
-        return float(raw_cost) if raw_cost is not None else 0.0
-    return 0.0
-
-
-def _cost_gate_issues(cost_estimate: Any) -> list[dict[str, Any]]:
-    """Check the cost estimate exists and is non-placeholder."""
-    if cost_estimate is None:
+    The cost half of this gate — `missing_cost_estimate` and `placeholder_cost` —
+    was removed with the cost feature. It blocked a plan whose estimate was
+    missing or $0.00, which after the removal is simply every plan.
+    """
+    if not _matrix_rows(shot_matrix):
         return [
-            _blocking(
-                "missing_cost_estimate",
-                "No cost estimate produced by generation planning. "
-                "Cannot validate dispatch readiness.",
-            )
-        ]
-    clip_count = _estimate_clip_count(cost_estimate)
-    total_cost = _estimate_total_cost(cost_estimate)
-    issues: list[dict[str, Any]] = []
-    if clip_count == 0:
-        issues.append(
             _blocking(
                 "zero_clip_count",
                 "Generation plan has 0 clips. Cannot dispatch to provider.",
             )
-        )
-    if total_cost == 0.0 and clip_count > 0:
-        issues.append(
-            _blocking(
-                "placeholder_cost",
-                "Generation plan has non-zero clips but $0.00 estimated cost. "
-                "Cost estimate must reflect real provider pricing.",
-            )
-        )
-    return issues
+        ]
+    return []
 
 
 def validate_planning_completeness(
     _state: dict[str, Any],
     shot_matrix: Any,
-    cost_estimate: Any,
 ) -> list[dict[str, Any]]:
-    """Gate B: Check field completeness and non-placeholder cost estimates.
+    """Gate B: Check field completeness and that the plan has clips.
 
-    Returns a list of blocking issues (empty list = pass).
+    Returns a list of blocking issues (empty list = pass). The cost checks this
+    gate used to run were removed with the cost feature; the clip-count check
+    they carried was re-sourced from the shot matrix rather than dropped.
     """
     issues = _incomplete_row_issues(_matrix_rows(shot_matrix))
-    issues.extend(_cost_gate_issues(cost_estimate))
+    issues.extend(_clip_gate_issues(shot_matrix))
     return issues
 
 

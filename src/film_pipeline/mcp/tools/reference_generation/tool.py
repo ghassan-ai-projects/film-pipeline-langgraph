@@ -38,6 +38,7 @@ from ..helpers import (
     _error,
     _load_latest_reference_index,
     _ok,
+    _register_active_artifact_ref,
     _services,
     require_project_state,
 )
@@ -56,10 +57,7 @@ def _persist_updated_index(
     }
     ref = _save_reference_index_artifact(rt, active, cast(dict[str, object], updated))
     if ref:
-        active["visual_refs"] = ref
-        active.setdefault("artifact_refs", []).append(ref)
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
+        _register_active_artifact_ref(rt, active, project_id, "visual_refs", ref)
     return ref
 
 

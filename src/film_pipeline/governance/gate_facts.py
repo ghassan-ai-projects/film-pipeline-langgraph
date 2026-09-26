@@ -40,10 +40,6 @@ class GateFacts(Protocol):
         """Return the ids of providers currently blocked."""
         ...
 
-    def is_budget_blocked(self, state: dict[str, Any]) -> bool:
-        """Return whether the budget threshold has been exceeded."""
-        ...
-
     def has_pending_revision(self, state: dict[str, Any]) -> bool:
         """Return whether an unresolved revision request exists."""
         ...

@@ -25,7 +25,6 @@ critical_mcp_tools:
   - get_validation_report
   - list_validation_issues
   - plan_generation_batch
-  - approve_generation_spend
   - get_generation_status
   - resume_generation_polling
   - list_active_generations

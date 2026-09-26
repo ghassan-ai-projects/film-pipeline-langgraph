@@ -169,8 +169,7 @@ class TestGateBPlanningCompleteness:
                 ),
             ]
         )
-        cost: dict[str, Any] = {"clip_count": 1, "total_cost_usd": 5.0}
-        issues = validate_planning_completeness({}, matrix, cost)
+        issues = validate_planning_completeness({}, matrix)
         assert issues == []
 
     def test_blocks_on_missing_fields(self) -> None:
@@ -187,7 +186,7 @@ class TestGateBPlanningCompleteness:
                 ),
             ]
         )
-        issues = validate_planning_completeness({}, matrix, {})
+        issues = validate_planning_completeness({}, matrix)
         assert len(issues) >= 1
         field_issues = [i for i in issues if "incomplete_shot_rows" in i["code"]]
         assert len(field_issues) == 1
@@ -207,29 +206,33 @@ class TestGateBPlanningCompleteness:
                 ),
             ]
         )
-        cost: dict[str, Any] = {"clip_count": 1, "total_cost_usd": 5.0}
-        issues = validate_planning_completeness({}, matrix, cost)
+        issues = validate_planning_completeness({}, matrix)
         assert all(i["code"] != "incomplete_shot_rows" for i in issues)
 
     def test_blocks_on_zero_clip_count(self) -> None:
-        matrix = FakeMatrix(rows=[FakeRow()])
-        cost: dict[str, Any] = {"clip_count": 0, "total_cost_usd": 0.0}
-        issues = validate_planning_completeness({}, matrix, cost)
-        assert len(issues) >= 1
+        """An empty matrix blocks; the count comes from the matrix, not a cost record.
+
+        This check used to read `clip_count` off the `cost_estimate` artifact,
+        which made a cost record the authority for a non-cost fact. It is now
+        sourced from the shot matrix, so the test supplies an empty matrix rather
+        than a cost dict claiming zero clips.
+        """
+        issues = validate_planning_completeness({}, FakeMatrix(rows=[]))
         assert any("zero_clip_count" in i["code"] for i in issues)
 
-    def test_blocks_on_placeholder_cost_with_clips(self) -> None:
-        matrix = FakeMatrix(rows=[FakeRow()])
-        cost: dict[str, Any] = {"clip_count": 5, "total_cost_usd": 0.0}
-        issues = validate_planning_completeness({}, matrix, cost)
-        assert len(issues) >= 1
-        assert any("placeholder_cost" in i["code"] for i in issues)
-
-    def test_blocks_on_missing_cost_estimate(self) -> None:
-        matrix = FakeMatrix(rows=[FakeRow()])
-        issues = validate_planning_completeness({}, matrix, None)
-        assert len(issues) >= 1
-        assert any("missing_cost_estimate" in i["code"] for i in issues)
+    def test_passes_with_rows_and_no_cost_record(self) -> None:
+        """A priced estimate is no longer required to pass Gate B."""
+        matrix = FakeMatrix(
+            rows=[
+                FakeRow(
+                    shot_id="s_001",
+                    characters=["hero"],
+                    environment="barren",
+                    camera_profile="static",
+                )
+            ]
+        )
+        assert validate_planning_completeness({}, matrix) == []
 
     def test_blocks_shots_referencing_missing_script_scenes(self) -> None:
         script = {"scenes": [{"scene_id": "SC_001"}]}
@@ -489,6 +492,5 @@ class TestGateDictRows:
                 },
             ]
         }
-        cost: dict[str, Any] = {"clip_count": 1, "total_cost_usd": 5.0}
-        issues = validate_planning_completeness({}, matrix, cost)
+        issues = validate_planning_completeness({}, matrix)
         assert any("incomplete_shot_rows" in i["code"] for i in issues)

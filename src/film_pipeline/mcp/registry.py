@@ -57,7 +57,6 @@ from film_pipeline.mcp.tools.config import (
     propose_profile_change,
 )
 from film_pipeline.mcp.tools.generation import (
-    approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
     list_active_generations,
@@ -75,7 +74,7 @@ from film_pipeline.mcp.tools.kb import (
     kb_search,
 )
 from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
-from film_pipeline.mcp.tools.planning import generate_plan, initialize_budget
+from film_pipeline.mcp.tools.planning import generate_plan
 from film_pipeline.mcp.tools.projects import (
     create_film_project,
     find_project,
@@ -338,14 +337,6 @@ def register_all_tools(registry: ToolRegistry) -> None:
     )
     _register(
         registry,
-        "initialize_budget",
-        ToolGroup.GENERATION,
-        initialize_budget,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
         "generate_plan",
         ToolGroup.GENERATION,
         generate_plan,
@@ -367,15 +358,6 @@ def register_all_tools(registry: ToolRegistry) -> None:
         ToolGroup.GENERATION,
         generate_reference_images,
         mutates=True,
-    )
-    _register(
-        registry,
-        "approve_generation_spend",
-        ToolGroup.GENERATION,
-        approve_generation_spend,
-        mutates=True,
-        confirm=True,
-        active_project=True,
     )
     _register(
         registry,

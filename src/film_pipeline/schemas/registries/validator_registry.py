@@ -32,9 +32,3 @@ class ValidatorRegistryEntry(SchemaBase):
     blocking_conditions: list[str] = Field(default_factory=list)
     warning_conditions: list[str] = Field(default_factory=list)
     enabled: bool = True
-
-
-class ValidatorRegistry(SchemaBase):
-    """Aggregate validator registry."""
-
-    validators: list[ValidatorRegistryEntry] = Field(default_factory=list)

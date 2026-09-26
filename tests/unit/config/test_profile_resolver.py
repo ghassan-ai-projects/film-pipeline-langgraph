@@ -12,28 +12,7 @@ from film_pipeline.config.profile_resolver import (
     provider_specs_from_raw,
     resolve_project_config,
 )
-
-
-def _import_targets(node: ast.AST, package_parts: tuple[str, ...]) -> list[str]:
-    if isinstance(node, ast.Import):
-        return [alias.name for alias in node.names]
-    if not isinstance(node, ast.ImportFrom):
-        return []
-
-    if node.level:
-        parent_size = len(package_parts) - node.level + 1
-        base = package_parts[: max(parent_size, 0)]
-    else:
-        base = ()
-    module_parts = tuple(node.module.split(".")) if node.module else ()
-    imported_parts = (*base, *module_parts)
-    targets = [".".join(imported_parts)] if imported_parts else []
-    targets.extend(
-        ".".join((*imported_parts, *alias.name.split(".")))
-        for alias in node.names
-        if alias.name != "*"
-    )
-    return targets
+from tests.unit._import_guard import import_targets as _import_targets
 
 
 def _is_app_or_provider_import(module: str) -> bool:

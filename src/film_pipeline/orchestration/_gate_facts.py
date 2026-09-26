@@ -27,9 +27,6 @@ class OrchestratorGateFacts:
     def blocked_providers(self, state: dict[str, Any]) -> list[str]:
         return ostate.get_blocked_providers(state)
 
-    def is_budget_blocked(self, state: dict[str, Any]) -> bool:
-        return ostate.is_budget_blocked(state)
-
     def has_pending_revision(self, state: dict[str, Any]) -> bool:
         return ostate.has_pending_revision(state)
 

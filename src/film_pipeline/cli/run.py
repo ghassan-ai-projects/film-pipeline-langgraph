@@ -12,6 +12,7 @@ from typing import Any
 
 from film_pipeline.cli.driver import HeadlessDriverError, HeadlessRunSpec, run_headless
 from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.storage.storage import default_run_root
 
 
@@ -276,9 +277,7 @@ def _print_summary(state: dict[str, Any], project_id: str) -> None:
 
 def _blocking_issues(issues: Iterable[Any]) -> list[dict[str, Any]]:
     """Return well-formed issues whose severity blocks delivery."""
-    return [
-        issue for issue in issues if isinstance(issue, dict) and issue.get("severity") == "blocking"
-    ]
+    return blocking_issues(list(issues))
 
 
 def _unique_strs(values: Iterable[Any]) -> list[str]:

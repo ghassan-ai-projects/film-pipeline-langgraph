@@ -6,7 +6,6 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.orchestration.nodes._generation_prompts import (
-    _load_artifact_data,
     _load_matrix_rows,
     _resolve_prompt_for_request,
 )
@@ -27,32 +26,16 @@ def _parse_generation_mode(mode_str: str) -> GenerationMode:
     return mode
 
 
-def _approve_spend_with_ceiling(
-    new_state: dict[str, Any],
-    services: GraphServices,
-    mgr: GenerationLedgerManager,
-    project_id: str,
-) -> None:
-    """Approve spend under a ceiling derived from the cost estimate (+10%)."""
-    max_cost_usd = -1.0
-    cost_estimate_ref = str(new_state.get("cost_estimate_ref", "") or "")
-    if cost_estimate_ref:
-        ce_data = _load_artifact_data(new_state, services, cost_estimate_ref)
-        if isinstance(ce_data, dict):
-            raw_cost = ce_data.get("estimated_cost_usd")
-            if raw_cost is not None:
-                with contextlib.suppress(TypeError, ValueError):
-                    max_cost_usd = float(raw_cost) * 1.1
-    try:
-        mgr.approve_spend(project_id, max_cost_usd=max_cost_usd)
-    except ValueError as exc:
-        new_state.setdefault("issues", []).append(
-            {
-                "severity": "blocking",
-                "code": "generation_budget_exceeded",
-                "message": str(exc),
-            }
-        )
+def _approve_spend(mgr: GenerationLedgerManager, project_id: str) -> None:
+    """Mark planned rows SUBMITTED so dispatch can pick them up.
+
+    This used to approve "under a ceiling" derived from the planner's own cost
+    estimate times 1.1. That ceiling could not refuse: the number it guarded
+    against was the number it was derived from, so the comparison was between a
+    value and itself plus ten percent. It was removed with the cost feature, and
+    what remains is the transition that actually mattered.
+    """
+    mgr.approve_spend(project_id)
 
 
 def _resolve_request_prompts(
@@ -131,26 +114,13 @@ def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices |
         return
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.pricing import estimate_cost_for_duration
 
     project_id = str(new_state.get("project_id", ""))
     mgr = GenerationLedgerManager(services.artifact_store)
 
     resolved_requests = _resolve_request_prompts(new_state, services)
     groups = _group_requests_by_batch(resolved_requests)
-    matrix_rows = {
-        str(row.get("shot_id", "")): row for row in _load_matrix_rows(new_state, services)
-    }
-
     for (provider, model, mode_str, prompt_ref), shot_ids in groups.items():
-        estimated_costs = {
-            shot_id: estimate_cost_for_duration(
-                provider,
-                model,
-                float(matrix_rows.get(shot_id, {}).get("duration_seconds", 5) or 5),
-            )
-            for shot_id in shot_ids
-        }
         mgr.plan_batch(
             project_id=project_id,
             shot_ids=shot_ids,
@@ -158,8 +128,7 @@ def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices |
             model=model,
             prompt_ref=prompt_ref,
             mode=_parse_generation_mode(mode_str),
-            estimated_costs=estimated_costs,
         )
 
-    _approve_spend_with_ceiling(new_state, services, mgr, project_id)
+    _approve_spend(mgr, project_id)
     _persist_planned_ledger(new_state, mgr, project_id)

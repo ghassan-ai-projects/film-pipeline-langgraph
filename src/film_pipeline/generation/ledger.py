@@ -7,7 +7,6 @@ generation phase. No provider calls happen here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -26,6 +25,28 @@ from film_pipeline.schemas.generation import (
 from film_pipeline.storage.store import ArtifactStore
 
 LEDGER_ARTIFACT_ID = "generation_ledger"
+
+#: Statuses a row can never leave. The ledger's state machine is owned here, so
+#: this is the single definition of terminality. It was hand-rolled in three
+#: places — this module, the executor's cost sum, and the MCP status handler —
+#: which is three opportunities to disagree about when a row is finished.
+#:
+#: ``requires_human_review``, ``blocked_provider`` and ``blocked_budget`` are
+#: deliberately NOT terminal: each waits on something that can still change, so
+#: the row is still live and must not be filtered out of an "active" listing.
+TERMINAL_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
+    {
+        GenerationStatus.COMPLETED,
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+        GenerationStatus.TIMED_OUT,
+    }
+)
+
+
+def is_terminal(status: GenerationStatus) -> bool:
+    """Return whether a generation row has reached a status it cannot leave."""
+    return status in TERMINAL_GENERATION_STATUSES
 
 
 class GenerationLedgerManager:
@@ -70,7 +91,6 @@ class GenerationLedgerManager:
         prompt_ref: str = "",
         reference_refs: list[str] | None = None,
         mode: GenerationMode = GenerationMode.TEST,
-        estimated_costs: Mapping[str, float] | None = None,
     ) -> GenerationLedger:
         """Add a row per shot to the ledger with status PREPARED.
 
@@ -96,7 +116,6 @@ class GenerationLedgerManager:
                 reference_refs=reference_refs or [],
                 status=GenerationStatus.PREPARED,
                 next_action="submit",
-                estimated_cost_usd=max(0.0, float((estimated_costs or {}).get(sid, 0.0))),
             )
             ledger.rows.append(row)
 
@@ -105,31 +124,18 @@ class GenerationLedgerManager:
 
     # ── approve spend ────────────────────────────────────────────────────
 
-    def approve_spend(self, project_id: str, max_cost_usd: float = -1.0) -> GenerationLedger:
+    def approve_spend(self, project_id: str) -> GenerationLedger:
         """Mark PREPARED rows as SUBMITTED and record submit time.
 
         This is a local state transition only. It does not call any provider.
 
         Skips rows already SUBMITTED (duplicate-submit prevention).
-        If *max_cost_usd* is set (>= 0), rejects if estimated cost exceeds budget.
         """
         ledger = self.load(project_id)
-        new_rows, submitted_count = _submit_prepared_rows(ledger.rows)
-        _raise_if_over_budget(new_rows, max_cost_usd, submitted_count)
+        new_rows, _submitted_count = _submit_prepared_rows(ledger.rows)
         ledger = ledger.model_copy(update={"rows": new_rows})
         self._persist(ledger)
         return ledger
-
-    def estimate_total_cost(self, project_id: str) -> float:
-        """Sum estimated_cost_usd for all non-terminal rows."""
-        ledger = self.load(project_id)
-        terminal = {
-            GenerationStatus.COMPLETED,
-            GenerationStatus.FAILED,
-            GenerationStatus.CANCELLED,
-            GenerationStatus.TIMED_OUT,
-        }
-        return sum(r.estimated_cost_usd for r in ledger.rows if r.status not in terminal)
 
     # ── promote ──────────────────────────────────────────────────────────
 
@@ -259,24 +265,3 @@ def _submit_prepared_rows(
         new_rows.append(row)
 
     return new_rows, submitted_count
-
-
-def _raise_if_over_budget(
-    rows: list[GenerationLedgerRow],
-    max_cost_usd: float,
-    submitted_count: int,
-) -> None:
-    """Reject the batch when estimated cost of SUBMITTED rows exceeds *max_cost_usd*.
-
-    A negative *max_cost_usd* means "no limit". Raises instead of persisting, so a
-    rejection leaves the stored ledger untouched.
-    """
-    if max_cost_usd < 0:
-        return
-    total_cost = sum(r.estimated_cost_usd for r in rows if r.status == GenerationStatus.SUBMITTED)
-    if total_cost > max_cost_usd:
-        raise ValueError(
-            f"Total estimated cost ${total_cost:.2f} exceeds budget ${max_cost_usd:.2f}. "
-            f"({submitted_count} new request(s) would be submitted). "
-            "Reduce batch or increase max_cost_usd."
-        )

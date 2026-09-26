@@ -5,19 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.schemas.budget import CostEstimate
-
-
-def _build_cost_estimate(estimate_data: dict[str, Any]) -> CostEstimate:
-    """Coerce the raw cost payload into a CostEstimate."""
-    return CostEstimate(
-        project_id=str(estimate_data.get("project_id", "")),
-        batch_id=str(estimate_data.get("batch_id", "batch-001")),
-        provider=str(estimate_data.get("provider", "seedance")),
-        estimated_cost_usd=float(estimate_data.get("estimated_cost_usd", 0.0)),
-        clip_count=int(estimate_data.get("clip_count", 0)),
-        notes=str(estimate_data.get("notes", "")),
-    )
 
 
 def _build_generation_requests(shot_groups: Any) -> list[dict[str, Any]]:
@@ -29,7 +16,6 @@ def _build_generation_requests(shot_groups: Any) -> list[dict[str, Any]]:
             "model": str(g.get("model", "2.0")),
             "mode": str(g.get("mode", "test")),
             "priority": int(g.get("priority", i)),
-            "estimated_cost_usd": float(g.get("estimated_cost_usd", 0.0)),
         }
         for i, g in enumerate(shot_groups)
     ]
@@ -38,7 +24,7 @@ def _build_generation_requests(shot_groups: Any) -> list[dict[str, Any]]:
 class GenPlannerAgent(BaseAgent):
     """Plans the generation batch from the shot matrix.
 
-    Output artifacts: ``CostEstimate``, plan metadata dict with shot groupings.
+    Output artifact: the generation requests and shot groupings the ledger consumes.
     """
 
     def prepare(
@@ -61,20 +47,23 @@ class GenPlannerAgent(BaseAgent):
         }
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
+        """Build the generation requests that drive dispatch.
+
+        Cost estimation was removed as a feature: the planner no longer produces a
+        `cost_estimate`, and `validate` no longer requires one. The requests and
+        shot count are what the generation path actually consumes.
+        """
         data = model_output.get("generation_plan", model_output)
 
-        cost_estimate = _build_cost_estimate(data.get("cost_estimate", {}))
         generation_requests = _build_generation_requests(data.get("shot_groups", []))
 
         return {
-            "cost_estimate": cost_estimate,
             "generation_requests": generation_requests,
             "total_shots": len(generation_requests),
-            "total_cost_usd": sum(r["estimated_cost_usd"] for r in generation_requests),
         }
 
     def validate(self, result: dict[str, Any]) -> bool:
-        estimate = result.get("cost_estimate")
-        if not isinstance(estimate, CostEstimate):
+        requests = result.get("generation_requests")
+        if not isinstance(requests, list):
             return False
-        return estimate.clip_count >= 0
+        return all(isinstance(r, dict) and r.get("shot_id") for r in requests)

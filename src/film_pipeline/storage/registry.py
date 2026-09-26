@@ -116,7 +116,6 @@ def _register_defaults(registry: ArtifactKindRegistry) -> None:
         "shot_matrix": _spec("shot_matrix", renderer=rendering.render_shot_matrix),
         "shot_bible": _spec("shot_bible"),
         # planning / generation
-        "cost_estimate": _spec("cost_estimate"),
         "generation_plan": _spec("generation_plan"),
         "generation_ledger": _spec(
             "generation_ledger", payload_model=GenerationLedger, mutable=True

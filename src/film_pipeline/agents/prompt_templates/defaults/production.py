@@ -202,39 +202,26 @@ def _generation_planner() -> PromptTemplate:
         ),
         constraints=(
             "Shots must be grouped by provider compatibility. "
-            "{provider_pricing}\n"
             "Dependency ordering must prevent generation of a shot before "
-            "its prerequisites. Flag shots that exceed budget or require "
-            "unavailable providers.\n"
+            "its prerequisites. Flag shots that require unavailable providers.\n"
             "Every shot in the matrix must have a plan entry. "
-            "Count your planned entries against the matrix row count. "
-            "Cost estimate must have clip_count matching the total shots."
+            "Count your planned entries against the matrix row count."
         ),
         output_format=(
             "Respond with valid JSON:\n"
             "{\n"
             '  "generation_plan": {\n'
             '    "project_id": "...",\n'
-            '    "cost_estimate": {\n'
-            '      "project_id": "...",\n'
-            '      "batch_id": "batch-001",\n'
-            '      "provider": "seedance",\n'
-            '      "estimated_cost_usd": 12.50,\n'
-            '      "clip_count": 20,\n'
-            '      "notes": "20 shots at $0.18/s avg 12s = $43.20"\n'
-            "    },\n"
             '    "shot_groups": [\n'
             "      {\n"
             '        "shot_id": "s_001",\n'
             '        "provider": "seedance",\n'
             '        "model": "2.0",\n'
             '        "mode": "test",\n'
-            '        "priority": 1,\n'
-            '        "estimated_cost_usd": 2.16\n'
+            '        "priority": 1\n'
             "      }\n"
             "    ],\n"
-            '    "total_shots": 20,\n'
-            '    "total_cost_usd": 43.20\n'
+            '    "total_shots": 20\n'
             "  }\n"
             "}"
         ),

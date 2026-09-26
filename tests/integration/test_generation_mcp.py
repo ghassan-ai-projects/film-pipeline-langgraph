@@ -14,7 +14,6 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.mcp.tools import (
-    approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
     list_active_generations,
@@ -83,6 +82,12 @@ class TestGenerationMCPTools:
         assert result.get("ok") is not True
 
     def test_approve_spend(self, rt: StudioRuntime) -> None:
+        """Approval moves planned rows to SUBMITTED.
+
+        The MCP `approve_generation_spend` tool was removed with the cost feature;
+        this asserts the transition it performed, through the operator use case
+        that survives it.
+        """
         asyncio.run(
             plan_generation_batch(
                 {
@@ -92,9 +97,12 @@ class TestGenerationMCPTools:
                 }
             )
         )
-        result = asyncio.run(approve_generation_spend({"confirmed": True}))
-        assert result.get("ok") is True
-        assert result.get("approved") == 1
+        from film_pipeline.mcp.tools import get_runtime
+        from film_pipeline.studio._operator_runtime import operator_service
+
+        workspace = operator_service(get_runtime()).approve_generation_spend()
+
+        assert workspace.submitted == 1, f"expected one submitted row, got {workspace}"
 
     def test_get_status(self, rt: StudioRuntime) -> None:
         plan_result = asyncio.run(

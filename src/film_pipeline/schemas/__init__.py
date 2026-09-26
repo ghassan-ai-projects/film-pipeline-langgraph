@@ -47,7 +47,7 @@ from film_pipeline.schemas.base import (
     ValidationScope,
     ValidationStatus,
 )
-from film_pipeline.schemas.budget import BudgetState, CostEstimate, SpendRecord
+from film_pipeline.schemas.budget import BudgetState, SpendRecord
 from film_pipeline.schemas.camera import CameraLanguageBible, CameraProfile
 from film_pipeline.schemas.character import (
     CharacterBible,
@@ -169,7 +169,6 @@ __all__ = [
     "ConsensusReport",
     "ContinuityLedger",
     "ContinuityLedgerEntry",
-    "CostEstimate",
     "CoverageGroup",
     "DeliveryManifest",
     "DeliveryPackage",

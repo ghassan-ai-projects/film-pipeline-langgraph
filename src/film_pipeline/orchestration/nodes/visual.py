@@ -15,8 +15,7 @@ from film_pipeline.orchestration.nodes._agent import (
 )
 from film_pipeline.orchestration.nodes._context import _parse_ref
 from film_pipeline.orchestration.nodes._shared import (
-    _is_new_issue,
-    _is_new_ref,
+    _collect_updates,
     _phase_gate_updates,
 )
 from film_pipeline.orchestration.nodes._visual_matrix_coverage import (
@@ -58,27 +57,6 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates, state)
-    return updates
-
-
-def _collect_updates(
-    gate_updates: dict[str, Any],
-    new_state: dict[str, Any],
-    original: dict[str, Any],
-    ref_keys: tuple[str, ...],
-) -> dict[str, Any]:
-    """Compute the partial update from a before/after diff of the node state."""
-    updates: dict[str, Any] = dict(gate_updates)
-    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
-    if new_refs:
-        updates["artifact_refs"] = new_refs
-    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
-    if new_issues:
-        updates["issues"] = new_issues
-    for key in ref_keys:
-        val = new_state.get(key)
-        if val:
-            updates[key] = val
     return updates
 
 
@@ -496,17 +474,6 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
-def _save_cost_estimate(new_state: dict[str, Any], result: dict[str, Any]) -> None:
-    """Persist the planner's cost estimate and record its ref in state."""
-    cost_estimate = produced_artifact(new_state, "provider-planning-agent", result)
-    if cost_estimate is None:
-        return
-    ref = _save_artifact(new_state, cost_estimate, "cost_estimate", "gen_planning")
-    if ref:
-        new_state["cost_estimate_ref"] = ref
-        new_state.setdefault("artifact_refs", []).append(ref)
-
-
 def _build_generation_plan_patch(
     new_state: dict[str, Any],
     shot_groups: list[Any],
@@ -556,7 +523,7 @@ def _build_generation_plan_patch(
         new_state.setdefault("artifact_refs", []).append(patch_ref)
 
 
-def _validate_planning_gate(new_state: dict[str, Any], cost_estimate: Any) -> None:
+def _validate_planning_gate(new_state: dict[str, Any]) -> None:
     """Validate planning completeness and script/shot scene references."""
     shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
     if not shot_matrix_ref:
@@ -579,7 +546,7 @@ def _validate_planning_gate(new_state: dict[str, Any], cost_estimate: Any) -> No
             validate_shot_scene_references,
         )
 
-        plan_issues = validate_planning_completeness(new_state, matrix_data, cost_estimate)
+        plan_issues = validate_planning_completeness(new_state, matrix_data)
         new_state.setdefault("issues", []).extend(plan_issues)
         script_ref = str(new_state.get("script_ref", "") or "")
         if not script_ref:
@@ -615,7 +582,6 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         ),
     )
 
-    _save_cost_estimate(new_state, result)
     # ``generation_requests``/``shot_groups`` are secondary keys of the plan
     # result, not the contract's ``produces`` key (``cost_estimate``), so they
     # stay literal here. Naming them on the roster would require a
@@ -630,15 +596,13 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         str(new_state.get("shot_matrix_ref", "")),
     )
 
-    _validate_planning_gate(
-        new_state, produced_artifact(new_state, "provider-planning-agent", result)
-    )
+    _validate_planning_gate(new_state)
 
     updates = _collect_updates(
         gate_updates,
         new_state,
         original,
-        ("cost_estimate_ref", "gen_planning_patch_ref"),
+        ("gen_planning_patch_ref",),
     )
     _propagate_side_effects(new_state, updates, state)
     return updates

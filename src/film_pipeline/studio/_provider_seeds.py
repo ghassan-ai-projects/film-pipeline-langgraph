@@ -21,10 +21,10 @@ def seed_default_provider_health(rt: StudioRuntime) -> None:
     if rt.provider_health:
         return
     if rt.server_mode == "real":
-        from film_pipeline.providers import credentials
+        from film_pipeline.providers import is_configured
 
         for provider_id in ("zai", "seedance-openrouter", "veo-fast", "gemini-imagen-4"):
-            if credentials.is_configured(provider_id):
+            if is_configured(provider_id):
                 rt.set_provider_health(provider_id, "healthy")
             else:
                 rt.set_provider_health(
@@ -43,21 +43,12 @@ def seed_default_provider_adapters(rt: StudioRuntime) -> None:
     Project profiles can replace these via ``register_provider``; seeding
     only fills providers that are not registered yet.
     """
+    from film_pipeline.providers import supported_provider_ids
     from film_pipeline.studio._provider_factory import build_provider_adapter
 
-    specs: tuple[tuple[str, str], ...]
-    if rt.server_mode == "real":
-        specs = (
-            ("seedance-openrouter", "video"),
-            ("veo-fast", "video"),
-            ("gemini-imagen-4", "image"),
-        )
-    else:
-        specs = (
-            ("mock-video-provider", "video"),
-            ("mock-image-provider", "image"),
-        )
-    for provider_id, provider_type in specs:
+    # The mode's provider set has one definition, in the providers catalogue.
+    for provider_id in supported_provider_ids(rt.server_mode):
+        provider_type = "image" if "image" in provider_id else "video"
         if provider_id not in rt.provider_adapters:
             rt.register_provider(
                 provider_id,
@@ -68,13 +59,13 @@ def seed_default_provider_adapters(rt: StudioRuntime) -> None:
 def default_video_provider(rt: StudioRuntime) -> tuple[str, str]:
     """Return the (provider_id, model) pair generation should default to."""
     if rt.server_mode == "real":
-        from film_pipeline.providers import credentials
+        from film_pipeline.providers import is_configured
 
         for provider_id, model in (
             ("seedance-openrouter", "bytedance/seedance-2.0"),
             ("veo-fast", "veo-3.1-fast"),
         ):
-            if credentials.is_configured(provider_id):
+            if is_configured(provider_id):
                 return provider_id, model
         return "seedance-openrouter", "bytedance/seedance-2.0"
     return "mock-video-provider", "mock-fast"

@@ -17,7 +17,7 @@ from film_pipeline.filmspec import (
 )
 from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHASES
 from film_pipeline.filmspec import PHASE_GATES as _APPROVAL_GATES
-from film_pipeline.filmspec import next_phase
+from film_pipeline.filmspec import is_blocking_issue, next_phase
 from film_pipeline.governance.gate_facts import GateFacts
 from film_pipeline.schemas.base import ValidationStatus
 
@@ -54,7 +54,7 @@ def _status_from_value(value: str) -> ValidationStatus:
 
 def _is_blocking_issue(issue: Any) -> bool:
     """True when an issue's severity blocks phase approval."""
-    return isinstance(issue, dict) and issue.get("severity") == "blocking"
+    return is_blocking_issue(issue)
 
 
 def _blocking_issue_count(issues: list[dict[str, Any]]) -> int:
@@ -204,22 +204,6 @@ def _blocked_providers_result(
     )
 
 
-def _budget_blocked_result(state: dict[str, Any], facts: GateFacts) -> RouterResult | None:
-    """Rule 4: budget threshold exceeded → escalate to human."""
-    if not facts.is_budget_blocked(state):
-        return None
-    return RouterResult(
-        eligible=["escalate_to_human"],
-        next_action="escalate_to_human",
-        blocked=[
-            {
-                "action": "advance_phase",
-                "reason": "budget threshold exceeded",
-            }
-        ],
-    )
-
-
 def _blocking_issues_result(issues: list[dict[str, Any]]) -> RouterResult | None:
     """Rule 5: blocking issues → repair or escalate."""
     blocking = [issue for issue in issues if _is_blocking_issue(issue)]
@@ -347,9 +331,6 @@ def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     if routed is not None:
         return routed
     routed = _blocked_providers_result(state, phase, facts)
-    if routed is not None:
-        return routed
-    routed = _budget_blocked_result(state, facts)
     if routed is not None:
         return routed
     routed = _blocking_issues_result(issues)

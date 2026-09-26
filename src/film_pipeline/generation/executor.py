@@ -30,7 +30,6 @@ from film_pipeline.providers.base import (
     ProviderJob,
     ProviderJobStatus,
 )
-from film_pipeline.providers.pricing import estimate_cost_for_duration
 from film_pipeline.schemas.base import FilmPhase, GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import GenerationLedgerRow
 from film_pipeline.storage.store import ArtifactStore
@@ -108,15 +107,6 @@ class GenerationExecutor:
             raise ValueError(
                 "No shots to plan. The shot matrix has no rows — approve shot_bible first."
             )
-        shot_rows = self._shot_rows_by_id(project_id)
-        estimated_costs = {
-            sid: estimate_cost_for_duration(
-                provider,
-                model,
-                float(shot_rows.get(sid, {}).get("duration_seconds", 5) or 5),
-            )
-            for sid in targets
-        }
         ledger = self._ledger.plan_batch(
             project_id=project_id,
             shot_ids=targets,
@@ -124,7 +114,6 @@ class GenerationExecutor:
             model=model,
             prompt_ref=prompt_ref,
             mode=mode,
-            estimated_costs=estimated_costs,
         )
         planned = [row for row in ledger.rows if row.shot_id in set(targets)]
         result = GenerationStepResult(processed=len(planned))
@@ -134,9 +123,9 @@ class GenerationExecutor:
         ]
         return result
 
-    def approve_spend(self, project_id: str, max_cost_usd: float = -1.0) -> GenerationStepResult:
+    def approve_spend(self, project_id: str) -> GenerationStepResult:
         """Approve spend for PREPARED rows (PREPARED -> SUBMITTED)."""
-        ledger = self._ledger.approve_spend(project_id, max_cost_usd=max_cost_usd)
+        ledger = self._ledger.approve_spend(project_id)
         submitted = [row for row in ledger.rows if row.status == GenerationStatus.SUBMITTED]
         return GenerationStepResult(processed=len(submitted), running=len(submitted))
 
@@ -330,18 +319,11 @@ class GenerationExecutor:
                 "mode": row.mode.value,
                 "status": row.status.value,
                 "polls": row.poll_count,
-                "cost_usd": row.estimated_cost_usd,
                 "output": row.output_refs[0] if row.output_refs else "",
                 "error": row.blocking_reason or "",
             }
             for row in self._ledger.list_rows(project_id)
         ]
-
-    def estimated_cost(self, project_id: str) -> float:
-        """Total estimated cost across the ledger."""
-        if not self.has_ledger(project_id):
-            return 0.0
-        return self._ledger.estimate_total_cost(project_id)
 
     def dispatchable_requests(self, project_id: str) -> list[dict[str, Any]]:
         """Build graph-state generation requests from current ledger rows.

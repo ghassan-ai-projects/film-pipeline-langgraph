@@ -6,9 +6,9 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.filmspec import is_text_only_policy
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
-    _is_text_only_policy,
 )
 
 from ..helpers import (
@@ -49,14 +49,6 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
     return shot_ids
 
 
-def _parse_max_cost_usd(args: dict[str, object]) -> float:
-    """Read the optional ``max_cost_usd`` spend cap; -1.0 means no cap."""
-    max_cost_raw = args.get("max_cost_usd", -1)
-    if max_cost_raw in (-1, None):
-        return -1.0
-    return float(str(max_cost_raw))
-
-
 async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     """Plan a generation batch: add rows to the ledger for each shot.
 
@@ -68,16 +60,19 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     active = require_project_state(args)
     project_id = str(active["project_id"])
 
-    if _is_text_only_policy(active):
+    if is_text_only_policy(active):
         return _complete_text_only_generation(rt, active, project_id)
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.pricing import estimate_cost_for_duration
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
-    provider = str(args.get("provider", "mock-video-provider"))
-    model = str(args.get("model", "mock-fast"))
+    # Default through the owner rather than the literal pair: the default
+    # depends on the runtime mode (real mode prefers a credentialed provider),
+    # so hardcoding the mock pair here planned a real run against a mock.
+    default_provider, default_model = rt.default_video_provider()
+    provider = str(args.get("provider", default_provider))
+    model = str(args.get("model", default_model))
     prompt_ref = str(args.get("prompt_ref", ""))
     mode = _resolve_generation_mode(args)
     shot_ids = _collect_shot_ids(args, rt, project_id)
@@ -86,22 +81,6 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
             "No shot IDs to plan. Provide shot_ids or approve shot_bible so the shot matrix exists."
         )
 
-    from film_pipeline.generation.executor import GenerationExecutor
-
-    shot_rows = {
-        str(row.get("shot_id", "")): row
-        for row in GenerationExecutor(
-            _services(rt).artifact_store, rt.provider_adapters
-        ).load_shot_rows(project_id)
-    }
-    estimated_costs = {
-        shot_id: estimate_cost_for_duration(
-            provider,
-            model,
-            float(shot_rows.get(shot_id, {}).get("duration_seconds", 5) or 5),
-        )
-        for shot_id in shot_ids
-    }
     ledger = mgr.plan_batch(
         project_id=project_id,
         shot_ids=shot_ids,
@@ -109,7 +88,6 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
         model=model,
         prompt_ref=prompt_ref,
         mode=mode,
-        estimated_costs=estimated_costs,
     )
     _sync_generation_requests_from_ledger(active, ledger.rows)
     return _ok(
@@ -136,7 +114,8 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     rt = tools_pkg.get_runtime()
     project_id = require_project_id(args)
     from film_pipeline.operations.errors import ServiceError
-    from film_pipeline.studio._operator_runtime import operator_service
+
+    from ..helpers import operator_service
 
     try:
         previews = operator_service(rt).preview_generation_prompts(project_id)
@@ -145,42 +124,21 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     return _ok(previews=previews)
 
 
-async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
-    """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
-    project_id = str(active["project_id"])
-    if _is_text_only_policy(active):
-        return _ok(text_only=True, approved=0)
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-
-    # Budget gate: the manager rejects the batch when estimated cost exceeds it.
-    max_cost = _parse_max_cost_usd(args)
-
-    try:
-        ledger = mgr.approve_spend(project_id, max_cost_usd=max_cost)
-    except ValueError as e:
-        return _error(str(e))
-
-    submitted = [r for r in ledger.rows if r.status.value == "submitted"]
-    _sync_generation_requests_from_ledger(active, submitted)
-    estimated_total = mgr.estimate_total_cost(project_id)
-    return _ok(
-        approved=len(submitted),
-        total_rows=len(ledger.rows),
-        estimated_total_cost_usd=estimated_total,
-    )
-
-
 def _sync_generation_requests_from_ledger(
     active: dict[str, Any], rows: list[GenerationLedgerRow]
 ) -> None:
-    """Publish dispatchable generation requests from ledger rows into graph state."""
+    """Publish dispatchable generation requests from ledger rows into graph state.
+
+    CANCELLED rows are skipped, matching
+    ``GenerationExecutor.dispatchable_requests``. This function was a
+    line-for-line copy of that method minus the CANCELLED filter, so a cancelled
+    request leaked into graph state and the generation-phase gate counted it.
+    """
+    from film_pipeline.schemas.base import GenerationStatus
+
     requests: list[dict[str, object]] = []
     for row in rows:
-        if not row.shot_id:
+        if not row.shot_id or row.status is GenerationStatus.CANCELLED:
             continue
         requests.append(
             {

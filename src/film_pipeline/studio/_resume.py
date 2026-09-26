@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.filmspec import PHASE_SEQUENCE
+from film_pipeline.filmspec import PHASE_SEQUENCE, is_blocking_issue
 from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES as _STALE_REQUEST_CODES
 
 
@@ -20,9 +20,7 @@ def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
     if state.get("_approval_blocked_by_issues"):
         return True
     issues = state.get("issues", [])
-    if isinstance(issues, list) and any(
-        isinstance(issue, dict) and issue.get("severity") == "blocking" for issue in issues
-    ):
+    if isinstance(issues, list) and any(is_blocking_issue(issue) for issue in issues):
         return True
     current_phase = str(state.get("current_phase", ""))
     if current_phase == previous_phase:

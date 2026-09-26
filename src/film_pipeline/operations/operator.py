@@ -12,7 +12,12 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from film_pipeline.config import profile_resolver as _profiles
+from film_pipeline.config import (
+    canonicalize_profile_stack,
+    resolve_project_config,
+    resolved_config_state_keys,
+)
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.operations import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.operations.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.operations.models import (
@@ -183,7 +188,7 @@ class OperatorService:
         self, state: dict[str, Any], request: ProjectCreateRequest
     ) -> None:
         """Canonicalize the request's profile stack, store its resolution, register providers."""
-        profile_stack = _profiles.canonicalize_profile_stack(
+        profile_stack = canonicalize_profile_stack(
             {
                 "film_type_profile": request.film_type_profile,
                 "quality_profile": request.quality_profile,
@@ -192,8 +197,8 @@ class OperatorService:
                 "auto_approve_profile": request.auto_approve_profile,
             }
         )
-        resolved_config = _profiles.resolve_project_config(profile_stack)
-        state.update(_profiles.resolved_config_state_keys(profile_stack, resolved_config))
+        resolved_config = resolve_project_config(profile_stack)
+        state.update(resolved_config_state_keys(profile_stack, resolved_config))
         self.register_profile_providers(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
@@ -367,7 +372,7 @@ class OperatorService:
             for issue in cast(list[Mapping[str, Any]], state.get("issues", []))
             if isinstance(issue, dict)
         ]
-        blocking = [dict(issue) for issue in issue_list if issue.get("severity") == "blocking"]
+        blocking = [dict(issue) for issue in blocking_issues(issue_list)]
         non_blocking = [dict(issue) for issue in issue_list if issue.get("severity") != "blocking"]
         return ValidationWorkspace(
             project_id=str(state["project_id"]),
@@ -422,13 +427,9 @@ class OperatorService:
         """Plan a generation batch for every shot in the approved shot matrix."""
         return _generation_ops.plan_generation(self, project_id)
 
-    def approve_generation_spend(
-        self,
-        project_id: str | None = None,
-        max_cost_usd: float = -1.0,
-    ) -> GenerationWorkspace:
-        """Approve spend for planned generation rows."""
-        return _generation_ops.approve_generation_spend(self, project_id, max_cost_usd)
+    def approve_generation_spend(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Approve planned generation rows by marking them SUBMITTED."""
+        return _generation_ops.approve_generation_spend(self, project_id)
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Submit approved generation rows to their providers."""
