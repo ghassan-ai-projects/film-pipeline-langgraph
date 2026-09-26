@@ -37,6 +37,37 @@ make test-e2e
 
 The full pipeline runs `make ci-check`: ruff format, ruff lint, mypy strict, pytest with 90% coverage, and `uv build`.
 
+### Architecture gate (Enola)
+
+`make ci-check` does **not** grade architecture. Enola is a second, required gate,
+and it must stay at exit 0 with no new *blocking* finding:
+
+```bash
+enola check --baseline=docs/modular-architecture/enola-out \
+            docs/modular-architecture/enola-config.yaml
+```
+
+Rules for using it:
+
+- **Run it before every commit, and again on the committed tree.** A clean
+  `make ci-check` says nothing about structure.
+- **Use the docs-local baseline.** `docs/modular-architecture/enola-out` plus
+  `docs/modular-architecture/enola-config.yaml` is the comparable pair. The root
+  `.enola` baseline is stale; a check against it is not a pass.
+- **Exit codes:** `0` clean, `1` regression (policy violated), `2` error
+  (gate could not run — no baseline, bad flag), `3` declined (baseline not
+  comparable). Anything but `0` must be resolved or explained, not ignored.
+- **`cycles` is the failure policy** (`--fail-on` defaults to it). Heuristic
+  explainers — `god-class`, `hotspots`, `complexity-outliers`, `dependency-depth`,
+  `exported-surface` — report as *advisory* and do not fail the gate. Treat them
+  as claims to verify against the source, not as verdicts.
+- **Never lower the count by changing an Enola filter or threshold.** The count is
+  evidence, not a target.
+- A refactor is expected to *change* coupling, so "new coupling" output is normal.
+  What must not appear is a new cycle or a violated policy.
+
+Record the Enola result next to `make ci-check` for every migration slice.
+
 ## Python Standards
 
 - Add type hints to public functions, methods, and module-level constants.
@@ -85,6 +116,60 @@ The former owners map to their replacements as follows: `artifacts` ->
 `governance`), `review` -> `governance`, `testing` -> `devharness`, and `app` ->
 `studio` (with the operator surface in `operations`). Import the new names.
 
+## Decomposition Rules
+
+These are the working conclusions of the modularization program
+(`docs/modular-architecture/`), learned by measurement rather than by taste.
+Apply them before proposing a new module or a new abstraction.
+
+**Size alone is not a seam.** The discriminating number is the *public surface*
+and the number of *concerns*, not the line count:
+
+| Class | Lines | Public methods | Concerns | Verdict |
+|---|---:|---:|---:|---|
+| `StudioRuntime` | 370 | 27 | 5 | split |
+| `ArtifactStore` | 605 | 15 | 1 | leave alone |
+
+Judge a file by "how many reasons does it have to change", not by how long it is.
+
+**A symbol used many times is a symptom, not a fix.** High fan-in on one method
+means consumers are reaching past the abstraction to something that belongs at a
+higher level. The repair is to move the concern *up* to its owner and delete the
+callers' re-derivation — not to add a wrapper that keeps every call site.
+
+**One policy reimplemented at N sites is the real defect.** When the same rule,
+guard, or message appears at many call sites, the fix is to find the owner that
+should already express it and route every site through it. Precedents: the
+`issues` reducer (13 wholesale writes reduced to one code path) and the
+active-project precondition (46 handler-level guards deleted in favour of one
+check at dispatch). Look for the existing mechanism before inventing a new one —
+a purpose-built API that its own intended callers bypass is a common finding.
+
+**Delete dead branches and divergent duplicates; do not preserve them.**
+Guards that no production path can reach, tables whose rows name ids that do not
+exist, and second implementations of one lifecycle should be removed. Deleting
+them is part of the change, not a follow-up.
+
+**Distinguish duplication of convenience from distributed ownership.** Two
+modules happening to write the same value the same way is *not* an ownership
+seam; a partial edit there produces an obvious bug, not divergent behaviour.
+Under `docs/modular-architecture/00-methodology-and-quality-bar.md` §1.3, only
+the latter justifies a boundary.
+
+### How to run a decomposition slice
+
+1. Make the **narrowest change a test can falsify**, then let the failures
+   enumerate the work. The `extra="forbid"` experiment is the model: 96 failures
+   became the work list.
+2. Prefer moves that **preserve behaviour and public signatures** over redesigns;
+   move *consumers* before moving *structure*.
+3. Keep the change **shippable on its own** — one slice, one commit, green gates.
+4. **Record the measurement, not the argument.** A count you can re-run beats a
+   design document. Four documents were written on state ownership before one
+   round of code plus tests produced more than all of them.
+5. State what the slice does **not** establish. Analysis that is not backed by a
+   falsifiable check is the less productive half.
+
 ## Operating Rules
 
 - Keep changes scoped to a single phase unless the change spans phases deliberately.
@@ -103,6 +188,6 @@ The former owners map to their replacements as follows: `artifacts` ->
 
 ## Done
 
-A task is done when: scope is complete with no unrelated refactors, the simplest correct change fits requirements, production changes have tests (90% coverage), `make ci-check` passes, docs are updated when behavior changes, and secrets are not added.
+A task is done when: scope is complete with no unrelated refactors, the simplest correct change fits requirements, production changes have tests (90% coverage), `make ci-check` passes, **Enola passes at exit 0**, docs are updated when behavior changes, and secrets are not added.
 
-Before handoff: re-read changed files for vague guidance, confirm tests prove behavior (not just coverage), run validation, and summarize remaining risks.
+Before handoff: re-read changed files for vague guidance, confirm tests prove behavior (not just coverage), run both gates, and summarize remaining risks.
