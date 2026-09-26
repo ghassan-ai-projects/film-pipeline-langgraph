@@ -1,24 +1,25 @@
-"""The budget cap policy has one owner.
+"""The budget cap reader has one owner.
 
 `audit/12` recorded the cap being derived in four shapes, eight gate sites of
 which only one could actually refuse, and a `SpendRecord` with zero writers.
-These tests pin the single reader, the single refusal path, and the spend
-record, so a later gate cannot quietly grow its own cap.
+
+What remains after the dead-surface deletion (see `budget/__init__.py`): the
+single cap reader. The enforcement surface these tests used to pin —
+`authorize_spend`, `record_spend`, `BudgetLedger`, `BudgetExceeded`,
+`budget_cap_prompt_value` — had **zero production callers** and was deleted. The
+refusal that *does* work is `generation.ledger.approve_spend`, which raises before
+persisting and is covered in `tests/unit/generation/test_ledger.py`.
+
+These tests are kept because `cap_for` is live: it is the generation planner's
+only cap read, and the "unconfigured means unlimited, not zero" rule it pins is
+the difference between a project that runs and one that silently refuses.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from film_pipeline.budget import (
-    UNLIMITED,
-    BudgetExceeded,
-    BudgetLedger,
-    authorize_spend,
-    budget_cap_prompt_value,
-    cap_for,
-    record_spend,
-)
+from film_pipeline.budget import UNLIMITED, cap_for
 
 
 class TestCapFor:
@@ -54,119 +55,28 @@ class TestCapFor:
         assert cap_for({"budget_cap_usd": 0.0}) == 0.0
 
 
-class TestBudgetCapPromptValue:
-    def test_formats_a_configured_cap(self) -> None:
-        assert budget_cap_prompt_value({"budget_cap_usd": 100.0}) == "$100.00"
+def test_the_module_has_no_enforcement_surface_left() -> None:
+    """The deleted symbols must not come back without a caller.
 
-    def test_unconfigured_cap_reads_unlimited(self) -> None:
-        assert budget_cap_prompt_value(None) == "unlimited"
-        assert budget_cap_prompt_value({}) == "unlimited"
+    They were removed because every one had zero production callers, while
+    `authorize_spend`'s own docstring claimed to be the single refusal path. If a
+    future change genuinely needs a gate here, it should be justified by a call
+    site — this test is a speed bump, not a prohibition.
+    """
+    import film_pipeline.budget as budget_module
 
-
-class TestAuthorizeSpend:
-    def test_permits_spend_within_the_cap(self) -> None:
-        authorize_spend("p1", 10.0, cap_usd=100.0, spent_usd=0.0)
-
-    def test_permits_spend_exactly_up_to_the_cap(self) -> None:
-        """The boundary is inclusive: spending the cap exactly is allowed."""
-        authorize_spend("p1", 100.0, cap_usd=100.0, spent_usd=0.0)
-
-    def test_refuses_spend_past_the_cap(self) -> None:
-        with pytest.raises(BudgetExceeded):
-            authorize_spend("p1", 100.01, cap_usd=100.0, spent_usd=0.0)
-
-    def test_accounts_for_spend_already_recorded(self) -> None:
-        with pytest.raises(BudgetExceeded):
-            authorize_spend("p1", 60.0, cap_usd=100.0, spent_usd=50.0)
-
-    def test_unlimited_cap_never_refuses(self) -> None:
-        authorize_spend("p1", 1e9, cap_usd=UNLIMITED)
-
-    def test_zero_cap_refuses_any_spend(self) -> None:
-        with pytest.raises(BudgetExceeded):
-            authorize_spend("p1", 0.01, cap_usd=0.0)
-
-    def test_refusal_carries_the_numbers_that_produced_it(self) -> None:
-        with pytest.raises(BudgetExceeded) as excinfo:
-            authorize_spend("p1", 70.0, cap_usd=100.0, spent_usd=50.0)
-        error = excinfo.value
-        assert error.project_id == "p1"
-        assert error.requested_usd == 70.0
-        assert error.cap_usd == 100.0
-        assert error.spent_usd == 50.0
-        assert error.remaining_usd == 50.0
-        assert "$50.00" in str(error)
-
-
-class TestBudgetLedger:
-    def test_spend_is_derived_from_records(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        ledger.record("generation", 10.0, "batch-1")
-        ledger.record("generation", 15.0, "batch-2")
-        assert ledger.spent_usd == 25.0
-        assert ledger.remaining_usd == 75.0
-
-    def test_records_are_attributable(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        entry = ledger.record("generation", 10.0, "batch-1")
-        assert entry.project_id == "p1"
-        assert entry.generation_id == "batch-1"
-        assert entry.amount_usd == 10.0
-
-    def test_record_ids_are_unique(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        ids = {ledger.record("generation", 1.0, f"b{i}").spend_id for i in range(3)}
-        assert len(ids) == 3
-
-    def test_negative_spend_is_rejected(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        with pytest.raises(ValueError, match="non-negative"):
-            ledger.record("generation", -1.0, "batch-1")
-
-    def test_authorize_uses_recorded_spend(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        ledger.record("generation", 90.0, "batch-1")
-        with pytest.raises(BudgetExceeded):
-            ledger.authorize(20.0)
-        ledger.authorize(10.0)
-
-    def test_remaining_never_goes_negative(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=10.0)
-        ledger.record("generation", 25.0, "batch-1")
-        assert ledger.remaining_usd == 0.0
-
-    def test_projects_onto_the_persisted_state_shape(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        ledger.record("generation", 30.0, "batch-1")
-        state = ledger.to_state()
-        assert state.project_id == "p1"
-        assert state.cap_usd == 100.0
-        assert state.spent_usd == 30.0
-        assert state.remaining_usd == 70.0
-
-    def test_record_spend_helper_delegates_to_the_ledger(self) -> None:
-        ledger = BudgetLedger(project_id="p1", cap_usd=100.0)
-        entry = record_spend(ledger, "generation", 5.0, "batch-1")
-        assert entry.amount_usd == 5.0
-        assert ledger.spent_usd == 5.0
-
-
-def test_budget_module_does_not_import_config_or_generation() -> None:
-    """The spec forbids `budget -> config`; the cap is read, not re-derived."""
-    import ast
-    from pathlib import Path
-
-    source = (
-        Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "budget" / "__init__.py"
-    )
-    tree = ast.parse(source.read_text(encoding="utf-8"))
-    imported: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            imported.add(node.module)
-        elif isinstance(node, ast.Import):
-            imported.update(alias.name for alias in node.names)
-    forbidden = {
-        m for m in imported if m.startswith(("film_pipeline.config", "film_pipeline.generation"))
+    removed = {
+        "authorize_spend",
+        "record_spend",
+        "budget_cap_prompt_value",
+        "BudgetLedger",
+        "BudgetExceeded",
     }
-    assert forbidden == set(), f"budget imports a forbidden module: {sorted(forbidden)}"
+    resurrected = sorted(name for name in removed if hasattr(budget_module, name))
+
+    assert not resurrected, (
+        f"budget reintroduced {resurrected}. Each was deleted for having zero "
+        "production callers; if one is genuinely needed now, add it with a caller "
+        "and remove it from this list."
+    )
+    assert budget_module.__all__ == ["UNLIMITED", "cap_for"]
