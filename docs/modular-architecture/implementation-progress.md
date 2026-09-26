@@ -864,3 +864,50 @@ old state is restored.
 prompt-template registry is still keyed from two id spaces (F-AGENT-05), and
 **F-AGENT-04 — the MCP bible second lifecycle — is still open** and is the
 Critical item this round did not reach.
+
+## AGENT-08 — F-AGENT-04 closed: one agent path, not two (2026-09-26)
+
+The Critical finding this round did not reach, now done in three commits. The
+MCP bible tools were a **second agent lifecycle**: local `AgentRegistration`
+literals, hand-assembled prompts, and a direct `model_adapter.chat` call.
+
+Two live defects made that path dead on arrival, both verified at HEAD before
+the fix:
+
+- `_shared.py:106` and `shot.py:195` resolved the model through
+  `model_router.resolve("creative_writer")`. `ModelRouter` has `select`,
+  `resolve_or_raise`, `fallback`, `cost_ranked`, `list_profiles`, and
+  `resolve_model_params` — **no `resolve`**. The real-model path raised
+  `AttributeError` before any request was made.
+- Even had it not, `_shared.py:107` tested `isinstance(raw, dict)` against
+  `ModelAdapter.chat`'s `-> str` return, so the result was always `{}`.
+
+Neither could be seen in mock mode, where `model_adapter is None` short-circuits
+before both lines. That is why the tests were green while the feature was dead.
+
+| Slice | Scope | Evidence | Gates | Enola | Commit |
+|---|---|---|---|---|---|
+| AGENT-08a | Register `camera/character/environment/style-bible-agent` on the roster; bind their classes; add their templates; move their mocks into `studio/mock_responses.py` | Contracts copied verbatim from the MCP literals so the later swap could not drift. Registration ≠ routing: `_PHASE_DEFAULT_AGENTS` untouched. Adds a guard that a registered mock must pass its own agent's `validate()` — falsified by emptying character's `identity_block` | PASS — 2,145 passed; ruff, mypy clean | PASS — exit 0 | `7d27083` |
+| AGENT-08b | Route the four visual-dev tools through `_run_bible_agent`, the MCP counterpart of `orchestration.nodes._agent` | Deletes `_chat_json_or_mock`, four `_request_*` / `_execute_*` pairs, four local contracts, and four hand-built prompt builders. Probed all four end-to-end: same `ok`, same response keys, same values, same refs | PASS — 2,145 passed; ruff, mypy clean | PASS — exit 0 | `42f8d7a` |
+| AGENT-08c | Route `shot.py` the same way; delete its divergent `shot-design-agent` contract (`matrix_planning` vs the roster's `matrix_assembly`+`coverage_planning`, family `DEVELOPMENT` vs `DIRECTING`) | The series' one intended behaviour change: the mock matrix goes from a hand-written **1 row** to the registered **16-row** demo matrix. The test asserted only `>= 1`, so the test was tightened to compare against the registered mock | PASS — 2,162 passed; ruff, mypy clean | PASS — exit 0 | `39cb402` |
+
+**Measured.** `mcp/tools/bibles/` went 1,181 → **765 lines** while gaining a
+working real-model path. Zero `model_router.resolve(` or `model_adapter.chat(`
+calls remain anywhere under `src/`. The real-model path was exercised end-to-end
+through a stubbed transport and returns a valid bible (`ok=True`, `profiles=1`),
+where before it raised before the request.
+
+**Guard.** `tests/unit/mcp/tools/test_bible_shared_path.py` makes the second
+path structurally impossible: no module in the package may construct an
+`AgentRegistration`, name `model_adapter`/`model_router`, call
+`ModelRouter.resolve`, or drive an agent id absent from the roster. Verified
+falsifiable by injecting the original bug form into `camera.py`.
+
+**Why structural guards here.** The defect was a second *path*, not a wrong
+*value*. Every mock-mode test passed with the bug present, so only a structural
+rule can catch a recurrence.
+
+**Still open, deliberately.** `output_artifacts` remains unvalidated
+(F-AGENT-03); `_AGENT_PROFILE_MAP` keeps its orphan rows (F-AGENT-06); the
+prompt-template registry is still keyed from two id spaces (F-AGENT-05); and
+`StudioRuntime` is untouched (`11` §3 defers it until consumers move).
