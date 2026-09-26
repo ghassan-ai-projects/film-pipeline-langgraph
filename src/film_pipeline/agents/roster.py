@@ -1,10 +1,15 @@
-"""MVP agent contracts — the agents wired into the current graph.
+"""The agent roster — which agents exist, and what each one is contracted to do.
 
-Agents that are not yet invoked by a graph phase (character-dossier,
-environment-bible, prompt-composition, continuity-ledger, generation-scheduler,
-scene-continuity-validator, full-movie-flow-validator, kb-curator) are kept out
-of the MVP roster until they are wired in. Their implementation classes and
-schema tests remain in the codebase for future phases.
+``MVP_AGENTS`` is the set of agents the current graph wires into phases. Agents
+that are not yet invoked by a graph phase (character-dossier, prompt-composition,
+continuity-ledger, generation-scheduler, scene-continuity-validator,
+full-movie-flow-validator, kb-curator) are kept out until they are wired in.
+Their implementation classes and schema tests remain in the codebase for future
+phases.
+
+This is a data module, not a package: it declares records and nothing else. The
+module that *validates* them and supports lookup is ``agents.registry``; the
+module that binds them to implementation classes is ``agents.impl.registry``.
 """
 
 from __future__ import annotations

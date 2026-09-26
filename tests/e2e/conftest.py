@@ -9,8 +9,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager

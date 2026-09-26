@@ -2,7 +2,7 @@
 
 The agent roster's registration model is :class:`AgentRegistration` in
 ``film_pipeline.schemas.handoff`` — it is the single record for that concept and
-is what ``agents.registry`` validates and what ``agents.mvp`` populates.
+is what ``agents.registry`` validates and what ``agents.roster`` populates.
 """
 
 from __future__ import annotations

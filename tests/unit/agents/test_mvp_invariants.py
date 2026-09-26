@@ -15,8 +15,8 @@ import pytest
 
 from film_pipeline.agents.impl.registry import get_agent_class
 from film_pipeline.agents.model_routing import ModelRouter
-from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.prompt_templates.registry import get_registry
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.studio.mock_responses import default_mock_responses
 
 

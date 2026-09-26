@@ -6,8 +6,8 @@ import logging
 
 import pytest
 
-from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 

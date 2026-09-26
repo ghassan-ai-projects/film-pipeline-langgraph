@@ -12,8 +12,8 @@ the ``AgentHandoff`` record. There is no in-process handoff manager — the form
 from __future__ import annotations
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.agents.mvp import MVP_AGENTS
 from film_pipeline.agents.registry import AgentRegistry
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner, RCTCOPrompt
 
 __all__ = [
