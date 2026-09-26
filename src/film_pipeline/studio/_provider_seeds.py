@@ -21,10 +21,10 @@ def seed_default_provider_health(rt: StudioRuntime) -> None:
     if rt.provider_health:
         return
     if rt.server_mode == "real":
-        from film_pipeline.providers import credentials
+        from film_pipeline.providers import is_configured
 
         for provider_id in ("zai", "seedance-openrouter", "veo-fast", "gemini-imagen-4"):
-            if credentials.is_configured(provider_id):
+            if is_configured(provider_id):
                 rt.set_provider_health(provider_id, "healthy")
             else:
                 rt.set_provider_health(
@@ -68,13 +68,13 @@ def seed_default_provider_adapters(rt: StudioRuntime) -> None:
 def default_video_provider(rt: StudioRuntime) -> tuple[str, str]:
     """Return the (provider_id, model) pair generation should default to."""
     if rt.server_mode == "real":
-        from film_pipeline.providers import credentials
+        from film_pipeline.providers import is_configured
 
         for provider_id, model in (
             ("seedance-openrouter", "bytedance/seedance-2.0"),
             ("veo-fast", "veo-3.1-fast"),
         ):
-            if credentials.is_configured(provider_id):
+            if is_configured(provider_id):
                 return provider_id, model
         return "seedance-openrouter", "bytedance/seedance-2.0"
     return "mock-video-provider", "mock-fast"

@@ -12,7 +12,11 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from film_pipeline.config import profile_resolver as _profiles
+from film_pipeline.config import (
+    canonicalize_profile_stack,
+    resolve_project_config,
+    resolved_config_state_keys,
+)
 from film_pipeline.operations import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.operations.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.operations.models import (
@@ -183,7 +187,7 @@ class OperatorService:
         self, state: dict[str, Any], request: ProjectCreateRequest
     ) -> None:
         """Canonicalize the request's profile stack, store its resolution, register providers."""
-        profile_stack = _profiles.canonicalize_profile_stack(
+        profile_stack = canonicalize_profile_stack(
             {
                 "film_type_profile": request.film_type_profile,
                 "quality_profile": request.quality_profile,
@@ -192,8 +196,8 @@ class OperatorService:
                 "auto_approve_profile": request.auto_approve_profile,
             }
         )
-        resolved_config = _profiles.resolve_project_config(profile_stack)
-        state.update(_profiles.resolved_config_state_keys(profile_stack, resolved_config))
+        resolved_config = resolve_project_config(profile_stack)
+        state.update(resolved_config_state_keys(profile_stack, resolved_config))
         self.register_profile_providers(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )

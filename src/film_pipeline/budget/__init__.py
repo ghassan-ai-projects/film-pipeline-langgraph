@@ -29,6 +29,16 @@ from film_pipeline.schemas.budget import BudgetState, SpendRecord
 
 #: Sentinel meaning "no cap configured", so callers compare against a number
 #: rather than branching on ``None`` at every gate.
+__all__ = [
+    "UNLIMITED",
+    "BudgetExceeded",
+    "BudgetLedger",
+    "authorize_spend",
+    "budget_cap_prompt_value",
+    "cap_for",
+    "record_spend",
+]
+
 UNLIMITED: float = float("inf")
 
 
