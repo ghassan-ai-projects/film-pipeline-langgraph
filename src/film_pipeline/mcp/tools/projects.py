@@ -19,6 +19,7 @@ from .helpers import (
     _collect_profile_models,
     _collect_profile_providers,
     _error,
+    _no_active_project,
     _ok,
     _services,
 )
@@ -245,7 +246,7 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
 async def get_active_project(args: dict[str, object]) -> dict[str, object]:
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project set")
+        return _no_active_project()
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
@@ -279,7 +280,7 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(state["project_id"])
     from film_pipeline.orchestration.router import get_blockers_for_state
 

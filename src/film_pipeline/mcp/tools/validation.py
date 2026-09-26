@@ -12,6 +12,7 @@ from .helpers import (
     _error,
     _load_artifact,
     _load_latest_reference_index,
+    _no_active_project,
     _ok,
     _report_summary,
     _services,
@@ -282,7 +283,7 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
     store = _services(rt).artifact_store
@@ -317,7 +318,7 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     resolved = _require_project(args, rt)
     if resolved is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id, state = resolved
 
     # Stored QC reports work even without a current phase because they are
@@ -355,7 +356,7 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     resolved = _require_project(args, rt)
     if resolved is None:
-        return _error("No active project.")
+        return _no_active_project()
     _project_id, state = resolved
 
     issues = _normalized_stored_issues(state.get("issues"))

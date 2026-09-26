@@ -53,6 +53,18 @@ def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
     return None
 
 
+#: The one message for "this request has no project to act on". The condition
+#: was previously re-derived at 45 call sites with three wordings and five
+#: emptiness tests — `if not active` and `if active is None` disagree on an
+#: empty dict — so one condition produced different answers.
+NO_ACTIVE_PROJECT = "No active project."
+
+
+def _no_active_project() -> dict[str, object]:
+    """The standard "nothing to act on" error response."""
+    return _error(NO_ACTIVE_PROJECT)
+
+
 def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     """Return the active project's state, or ``None`` when none resolves.
 

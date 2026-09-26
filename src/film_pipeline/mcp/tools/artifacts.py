@@ -12,6 +12,7 @@ from .helpers import (
     _active_project_state,
     _error,
     _load_latest_reference_index,
+    _no_active_project,
     _ok,
     _services,
 )
@@ -22,7 +23,7 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     phase_str = args.get("phase")
     from film_pipeline.schemas.base import FilmPhase
 
@@ -52,7 +53,7 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(state["project_id"])
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
@@ -96,7 +97,7 @@ async def list_shots(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _ok(shots=[], note="Shot bible not yet generated.")
@@ -111,7 +112,7 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _error("Shot bible not yet generated.")
@@ -131,7 +132,7 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
@@ -155,7 +156,7 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(state["project_id"])
     data = _load_latest_reference_index(rt, project_id, state)
     if data is None:
@@ -175,7 +176,7 @@ async def list_assets(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     store = _services(rt).artifact_store
     manifest = read_manifest(project_id, root=store.root)
     if manifest is None:

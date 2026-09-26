@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _ok, _services
+from ..helpers import (
+    _no_active_project,
+    _ok,
+    _services,
+)
 
 
 async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:
@@ -16,7 +20,7 @@ async def promote_test_to_production(args: dict[str, object]) -> dict[str, objec
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 

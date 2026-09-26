@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .helpers import _active_project_state, _error, _ok
+from .helpers import (
+    _active_project_state,
+    _error,
+    _no_active_project,
+    _ok,
+)
 
 if TYPE_CHECKING:
     from film_pipeline.kb.manifest import KBManifest
@@ -85,7 +90,7 @@ async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
 async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project.")
+        return _no_active_project()
     from film_pipeline.kb.packets import KBContextPacketBuilder
 
     try:

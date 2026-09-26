@@ -9,7 +9,13 @@ import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.budget import cap_for
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
-from .helpers import _error, _latest_artifact_version, _ok, _services
+from .helpers import (
+    _error,
+    _latest_artifact_version,
+    _no_active_project,
+    _ok,
+    _services,
+)
 
 #: Fallback cap when neither the caller nor the project supplies one. Kept
 #: explicit and named so it is visible as the last-resort default it is.
@@ -21,7 +27,7 @@ async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     raw_cap = args.get("cap_usd")
     if raw_cap is None:
@@ -234,7 +240,7 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

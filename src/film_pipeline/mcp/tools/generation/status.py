@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _active_project_id, _error, _ok, _services
+from ..helpers import (
+    _active_project_id,
+    _error,
+    _no_active_project,
+    _ok,
+    _services,
+)
 
 
 async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
@@ -15,7 +21,7 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
@@ -39,7 +45,7 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
 

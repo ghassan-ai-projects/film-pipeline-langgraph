@@ -6,7 +6,14 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _active_project_state, _coerce_runtime_arg, _error, _ok, _services
+from .helpers import (
+    _active_project_state,
+    _coerce_runtime_arg,
+    _error,
+    _no_active_project,
+    _ok,
+    _services,
+)
 
 
 def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None:
@@ -24,9 +31,9 @@ def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None
 
 async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
+    active = _active_project_state(args)
     if active is None:
-        return _error("No active project. Create one first with create_film_project.")
+        return _no_active_project()
     idea = str(args.get("idea", args.get("text", "")))
     if not idea:
         return _error("idea is required")
@@ -47,7 +54,7 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     state = _active_project_state(args)
     if state is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(state["project_id"])
     from film_pipeline.schemas.base import FilmPhase
 
@@ -68,7 +75,7 @@ async def approve_intake(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if active is None:
-        return _error("No active project.")
+        return _no_active_project()
     current_phase = str(active.get("current_phase", ""))
     if current_phase not in ("intake", ""):
         return _error(f"Current phase is '{current_phase}', not intake.")

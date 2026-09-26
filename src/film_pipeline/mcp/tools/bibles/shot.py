@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _latest_artifact_version, _ok, _services
+from ..helpers import (
+    _error,
+    _latest_artifact_version,
+    _no_active_project,
+    _ok,
+    _services,
+)
 from ._shared import _extract_script_text
 
 if TYPE_CHECKING:
@@ -210,7 +216,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

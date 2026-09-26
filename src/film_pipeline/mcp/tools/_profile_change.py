@@ -30,6 +30,7 @@ from film_pipeline.studio._operator_runtime import operator_service
 from .helpers import (
     _active_project_id,
     _error,
+    _no_active_project,
     _ok,
     _services,
 )
@@ -54,7 +55,7 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = _active_state(rt, args)
     if active is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id, state = active
 
     reason = str(args.get("reason", "")).strip()
@@ -106,7 +107,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = _active_state(rt, args)
     if active is None:
-        return _error("No active project.")
+        return _no_active_project()
     project_id, state = active
 
     proposal_id = str(args.get("proposal_id", "")).strip()

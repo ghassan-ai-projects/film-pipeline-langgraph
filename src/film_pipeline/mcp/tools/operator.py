@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _active_project_id, _error, _ok
+from .helpers import (
+    _active_project_id,
+    _error,
+    _no_active_project,
+    _ok,
+)
 
 
 async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
@@ -12,7 +17,7 @@ async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
 
     target_type = str(args.get("target_type", "")).strip()
     target_id = str(args.get("target_id", "")).strip()
@@ -55,7 +60,7 @@ async def list_operator_comments(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
 
     include_resolved = bool(args.get("include_resolved"))
     try:

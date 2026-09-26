@@ -11,7 +11,13 @@ from film_pipeline.mcp.tools.generation._text_only import (
     _is_text_only_policy,
 )
 
-from ..helpers import _active_project_id, _error, _ok, _services
+from ..helpers import (
+    _active_project_id,
+    _error,
+    _no_active_project,
+    _ok,
+    _services,
+)
 
 if TYPE_CHECKING:
     from film_pipeline.schemas.base import GenerationMode
@@ -61,7 +67,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
 
     if _is_text_only_policy(active):
@@ -132,7 +138,7 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     rt = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
-        return _error("No active project.")
+        return _no_active_project()
     from film_pipeline.operations.errors import ServiceError
     from film_pipeline.studio._operator_runtime import operator_service
 
@@ -148,7 +154,7 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
     rt = tools_pkg.get_runtime()
     active = rt.get_active()
     if not active:
-        return _error("No active project.")
+        return _no_active_project()
     project_id = str(active["project_id"])
     if _is_text_only_policy(active):
         return _ok(text_only=True, approved=0)
