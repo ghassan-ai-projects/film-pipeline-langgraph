@@ -1822,3 +1822,100 @@ decision:
   it identical to `APPROVE_ALL`. A surviving budget concept, predating this work.
 
 Both are recorded here so the next round does not rediscover them as new.
+
+## AGENT-24 — module interfaces, layer direction, and the last cycle (2026-09-26)
+
+The user asked to "define clear public interfaces for the modules, and check we
+have layers and the controls/data flows in one direction." Measured answer, by
+rebuilding the import graph from `ast` rather than reading the design docs.
+
+### The question has a mostly-negative answer, and that is the finding
+
+**Layers: 06's rejection of a layer law was correct, and is now provable rather
+than asserted.** The package graph contained exactly one mutual pair, and it is
+gone. Measured before this round: `orchestration -> schemas` from 41 files against
+`schemas -> orchestration` from one (`schemas/runtime_state.py`, importing
+`orchestration.state_schema` to check persisted graph-state keys — its own
+docstring conceded the inversion). After moving the check to the module that owns
+`StudioGraphState`, the graph is acyclic.
+
+The reason a layer law is the wrong frame is measurable: **201 of the cross-package
+imports are function-local**, deliberate lazy bindings (e.g. `mcp/tools/helpers.py`
+documents that `get_runtime` must be attribute-bound at call time so tests can
+monkeypatch). Enforcing a directional layer law would have outlawed the very
+mechanism that keeps the eager graph acyclic. The 720 cross-package imports are an
+ownership map, not defects.
+
+**Interfaces: they exist, are mostly unused, and that is fine.** Measured
+cross-package imports: **81 via package root** (guarded by
+`test_public_surface.py`) against **639 via submodule path** (unguarded). The
+existing guard therefore sees ~11% of import traffic and is honest about it in its
+own docstring. The conclusion is *not* to expand `__all__` or add facades — that is
+the rejected `03`/`05` program. `filmspec/__init__.py` is a genuine surface
+(definitions live there); `schemas/__init__.py`'s 107 names are a convenience
+aggregator. Both are fine as they are.
+
+**Flow direction: verified one-directional, with single-writer evidence:**
+- `mcp/server.py` is the single operator funnel (resolution, confirmation,
+  active-project precondition, dispatch, error mapping before any handler), and the
+  headless CLI deliberately reuses it (`cli/driver.py`) rather than bypassing it.
+- The active-project precondition is checked once at dispatch; the 48 handler-level
+  guards are gone.
+- `merge_issues` is the single implementation of issue semantics, with
+  `remove_issues_by_code` applying those same semantics to plain mappings for the
+  three non-graph callers that cannot use a reducer.
+- `project.json` and `graph-state.json` each have exactly one writer module, both
+  through `ProjectStorage`. Zero layout writes exist outside `storage/`.
+
+Verified empirically rather than by reading: duplicate-append dedupes, a shorter
+list cannot remove an issue, and removal requires the explicit
+`{"__remove_codes__": [...]}` command form.
+
+### The guard decision, and why the advice against it was wrong
+
+A subagent recommended **against** adding an acyclicity guard, on the grounds that
+"Enola's `cycles` policy already IS the gate." That reasoning fails on measurement:
+`enola check` grades the working tree against a **pinned snapshot**, so once the
+snapshot is regenerated from the current commit, an injected cycle does not fail it.
+Verified both directions:
+
+| Check | Injected `schemas -> orchestration` back-edge |
+|---|---|
+| `enola check` (freshly pinned baseline) | exit **0** — does not catch it |
+| `tests/unit/architecture/test_package_acyclicity.py` | `test_package_graph_is_acyclic` **FAILED** |
+
+So the pytest guard covers a real gap in the working-tree check rather than
+duplicating it. It is scoped to cycles only, at package granularity, and its
+docstring records why it must not be widened into `03`'s layer law.
+
+### The stale-baseline trap, recorded because it cost real time
+
+`docs/modular-architecture/enola-out/` is gitignored and was generated
+2026-09-25 — before this branch's renames. It held 703 facts for
+`src/film_pipeline/app`, 935 for `graph`, and 396 for `artifacts`, none of which
+exist any more, and **zero** `schemas/runtime_state -> orchestration` facts, because
+that import was function-local then. Consequence: removing the back-edge made
+enola recount and promote a **pre-existing** `agents <-> agents/prompt_templates`
+cycle from advisory to "regression". HEAD passed enola only because the stale
+baseline was hiding that cycle.
+
+Resolved by regenerating the snapshot and re-pinning from **clean** HEAD
+(`fae6f3e`, 9528 facts) — after confirming the fresh snapshot holds 0 facts for
+the removed packages. **No filter or threshold was changed.** Then re-pinned at
+`7677a7c` (9537 facts) once this round's work was committed.
+
+The lesson: a pinned baseline that is older than the branch it grades will report
+the branch's own renames as architectural regressions. Regenerate it from clean
+HEAD before believing a FAIL.
+
+### Still open, deliberately
+
+- `agents <-> agents/prompt_templates` is a real parent/subpackage cycle:
+  `prompt_templates/registry.py` imports `agents._prompt_template` while `agents`
+  reaches `prompt_templates`. It predates this round and is now visible in the
+  graph. Not fixed here — the natural fix moves `_prompt_template` into the
+  subpackage that uses it, which is a behaviour-preserving move worth its own
+  slice rather than a rider on this one.
+- The 9 frozen `rt._persist_project_state` / `rt.projects[id] = state` sites remain
+  recorded debt in `test_boundary_law.py`; routing them through `RuntimePort` is
+  opportunistic work, not a defect.
