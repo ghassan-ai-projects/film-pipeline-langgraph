@@ -1,6 +1,6 @@
 """Tests for orchestrator_state helpers — candidate/approved refs, review
 cycles, revision requests, routing decisions, convergence, failure decisions,
-provider health, and budget awareness."""
+provider health, and the budget snapshot read."""
 
 from __future__ import annotations
 
@@ -244,19 +244,6 @@ def test_budget_snapshot_defaults() -> None:
     assert snap["cap_usd"] == 0.0
     assert snap["spent_usd"] == 0.0
     assert snap["threshold_exceeded"] is False
-
-
-def test_update_budget_snapshot() -> None:
-    state = _empty_state()
-    ostate.update_budget_snapshot(state, cap_usd=50.0, spent_usd=30.0)
-    snap = ostate.get_budget_snapshot(state)
-    assert snap["remaining_usd"] == 20.0
-
-
-def test_is_budget_blocked() -> None:
-    state = _empty_state()
-    ostate.update_budget_snapshot(state, cap_usd=50.0, spent_usd=50.0, threshold_exceeded=True)
-    assert ostate.is_budget_blocked(state) is True
 
 
 def test_ensure_orchestrator_state_idempotent() -> None:

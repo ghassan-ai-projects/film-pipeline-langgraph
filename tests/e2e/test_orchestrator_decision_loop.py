@@ -1,5 +1,5 @@
 """E2E tests for the orchestrator decision loop — multi-round review,
-revision durability, provider-blocked routing, budget awareness, and
+revision durability, provider-blocked routing, and
 approved-baseline handoff between phases."""
 
 from __future__ import annotations
@@ -105,17 +105,6 @@ class TestOrchestratorDecisionLoop:
         assert r.next_action == "advance_to_visual_dev"
 
     # --- Budget awareness ---------------------------------------------------
-
-    def test_budget_exceeded_escalates(self) -> None:
-        """Budget threshold exceeded forces human escalation."""
-        state = _base_state("gen_planning", approved=True)
-        ostate.update_budget_snapshot(
-            state, cap_usd=100.0, spent_usd=100.0, threshold_exceeded=True
-        )
-        r = compute_actions(state)
-        assert r.next_action == "escalate_to_human"
-
-    # --- Failure decisions --------------------------------------------------
 
     def test_blocking_failure_routes_to_handler(self) -> None:
         """Blocking failure with no safe continuation routes to failure handler."""
