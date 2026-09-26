@@ -979,3 +979,13 @@ since `_run_agent` short-circuits to `status: no_services` first. And the
 orchestrator-key guard's "reads" scope matches `state.get("<literal>")` but not
 subscript or variable-bound reads; the one live instance is present in `origin/main`,
 so it is not a regression.
+
+**Correction to the AGENT-09 commit body (`f5a3c53`).** It states the gate result as
+"2344 passed / 8 skipped / 10 xfailed". The measured figure is **2317 passed / 8
+skipped / 10 xfailed** (re-run over the full `ci-check` test scope). The 2344 was
+written without running that scope, which is the same class of error the two
+earlier corrections in this file exist to catch. Gates are otherwise as stated:
+`make ci-check` PASS, 91.98% coverage, builds and product gate PASS; ruff and mypy
+strict clean; `enola check` exit 0. The unit-scope figure for the same tree is 2181
+passed / 3 skipped / 1 xfailed; the two differ because the full scope includes the
+integration and e2e suites with their own skip marks.
