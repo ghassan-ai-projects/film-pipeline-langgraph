@@ -56,8 +56,12 @@ class StudioRuntime:
     def __post_init__(self) -> None:
         self.server_mode = _normalize_server_mode(self.server_mode)
         if self.runtime_root is None:
-            if os.getenv("FILM_PIPELINE_RUNTIME_ROOT", "").strip():
-                self.runtime_root = configured_runtime_root()
+            # The env var is read once, in `configured_runtime_root`. This used to
+            # re-read it and repeat the empty-string check to distinguish the same
+            # three cases.
+            configured_root = configured_runtime_root()
+            if configured_root is not None:
+                self.runtime_root = configured_root
             elif use_persistent_runtime():
                 self.runtime_root = default_runtime_root()
                 self.runtime_root.mkdir(parents=True, exist_ok=True)

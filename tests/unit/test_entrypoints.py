@@ -42,3 +42,41 @@ def test_mcp_main_configures_logging_before_stdio_server(
 
     assert server.main() == 0
     configure.assert_called_once_with(runtime_root)
+
+
+def test_mcp_main_still_logs_when_no_runtime_root_is_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The persistent MCP server must keep a file log with no env override.
+
+    This pins a regression that no test caught: `configured_runtime_root` was
+    changed to return ``None`` when unset, and this call site briefly kept calling
+    it. `configure_logging(None)` installs **no** file handler, silently, so the
+    persistent server lost its log in the normal case (no
+    `FILM_PIPELINE_RUNTIME_ROOT`). The sibling test above sets that variable
+    explicitly, which is exactly why it masked the break.
+
+    The assertion is on a real path, not on `None`: `runtime_root_from_config()`
+    must supply the default when the environment supplies nothing.
+    """
+    from film_pipeline.mcp import server
+
+    monkeypatch.delenv("FILM_PIPELINE_NO_PERSIST", raising=False)
+    monkeypatch.delenv("FILM_PIPELINE_RUNTIME_ROOT", raising=False)
+    monkeypatch.setenv("FILM_PIPELINE_PERSIST_STATE", "1")
+    monkeypatch.setenv("FILM_PIPELINE_STORAGE_ROOT", str(tmp_path / "store"))
+
+    configure = MagicMock()
+    monkeypatch.setattr("film_pipeline.studio.logging_setup.configure_logging", configure)
+    monkeypatch.setattr("film_pipeline.studio.bootstrap.validate_environment", list)
+    monkeypatch.setattr(server, "_serve_stdio", lambda _server: 0)
+
+    assert server.main() == 0
+
+    configure.assert_called_once()
+    (root,), _kwargs = configure.call_args
+    assert root is not None, (
+        "MCP main passed no runtime root to configure_logging, so the persistent "
+        "server silently installs no file handler."
+    )
+    assert isinstance(root, Path)

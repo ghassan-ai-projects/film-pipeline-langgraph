@@ -299,11 +299,15 @@ def main() -> int:
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
 
     # Stdio transport owns stderr's cleanliness; persistent runs also retain a
-    # file log under the same runtime root used by StudioRuntime.
-    from film_pipeline.studio._persistence import configured_runtime_root
+    # file log. The file handler is placed under the configured runtime root when
+    # one is set. Note this is NOT always the root `StudioRuntime` will use: with
+    # neither `FILM_PIPELINE_RUNTIME_ROOT` nor persistence enabled the runtime
+    # falls back to a throwaway tempdir. `configure_logging` tolerates `None` and
+    # adds the file handler only when it has a root.
+    from film_pipeline.studio._persistence import runtime_root_from_config
     from film_pipeline.studio.logging_setup import configure_logging
 
-    configure_logging(configured_runtime_root())
+    configure_logging(runtime_root_from_config())
 
     issues = validate_environment()
     if issues:
