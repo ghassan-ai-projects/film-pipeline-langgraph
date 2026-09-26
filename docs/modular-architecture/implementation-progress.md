@@ -1101,15 +1101,23 @@ clustering is understood well enough to say the finding is spurious. **This need
 an owner decision** — it is the one thing this round could not settle by
 measurement.
 
-### Finding B — the three hardcoded provider defaults (AGENT-10c) have siblings
+### Finding B — fixed in `6de7be3`
 
-Not re-investigated this round; recorded for the next one, from the same
-generation-cluster investigation: `status.py` counts `requires_human_review`,
-`blocked_provider` and `blocked_budget` as ACTIVE because it hand-rolls a
-4-member terminal set from a 10-member enum with no owner; and both `status.py`
-handlers call `mgr.list_rows` without the `has_ledger` guard that exists
-precisely because "the ledger manager's `load` persists a new empty ledger
-artifact when none exists" — so a status read writes an artifact.
+The two sibling defects the investigation named:
+
+- **Terminality had three definitions, not one.** `GenerationLedgerManager`, the
+  executor's cost sum, and the MCP status handler each hand-rolled the same
+  four-member set from a ten-member `GenerationStatus` enum. The ledger owns the
+  state machine, so `TERMINAL_GENERATION_STATUSES` and `is_terminal()` now live
+  there; the other two call them. The docstring records why
+  `requires_human_review`, `blocked_provider` and `blocked_budget` are *not*
+  terminal — each waits on something that can still change.
+- **A status read wrote an artifact.** `list_active_generations` called
+  `list_rows` with no existence check, and the ledger's `load()` persists an
+  empty ledger when none exists. Guarded with the same two store primitives
+  `GenerationExecutor.has_ledger` uses — inlined rather than calling that method,
+  because importing the executor here added an `mcp -> generation` edge and the
+  dependency-law guard caught it on the first attempt.
 
 ### Deliberately not done
 
