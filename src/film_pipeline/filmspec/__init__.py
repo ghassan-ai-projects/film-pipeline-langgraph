@@ -19,6 +19,8 @@ __all__ = [
     "GenerationStatus",
     "IssueSeverity",
     "ValidationStatus",
+    "blocking_issues",
+    "is_blocking_issue",
     "is_text_only_policy",
     "next_phase",
     "text_only_generation_request",
@@ -154,6 +156,32 @@ class IssueSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
     BLOCKING = "blocking"
+
+
+def is_blocking_issue(issue: object) -> bool:
+    """Return whether an issue record's severity blocks phase advancement.
+
+    The single definition of "this issue blocks". It was re-derived at more than
+    a dozen call sites across eight packages as a bare
+    ``issue.get("severity") == "blocking"``, and they had already diverged: some
+    guarded against a malformed record with ``isinstance(issue, dict)`` and at
+    least one did not, so a non-mapping issue raised ``AttributeError`` on that
+    path while the others skipped it.
+
+    Non-mappings are never blocking rather than an error: an issue list is
+    persisted state, and crash recovery must not depend on every entry being
+    well-formed.
+    """
+    if not isinstance(issue, dict):
+        return False
+    return str(issue.get("severity", "")) == IssueSeverity.BLOCKING.value
+
+
+def blocking_issues(issues: object) -> list[dict[str, Any]]:
+    """Return the issues whose severity blocks advancement."""
+    if not isinstance(issues, (list, tuple)):
+        return []
+    return [issue for issue in issues if is_blocking_issue(issue)]
 
 
 PHASE_SEQUENCE: tuple[str, ...] = tuple(phase.value for phase in FilmPhase)

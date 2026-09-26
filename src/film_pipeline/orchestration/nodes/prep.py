@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 from film_pipeline.constraints import extract_constraints
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
@@ -354,7 +355,7 @@ def _withhold_auto_approval_on_blockers(
     """
     if not updates.get("approved"):
         return
-    if any(i.get("severity") == "blocking" for i in issues):
+    if blocking_issues(issues):
         updates["approved"] = False
         updates["human_approval_required"] = False
 

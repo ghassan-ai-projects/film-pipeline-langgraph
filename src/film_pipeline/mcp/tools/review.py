@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.filmspec import blocking_issues as _blocking_issues_of
 
 from .helpers import (
     _error,
@@ -66,8 +67,13 @@ def _build_review_package(
 
 
 def _blocking_issues(state: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return the open issues whose severity is blocking."""
-    return [i for i in state.get("issues", []) if i.get("severity") == "blocking"]
+    """Return the open issues whose severity is blocking.
+
+    Routed through `filmspec.blocking_issues`: this copy omitted the
+    `isinstance(issue, dict)` guard its siblings had, so a malformed issue
+    raised AttributeError on this path while every other one skipped it.
+    """
+    return _blocking_issues_of(state.get("issues", []))
 
 
 async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:

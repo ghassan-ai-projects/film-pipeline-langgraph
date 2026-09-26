@@ -17,6 +17,7 @@ from film_pipeline.config import (
     resolve_project_config,
     resolved_config_state_keys,
 )
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.operations import _browse_ops, _checkpoint_ops, _generation_ops
 from film_pipeline.operations.errors import BackendOperationError, ProjectNotFoundError
 from film_pipeline.operations.models import (
@@ -371,7 +372,7 @@ class OperatorService:
             for issue in cast(list[Mapping[str, Any]], state.get("issues", []))
             if isinstance(issue, dict)
         ]
-        blocking = [dict(issue) for issue in issue_list if issue.get("severity") == "blocking"]
+        blocking = [dict(issue) for issue in blocking_issues(issue_list)]
         non_blocking = [dict(issue) for issue in issue_list if issue.get("severity") != "blocking"]
         return ValidationWorkspace(
             project_id=str(state["project_id"]),

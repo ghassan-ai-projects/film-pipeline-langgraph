@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, cast
 
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _run_agent
 from film_pipeline.orchestration.nodes._repair_loop import (
     _PHASE_NODES,
@@ -50,7 +51,7 @@ def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
 def _count_blocking_issues(state: dict[str, Any]) -> int:
     """Count blocking-severity entries in state's issues (pure read)."""
     issues = state.get("issues", []) or []
-    return sum(1 for i in issues if i.get("severity") == "blocking")
+    return len(blocking_issues(issues))
 
 
 def _orchestrator_working_state(state: dict[str, Any]) -> dict[str, Any]:

@@ -17,7 +17,7 @@ from film_pipeline.filmspec import (
 )
 from film_pipeline.filmspec import PHASE_AGNOSTIC_PHASES as _PHASE_AGNOSTIC_PHASES
 from film_pipeline.filmspec import PHASE_GATES as _APPROVAL_GATES
-from film_pipeline.filmspec import next_phase
+from film_pipeline.filmspec import is_blocking_issue, next_phase
 from film_pipeline.governance.gate_facts import GateFacts
 from film_pipeline.schemas.base import ValidationStatus
 
@@ -54,7 +54,7 @@ def _status_from_value(value: str) -> ValidationStatus:
 
 def _is_blocking_issue(issue: Any) -> bool:
     """True when an issue's severity blocks phase approval."""
-    return isinstance(issue, dict) and issue.get("severity") == "blocking"
+    return is_blocking_issue(issue)
 
 
 def _blocking_issue_count(issues: list[dict[str, Any]]) -> int:

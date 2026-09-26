@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.schemas.base import IssueSeverity, ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
@@ -218,7 +219,7 @@ class DialogueVoiceValidator(BaseValidator):
         if total_lines == 0:
             return 100.0
 
-        blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
+        blocking_count = len(blocking_issues(issues))
         warning_count = sum(1 for i in issues if i.get("severity") == "warning")
 
         score = 100.0

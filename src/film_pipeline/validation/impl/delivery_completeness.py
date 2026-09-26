@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import blocking_issues
 from film_pipeline.schemas.base import IssueSeverity, ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
@@ -174,7 +175,7 @@ class DeliveryCompletenessValidator(BaseValidator):
         missing = raw.get("missing_required", [])
         missing_count = len(missing) if isinstance(missing, list) else 0
         issues: list[dict[str, str]] = raw.get("issues", [])
-        blocking_count = sum(1 for i in issues if i.get("severity") == "blocking")
+        blocking_count = len(blocking_issues(issues))
         warning_count = sum(1 for i in issues if i.get("severity") == "warning")
 
         score = 100.0
