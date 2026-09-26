@@ -833,3 +833,34 @@ and `qc_patch_ref`) as an explicit R-01 API target; the established script
 response remains separately frozen. The project-resolution probes cover all
 four mutating operator actions, and the stdio expected failure is isolated from
 process-startup and malformed-response failures.
+
+## AGENT-01..07 — the agents-module round (2026-09-26)
+
+Seven slices against the candidates triaged in
+[12 — file inventory and candidates](12-file-inventory-and-candidates.md). The
+round's method was the one `11` §6 asked for: pick the narrowest change a test
+can falsify, and let the measurement decide the rest. Both gates ran on every
+slice; the tree was at 2,106 unit tests / 3 skipped / 1 xfailed by the end.
+
+| Slice | Scope | Method note | Behavior evidence | Gates | Enola | Commit |
+|---|---|---|---|---|---|---|
+| AGENT-01 | Delete `schemas/registries/agent_registry.py`: `AgentRegistryEntry` duplicated `AgentRegistration` (12 of 13 fields; the 13th, `enabled`, had no production reader) | Measured first: every reference in `src/` was its own definition plus two re-exports; the only real user was one construction test | New guard `TestSingleAgentRegistrationModel` pins exactly one registration model under `src/` and its roster fields | PASS — 514 passed; ruff, mypy clean | PASS — exit 0 | `911ff4f` |
+| AGENT-02 | Delete `agents/handoff.py` (`HandoffManager`) and `PromptRunner.create_handoff` — no production caller | The graph records handoffs on state channels via `orchestration.nodes._agent_handoff`; `AgentHandoff` stays in `schemas.handoff`. Also retires one of the two production readers of the field F-AGENT-02 shows is a lie | Full suite; no behavior changed because nothing reachable called it | PASS — 2,057 passed / 3 skipped / 1 xfailed; ruff, mypy clean | PASS — exit 0 | `12263f8` |
+| AGENT-03 | Move `agents/mvp/__init__.py` -> `agents/roster.py`; `mvp` named a release scope, not a concern, and implied an implementation package next to the real `agents/impl/` | Mechanical: 11 import sites, `MVP_AGENTS` name unchanged | Full suite | PASS — 2,057 passed; ruff, mypy clean | PASS — exit 0 | `dda3afb` |
+| AGENT-04 | F-AGENT-02: add `produces` to `AgentRegistration`, set it on all 11 roster rows, move `AGENT_CLASS_BY_ID` into `agents/registry.py`, delete `agents/impl/registry.py` and the orphan `visual-dev-agent` key, and route 10 node call sites through the contract | Measured by **runtime** call, not the audit's AST scan: the AST technique reports `[]` for `orchestrator-agent` (it returns `model_dump()`), which would have fabricated a second divergence. Set equality went 1 exact / 3 partial / 7 disjoint -> **11 exact** | `TestRosterDeclaresWhatItsAgentsProduce` instantiates each row's real impl with the row as contract and asserts `produces in execute({})`; falsified by restoring the old `validation_report` claim (fails for all 10) | PASS — 2,080 passed; ruff, mypy clean | PASS — exit 0, cycle set identical | `9b0cfc0` |
+| AGENT-05 | `07` §4's "highest-confidence split": `model_adapter.py` 383 -> 289, new `agents/transports/{chat_completions,gemini,zai}.py`; `ModelAdapter` becomes dispatch; the two frozen request value objects **moved**, not reinvented | Public signature, the z.ai allowlist, error strings, `redact_body` flags, and headers are unchanged; `_zai_base_url`/`_gemini_url` kept as delegates for the five tests that poke them | `test_model_adapter.py` 40 -> 57, including a dispatch-policy test pinning that a `zai/` model never reaches OpenRouter and a bare model never reaches z.ai | PASS — 2,106 passed; ruff, mypy clean | PASS — exit 0, no new cycle | `f55a23a` |
+| AGENT-06 | `07` §3/§6.4: `orchestrator_state` gains the `__all__` surface it lacked (the diagnosis was a surface problem, not a size one, so the file is **not** split) | Writing the guards found three real leaks, all fixed: `_context.py` and `approval.py` indexed orchestrator slices by hand while accessors existed; `_require_human_approval` was imported by three modules outside its owner (O7) and is now `require_human_approval`; `_repair_loop.py` hand-copied the convergence slice | New `test_orchestrator_state_surface.py`: declared surface matches definitions, no outside private import, no outside hand-built key **read**. Falsified by restoring one old `working.get("_orchestrator__approved_refs")` line | PASS — 2,106 passed; ruff, mypy clean | PASS — exit 0 | `860e041` |
+
+### What this round establishes, and what it does not
+
+**Establishes.** The agents module no longer declares the same concept twice.
+Three registries became two (`roster` declares, `registry` validates and binds),
+one duplicate schema is gone, one dead lifecycle is gone, and one provider seam
+is a package. Every change is pinned by a test that was shown to fail when the
+old state is restored.
+
+**Does not establish.** `output_artifacts` is still validated against nothing
+(F-AGENT-03), `_AGENT_PROFILE_MAP` keeps 10 orphan rows (F-AGENT-06), the
+prompt-template registry is still keyed from two id spaces (F-AGENT-05), and
+**F-AGENT-04 — the MCP bible second lifecycle — is still open** and is the
+Critical item this round did not reach.
