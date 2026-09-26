@@ -12,9 +12,9 @@ from film_pipeline.config.profile_resolver import provider_specs_from_raw
 from .helpers import (
     _error,
     _latest_artifact_version,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 
 #: Fallback cap when neither the caller nor the project supplies one. Kept
@@ -25,9 +25,7 @@ _DEFAULT_CAP_USD: float = 100.0
 async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     """Create the initial BudgetState for a project."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     raw_cap = args.get("cap_usd")
     if raw_cap is None:
@@ -238,9 +236,7 @@ def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -
 async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     """Generate a GenerationPlan from the shot matrix."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

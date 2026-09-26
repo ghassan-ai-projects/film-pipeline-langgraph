@@ -8,9 +8,9 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import (
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 from ._shared import (
     _chat_json_or_mock,
@@ -220,9 +220,7 @@ async def generate_character_bible(args: dict[str, object]) -> dict[str, object]
     structured prompt construction.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
 
     project_id = str(active["project_id"])
     character_id = str(args.get("character_id", "")).strip()

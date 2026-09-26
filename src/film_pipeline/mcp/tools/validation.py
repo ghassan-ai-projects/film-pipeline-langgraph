@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import (
-    _active_project_id,
     _error,
     _load_artifact,
     _load_latest_reference_index,
-    _no_active_project,
     _ok,
     _report_summary,
     _services,
+    require_project_id,
+    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -34,17 +34,6 @@ def _parse_phase(phase_str: str) -> FilmPhase | None:
         return FilmPhase(phase_str)
     except ValueError:
         return None
-
-
-def _require_project(args: dict[str, object], rt: Any) -> tuple[str, dict[str, object]] | None:
-    """Resolve (project_id, state) for a request, or None when unavailable."""
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    state = rt.get_project(project_id)
-    if state is None:
-        return None
-    return project_id, state
 
 
 def _stored_qc_reports(state: dict[str, object]) -> list[object] | None:
@@ -281,9 +270,7 @@ def _record_validation_results(
 async def run_validation(args: dict[str, object]) -> dict[str, object]:
     """Run validators for the current phase and persist ValidationReport."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
     store = _services(rt).artifact_store
@@ -316,10 +303,9 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     by the QC node). Falls back to live validator runs if no stored reports.
     """
     rt = tools_pkg.get_runtime()
-    resolved = _require_project(args, rt)
-    if resolved is None:
-        return _no_active_project()
-    project_id, state = resolved
+    project_id = require_project_id(args)
+    rt = tools_pkg.get_runtime()
+    state = require_project_state(args)
 
     # Stored QC reports work even without a current phase because they are
     # already persisted in state.
@@ -353,11 +339,7 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
 
     Reads from stored ``issues`` in project state (populated by QC node).
     """
-    rt = tools_pkg.get_runtime()
-    resolved = _require_project(args, rt)
-    if resolved is None:
-        return _no_active_project()
-    _project_id, state = resolved
+    state = require_project_state(args)
 
     issues = _normalized_stored_issues(state.get("issues"))
 

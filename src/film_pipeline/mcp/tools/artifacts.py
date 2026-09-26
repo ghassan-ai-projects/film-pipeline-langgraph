@@ -8,22 +8,19 @@ import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.storage.manifest import read_manifest
 
 from .helpers import (
-    _active_project_id,
-    _active_project_state,
     _error,
     _load_latest_reference_index,
-    _no_active_project,
     _ok,
     _services,
+    require_project_id,
+    require_project_state,
 )
 
 
 async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
     """List all artifacts for the active project, optionally filtered by phase."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     phase_str = args.get("phase")
     from film_pipeline.schemas.base import FilmPhase
 
@@ -51,9 +48,7 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
 async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
     """Load and return the content of a specific artifact."""
     rt = tools_pkg.get_runtime()
-    state = _active_project_state(args)
-    if state is None:
-        return _no_active_project()
+    state = require_project_state(args)
     project_id = str(state["project_id"])
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
@@ -95,9 +90,7 @@ def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
 async def list_shots(args: dict[str, object]) -> dict[str, object]:
     """List shots from the shot bible artifact, if available."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _ok(shots=[], note="Shot bible not yet generated.")
@@ -110,9 +103,7 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     if not shot_id:
         return _error("shot_id is required.")
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _error("Shot bible not yet generated.")
@@ -130,9 +121,7 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
     if not scene_id:
         return _error("scene_id is required.")
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
@@ -154,9 +143,7 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     if not reference_id:
         return _error("reference_id is required.")
     rt = tools_pkg.get_runtime()
-    state = _active_project_state(args)
-    if state is None:
-        return _no_active_project()
+    state = require_project_state(args)
     project_id = str(state["project_id"])
     data = _load_latest_reference_index(rt, project_id, state)
     if data is None:
@@ -174,9 +161,7 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
 async def list_assets(args: dict[str, object]) -> dict[str, object]:
     """List generated/reference assets from the project asset manifest."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     store = _services(rt).artifact_store
     manifest = read_manifest(project_id, root=store.root)
     if manifest is None:

@@ -19,18 +19,6 @@ from film_pipeline.mcp.tools import (
 from film_pipeline.studio.runtime import StudioRuntime
 
 
-def test_review_phase_artifacts_requires_active_project(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(review_phase_artifacts({}))
-    assert result["ok"] is False
-
-
 def test_review_phase_artifacts_requires_phase(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -30,9 +30,10 @@ from film_pipeline.studio._operator_runtime import operator_service
 from .helpers import (
     _active_project_id,
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_id,
+    require_project_state,
 )
 
 _PROFILE_STACK_KEYS = (
@@ -53,10 +54,8 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     human approves it via ``approve_profile_change``.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
-    if active is None:
-        return _no_active_project()
-    project_id, state = active
+    project_id = require_project_id(args)
+    state = require_project_state(args)
 
     reason = str(args.get("reason", "")).strip()
     if not reason:
@@ -105,10 +104,8 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     downstream artifacts, and records the approval.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
-    if active is None:
-        return _no_active_project()
-    project_id, state = active
+    project_id = require_project_id(args)
+    state = require_project_state(args)
 
     proposal_id = str(args.get("proposal_id", "")).strip()
     if not proposal_id:

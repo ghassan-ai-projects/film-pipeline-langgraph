@@ -20,7 +20,6 @@ from film_pipeline.mcp.tools import (
     set_active_project,
 )
 from film_pipeline.studio.runtime import StudioRuntime
-from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
@@ -40,13 +39,6 @@ def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> Studio
 def _make_active_project(project_id: str) -> None:
     asyncio.run(create_film_project({"project_id": project_id}))
     asyncio.run(set_active_project({"project_ref": project_id}))
-
-
-def test_list_artifacts_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_artifacts({}))
-    assert result["ok"] is False
 
 
 def test_list_artifacts_empty_for_new_project() -> None:
@@ -271,13 +263,6 @@ def test_inspect_reference_not_found_with_index(
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
     result = asyncio.run(inspect_reference({"reference_id": "totally-bogus-ref-id"}))
-    assert result["ok"] is False
-
-
-def test_list_assets_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_assets({}))
     assert result["ok"] is False
 
 

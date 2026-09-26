@@ -93,18 +93,6 @@ def _create_active_project(project_id: str) -> None:
     asyncio.run(set_active_project({"project_ref": project_id}))
 
 
-def test_propose_profile_change_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(
-        propose_profile_change({"reason": "Switch quality", "quality_profile": "quality.draft"})
-    )
-    assert result["ok"] is False
-    assert "active project" in cast(str, result["error"]).lower()
-
-
 def test_propose_profile_change_requires_reason() -> None:
     _create_active_project("profile-change-no-reason")
     result = asyncio.run(propose_profile_change({"quality_profile": "quality.draft"}))

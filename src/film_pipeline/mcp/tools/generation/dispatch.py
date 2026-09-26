@@ -11,9 +11,9 @@ from film_pipeline.mcp.tools.generation._text_only import (
 
 from ..helpers import (
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -123,9 +123,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     in the ledger row. Partial failures are recorded per-row.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     if _is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
@@ -207,9 +205,7 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     from datetime import UTC, datetime
 
@@ -262,9 +258,7 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus

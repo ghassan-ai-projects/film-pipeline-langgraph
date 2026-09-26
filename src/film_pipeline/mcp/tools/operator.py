@@ -5,19 +5,16 @@ from __future__ import annotations
 import film_pipeline.mcp.tools as tools_pkg
 
 from .helpers import (
-    _active_project_id,
     _error,
-    _no_active_project,
     _ok,
+    require_project_id,
 )
 
 
 async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
     """Add an operator comment to a project target."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
 
     target_type = str(args.get("target_type", "")).strip()
     target_id = str(args.get("target_id", "")).strip()
@@ -58,9 +55,7 @@ async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
 async def list_operator_comments(args: dict[str, object]) -> dict[str, object]:
     """List operator comments for the active project."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
 
     include_resolved = bool(args.get("include_resolved"))
     try:

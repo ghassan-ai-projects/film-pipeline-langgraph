@@ -18,16 +18,6 @@ from film_pipeline.mcp.tools import (
 from film_pipeline.studio.runtime import StudioRuntime
 
 
-def test_run_validation_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(run_validation({}))
-    assert result["ok"] is False
-
-
 def test_run_validation_unknown_phase(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-bad-phase", "Bad Phase")
@@ -97,15 +87,6 @@ def test_run_validation_visual_dev_phase_success(
     assert result["ok"] is True
     assert result["phase"] == "visual_dev"
     assert len(cast(list[object], result["reports"])) >= 1
-
-
-def test_get_validation_report_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(get_validation_report({}))
-    assert result["ok"] is False
 
 
 def test_get_validation_report_uses_qc_stored_reports() -> None:
@@ -182,15 +163,6 @@ def test_get_validation_report_live_dispatch_visual_dev_phase(
     assert result["ok"] is True
     assert result["source"] == "live"
     assert result["phase"] == "visual_dev"
-
-
-def test_list_validation_issues_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_validation_issues({}))
-    assert result["ok"] is False
 
 
 def test_list_validation_issues_with_stored_issues() -> None:

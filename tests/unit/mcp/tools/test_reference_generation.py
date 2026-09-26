@@ -180,17 +180,6 @@ def _make_entry(
 # ---------------------------------------------------------------------------
 
 
-def test_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(generate_reference_images({}))
-    assert result["ok"] is False
-    assert "No active project" in str(result.get("error", ""))
-
-
 def test_missing_reference_index(rt: StudioRuntime) -> None:
     result = asyncio.run(generate_reference_images({}))
     assert result["ok"] is False

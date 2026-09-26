@@ -14,14 +14,13 @@ from film_pipeline.operations.operator import OperatorService
 from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
-    _active_project_state,
     _coerce_runtime_arg,
     _collect_profile_models,
     _collect_profile_providers,
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 
 
@@ -244,9 +243,7 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_active_project(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _no_active_project()
+    state = require_project_state(args)
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
@@ -278,9 +275,7 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
     rt = tools_pkg.get_runtime()
-    state = _active_project_state(args)
-    if state is None:
-        return _no_active_project()
+    state = require_project_state(args)
     project_id = str(state["project_id"])
     from film_pipeline.orchestration.router import get_blockers_for_state
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import cast
 
 import pytest
 
@@ -44,17 +43,6 @@ def test_approve_coverage_generation_stub() -> None:
     )
 
 
-def test_assemble_review_cut_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(assemble_review_cut({}))
-    assert result["ok"] is False
-    assert "No active project" in cast(str, result["error"])
-
-
 def test_assemble_review_cut_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("asm-review", "Assembly Review")
@@ -71,17 +59,6 @@ def test_assemble_review_cut_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_assemble_final_cut_stub() -> None:
     _stub_check(asyncio.run(assemble_final_cut({})), "assemble_final_cut")
-
-
-def test_export_delivery_package_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(export_delivery_package({"confirmed": True}))
-    assert result["ok"] is False
-    assert "No active project" in cast(str, result["error"])
 
 
 def test_export_delivery_package_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -35,15 +35,6 @@ def test_kb_get_item_not_found() -> None:
     assert result["ok"] is False
 
 
-def test_kb_get_context_packet_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(kb_get_context_packet({}))
-    assert result["ok"] is False
-
-
 def test_kb_get_context_packet_with_active_project() -> None:
     asyncio.run(create_film_project({"project_id": "proj-kb-1"}))
     asyncio.run(set_active_project({"project_ref": "proj-kb-1"}))

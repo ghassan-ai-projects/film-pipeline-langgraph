@@ -12,11 +12,11 @@ from film_pipeline.mcp.tools.generation._text_only import (
 )
 
 from ..helpers import (
-    _active_project_id,
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_id,
+    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -65,9 +65,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     created directly so the graph can advance to delivery.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
 
     if _is_text_only_policy(active):
@@ -136,9 +134,7 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     validate prompts during gen_planning review — before any spend.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _no_active_project()
+    project_id = require_project_id(args)
     from film_pipeline.operations.errors import ServiceError
     from film_pipeline.studio._operator_runtime import operator_service
 
@@ -152,9 +148,7 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
 async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
     """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     if _is_text_only_policy(active):
         return _ok(text_only=True, approved=0)

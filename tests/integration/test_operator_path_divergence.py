@@ -240,10 +240,6 @@ def test_mcp_revision_uses_resolved_project(
     assert requested["revision_note"] == "Clarify the character goal."
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="O-01 captures run_validation selecting the runtime active project.",
-)
 def test_mcp_validation_uses_resolved_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

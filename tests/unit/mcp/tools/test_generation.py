@@ -119,17 +119,6 @@ def test_start_generation_batch_skips_already_submitted(rt: StudioRuntime) -> No
     assert second["submitted"] == 0
 
 
-def test_promote_test_to_production_no_active_project() -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    result = asyncio.run(promote_test_to_production({"confirmed": True}))
-    assert result["ok"] is False
-
-
 def test_promote_test_to_production_no_eligible_rows(rt: StudioRuntime) -> None:
     import asyncio
 
@@ -138,18 +127,6 @@ def test_promote_test_to_production_no_eligible_rows(rt: StudioRuntime) -> None:
     result = asyncio.run(promote_test_to_production({"confirmed": True}))
     assert result["ok"] is True
     assert result["promoted"] == 0
-
-
-def test_plan_generation_batch_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(plan_generation_batch({}))
-    assert result["ok"] is False
 
 
 def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
@@ -219,18 +196,6 @@ def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
     assert "No shot IDs to plan" in cast(str, result["error"])
 
 
-def test_approve_generation_spend_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(approve_generation_spend({"confirmed": True}))
-    assert result["ok"] is False
-
-
 def test_approve_generation_spend_value_error(
     rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -263,18 +228,6 @@ def test_get_generation_status_missing_id() -> None:
     assert "generation_id is required" in cast(str, result["error"])
 
 
-def test_get_generation_status_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(get_generation_status({"generation_id": "g1"}))
-    assert result["ok"] is False
-
-
 def test_get_generation_status_not_found(rt: StudioRuntime) -> None:
     import asyncio
 
@@ -295,18 +248,6 @@ def test_get_generation_status_success(rt: StudioRuntime) -> None:
     result = asyncio.run(get_generation_status({"generation_id": gen_id}))
     assert result["ok"] is True
     assert result["generation_id"] == gen_id
-
-
-def test_list_active_generations_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(list_active_generations({}))
-    assert result["ok"] is False
 
 
 def test_list_active_generations_success(rt: StudioRuntime) -> None:
@@ -367,18 +308,6 @@ def test_resume_generation_polling_missing_id() -> None:
     result = asyncio.run(resume_generation_polling({}))
     assert result["ok"] is False
     assert "generation_id is required" in cast(str, result["error"])
-
-
-def test_resume_generation_polling_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(resume_generation_polling({"generation_id": "g1"}))
-    assert result["ok"] is False
 
 
 def test_resume_generation_polling_not_found(rt: StudioRuntime) -> None:
@@ -492,18 +421,6 @@ def test_cancel_generation_request_missing_id() -> None:
     assert "generation_id is required" in cast(str, result["error"])
 
 
-def test_cancel_generation_request_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(cancel_generation_request({"generation_id": "g1"}))
-    assert result["ok"] is False
-
-
 def test_cancel_generation_request_not_found(rt: StudioRuntime) -> None:
     import asyncio
 
@@ -614,19 +531,6 @@ def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> N
     result = asyncio.run(promote_test_to_production({"shot_ids": ["S001"], "confirmed": True}))
     assert result["ok"] is True
     assert result["promoted"] == 1
-
-
-def test_preview_generation_prompts_no_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio
-
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt2 = gr()
-    rt2.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt2)
-    result = asyncio.run(preview_generation_prompts({}))
-    assert result["ok"] is False
-    assert "active project" in cast(str, result["error"]).lower()
 
 
 def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime) -> None:

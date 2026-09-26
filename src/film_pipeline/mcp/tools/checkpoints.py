@@ -10,8 +10,8 @@ from film_pipeline.studio._operator_runtime import operator_service
 from .helpers import (
     _active_project_id,
     _error,
-    _no_active_project,
     _ok,
+    require_project_state,
 )
 
 _RECENT_CHECKPOINT_LIMIT = 20
@@ -44,9 +44,7 @@ async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
 
 async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
-        return _no_active_project()
+    active = require_project_state(args)
     reason = str(args.get("reason", "manual checkpoint"))
     try:
         cp = rt.create_checkpoint(
@@ -120,9 +118,7 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
         return _error("artifact_id is required.")
     checkpoint_id = str(args.get("checkpoint_id", ""))
     confirmed = bool(args.get("confirmed"))
-    active = rt.get_active()
-    if active is None:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     service = operator_service(rt)
     checkpoint = service.get_checkpoint(checkpoint_id) if checkpoint_id and not confirmed else None

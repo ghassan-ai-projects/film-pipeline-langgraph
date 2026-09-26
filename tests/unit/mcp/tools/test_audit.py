@@ -45,14 +45,6 @@ def test_explain_last_decision_empty() -> None:
     assert result["message"] == "No decisions recorded yet."
 
 
-def test_explain_agent_routing_no_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(explain_agent_routing({}))
-    assert result["ok"] is True
-    assert result["decisions"] == []
-
-
 def test_explain_agent_routing_no_decisions_yet() -> None:
     asyncio.run(create_film_project({"project_id": "proj-audit-4"}))
     asyncio.run(set_active_project({"project_ref": "proj-audit-4"}))

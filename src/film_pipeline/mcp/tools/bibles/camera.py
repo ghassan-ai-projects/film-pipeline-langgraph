@@ -8,9 +8,9 @@ import film_pipeline.mcp.tools as tools_pkg
 
 from ..helpers import (
     _error,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 from ._shared import (
     _chat_json_or_mock,
@@ -107,9 +107,7 @@ def _deliver_camera_bible(
 async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
     """Generate a CameraLanguageBible from FilmConstitution."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

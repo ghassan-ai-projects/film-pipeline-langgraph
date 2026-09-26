@@ -179,16 +179,26 @@ class TestMCPFlow:
         finally:
             loop.close()
 
-    def test_missing_project_errors(self) -> None:
+    def test_unknown_project_ref_errors(self) -> None:
         loop = asyncio.new_event_loop()
         try:
             r = loop.run_until_complete(set_active_project({"project_ref": "nonexistent"}))
             assert r.get("ok") is False
-
-            r = loop.run_until_complete(submit_idea({"idea": "x"}))
-            assert r.get("ok") is False
         finally:
             loop.close()
+
+    def test_submit_idea_without_an_active_project_raises(self) -> None:
+        """Called directly, the handler asserts the dispatch precondition.
+
+        `MCPServer.call` refuses the request with `no_active_project` before the
+        handler runs (see `test_active_project_precondition`). A direct caller
+        bypasses that gate, so the handler raises rather than returning a
+        wrong answer.
+        """
+        from film_pipeline.operations.errors import ProjectNotFoundError
+
+        with pytest.raises(ProjectNotFoundError):
+            asyncio.run(submit_idea({"idea": "x"}))
 
     def test_create_duplicate_project(self) -> None:
         loop = asyncio.new_event_loop()

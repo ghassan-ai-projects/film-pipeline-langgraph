@@ -29,6 +29,7 @@ from film_pipeline.mcp.contract import (
 )
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
+from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.projects import (
     AmbiguousProjectError,
     ProjectRecord,
@@ -256,6 +257,19 @@ class MCPServer:
             return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
+        except ProjectNotFoundError as exc:
+            # Handlers assert the active-project precondition instead of
+            # checking it (`require_project_id`). A raise here means the
+            # precondition did not actually hold, so it is reported with the
+            # same code the dispatch check would have used.
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.NO_ACTIVE_PROJECT,
+                    message=str(exc),
+                ),
+            )
         except Exception as exc:  # pragma: no cover — defensive
             return MCPResponse(
                 success=False,

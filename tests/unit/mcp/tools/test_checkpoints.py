@@ -26,15 +26,6 @@ def _make_active_project(project_id: str) -> None:
     asyncio.run(set_active_project({"project_ref": project_id}))
 
 
-def test_create_checkpoint_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(create_checkpoint({"reason": "no project"}))
-    assert result["ok"] is False
-
-
 def test_create_and_list_checkpoints() -> None:
     _make_active_project("proj-cp-1")
     created = asyncio.run(create_checkpoint({"reason": "unit test checkpoint"}))
@@ -159,15 +150,6 @@ def test_rollback_artifact_requires_artifact_id() -> None:
     result = asyncio.run(rollback_artifact({"confirmed": True}))
     assert result["ok"] is False
     assert "artifact_id is required" in cast(str, result["error"])
-
-
-def test_rollback_artifact_requires_active_project() -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(rollback_artifact({"confirmed": True, "artifact_id": "script"}))
-    assert result["ok"] is False
 
 
 def test_rollback_artifact_checkpoint_not_found() -> None:

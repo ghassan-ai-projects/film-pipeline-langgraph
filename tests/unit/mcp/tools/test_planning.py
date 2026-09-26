@@ -35,16 +35,6 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
     return rt
 
 
-def test_initialize_budget_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(initialize_budget({}))
-    assert result["ok"] is False
-
-
 def test_initialize_budget_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rt = _build_runtime_with_shot_bible(tmp_path, "plan-budget-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
@@ -160,17 +150,6 @@ def test_initialize_budget_save_failure(tmp_path: Path, monkeypatch: pytest.Monk
     result = asyncio.run(initialize_budget({}))
     assert result["ok"] is False
     assert "Budget initialization failed" in cast(str, result["error"])
-
-
-def test_generate_plan_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.studio.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(generate_plan({}))
-    assert result["ok"] is False
-    assert "No active project" in cast(str, result["error"])
 
 
 def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

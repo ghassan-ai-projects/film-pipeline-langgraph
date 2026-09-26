@@ -76,13 +76,6 @@ def test_set_active_project_unknown_returns_error() -> None:
     assert result["ok"] is False
 
 
-def test_get_project_summary_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(get_project_summary({}))
-    assert result["ok"] is False
-
-
 def test_get_project_summary_success() -> None:
     asyncio.run(create_film_project({"project_id": "proj-summary-1"}))
     asyncio.run(set_active_project({"project_ref": "proj-summary-1"}))

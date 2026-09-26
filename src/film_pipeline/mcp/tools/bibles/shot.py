@@ -9,9 +9,9 @@ import film_pipeline.mcp.tools as tools_pkg
 from ..helpers import (
     _error,
     _latest_artifact_version,
-    _no_active_project,
     _ok,
     _services,
+    require_project_state,
 )
 from ._shared import _extract_script_text
 
@@ -214,9 +214,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
     tracking state_in/state_out per shot.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _no_active_project()
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
