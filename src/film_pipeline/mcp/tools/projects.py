@@ -11,7 +11,6 @@ from film_pipeline.config.profile_resolver import (
     resolved_config_state_keys,
 )
 from film_pipeline.operations.operator import OperatorService
-from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -20,6 +19,7 @@ from .helpers import (
     _error,
     _ok,
     _services,
+    operator_service,
     require_project_state,
 )
 

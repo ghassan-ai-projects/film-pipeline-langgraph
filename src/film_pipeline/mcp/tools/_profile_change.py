@@ -25,13 +25,13 @@ from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeP
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage.contract import sanitize_artifact_id
-from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_id,
     _error,
     _ok,
     _services,
+    operator_service,
     require_project_id,
     require_project_state,
 )

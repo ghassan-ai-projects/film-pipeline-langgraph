@@ -43,9 +43,14 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SRC = _REPO_ROOT / "src" / "film_pipeline"
 _ARCHITECTURE_DOC = _REPO_ROOT / "docs" / "modular-architecture" / "03-target-architecture.md"
 
-# Recorded violations of the declared law, frozen at 2026-09-26 (45ba45f).
-# Keyed by (source package, forbidden destination package) -> edge count.
-# Lower a number when you remove edges; delete the row at zero. Never raise one.
+# Recorded violations of the declared law, frozen at 2026-09-26 (45ba45f) and
+# tightened as edges are removed. Keyed by (source, forbidden destination) ->
+# edge count. Lower a number when you remove edges; delete the row at zero.
+# Never raise one.
+#
+# Paid down so far: mcp->studio 10 -> 7, by routing the four `operator_service`
+# imports through `mcp.tools.helpers.operator_service` instead of importing the
+# composition root's private `_operator_runtime` module directly.
 KNOWN_DEPENDENCY_LAW_DEBT: dict[tuple[str, str], int] = {
     ("mcp", "agents"): 3,
     ("mcp", "budget"): 1,
@@ -57,7 +62,7 @@ KNOWN_DEPENDENCY_LAW_DEBT: dict[tuple[str, str], int] = {
     ("mcp", "post"): 2,
     ("mcp", "providers"): 6,
     ("mcp", "storage"): 6,
-    ("mcp", "studio"): 10,
+    ("mcp", "studio"): 7,
     ("schemas", "orchestration"): 1,
 }
 

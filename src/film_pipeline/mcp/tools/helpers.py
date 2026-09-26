@@ -118,6 +118,40 @@ def _services(rt: object) -> Any:
     return rt.services
 
 
+def _register_active_artifact_ref(
+    rt: Any, active: dict[str, Any], project_id: str, state_key: str, ref: object
+) -> None:
+    """Record an artifact reference on the active project and persist state.
+
+    The one definition of this write. It was previously defined byte-identically
+    in two modules and inlined a third time, so dropping the ``artifact_refs``
+    append from one copy failed no test in any suite — the three copies could
+    drift apart with nothing able to notice.
+    """
+    active[state_key] = ref
+    active.setdefault("artifact_refs", []).append(ref)
+    rt.projects[project_id] = active
+    rt._persist_project_state(project_id)
+
+
+def operator_service(rt: Any) -> Any:
+    """Return the operator service bound to ``rt``.
+
+    The single place this package obtains an ``OperatorService``. Four tool
+    modules previously imported ``studio._operator_runtime.operator_service``
+    directly — a private module in a package the dependency law forbids ``mcp``
+    from importing at all. Routing them through one accessor means the wiring
+    is named once, and if the composition root's shape changes only this
+    function moves.
+
+    The concrete factory still lives in the composition root, which is the
+    correct owner of that wiring; this is the ``mcp``-side seam for reaching it.
+    """
+    from film_pipeline.studio._operator_runtime import operator_service as _build
+
+    return _build(rt)
+
+
 def _coerce_runtime_arg(args: dict[str, object]) -> int:
     """Read the user-supplied expected length from tool args.
 

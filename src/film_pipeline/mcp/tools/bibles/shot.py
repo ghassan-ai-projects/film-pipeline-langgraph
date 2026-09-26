@@ -10,6 +10,7 @@ from ..helpers import (
     _error,
     _latest_artifact_version,
     _ok,
+    _register_active_artifact_ref,
     _services,
     require_project_state,
 )
@@ -175,13 +176,9 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
         matrix = result["shot_matrix"]
 
         ref = _persist_shot_matrix(store, project_id, matrix)
-        active["shot_matrix_ref"] = ref
-        active.setdefault("artifact_refs", []).append(ref)
+        _register_active_artifact_ref(rt, active, project_id, "shot_matrix_ref", ref)
 
         ledger_ref = _generate_continuity_ledger(store, project_id, matrix)
-
-        rt.projects[project_id] = active
-        rt._persist_project_state(project_id)
 
         return _ok(
             shot_matrix_ref=ref,

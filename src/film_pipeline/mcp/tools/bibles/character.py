@@ -9,6 +9,7 @@ import film_pipeline.mcp.tools as tools_pkg
 from ..helpers import (
     _error,
     _ok,
+    _register_active_artifact_ref,
     _services,
     require_project_state,
 )
@@ -17,7 +18,6 @@ from ._shared import (
     _constitution_theme,
     _load_artifact_if_present,
     _load_script_text,
-    _register_active_artifact_ref,
     _run_bible_agent,
     _save_visual_dev_candidate,
 )

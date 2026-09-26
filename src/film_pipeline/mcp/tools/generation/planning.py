@@ -136,7 +136,8 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     rt = tools_pkg.get_runtime()
     project_id = require_project_id(args)
     from film_pipeline.operations.errors import ServiceError
-    from film_pipeline.studio._operator_runtime import operator_service
+
+    from ..helpers import operator_service
 
     try:
         previews = operator_service(rt).preview_generation_prompts(project_id)
