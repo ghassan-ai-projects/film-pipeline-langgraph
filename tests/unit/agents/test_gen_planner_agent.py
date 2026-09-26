@@ -16,7 +16,7 @@ def _make_contract() -> AgentRegistration:
         agent_id="provider-planning-agent",
         family=AgentFamily.PROMPT_PLANNING,
         role=AgentRole.CREATOR,
-        capabilities=["provider_selection", "cost_estimation"],
+        capabilities=["provider_selection", "dispatch_planning"],
         input_artifacts=["prompt_registry", "master_film_matrix", "resolved_config"],
         output_artifacts=["provider_plan"],
     )

@@ -301,7 +301,7 @@ def _advance_result(
 
 def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     """Compute eligible actions from current state including provider health,
-    budget, failure decisions, and revision state.
+    failure decisions, and revision state.
 
     ``facts`` supplies the orchestrator reads this law depends on. `governance`
     sits below `orchestration` in the layer order, so the orchestrator facts are
@@ -311,7 +311,6 @@ def compute_actions(state: dict[str, Any], facts: GateFacts) -> RouterResult:
     1. Human approval required → wait for human
     2. Blocking failure decision → escalate_to_failure_handler or continue_unrelated_work
     3. Provider-blocked generation → continue_unrelated_work (if non-gen phase possible)
-    4. Budget blocked → escalate_to_human
     5. Blocking issues → repair or escalate
     6. Pending revision → revise
     7. Not approved → present review package

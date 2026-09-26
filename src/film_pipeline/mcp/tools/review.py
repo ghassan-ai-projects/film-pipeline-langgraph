@@ -81,7 +81,7 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
 
     Returns a structured ReviewPackage instead of a plain artifact list.
     The package includes candidate vs approved diffs, validation results,
-    open issues, risks, cost impact, and recommended next actions.
+    open issues, risks, and recommended next actions.
     """
     rt = tools_pkg.get_runtime()
     state = require_project_state(args)
@@ -134,7 +134,7 @@ def _build_orchestrator_recommendation(state: dict[str, Any], router_result: Any
     if action == "handle_blockers":
         return "Blocking issues detected. Resolve before advancing."
     if action == "escalate_to_human":
-        return "Pipeline requires human decision — budget, provider, or quality threshold reached."
+        return "Pipeline requires human decision — provider or quality threshold reached."
     if action == "escalate_to_failure_handler":
         return "Provider error requires triage by failure-handling agent."
     if action == "continue_unrelated_work":

@@ -3,7 +3,7 @@
 The gate law (`governance.actions`) decides which actions are eligible for a
 phase. That decision legitimately depends on orchestrator facts — whether a
 blocking failure exists, which providers are blocked, whether a revision is
-pending, whether the budget threshold tripped.
+pending.
 
 Those facts live in orchestrator state, which is `orchestration` (L9), while
 `governance` sits below it (L8) and must not import it. This module declares the
