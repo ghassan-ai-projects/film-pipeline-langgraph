@@ -7,7 +7,6 @@ generation phase. No provider calls happen here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -92,7 +91,6 @@ class GenerationLedgerManager:
         prompt_ref: str = "",
         reference_refs: list[str] | None = None,
         mode: GenerationMode = GenerationMode.TEST,
-        estimated_costs: Mapping[str, float] | None = None,
     ) -> GenerationLedger:
         """Add a row per shot to the ledger with status PREPARED.
 
@@ -118,7 +116,6 @@ class GenerationLedgerManager:
                 reference_refs=reference_refs or [],
                 status=GenerationStatus.PREPARED,
                 next_action="submit",
-                estimated_cost_usd=max(0.0, float((estimated_costs or {}).get(sid, 0.0))),
             )
             ledger.rows.append(row)
 
@@ -127,25 +124,18 @@ class GenerationLedgerManager:
 
     # ── approve spend ────────────────────────────────────────────────────
 
-    def approve_spend(self, project_id: str, max_cost_usd: float = -1.0) -> GenerationLedger:
+    def approve_spend(self, project_id: str) -> GenerationLedger:
         """Mark PREPARED rows as SUBMITTED and record submit time.
 
         This is a local state transition only. It does not call any provider.
 
         Skips rows already SUBMITTED (duplicate-submit prevention).
-        If *max_cost_usd* is set (>= 0), rejects if estimated cost exceeds budget.
         """
         ledger = self.load(project_id)
-        new_rows, submitted_count = _submit_prepared_rows(ledger.rows)
-        _raise_if_over_budget(new_rows, max_cost_usd, submitted_count)
+        new_rows, _submitted_count = _submit_prepared_rows(ledger.rows)
         ledger = ledger.model_copy(update={"rows": new_rows})
         self._persist(ledger)
         return ledger
-
-    def estimate_total_cost(self, project_id: str) -> float:
-        """Sum estimated_cost_usd for all non-terminal rows."""
-        ledger = self.load(project_id)
-        return sum(r.estimated_cost_usd for r in ledger.rows if not is_terminal(r.status))
 
     # ── promote ──────────────────────────────────────────────────────────
 
@@ -275,24 +265,3 @@ def _submit_prepared_rows(
         new_rows.append(row)
 
     return new_rows, submitted_count
-
-
-def _raise_if_over_budget(
-    rows: list[GenerationLedgerRow],
-    max_cost_usd: float,
-    submitted_count: int,
-) -> None:
-    """Reject the batch when estimated cost of SUBMITTED rows exceeds *max_cost_usd*.
-
-    A negative *max_cost_usd* means "no limit". Raises instead of persisting, so a
-    rejection leaves the stored ledger untouched.
-    """
-    if max_cost_usd < 0:
-        return
-    total_cost = sum(r.estimated_cost_usd for r in rows if r.status == GenerationStatus.SUBMITTED)
-    if total_cost > max_cost_usd:
-        raise ValueError(
-            f"Total estimated cost ${total_cost:.2f} exceeds budget ${max_cost_usd:.2f}. "
-            f"({submitted_count} new request(s) would be submitted). "
-            "Reduce batch or increase max_cost_usd."
-        )

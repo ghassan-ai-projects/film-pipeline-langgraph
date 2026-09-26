@@ -65,7 +65,6 @@ from film_pipeline.mcp.tools.kb import kb_search as kb_search
 from film_pipeline.mcp.tools.operator import add_operator_comment as add_operator_comment
 from film_pipeline.mcp.tools.operator import list_operator_comments as list_operator_comments
 from film_pipeline.mcp.tools.planning import generate_plan as generate_plan
-from film_pipeline.mcp.tools.planning import initialize_budget as initialize_budget
 from film_pipeline.mcp.tools.projects import create_film_project as create_film_project
 from film_pipeline.mcp.tools.projects import find_project as find_project
 from film_pipeline.mcp.tools.projects import get_active_project as get_active_project

@@ -64,7 +64,6 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
         return _complete_text_only_generation(rt, active, project_id)
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.pricing import estimate_cost_for_duration
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
@@ -82,22 +81,6 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
             "No shot IDs to plan. Provide shot_ids or approve shot_bible so the shot matrix exists."
         )
 
-    from film_pipeline.generation.executor import GenerationExecutor
-
-    shot_rows = {
-        str(row.get("shot_id", "")): row
-        for row in GenerationExecutor(
-            _services(rt).artifact_store, rt.provider_adapters
-        ).load_shot_rows(project_id)
-    }
-    estimated_costs = {
-        shot_id: estimate_cost_for_duration(
-            provider,
-            model,
-            float(shot_rows.get(shot_id, {}).get("duration_seconds", 5) or 5),
-        )
-        for shot_id in shot_ids
-    }
     ledger = mgr.plan_batch(
         project_id=project_id,
         shot_ids=shot_ids,
@@ -105,7 +88,6 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
         model=model,
         prompt_ref=prompt_ref,
         mode=mode,
-        estimated_costs=estimated_costs,
     )
     _sync_generation_requests_from_ledger(active, ledger.rows)
     return _ok(

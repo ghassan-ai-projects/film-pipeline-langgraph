@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.budget import cap_for
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
 from .helpers import (
@@ -21,61 +19,6 @@ from .helpers import (
 #: Fallback cap when neither the caller nor the project supplies one. Kept
 #: explicit and named so it is visible as the last-resort default it is.
 _DEFAULT_CAP_USD: float = 100.0
-
-
-async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
-    """Create the initial BudgetState for a project."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
-    project_id = str(active["project_id"])
-    raw_cap = args.get("cap_usd")
-    if raw_cap is None:
-        # Read the project's configured cap rather than carrying a rival literal.
-        # `cap_for` returns unlimited when nothing is configured; that is a real
-        # gap (profiles declare `project_cap_usd`, but no creation path writes it
-        # onto the project), so this preserves the previous *effective* behavior
-        # of "no cap supplied means no limit" instead of silently inventing 100.
-        cap = cap_for(active)
-        if not math.isfinite(cap):
-            cap = _DEFAULT_CAP_USD
-    else:
-        try:
-            cap = float(cast(float, raw_cap))
-        except (TypeError, ValueError):
-            return _error("cap_usd must be a number.")
-    if not math.isfinite(cap) or cap < 0:
-        return _error("cap_usd must be a finite, non-negative number.")
-    store = _services(rt).artifact_store
-
-    try:
-        from film_pipeline.schemas.base import ArtifactType
-        from film_pipeline.schemas.budget import BudgetState
-
-        budget = BudgetState(
-            project_id=project_id,
-            cap_usd=cap,
-            spent_usd=0.0,
-            per_phase_caps_usd={
-                "visual_dev": cap * 0.3,
-                "generation": cap * 0.6,
-                "post": cap * 0.1,
-            },
-            max_auto_approved_cost_usd=1.0,
-            human_approval_above_usd=5.0,
-        )
-        ref = _save_gen_planning_candidate(
-            store,
-            project_id,
-            "budget_state",
-            ArtifactType.BUDGET_STATE,
-            "mcp.initialize_budget",
-            budget,
-        )
-        _register_active_artifact_ref(rt, active, project_id, "budget_state_ref", ref)
-
-        return _ok(budget_state_ref=ref, cap_usd=cap, remaining_usd=budget.remaining_usd)
-    except Exception as exc:
-        return _error(f"Budget initialization failed: {exc}")
 
 
 def _save_gen_planning_candidate(

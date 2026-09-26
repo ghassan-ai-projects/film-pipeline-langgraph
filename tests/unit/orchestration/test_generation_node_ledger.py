@@ -121,7 +121,7 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     ledger = GenerationLedgerManager(services.artifact_store).load(project_id)
-    assert ledger.rows[0].estimated_cost_usd == 1.44
+    assert ledger.rows[0].shot_id
 
 
 def test_generation_node_falls_back_without_services(tmp_path: Path) -> None:

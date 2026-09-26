@@ -51,7 +51,6 @@ _TOOL_MODULES: dict[str, str] = {
     "get_project_summary": "film_pipeline.mcp.tools.projects",
     "get_runtime_mode": "film_pipeline.mcp.tools.config",
     "get_validation_report": "film_pipeline.mcp.tools.validation",
-    "initialize_budget": "film_pipeline.mcp.tools.planning",
     "inspect_artifact": "film_pipeline.mcp.tools.artifacts",
     "inspect_coverage_group": "film_pipeline.mcp.tools.assembly",
     "inspect_profile": "film_pipeline.mcp.tools.config",

@@ -114,26 +114,13 @@ def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices |
         return
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.pricing import estimate_cost_for_duration
 
     project_id = str(new_state.get("project_id", ""))
     mgr = GenerationLedgerManager(services.artifact_store)
 
     resolved_requests = _resolve_request_prompts(new_state, services)
     groups = _group_requests_by_batch(resolved_requests)
-    matrix_rows = {
-        str(row.get("shot_id", "")): row for row in _load_matrix_rows(new_state, services)
-    }
-
     for (provider, model, mode_str, prompt_ref), shot_ids in groups.items():
-        estimated_costs = {
-            shot_id: estimate_cost_for_duration(
-                provider,
-                model,
-                float(matrix_rows.get(shot_id, {}).get("duration_seconds", 5) or 5),
-            )
-            for shot_id in shot_ids
-        }
         mgr.plan_batch(
             project_id=project_id,
             shot_ids=shot_ids,
@@ -141,7 +128,6 @@ def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices |
             model=model,
             prompt_ref=prompt_ref,
             mode=_parse_generation_mode(mode_str),
-            estimated_costs=estimated_costs,
         )
 
     _approve_spend(mgr, project_id)

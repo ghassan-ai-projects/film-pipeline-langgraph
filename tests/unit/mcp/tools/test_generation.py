@@ -177,7 +177,7 @@ def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
     assert result["planned"] == 2
 
 
-def test_plan_generation_batch_records_catalog_estimated_cost(rt: StudioRuntime) -> None:
+def test_plan_generation_batch_creates_ledger_rows(rt: StudioRuntime) -> None:
     result = asyncio.run(
         plan_generation_batch(
             {
@@ -192,8 +192,11 @@ def test_plan_generation_batch_records_catalog_estimated_cost(rt: StudioRuntime)
     assert rt.services is not None
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
+    # Cost recording was removed with the cost feature; the row itself is the
+    # observable outcome of planning.
     rows = GenerationLedgerManager(rt.services.artifact_store).list_rows("gen-start-test")
-    assert rows[0].estimated_cost_usd == pytest.approx(0.9)
+    assert [row.shot_id for row in rows] == ["S001"]
+    assert rows[0].provider == "seedance-openrouter"
 
 
 def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:

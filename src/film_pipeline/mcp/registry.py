@@ -74,7 +74,7 @@ from film_pipeline.mcp.tools.kb import (
     kb_search,
 )
 from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
-from film_pipeline.mcp.tools.planning import generate_plan, initialize_budget
+from film_pipeline.mcp.tools.planning import generate_plan
 from film_pipeline.mcp.tools.projects import (
     create_film_project,
     find_project,
@@ -332,14 +332,6 @@ def register_all_tools(registry: ToolRegistry) -> None:
         "generate_shot_bible",
         ToolGroup.GENERATION,
         generate_shot_bible,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "initialize_budget",
-        ToolGroup.GENERATION,
-        initialize_budget,
         mutates=True,
         active_project=True,
     )

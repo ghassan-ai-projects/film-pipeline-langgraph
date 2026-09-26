@@ -32,7 +32,6 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
         provider_job_id=row.provider_job_id,
         submitted_at=str(row.submitted_at) if row.submitted_at else None,
         poll_count=row.poll_count,
-        estimated_cost_usd=row.estimated_cost_usd,
         next_action=row.next_action,
     )
 

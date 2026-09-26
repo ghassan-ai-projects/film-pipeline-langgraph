@@ -147,33 +147,6 @@ class TestGenerationLedgerManager:
         row = mgr.get_row("proj-14", "any")
         assert row is None
 
-    def test_approve_spend_budget_gate_rejects(self, tmp_path: Path) -> None:
-        """Budget gate: reject if total cost exceeds max_cost_usd."""
-        store = ArtifactStore(root=tmp_path / "artifacts")
-        mgr = GenerationLedgerManager(store)
-        mgr.plan_batch("proj-budget", ["S001", "S002"], "p", "m")
-        # Set estimated costs
-        ledger = mgr.load("proj-budget")
-        for row in ledger.rows:
-            mgr.update_row("proj-budget", row.generation_id, estimated_cost_usd=50.0)
-        # Budget of 60 should reject (total is 100)
-        raised = False
-        try:
-            mgr.approve_spend("proj-budget", max_cost_usd=60.0)
-        except ValueError:
-            raised = True
-        assert raised
-
-    def test_approve_spend_budget_gate_passes(self, tmp_path: Path) -> None:
-        """Budget gate: passes when total cost is within limit."""
-        store = ArtifactStore(root=tmp_path / "artifacts")
-        mgr = GenerationLedgerManager(store)
-        mgr.plan_batch("proj-budget-ok", ["S001"], "p", "m")
-        ledger = mgr.load("proj-budget-ok")
-        mgr.update_row("proj-budget-ok", ledger.rows[0].generation_id, estimated_cost_usd=25.0)
-        ledger = mgr.approve_spend("proj-budget-ok", max_cost_usd=100.0)
-        assert ledger.rows[0].status == GenerationStatus.SUBMITTED
-
     def test_approve_spend_no_budget_limit(self, tmp_path: Path) -> None:
         """No budget limit: max_cost_usd=-1 passes everything."""
         store = ArtifactStore(root=tmp_path / "artifacts")
@@ -183,17 +156,6 @@ class TestGenerationLedgerManager:
         mgr.update_row("proj-no-limit", ledger.rows[0].generation_id, estimated_cost_usd=9999.0)
         ledger = mgr.approve_spend("proj-no-limit")
         assert ledger.rows[0].status == GenerationStatus.SUBMITTED
-
-    def test_estimate_total_cost(self, tmp_path: Path) -> None:
-        """Estimate total cost of non-terminal rows."""
-        store = ArtifactStore(root=tmp_path / "artifacts")
-        mgr = GenerationLedgerManager(store)
-        mgr.plan_batch("proj-cost", ["S001", "S002"], "p", "m")
-        ledger = mgr.load("proj-cost")
-        mgr.update_row("proj-cost", ledger.rows[0].generation_id, estimated_cost_usd=10.0)
-        mgr.update_row("proj-cost", ledger.rows[1].generation_id, estimated_cost_usd=20.0)
-        total = mgr.estimate_total_cost("proj-cost")
-        assert total == 30.0
 
     def test_approve_spend_skips_already_submitted(self, tmp_path: Path) -> None:
         """Duplicate-prevention: already-SUBMITTED rows stay as-is."""

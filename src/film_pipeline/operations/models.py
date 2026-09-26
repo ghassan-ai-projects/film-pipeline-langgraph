@@ -105,7 +105,6 @@ class GenerationWorkspace:
     phase: str
     provider: str
     model: str
-    estimated_cost_usd: float
     rows: list[dict[str, Any]] = field(default_factory=list)
     planned: int = 0
     submitted: int = 0
