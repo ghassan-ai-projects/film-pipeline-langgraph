@@ -85,3 +85,60 @@ def test_the_sweep_finds_functions_to_compare() -> None:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         )
     assert count > 100, f"only found {count} module-level functions; the sweep is broken"
+
+
+def test_the_import_target_resolver_has_one_implementation() -> None:
+    """The shared resolver must stay shared.
+
+    `tests/unit/_import_guard.py` opens with "It is one rule, so it lives here",
+    and it is load-bearing for four boundary guards: `config`, `providers`,
+    `schemas` and `studio`. It had accumulated **four** implementations of the
+    same algorithm — one in each of three guard files plus the shared one — and
+    three of them were AST-identical to the original. A divergence between them
+    would mean one guard silently stops guarding, which is the failure mode this
+    whole file exists to prevent.
+
+    A guard file may keep a thin adapter that narrows the signature (the studio
+    guard returns a `set` and takes a package string), but not a second copy of
+    the resolution algorithm.
+    """
+    import ast as _ast
+
+    tests_root = _REPO_ROOT / "tests"
+    resolver_names = {"import_targets", "_import_targets"}
+    defining: list[str] = []
+    duplicated_bodies: list[str] = []
+
+    for path in tests_root.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        source = path.read_text()
+        tree = _ast.parse(source)
+        for node in tree.body:
+            if not isinstance(node, _ast.FunctionDef) or node.name not in resolver_names:
+                continue
+            relative = str(path.relative_to(tests_root))
+            defining.append(f"{relative}::{node.name}")
+
+            # The shared helper IS the implementation; only other files must delegate.
+            if relative.endswith("_import_guard.py"):
+                continue
+
+            # A delegating adapter has one statement that calls the shared helper.
+            body = [
+                stmt
+                for stmt in node.body
+                if not (isinstance(stmt, _ast.Expr) and isinstance(stmt.value, _ast.Constant))
+            ]
+            calls_shared = "import_targets(" in _ast.unparse(
+                _ast.Module(body=body, type_ignores=[])
+            )
+            if not calls_shared:
+                duplicated_bodies.append(f"{relative}::{node.name}")
+
+    assert defining, "no import-target resolver found; the sweep is looking in the wrong place"
+
+    assert not duplicated_bodies, (
+        "these re-implement the shared import-target resolver instead of "
+        f"delegating to tests/unit/_import_guard.import_targets: {duplicated_bodies}"
+    )

@@ -3,36 +3,30 @@
 from __future__ import annotations
 
 import ast
-import importlib.util
 from pathlib import Path
 
 import pytest
+from tests.unit._import_guard import import_targets
 
 _APP_DIR = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "studio"
 _FORBIDDEN_IMPORT = "film_pipeline.mcp"
 
 
 def _import_targets(tree: ast.Module, current_package: str) -> set[str]:
-    """Resolve the module targets named by absolute and relative imports."""
-    targets: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            targets.update(alias.name for alias in node.names)
-            continue
-        if not isinstance(node, ast.ImportFrom):
-            continue
+    """Resolve the module targets named by absolute and relative imports.
 
-        if node.level:
-            relative_name = f"{'.' * node.level}{node.module or ''}"
-            base_module = importlib.util.resolve_name(relative_name, current_package)
-        else:
-            base_module = node.module or ""
-        if base_module:
-            targets.add(base_module)
-            targets.update(
-                f"{base_module}.{alias.name}" for alias in node.names if alias.name != "*"
-            )
-    return targets
+    Delegates to the shared resolver in `tests.unit._import_guard`, which the
+    `providers` and `schemas` boundary guards already use. This file carried its
+    own copy of the same algorithm — including `importlib.util.resolve_name` for
+    the relative case — and two resolvers behind three guards means a divergence
+    could unguard one of them without any test noticing. The two agreed on every
+    form when compared, so this is a consolidation, not a repair.
+    """
+    found: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            found.update(import_targets(node, tuple(current_package.split("."))))
+    return found
 
 
 def _source_module(path: Path) -> tuple[str, str]:
