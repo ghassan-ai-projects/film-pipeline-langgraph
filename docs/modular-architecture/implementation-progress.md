@@ -1367,3 +1367,66 @@ one that forces bad routing.
 | Sites re-deriving the issue-severity rule | 19 across 16 files | **0** |
 | Definitions of the predicate | 1 real + 6 ad-hoc readers | **2 in one owner** |
 | Live crashes on a malformed issue list | 1 | **0** |
+
+## AGENT-16 — a JSON array aborted the model-output extraction chain (2026-09-26)
+
+Found by sweeping for **structurally near-duplicate helpers** (AST bodies at ≥0.90
+similarity), a different axis from AGENT-14's exact-match sweep. It surfaced
+`agents/_json_extraction._parse_direct_json` and
+`validation/base._parse_json_dict_or_none` as byte-identical — and investigating
+*that* is what exposed the real defect underneath.
+
+### The bug
+
+`extract_json_object` is the four-strategy recovery chain behind
+`ModelAdapter.chat_json`, so every agent requesting structured output depends on
+it. Three of the four strategies caught only `json.JSONDecodeError`, but
+`dict(result)` raises **`ValueError`** — not `JSONDecodeError`, not `TypeError` —
+when the parsed JSON is an array:
+
+```
+extract_json_object('[{"e": 5}]')
+  -> ValueError: dictionary update sequence element #0 has length 1
+```
+
+The exception escaped the strategy and aborted the chain, so `chat_json`
+surfaced that dict-construction message instead of its intended actionable
+"not valid JSON after 4 extraction strategies" error with a response preview.
+**An array is a normal shape for a model to return.**
+
+All four strategies now catch `(JSONDecodeError, TypeError, ValueError)`. A
+single-element object array is recovered (`{"e": 5}`); other arrays and JSON
+scalars degrade to `None` so the caller reports its own error.
+
+### Why it survived
+
+`extract_json_object` had **zero direct tests**. The new
+`tests/unit/agents/test_json_extraction.py` covers all four strategies, the array
+and scalar shapes that crashed, and the public path; restoring the bug fails
+**10 of its 19 tests**.
+
+### A guard refused my first fix, and it was right
+
+I also tried to delete the duplicate chain in `validation/base.py` by importing
+the tested extractor. `test_boundary_law.py` rejected it:
+`validation -> agents._json_extraction` is a **cross-package private reach-in** —
+precisely the shape `06` §4 *does* endorse tightening, unlike the layer law that
+guard was re-scoped away from in AGENT-12.
+
+So I reverted the routing and kept only the bug fix. **The duplication is recorded
+rather than paid for with a worse dependency** — which is the right trade when one
+option removes a duplicate and the other adds a boundary violation.
+
+### Note on the measurement approach
+
+Two sweeps now, two real defects:
+
+| Sweep | Axis | Found |
+|---|---|---|
+| AGENT-14 | exact function-body matches | 3 duplicates, one a dead module |
+| AGENT-15 | string literals compared in 3+ files | 19 sites, one a live MCP crash |
+| AGENT-16 | structural similarity ≥0.90 | a duplicate *and* a crash behind it |
+
+The pattern worth keeping: the duplicate was the *lead*, not the finding. Each
+time, asking "why do these two exist and how do they differ?" surfaced a defect
+that neither a duplicate count nor a test run would have shown.
