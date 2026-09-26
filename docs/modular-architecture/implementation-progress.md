@@ -1266,3 +1266,46 @@ packages with `__all__` and found **zero** findings — every package already
 declares everything it defines. Building it would have been metadata for its own
 sake, so it was skipped. A `ModuleContract` in every `__init__.py` is explicitly
 rejected by `06`.
+
+## AGENT-14 — duplicated function bodies: 3 → 0 (2026-09-26)
+
+The sound clause of the standing objective — *"remove real duplication"* — pursued
+by measuring rather than searching: an AST sweep comparing normalized bodies of
+every module-level function. It found **exactly three** cross-file duplicates.
+
+| Duplicate | Finding | Resolution |
+|---|---|---|
+| `_collect_updates` — `nodes/qc.py` + `nodes/visual.py`, 19 lines byte-identical | The **node-boundary update rule**: which refs and issues cross the boundary, which keys carry. Two authors for one rule, nothing tying them together. | Moved to `nodes/_shared.py`, which already owned its `_is_new_ref`/`_is_new_issue` prerequisites. |
+| `missing_profile_credentials` — `studio/_provider_profiles.py` + `_operator_runtime.py` | **More than duplication:** `_provider_profiles.py` had **zero production importers** — only a test imported it — and its `register_profile_providers` was a narrower copy typed to `StudioRuntime` instead of `RuntimePort`. | Module deleted; the test retargeted at the live implementation. All three assertions passed unchanged, which is what proves the duplicate was redundant. |
+| `_is_text_only_policy` — `operations/_generation_ops.py` + `mcp/tools/generation/_text_only.py` | The literal `"text_only"` appeared in **three** places, across **12 call sites** in two packages. | The vocabulary owner is `filmspec`, so `TEXT_ONLY_POLICY` and `is_text_only_policy` live there now; the predicate also handles non-dict input instead of raising. |
+
+### The guard
+
+`tests/unit/architecture/test_no_duplicate_functions.py` — module-level functions
+only, exact body matches only. Methods are **excluded on purpose**: same-shaped
+methods on different classes are usually a real contract (two adapters
+implementing one port), not duplication. Near-duplicates are out of scope; they
+need judgement, not a string comparison.
+
+**Falsified properly.** My first attempt used a shell heredoc that silently failed
+to apply the mutation, so the guard appeared to pass — the same false-null trap
+recorded in AGENT-11. The working falsification copies `_collect_updates` under a
+new name into a second module of a **temp tree** and confirms the predicate
+reports both sites. (Temp-tree mutation is safe here because the predicate reads
+files by path rather than importing them; earlier rounds established that
+import-based mutation in a clone gives false results.)
+
+### Collateral the tests caught
+
+Moving `_collect_updates` correctly failed `test_channel_registry.py`, which
+requires every boundary-key writer to carry a recorded disposition. It checks
+**both** directions at once: the new `_shared.py` site was unaccounted *and* two
+old `qc.py`/`visual.py` rows had gone stale. One row added, two removed.
+
+### Re-measured
+
+| Measure | Before | After |
+|---|---:|---:|
+| Cross-file duplicate function bodies | 3 | **0** |
+| Dead modules with no production importer | 1 | **0** |
+| Definitions of the text-only policy | 2 + 3 literals | **1 + 1** |
