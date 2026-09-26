@@ -55,6 +55,29 @@ KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
     ("mcp", "studio._operator_runtime"): 1,
 }
 
+# Private *symbols* imported across a package boundary. A narrower concern than a
+# private module: these are individual underscore-prefixed functions or values,
+# not whole modules, so the encapsulation break is real but smaller. Tracked
+# separately rather than folded into the row above, because conflating the two
+# would let a genuine module-level reach-in hide inside a symbol count.
+#
+# All five were invisible until the detector was widened to read imported names
+# and not just module paths — see the docstring on `_measure_private_reach_ins`.
+KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
+    # `agents` re-exports these two from `providers.http_transport` under the
+    # historical alias form, deliberately, so old import paths keep working.
+    # Retiring the aliases is a separate, consumer-visible change.
+    ("agents", "providers._accepts_timeout_kw"): 1,
+    ("agents", "providers._open_with_timeout"): 1,
+    # `studio` reaches orchestration internals: the services context variable it
+    # sets and resets around graph runs, the phase-node table, and the validator
+    # runner. These are the composition root driving the graph, which is its job,
+    # but it does so through private names rather than a declared seam.
+    ("studio", "orchestration._PHASE_NODES"): 1,
+    ("studio", "orchestration._SERVICES_CTX"): 1,
+    ("studio", "orchestration._run_validators"): 1,
+}
+
 # `operations/ports.py` mirrors these two names on purpose so `RuntimePort` can
 # describe the runtime surface it adapts. That file declares the debt.
 _PORT_MIRRORED_PRIVATES = {"_persist_project_state", "_record_audit"}
@@ -94,24 +117,58 @@ def _source_files() -> list[Path]:
     return [p for p in _SRC.rglob("*.py") if "__pycache__" not in p.parts]
 
 
-def _measure_private_reach_ins() -> dict[tuple[str, str], int]:
-    """Count imports of another package's underscore-prefixed module."""
-    counts: dict[tuple[str, str], int] = {}
+def _measure_private_imports() -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], int]]:
+    """Count cross-package imports of private MODULES and of private SYMBOLS.
+
+    Two syntactic forms both count, and the earlier detector saw only the first:
+
+        from film_pipeline.storage._layout import read_json   # private module
+        from film_pipeline.storage import _layout             # private symbol
+
+    Widening it to read imported names as well as module paths exposed five real
+    reach-ins it had been blind to. They are returned separately because the
+    severities differ: importing another package's whole private module is a
+    larger encapsulation break than importing one private function from it.
+    """
+    modules: dict[tuple[str, str], int] = {}
+    symbols: dict[tuple[str, str], int] = {}
+
     for path in _source_files():
         parts = path.relative_to(_SRC).parts
         source = parts[0] if len(parts) > 1 else None
         if source is None:
             continue
-        for module in _film_pipeline_imports(ast.parse(path.read_text())):
-            segments = module.split(".")
-            if len(segments) < 3:
+
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
                 continue
-            destination, leaf = segments[1], segments[-1]
-            if destination == source or not leaf.startswith("_"):
+            if not node.module.startswith("film_pipeline."):
                 continue
-            key = (source, f"{destination}.{leaf}")
-            counts[key] = counts.get(key, 0) + 1
-    return counts
+            segments = node.module.split(".")
+            owner = segments[1]
+            if owner == source:
+                continue
+
+            if len(segments) >= 3 and segments[-1].startswith("_"):
+                key = (source, f"{owner}.{segments[-1]}")
+                modules[key] = modules.get(key, 0) + 1
+
+            for alias in node.names:
+                if alias.name.startswith("_"):
+                    key = (source, f"{owner}.{alias.name}")
+                    symbols[key] = symbols.get(key, 0) + 1
+
+    return modules, symbols
+
+
+def _measure_private_reach_ins() -> dict[tuple[str, str], int]:
+    """Private-module reach-ins only (the narrower, older measurement)."""
+    return _measure_private_imports()[0]
+
+
+def _measure_private_symbol_imports() -> dict[tuple[str, str], int]:
+    """Private-symbol reach-ins only."""
+    return _measure_private_imports()[1]
 
 
 # --- 1. No cross-package private reach-in ------------------------------------
@@ -154,6 +211,68 @@ def test_recorded_reach_ins_are_not_stale() -> None:
 def test_recorded_reach_in_still_exists(pair: tuple[str, str]) -> None:
     assert _measure_private_reach_ins().get(pair, 0) > 0, (
         f"{pair[0]} -> {pair[1]} no longer reaches in; delete its row."
+    )
+
+
+def test_no_new_private_symbol_import() -> None:
+    """Private *symbols* imported across a package boundary, tracked separately.
+
+    Kept distinct from the module baseline above: importing another package's
+    whole private module is a larger encapsulation break than importing one
+    private function from it, and folding them together would let the former hide
+    inside the latter's count.
+    """
+    actual = _measure_private_symbol_imports()
+    new = sorted(set(actual) - set(KNOWN_PRIVATE_SYMBOL_IMPORTS))
+
+    assert not new, (
+        "these import a PRIVATE symbol from another package: "
+        f"{new}. Import a public name, or record it in "
+        "KNOWN_PRIVATE_SYMBOL_IMPORTS with a reason."
+    )
+
+
+def test_recorded_private_symbol_imports_have_not_grown() -> None:
+    actual = _measure_private_symbol_imports()
+    grown = {
+        pair: (KNOWN_PRIVATE_SYMBOL_IMPORTS[pair], actual[pair])
+        for pair in sorted(KNOWN_PRIVATE_SYMBOL_IMPORTS)
+        if actual.get(pair, 0) > KNOWN_PRIVATE_SYMBOL_IMPORTS[pair]
+    }
+    assert not grown, f"private symbol imports grew (recorded -> actual): {grown}."
+
+
+def test_recorded_private_symbol_imports_are_not_stale() -> None:
+    actual = _measure_private_symbol_imports()
+    stale = {
+        pair: (recorded, actual.get(pair, 0))
+        for pair, recorded in sorted(KNOWN_PRIVATE_SYMBOL_IMPORTS.items())
+        if actual.get(pair, 0) < recorded
+    }
+    assert not stale, (
+        f"private symbol imports improved (recorded -> actual): {stale}. Tighten the rows."
+    )
+
+
+def test_the_detector_sees_the_name_form_of_a_reach_in() -> None:
+    """Guard the guard: the name form was invisible to an earlier version.
+
+    That version inspected only module paths, so it required three dotted
+    segments and could not see `from film_pipeline.<pkg> import _private` at all.
+    A probe injecting exactly that shape into a temp tree was not reported. Both
+    forms must stay visible.
+    """
+    name_form = ast.parse("from film_pipeline.storage import _layout")
+    hits = [
+        alias.name
+        for node in ast.walk(name_form)
+        if isinstance(node, ast.ImportFrom) and node.module == "film_pipeline.storage"
+        for alias in node.names
+        if alias.name.startswith("_")
+    ]
+    assert hits == ["_layout"], (
+        "the name form `from film_pipeline.<pkg> import _private` must be visible "
+        "to the detector, not only the dotted-path form"
     )
 
 
