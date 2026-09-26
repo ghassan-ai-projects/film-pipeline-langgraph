@@ -129,7 +129,7 @@ def _populate_project_state(
 
 def _audit_project_creation(rt: Any, project_id: str, runtime_mode: str, server_mode: str) -> None:
     """Record the project creation in the runtime audit trail."""
-    rt._record_audit(
+    rt.record_audit(
         "system",
         "create_film_project",
         project_id=project_id,

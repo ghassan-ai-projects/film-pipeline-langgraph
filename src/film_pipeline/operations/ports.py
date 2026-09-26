@@ -96,15 +96,18 @@ class RuntimePort(Protocol):
         """The on-disk root of each live project, keyed by project id."""
         ...
 
-    def _persist_project_state(self, project_id: str) -> None:
+    def persist_project_state(self, project_id: str) -> None:
         """Persist a project's in-memory state to durable storage.
 
-        Recorded debt (O7, leaked internals): this is the concrete runtime's
-        private name and the operator surface already reaches it. The port
-        mirrors the real spelling so the protocol describes the code that
-        exists rather than a rename that has not happened; giving it a public
-        name is a separate, behavior-adjacent change.
+        Public name since the operator-surface routing work: `mcp` and
+        `operations` live outside `studio` and must not call a private method.
+        `StudioRuntime` exposes this as the public spelling and keeps the old
+        underscore name as an in-package alias.
         """
+        ...
+
+    def record_audit(self, actor: str, action: str, **details: str) -> None:
+        """Append an audit event, persisting it when the project is live."""
         ...
 
     # ── orchestration ─────────────────────────────────────────────────────

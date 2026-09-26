@@ -131,7 +131,7 @@ def _register_active_artifact_ref(
     active[state_key] = ref
     active.setdefault("artifact_refs", []).append(ref)
     rt.projects[project_id] = active
-    rt._persist_project_state(project_id)
+    rt.persist_project_state(project_id)
 
 
 def operator_service(rt: Any) -> Any:

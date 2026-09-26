@@ -168,7 +168,7 @@ def _sync_generation_requests(svc: OperatorService, state: dict[str, Any], proje
 def _store_project_state(svc: OperatorService, state: dict[str, Any], project_id: str) -> None:
     """Write the updated state back into the runtime and persist it."""
     svc.runtime.projects[project_id] = state
-    svc.runtime._persist_project_state(project_id)
+    svc.runtime.persist_project_state(project_id)
 
 
 def _strip_stale_request_issues(state: dict[str, Any]) -> None:

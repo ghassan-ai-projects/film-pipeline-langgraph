@@ -78,27 +78,30 @@ KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
     ("studio", "orchestration._run_validators"): 1,
 }
 
-# `operations/ports.py` mirrors these two names on purpose so `RuntimePort` can
-# describe the runtime surface it adapts. That file declares the debt.
+# The private spellings of the runtime's persist/audit methods. `studio` owns
+# them and uses these internally; every other package must call the public names
+# (`persist_project_state`, `record_audit`), which `RuntimePort` declares.
+#
+# Only the private spellings are counted. Counting the public ones would flag
+# legitimate operator-surface calls and force a table that grows whenever someone
+# does the right thing.
 _PORT_MIRRORED_PRIVATES = {"_persist_project_state", "_record_audit"}
 
-# Call sites of those mirrored privates outside the package that owns them,
-# frozen 2026-09-26. `06` section 4 endorses tightening reach-ins; these are the
-# remaining ones. Remove them by routing through a public seam, then lower the
-# count. Never raise it.
-KNOWN_MIRRORED_PRIVATE_CALLS: dict[str, int] = {
-    # `operations/_generation_ops.py` and six `mcp/tools/*` modules persist
-    # project state and write audit records by calling the runtime's private
-    # methods directly. `operations/ports.py` mirrors the names so the port can
-    # declare them; the callers should go through that port instead.
-    "operations/_generation_ops.py": 1,
-    "mcp/tools/_profile_change.py": 2,
-    "mcp/tools/generation/_text_only.py": 1,
-    "mcp/tools/helpers.py": 1,
-    "mcp/tools/projects.py": 1,
-    "mcp/tools/reference_generation/tool.py": 1,
-    "mcp/tools/validation.py": 1,
-}
+# Call sites of the runtime's persist/audit methods outside the package that owns
+# them, frozen 2026-09-26 and **cleared to zero** on 2026-09-26.
+#
+# History, because an empty table needs to say why it is empty: `operations/`
+# and six `mcp/tools/*` modules used to call `rt._persist_project_state` and
+# `rt._record_audit` — private names — while `operations/ports.py` mirrored those
+# spellings so the port could describe them. That is a port bypassed by its own
+# intended callers. `StudioRuntime` now exposes `persist_project_state` and
+# `record_audit` as the public surface (keeping the underscore names as
+# in-package aliases, where 24 internal call sites still use them), the port
+# declares the public names, and all 8 external call sites were redirected.
+#
+# If a future change reintroduces an external private call, the count must be
+# recorded here rather than silently allowed.
+KNOWN_MIRRORED_PRIVATE_CALLS: dict[str, int] = {}
 
 
 def _film_pipeline_imports(tree: ast.Module) -> list[str]:
@@ -280,7 +283,7 @@ def test_the_detector_sees_the_name_form_of_a_reach_in() -> None:
 
 
 def _measure_mirrored_private_calls() -> dict[str, int]:
-    """Count calls to the port's mirrored runtime privates, by caller file."""
+    """Count external calls to the runtime persist/audit methods, by caller file."""
     counts: dict[str, int] = {}
     for path in _source_files():
         parts = path.relative_to(_SRC).parts
