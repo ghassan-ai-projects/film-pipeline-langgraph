@@ -6,7 +6,6 @@ and returns control to the human gate instead of cycling forever.
 
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.orchestration.nodes._agent import _save_artifact
@@ -59,6 +58,7 @@ def _start_round(
     before the stall check, so ``phase_fn`` and the returned update agree.
     """
     from film_pipeline.orchestration.orchestrator_state import (
+        get_convergence,
         increment_convergence_round,
         is_stalled,
         mark_stalled,
@@ -67,7 +67,7 @@ def _start_round(
     # Track repair attempts (on the shared state so phase_fn sees the round,
     # and returned explicitly so the update survives the node boundary).
     round_num = increment_convergence_round(state, phase)
-    convergence_update = deepcopy(state.get("_orchestrator__convergence", {}))
+    convergence_update = get_convergence(state)
 
     if is_stalled(state, phase, max_rounds=3):
         mark_stalled(state, phase, f"Repair failed after {round_num} rounds.")
@@ -75,7 +75,7 @@ def _start_round(
             round_num,
             convergence_update,
             {
-                "_orchestrator__convergence": deepcopy(state.get("_orchestrator__convergence", {})),
+                "_orchestrator__convergence": get_convergence(state),
                 "_stalled_phase": phase,
             },
         )

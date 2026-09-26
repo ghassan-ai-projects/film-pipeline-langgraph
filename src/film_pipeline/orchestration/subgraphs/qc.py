@@ -254,12 +254,12 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     only produce reports) and translates validator findings into issues so
     the approval gate sees them.
     """
-    from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+    from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
 
-    auto = not _require_human_approval(dict(state))
+    auto = not require_human_approval(dict(state))
     update: dict[str, object] = {
         # _qc_reports/_qc_raw_reports are reducer channels already holding the
         # workers' outputs; re-emitting them here would duplicate entries.

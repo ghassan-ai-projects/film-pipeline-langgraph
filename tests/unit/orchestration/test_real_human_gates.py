@@ -236,32 +236,32 @@ class TestAutoApprove:
 
     def test_require_human_approval_defaults_true(self) -> None:
         """Missing config → gates stay ON (safe default)."""
-        from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+        from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
-        assert _require_human_approval({}) is True
-        assert _require_human_approval({"resolved_config": {}}) is True
+        assert require_human_approval({}) is True
+        assert require_human_approval({"resolved_config": {}}) is True
 
     def test_require_human_approval_reads_config_false(self) -> None:
         """require_human_approval: false → gates OFF."""
-        from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+        from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
         state: dict[str, Any] = {
             "resolved_config": {
                 "studio": {"require_human_approval": False},
             }
         }
-        assert _require_human_approval(state) is False
+        assert require_human_approval(state) is False
 
     def test_require_human_approval_reads_config_true(self) -> None:
         """require_human_approval: true → gates ON."""
-        from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+        from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
         state: dict[str, Any] = {
             "resolved_config": {
                 "studio": {"require_human_approval": True},
             }
         }
-        assert _require_human_approval(state) is True
+        assert require_human_approval(state) is True
 
     def test_await_approval_passes_through_when_approved(self) -> None:
         """await_approval_node returns no updates when already approved."""
@@ -282,7 +282,7 @@ class TestAutoApprove:
     def test_phase_node_auto_approves_when_config_false(self) -> None:
         """Phase node sets approved=True when require_human_approval is off."""
         from film_pipeline.orchestration.nodes import intake_node
-        from film_pipeline.orchestration.orchestrator_state import _require_human_approval
+        from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
         state: dict[str, Any] = {
             "project_id": "test-auto",
@@ -292,7 +292,7 @@ class TestAutoApprove:
             },
             "artifact_refs": [],
         }
-        assert _require_human_approval(state) is False
+        assert require_human_approval(state) is False
         updates = intake_node(state)
         assert updates.get("approved") is True
         assert updates.get("human_approval_required") is False
