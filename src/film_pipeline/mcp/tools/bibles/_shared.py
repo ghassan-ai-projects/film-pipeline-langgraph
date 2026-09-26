@@ -98,13 +98,65 @@ def _constitution_camera_philosophy(constitution: Any) -> str:
     return str(constitution.get("camera_philosophy", "")) if isinstance(constitution, dict) else ""
 
 
-def _chat_json_or_mock(rt: Any, prompt: str, mock_payload: dict[str, Any]) -> dict[str, Any]:
-    """Chat reply parsed as a mapping; mock_payload when no model adapter is configured."""
-    runner = _services(rt).prompt_runner
-    if runner.model_adapter is None:
-        return mock_payload
-    raw = runner.model_adapter.chat(prompt, model=runner.model_router.resolve("creative_writer"))
-    return raw if isinstance(raw, dict) else {}
+def _run_bible_agent(
+    rt: Any,
+    agent_id: str,
+    task: str,
+    context_vars: dict[str, str],
+) -> dict[str, Any]:
+    """Produce one bible by running its roster agent through the shared path.
+
+    This is the MCP counterpart of ``orchestration.nodes._agent``: the contract
+    comes from the roster, the prompt from the dedicated template registry, the
+    model call and its retry ladder from ``PromptRunner``, the mock from
+    ``studio.mock_responses``, and the parse from the agent's own ``execute()``.
+
+    The tool layer previously assembled prompts by hand and called
+    ``model_adapter.chat`` directly, which was a second agent lifecycle: the
+    model id was resolved through a method that did not exist, and the reply was
+    tested with ``isinstance(raw, dict)`` against a ``-> str`` return, so the
+    real-model path both raised and could never have produced a bible.
+
+    Raises:
+        KeyError: the agent is not on the roster or has no dedicated template.
+        ValueError: the agent rejected the model output.
+    """
+    from film_pipeline.agents.prompt_templates.registry import get_registry
+    from film_pipeline.agents.registry import get_agent_class
+
+    services = _services(rt)
+    registry = services.agent_registry
+    contract = registry.lookup_by_id(agent_id) if registry is not None else None
+    if contract is None:
+        raise KeyError(f"Agent '{agent_id}' is not registered on the roster.")
+
+    impl_class = get_agent_class(agent_id)
+    if impl_class is None:
+        raise KeyError(f"Agent '{agent_id}' has no implementation class.")
+
+    runner = services.prompt_runner
+    project_id = str(context_vars.get("project_id", ""))
+    kb = services.kb_for(
+        project_id=project_id,
+        phase="visual_dev",
+        agent_id=agent_id,
+        task=task,
+    )
+    template = get_registry().get_required(agent_id)
+    model_output, _, _ = runner.run_from_template(
+        template,
+        kb,
+        task,
+        model_profile=contract.default_model_profile,
+        context_vars=context_vars,
+        agent_id=agent_id,
+    )
+
+    agent = impl_class(contract)
+    result = agent.execute(model_output)
+    if not agent.validate(result):
+        raise ValueError(f"Agent '{agent_id}' produced invalid output.")
+    return result
 
 
 def _save_visual_dev_candidate(

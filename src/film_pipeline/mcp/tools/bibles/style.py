@@ -13,13 +13,15 @@ from ..helpers import (
     require_project_state,
 )
 from ._shared import (
-    _chat_json_or_mock,
     _constitution_tone,
     _constitution_visual_language,
     _load_artifact_if_present,
     _register_active_artifact_ref,
+    _run_bible_agent,
     _save_visual_dev_candidate,
 )
+
+_AGENT_ID = "style-bible-agent"
 
 
 def _style_palette_hint(store: Any, project_id: str) -> str:
@@ -28,57 +30,6 @@ def _style_palette_hint(store: Any, project_id: str) -> str:
     if not isinstance(env_bible, dict):
         return ""
     return ", ".join(str(c) for c in env_bible.get("color_palette", [])[:6])
-
-
-def _style_prompt(visual_language: str, tone: str, palette_hint: str) -> str:
-    """Assemble the StyleBible prompt."""
-    return (
-        f"Create a StyleBible. Visual language: {visual_language}. "
-        f"Tone: {tone}. Palette hints: {palette_hint}. "
-        "Return JSON with 'color_palette' (4-8 hex codes), "
-        "'texture', 'grain', 'visual_mood', 'reference_stills', "
-        "and 'must_not_change'."
-    )
-
-
-def _style_mock_payload(project_id: str) -> dict[str, Any]:
-    """Minimal valid StyleBible response for mock mode."""
-    return {
-        "project_id": project_id,
-        "color_palette": ["#1a1a2e", "#e94560", "#0f3460", "#16213e"],
-        "texture": "gritty, painterly",
-        "grain": "subtle 16mm grain",
-        "visual_mood": "melancholic, high-contrast",
-        "reference_stills": [],
-        "must_not_change": ["color_palette"],
-    }
-
-
-def _request_style_bible_output(rt: Any, prompt: str, project_id: str) -> dict[str, Any]:
-    """Obtain StyleBible JSON from the model adapter or mock fallback."""
-    return _chat_json_or_mock(rt, prompt, _style_mock_payload(project_id))
-
-
-def _execute_style_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
-    """Run StyleBibleAgent over the model output; None signals invalid output."""
-    from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
-    from film_pipeline.schemas.base import AgentFamily, AgentRole
-    from film_pipeline.schemas.handoff import AgentRegistration
-
-    agent = StyleBibleAgent(
-        AgentRegistration(
-            agent_id="style-bible-agent",
-            family=AgentFamily.DEVELOPMENT,
-            role=AgentRole.CREATOR,
-            capabilities=["style_definition"],
-            input_artifacts=["film_constitution", "environment_bible"],
-            output_artifacts=["style_bible"],
-        )
-    )
-    result = agent.execute(model_output)
-    if not agent.validate(result):
-        return None
-    return result
 
 
 def _deliver_style_bible(
@@ -110,17 +61,18 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
     if constitution is None:
         return _error("FilmConstitution not found.")
 
-    prompt = _style_prompt(
-        _constitution_visual_language(constitution),
-        _constitution_tone(constitution),
-        _style_palette_hint(store, project_id),
-    )
-
     try:
-        model_output = _request_style_bible_output(rt, prompt, project_id)
-        result = _execute_style_bible_agent(model_output)
-        if result is None:
-            return _error("StyleBible agent produced invalid output.")
+        result = _run_bible_agent(
+            rt,
+            _AGENT_ID,
+            "Define the film's visual style.",
+            {
+                "visual_language": _constitution_visual_language(constitution),
+                "tone": _constitution_tone(constitution),
+                "palette_hint": _style_palette_hint(store, project_id),
+                "project_id": project_id,
+            },
+        )
         return _deliver_style_bible(rt, active, store, project_id, result["style_bible"])
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")
