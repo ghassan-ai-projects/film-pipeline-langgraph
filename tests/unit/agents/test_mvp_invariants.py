@@ -67,3 +67,52 @@ class TestMVPAgentInvariants:
         )
         assert isinstance(mock_responses[agent.agent_id], dict)
         assert mock_responses[agent.agent_id], f"{agent.agent_id} mock response is empty"
+
+
+class TestSingleAgentRegistrationModel:
+    """One concept, one record definition.
+
+    ``AgentRegistration`` (``schemas/handoff.py``) is the roster's registration
+    model. A second class for the same concept — the removed
+    ``schemas/registries/agent_registry.AgentRegistryEntry`` — shared 12 of its
+    13 fields and had no production reader, so the two could drift with nothing
+    able to fail. This pins the single definition.
+    """
+
+    def test_agent_registration_is_the_only_registration_model(self) -> None:
+        import pathlib
+
+        import film_pipeline
+
+        root = pathlib.Path(film_pipeline.__file__).parent
+        declaring: list[str] = []
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts:
+                continue
+            text = path.read_text()
+            if "class AgentRegistration" in text or "class AgentRegistryEntry" in text:
+                declaring.append(str(path.relative_to(root)))
+
+        assert declaring == ["schemas/handoff.py"], (
+            "Agent registration must be declared exactly once, in schemas/handoff.py; "
+            f"found {declaring}"
+        )
+
+    def test_agent_registration_exposes_the_roster_fields(self) -> None:
+        from film_pipeline.schemas.handoff import AgentRegistration
+
+        for field in (
+            "agent_id",
+            "family",
+            "role",
+            "capabilities",
+            "input_artifacts",
+            "output_artifacts",
+            "allowed_kb_domains",
+            "blocked_kb_domains",
+            "prompt_framework",
+            "default_model_profile",
+            "reviewed_by",
+            "failure_modes",
+        ):
+            assert field in AgentRegistration.model_fields, f"missing roster field '{field}'"

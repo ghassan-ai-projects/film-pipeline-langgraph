@@ -107,7 +107,6 @@ from film_pipeline.schemas import (
     WardrobeRules,
 )
 from film_pipeline.schemas.registries import (
-    AgentRegistryEntry,
     CostProfile,
     ModelRegistry,
     ModelRegistryEntry,
@@ -977,19 +976,6 @@ def test_model_registry_entry() -> None:
         preferred_tasks=["dialogue"],
     )
     assert e.model_id == "gpt-5"
-
-
-def test_agent_registry_entry() -> None:
-    from film_pipeline.schemas.base import AgentFamily, AgentRole
-
-    e = AgentRegistryEntry(
-        agent_id="dialogue-agent",
-        family=AgentFamily.SCREENWRITING,
-        role=AgentRole.CREATOR,
-        capabilities=["dialogue"],
-        prompt_framework="RCTCO",
-    )
-    assert e.enabled is True
 
 
 def test_validation_ledger_entry() -> None:
