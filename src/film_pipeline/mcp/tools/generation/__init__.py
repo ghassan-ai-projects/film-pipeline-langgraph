@@ -16,7 +16,6 @@ from film_pipeline.mcp.tools.generation.dispatch import (
 )
 from film_pipeline.mcp.tools.generation.planning import (
     _sync_generation_requests_from_ledger,
-    approve_generation_spend,
     plan_generation_batch,
     preview_generation_prompts,
 )
@@ -29,7 +28,6 @@ from film_pipeline.mcp.tools.generation.status import (
 __all__ = [
     "_complete_text_only_generation",
     "_sync_generation_requests_from_ledger",
-    "approve_generation_spend",
     "cancel_generation_request",
     "get_generation_status",
     "list_active_generations",

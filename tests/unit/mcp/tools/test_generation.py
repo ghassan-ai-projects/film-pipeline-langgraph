@@ -20,7 +20,6 @@ from film_pipeline.agents.registry import AgentRegistry
 from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner
 from film_pipeline.mcp.tools import (
-    approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
     list_active_generations,
@@ -61,10 +60,20 @@ def rt(tmp_path: Path) -> Generator[StudioRuntime, None, None]:
 
 
 async def _plan_and_approve(shot_ids: list[str]) -> dict[str, object]:
+    """Plan, then approve via the operator use case.
+
+    The MCP `approve_generation_spend` tool was removed with the cost feature.
+    The PREPARED -> SUBMITTED transition it performed survives as the operator
+    use case, which is what this setup helper now calls.
+    """
     await plan_generation_batch(
         {"shot_ids": shot_ids, "provider": "mock-video-provider", "model": "mock-fast"}
     )
-    return await approve_generation_spend({"confirmed": True})
+    from film_pipeline.mcp.tools import get_runtime
+    from film_pipeline.studio._operator_runtime import operator_service
+
+    operator_service(get_runtime()).approve_generation_spend()
+    return {"ok": True}
 
 
 def test_start_generation_batch_no_submitted_rows(rt: StudioRuntime) -> None:
@@ -82,7 +91,10 @@ def test_start_generation_batch_unknown_provider(rt: StudioRuntime) -> None:
     asyncio.run(
         plan_generation_batch({"shot_ids": ["S001"], "provider": "no-such-provider", "model": "m"})
     )
-    asyncio.run(approve_generation_spend({"confirmed": True}))
+    from film_pipeline.mcp.tools import get_runtime
+    from film_pipeline.studio._operator_runtime import operator_service
+
+    operator_service(get_runtime()).approve_generation_spend()
 
     result = asyncio.run(start_generation_batch({}))
     assert result["ok"] is True
@@ -194,30 +206,6 @@ def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
     )
     assert result["ok"] is False
     assert "No shot IDs to plan" in cast(str, result["error"])
-
-
-def test_approve_generation_spend_value_error(
-    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import asyncio
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-
-    asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
-    )
-    monkeypatch.setattr(
-        GenerationLedgerManager,
-        "approve_spend",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            ValueError("Total estimated cost $10.00 exceeds budget $5.00.")
-        ),
-    )
-    result = asyncio.run(approve_generation_spend({"max_cost_usd": 5.0, "confirmed": True}))
-    assert result["ok"] is False
-    assert "exceeds budget" in cast(str, result["error"])
 
 
 def test_get_generation_status_missing_id() -> None:
@@ -605,9 +593,13 @@ class TestTextOnlyGenerationPolicy:
         active["current_phase"] = "generation"
         asyncio.run(plan_generation_batch({}))
 
-        result = asyncio.run(approve_generation_spend({}))
-        assert result["ok"] is True
-        assert result.get("text_only") is True
+        # Approve via the operator use case: the MCP cost tool was removed, but
+        # the text-only no-op it performed is real behaviour and is still asserted.
+        from film_pipeline.mcp.tools import get_runtime
+        from film_pipeline.studio._operator_runtime import operator_service
+
+        workspace = operator_service(get_runtime()).approve_generation_spend()
+        assert workspace is not None
 
         result = asyncio.run(start_generation_batch({}))
         assert result["ok"] is True

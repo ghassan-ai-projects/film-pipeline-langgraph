@@ -15,7 +15,6 @@ from film_pipeline.studio.runtime import get_runtime as get_runtime
 _TOOL_MODULES: dict[str, str] = {
     "add_operator_comment": "film_pipeline.mcp.tools.operator",
     "approve_coverage_generation": "film_pipeline.mcp.tools.assembly",
-    "approve_generation_spend": "film_pipeline.mcp.tools.generation",
     "approve_intake": "film_pipeline.mcp.tools.intake",
     "approve_phase": "film_pipeline.mcp.tools.review",
     "approve_profile_change": "film_pipeline.mcp.tools.config",

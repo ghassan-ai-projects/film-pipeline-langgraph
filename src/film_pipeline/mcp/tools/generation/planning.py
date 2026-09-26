@@ -49,14 +49,6 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
     return shot_ids
 
 
-def _parse_max_cost_usd(args: dict[str, object]) -> float:
-    """Read the optional ``max_cost_usd`` spend cap; -1.0 means no cap."""
-    max_cost_raw = args.get("max_cost_usd", -1)
-    if max_cost_raw in (-1, None):
-        return -1.0
-    return float(str(max_cost_raw))
-
-
 async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     """Plan a generation batch: add rows to the ledger for each shot.
 
@@ -148,35 +140,6 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     except ServiceError as exc:
         return _error(str(exc))
     return _ok(previews=previews)
-
-
-async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
-    """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
-    project_id = str(active["project_id"])
-    if is_text_only_policy(active):
-        return _ok(text_only=True, approved=0)
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-
-    # Budget gate: the manager rejects the batch when estimated cost exceeds it.
-    max_cost = _parse_max_cost_usd(args)
-
-    try:
-        ledger = mgr.approve_spend(project_id, max_cost_usd=max_cost)
-    except ValueError as e:
-        return _error(str(e))
-
-    submitted = [r for r in ledger.rows if r.status.value == "submitted"]
-    _sync_generation_requests_from_ledger(active, submitted)
-    estimated_total = mgr.estimate_total_cost(project_id)
-    return _ok(
-        approved=len(submitted),
-        total_rows=len(ledger.rows),
-        estimated_total_cost_usd=estimated_total,
-    )
 
 
 def _sync_generation_requests_from_ledger(

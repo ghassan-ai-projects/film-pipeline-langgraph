@@ -39,7 +39,6 @@ from film_pipeline.mcp.tools.config import get_runtime_mode as get_runtime_mode
 from film_pipeline.mcp.tools.config import inspect_profile as inspect_profile
 from film_pipeline.mcp.tools.config import list_profiles as list_profiles
 from film_pipeline.mcp.tools.config import propose_profile_change as propose_profile_change
-from film_pipeline.mcp.tools.generation import approve_generation_spend as approve_generation_spend
 from film_pipeline.mcp.tools.generation import (
     cancel_generation_request as cancel_generation_request,
 )

@@ -427,13 +427,9 @@ class OperatorService:
         """Plan a generation batch for every shot in the approved shot matrix."""
         return _generation_ops.plan_generation(self, project_id)
 
-    def approve_generation_spend(
-        self,
-        project_id: str | None = None,
-        max_cost_usd: float = -1.0,
-    ) -> GenerationWorkspace:
-        """Approve spend for planned generation rows."""
-        return _generation_ops.approve_generation_spend(self, project_id, max_cost_usd)
+    def approve_generation_spend(self, project_id: str | None = None) -> GenerationWorkspace:
+        """Approve planned generation rows by marking them SUBMITTED."""
+        return _generation_ops.approve_generation_spend(self, project_id)
 
     def start_generation(self, project_id: str | None = None) -> GenerationWorkspace:
         """Submit approved generation rows to their providers."""

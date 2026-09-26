@@ -57,7 +57,6 @@ from film_pipeline.mcp.tools.config import (
     propose_profile_change,
 )
 from film_pipeline.mcp.tools.generation import (
-    approve_generation_spend,
     cancel_generation_request,
     get_generation_status,
     list_active_generations,
@@ -367,15 +366,6 @@ def register_all_tools(registry: ToolRegistry) -> None:
         ToolGroup.GENERATION,
         generate_reference_images,
         mutates=True,
-    )
-    _register(
-        registry,
-        "approve_generation_spend",
-        ToolGroup.GENERATION,
-        approve_generation_spend,
-        mutates=True,
-        confirm=True,
-        active_project=True,
     )
     _register(
         registry,

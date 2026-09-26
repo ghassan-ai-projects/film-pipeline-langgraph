@@ -75,9 +75,10 @@ class TestManualFourMinuteMockShort:
         assert result["ok"] is True, f"plan_generation_batch failed: {result}"
         assert result.get("planned", 0) >= 1
 
-        result = invoke_tool(rt, "approve_generation_spend", max_cost_usd=25.0, confirmed=True)
-        assert result["ok"] is True, f"approve_generation_spend failed: {result}"
-        assert result.get("approved", 0) >= 1
+        from film_pipeline.studio._operator_runtime import operator_service
+
+        workspace = operator_service(rt).approve_generation_spend()
+        assert workspace.submitted >= 1, f"approval did not submit rows: {workspace}"
 
         result = invoke_tool(rt, "approve_phase", confirmed=True)
         assert result["ok"] is True, f"approve_phase gen_planning->generation failed: {result}"
