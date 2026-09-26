@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.filmspec import text_only_generation_requests
+from film_pipeline.filmspec import is_text_only_policy, text_only_generation_requests
 from film_pipeline.operations.errors import BackendOperationError
 from film_pipeline.operations.models import GenerationWorkspace
 from film_pipeline.storage.manifest import read_manifest
@@ -27,7 +27,7 @@ def get_generation_workspace(
     project_id_value = str(state["project_id"])
     provider, model = svc.runtime.default_video_provider()
 
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return _text_only_workspace(state, project_id_value, provider, model)
 
     executor = _generation_executor(svc)
@@ -53,7 +53,7 @@ def plan_generation(svc: OperatorService, project_id: str | None = None) -> Gene
     """Plan a generation batch for every shot in the approved shot matrix."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         _complete_text_only_generation(svc, state, project_id_value)
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
@@ -74,7 +74,7 @@ def approve_generation_spend(
     """Approve spend for planned generation rows."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     try:
@@ -89,7 +89,7 @@ def start_generation(svc: OperatorService, project_id: str | None = None) -> Gen
     """Submit approved generation rows to their providers."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     executor.start(project_id_value)
@@ -101,7 +101,7 @@ def poll_generation(svc: OperatorService, project_id: str | None = None) -> Gene
     """Poll running generations once, delivering completed outputs."""
     state = svc._state_for_project(project_id)
     project_id_value = str(state["project_id"])
-    if _is_text_only_policy(state):
+    if is_text_only_policy(state):
         return get_generation_workspace(svc, project_id_value)
     executor = _generation_executor(svc)
     executor.poll_once(project_id_value)
@@ -199,10 +199,6 @@ def _generation_next_step(rows: list[dict[str, Any]], counts: dict[str, int]) ->
 def _shot_row_id(row: dict[str, Any]) -> str:
     """Identify a shot-matrix row, falling back to its scene id."""
     return str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
-
-
-def _is_text_only_policy(state: dict[str, Any]) -> bool:
-    return str(state.get("generation_policy", "")).lower() == "text_only"
 
 
 def _complete_text_only_generation(

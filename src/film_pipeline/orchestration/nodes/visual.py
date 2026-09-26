@@ -15,8 +15,7 @@ from film_pipeline.orchestration.nodes._agent import (
 )
 from film_pipeline.orchestration.nodes._context import _parse_ref
 from film_pipeline.orchestration.nodes._shared import (
-    _is_new_issue,
-    _is_new_ref,
+    _collect_updates,
     _phase_gate_updates,
 )
 from film_pipeline.orchestration.nodes._visual_matrix_coverage import (
@@ -58,27 +57,6 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     if new_refs:
         updates["artifact_refs"] = new_refs
     _propagate_side_effects(new_state, updates, state)
-    return updates
-
-
-def _collect_updates(
-    gate_updates: dict[str, Any],
-    new_state: dict[str, Any],
-    original: dict[str, Any],
-    ref_keys: tuple[str, ...],
-) -> dict[str, Any]:
-    """Compute the partial update from a before/after diff of the node state."""
-    updates: dict[str, Any] = dict(gate_updates)
-    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
-    if new_refs:
-        updates["artifact_refs"] = new_refs
-    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
-    if new_issues:
-        updates["issues"] = new_issues
-    for key in ref_keys:
-        val = new_state.get(key)
-        if val:
-            updates[key] = val
     return updates
 
 

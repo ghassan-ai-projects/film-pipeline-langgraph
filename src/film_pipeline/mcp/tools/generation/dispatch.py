@@ -5,9 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.mcp.tools.generation._text_only import (
-    _is_text_only_policy,
-)
+from film_pipeline.filmspec import is_text_only_policy
 
 from ..helpers import (
     _error,
@@ -140,7 +138,7 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     active = require_project_state(args)
     project_id = str(active["project_id"])
-    if _is_text_only_policy(active):
+    if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
 
     from film_pipeline.generation.executor import GenerationExecutor

@@ -6,9 +6,9 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.filmspec import is_text_only_policy
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
-    _is_text_only_policy,
 )
 
 from ..helpers import (
@@ -68,7 +68,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     active = require_project_state(args)
     project_id = str(active["project_id"])
 
-    if _is_text_only_policy(active):
+    if is_text_only_policy(active):
         return _complete_text_only_generation(rt, active, project_id)
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
@@ -155,7 +155,7 @@ async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]
     rt = tools_pkg.get_runtime()
     active = require_project_state(args)
     project_id = str(active["project_id"])
-    if _is_text_only_policy(active):
+    if is_text_only_policy(active):
         return _ok(text_only=True, approved=0)
     from film_pipeline.generation.ledger import GenerationLedgerManager
 

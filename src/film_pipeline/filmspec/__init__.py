@@ -10,6 +10,7 @@ __all__ = [
     "PHASE_GATES",
     "PHASE_SEQUENCE",
     "STALE_GENERATION_REQUEST_CODES",
+    "TEXT_ONLY_POLICY",
     "TRANSITION_TYPES",
     "AgentFamily",
     "AgentRole",
@@ -18,6 +19,7 @@ __all__ = [
     "GenerationStatus",
     "IssueSeverity",
     "ValidationStatus",
+    "is_text_only_policy",
     "next_phase",
     "text_only_generation_request",
     "text_only_generation_requests",
@@ -197,6 +199,22 @@ LEGACY_TRANSITION_ALIASES: dict[str, str] = {"fade": "fade_out"}
 STALE_GENERATION_REQUEST_CODES: frozenset[str] = frozenset(
     {"empty_generation_requests", "no_generation_requests"}
 )
+
+
+#: The ``generation_policy`` value that selects text-only delivery.
+#:
+#: The policy string is written by project creation and read by the generation
+#: paths in two packages. The predicate lived as two byte-identical copies — one
+#: in `operations._generation_ops`, one in `mcp.tools.generation._text_only` —
+#: with the literal in three places, so the vocabulary is owned here.
+TEXT_ONLY_POLICY = "text_only"
+
+
+def is_text_only_policy(state: object) -> bool:
+    """Return whether a project state selects the text-only generation policy."""
+    if not isinstance(state, dict):
+        return False
+    return str(state.get("generation_policy", "")).strip().lower() == TEXT_ONLY_POLICY
 
 
 def text_only_generation_request(

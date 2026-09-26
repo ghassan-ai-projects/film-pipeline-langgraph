@@ -5,9 +5,9 @@ Split by lifecycle stage; this facade preserves the original import surface.
 
 from __future__ import annotations
 
+from film_pipeline.filmspec import is_text_only_policy as is_text_only_policy
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
-    _is_text_only_policy,
 )
 from film_pipeline.mcp.tools.generation.dispatch import (
     cancel_generation_request,
@@ -28,7 +28,6 @@ from film_pipeline.mcp.tools.generation.status import (
 
 __all__ = [
     "_complete_text_only_generation",
-    "_is_text_only_policy",
     "_sync_generation_requests_from_ledger",
     "approve_generation_spend",
     "cancel_generation_request",

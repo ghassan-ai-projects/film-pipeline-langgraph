@@ -174,3 +174,31 @@ def _is_new_issue(issue: dict[str, Any], original_state: dict[str, Any]) -> bool
         i.get("issue_id") for i in (original_state.get("issues", []) or []) if i.get("issue_id")
     }
     return iid not in orig_ids
+
+
+def _collect_updates(
+    gate_updates: dict[str, Any],
+    new_state: dict[str, Any],
+    original: dict[str, Any],
+    ref_keys: tuple[str, ...],
+) -> dict[str, Any]:
+    """Compute the partial update from a before/after diff of the node state.
+
+    One definition, shared by the phase nodes that diff their working copy
+    against the state they were handed. It was byte-identical in both `qc` and
+    `visual`, which meant the node-boundary update rule — which refs and issues
+    cross the boundary, and which keys are carried — had two authors and no
+    test pinning them to each other.
+    """
+    updates: dict[str, Any] = dict(gate_updates)
+    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    if new_refs:
+        updates["artifact_refs"] = new_refs
+    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    if new_issues:
+        updates["issues"] = new_issues
+    for key in ref_keys:
+        val = new_state.get(key)
+        if val:
+            updates[key] = val
+    return updates
