@@ -11,6 +11,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+__all__ = [
+    "ModelResolutionError",
+    "ModelRouter",
+]
+
 # Last-resort profiles for direct router users without resolved project config.
 # The project-facing source of truth is profiles/base.studio.yaml. Provider
 # adapters do not change this policy; a z.ai model is selected only when

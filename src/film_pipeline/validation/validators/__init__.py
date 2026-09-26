@@ -8,6 +8,8 @@ from film_pipeline.schemas.registries.validator_registry import (
     ValidatorThresholds,
 )
 
+__all__ = ["MVP_VALIDATORS"]
+
 MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
     # --- Text validators (artifact scope) ---
     ValidatorRegistryEntry(

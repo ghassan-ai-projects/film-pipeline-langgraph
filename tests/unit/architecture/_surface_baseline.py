@@ -46,7 +46,7 @@ class Surface(NamedTuple):
 SURFACE_BASELINE: dict[str, Surface] = {
     "agents": Surface(5, 28),
     "agents.impl": Surface(14, 15),
-    "agents.model_routing": Surface(None, 0),
+    "agents.model_routing": Surface(2, 0),
     "agents.prompt_templates": Surface(3, 5),
     "agents.prompt_templates.defaults": Surface(24, 3),
     "agents.transports": Surface(20, 3),
@@ -80,19 +80,11 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "studio": Surface(None, 9),
     "validation": Surface(7, 11),
     "validation.impl": Surface(7, 7),
-    "validation.validators": Surface(None, 0),
+    "validation.validators": Surface(1, 0),
 }
 
 #: Package roots that deliberately declare no `__all__`, with the reason.
 BARE_ROOT_REASONS: dict[str, str] = {
-    "agents.model_routing": (
-        "Defines `ModelRouter` and `ModelResolutionError` in its `__init__` and "
-        "exports neither. Consumers import `ModelRouter` from the package root by "
-        "attribute, which works, but nothing is declared — so this is the one bare "
-        "package here that is arguably a *missing* surface rather than a deliberate "
-        "absence. Recorded instead of silently fixed because adding `__all__` is a "
-        "public-API change that belongs in its own slice."
-    ),
     "cli": (
         "A command-line entry package: consumers invoke console commands, not "
         "symbols from its root. It is imported by nothing in src/, so a root "
@@ -112,11 +104,6 @@ BARE_ROOT_REASONS: dict[str, str] = {
         "The composition root: it wires other packages together and owns no "
         "vocabulary of its own. `__version__` is the only root binding, and it is "
         "not part of any consumer's contract."
-    ),
-    "validation.validators": (
-        "Defines the 15-entry `MVP_VALIDATORS` registry and exports nothing. Like "
-        "`agents.model_routing`, the name is reachable by attribute but undeclared "
-        "— a missing surface rather than a deliberate absence, recorded here."
     ),
 }
 
@@ -141,5 +128,15 @@ ARTIFACT_NAMES: frozenset[str] = frozenset(
         # neither is API.
         "PromptTemplate",
         "import_module",
+        # `agents.model_routing` uses these to declare its own `@dataclass`; no
+        # consumer imports them through that root.
+        "dataclass",
+        "field",
+        # `validation.validators` uses these to build `MVP_VALIDATORS`, its one
+        # exported name. Consumers import them from `schemas`, not from here.
+        "ValidationModality",
+        "ValidationScope",
+        "ValidatorRegistryEntry",
+        "ValidatorThresholds",
     }
 )
