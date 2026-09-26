@@ -103,6 +103,9 @@ def _run_bible_agent(
     agent_id: str,
     task: str,
     context_vars: dict[str, str],
+    *,
+    subject_key: str = "",
+    subject_id: str = "",
 ) -> dict[str, Any]:
     """Produce one bible by running its roster agent through the shared path.
 
@@ -116,6 +119,15 @@ def _run_bible_agent(
     model id was resolved through a method that did not exist, and the reply was
     tested with ``isinstance(raw, dict)`` against a ``-> str`` return, so the
     real-model path both raised and could never have produced a bible.
+
+    ``subject_key``/``subject_id`` name the subject the operator asked for (a
+    ``character_id`` or ``environment_id``). They are written over the model
+    output before the agent parses it, because the request is the authority for
+    which subject an artifact is about. A registered mock is static and cannot
+    interpolate the request, so without this a mock-mode run would persist an
+    artifact identified as the mock's subject rather than the requested one. The
+    bible schemas are frozen, so the value is set on the input rather than
+    patched onto the parsed artifact.
 
     Raises:
         KeyError: the agent is not on the roster or has no dedicated template.
@@ -158,11 +170,50 @@ def _run_bible_agent(
         agent_id=agent_id,
     )
 
+    if subject_key and subject_id:
+        model_output = _with_subject(model_output, subject_key, subject_id)
+
     agent = impl_class(contract)
     result = agent.execute(model_output)
     if not agent.validate(result):
-        raise ValueError(f"Agent '{agent_id}' produced invalid output.")
+        raise InvalidBibleOutput(agent_id)
     return result
+
+
+class InvalidBibleOutput(ValueError):
+    """Raised when a bible agent rejects its own model output.
+
+    Carries the agent id so a tool can report its own operator-facing message
+    ("CameraBible agent produced invalid output.") rather than only a generic
+    one, while the ``validate()`` call itself stays in one place.
+    """
+
+    def __init__(self, agent_id: str) -> None:
+        super().__init__(f"Agent '{agent_id}' produced invalid output.")
+        self.agent_id = agent_id
+
+
+def _with_subject(model_output: Any, subject_key: str, subject_id: str) -> Any:
+    """Return the model output with ``subject_key`` forced to ``subject_id``.
+
+    The key is set at the top level *and* inside the artifact payload, since
+    agents read identity from whichever level their schema lives at. A copy is
+    returned so the caller's payload is not mutated.
+    """
+    from copy import deepcopy
+
+    if not isinstance(model_output, dict):
+        return model_output
+    patched: dict[str, Any] = deepcopy(model_output)
+    patched[subject_key] = subject_id
+    for wrapper in ("character_bible", "environment_bible"):
+        nested = patched.get(wrapper)
+        if isinstance(nested, dict):
+            nested[subject_key] = subject_id
+            identity = nested.get("visual_identity")
+            if isinstance(identity, dict):
+                identity[subject_key] = subject_id
+    return patched
 
 
 def _save_visual_dev_candidate(

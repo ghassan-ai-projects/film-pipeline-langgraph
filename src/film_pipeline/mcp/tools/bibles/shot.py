@@ -13,7 +13,7 @@ from ..helpers import (
     _services,
     require_project_state,
 )
-from ._shared import _extract_script_text, _run_bible_agent
+from ._shared import InvalidBibleOutput, _extract_script_text, _run_bible_agent
 
 if TYPE_CHECKING:
     from film_pipeline.schemas.base import ArtifactType
@@ -188,5 +188,7 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
             shot_count=len(matrix.rows),
             continuity_ledger_ref=ledger_ref,
         )
+    except InvalidBibleOutput:
+        return _error("ShotBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"Shot bible generation failed: {exc}")

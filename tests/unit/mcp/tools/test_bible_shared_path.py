@@ -430,3 +430,50 @@ def test_the_helper_actually_supplies_the_vars_it_claims() -> None:
     # And nothing the helper adds is a placeholder the template never declares,
     # which would mean the two sides of this contract have drifted apart.
     assert {"constraints", "kb_refs"} <= set(captured), captured
+
+
+# The operator-facing message each tool must produce when its agent rejects
+# model output. Pinned because routing the tools through the shared helper once
+# collapsed all five into one generic string: the agent id was carried by the
+# exception but the tool's own wording was dropped.
+_INVALID_OUTPUT_MESSAGE: dict[str, str] = {
+    "camera.py": "CameraBible agent produced invalid output.",
+    "character.py": "CharacterBible agent produced invalid output.",
+    "environment.py": "EnvironmentBible agent produced invalid output.",
+    "style.py": "StyleBible agent produced invalid output.",
+    "shot.py": "ShotBible agent produced invalid output.",
+}
+
+
+@pytest.mark.parametrize("filename", sorted(_INVALID_OUTPUT_MESSAGE), ids=str)
+def test_tool_reports_its_own_invalid_output_message(filename: str) -> None:
+    """A tool's rejection message must name its own artifact, not a generic one."""
+    expected = _INVALID_OUTPUT_MESSAGE[filename]
+    tree = ast.parse((_BIBLES_DIR / filename).read_text())
+
+    literals = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    assert expected in literals, (
+        f"{filename} no longer returns {expected!r}. The shared helper raises "
+        "InvalidBibleOutput carrying the agent id; the tool must translate that "
+        "into its own operator-facing wording."
+    )
+
+
+def test_every_bible_tool_handles_the_invalid_output_exception() -> None:
+    """Each tool must catch it explicitly, or the specific message is unreachable."""
+    for filename in sorted(_INVALID_OUTPUT_MESSAGE):
+        tree = ast.parse((_BIBLES_DIR / filename).read_text())
+        handled = any(
+            isinstance(node, ast.ExceptHandler)
+            and isinstance(node.type, ast.Name)
+            and node.type.id == "InvalidBibleOutput"
+            for node in ast.walk(tree)
+        )
+        assert handled, (
+            f"{filename} does not catch InvalidBibleOutput, so its specific "
+            "message can never be returned"
+        )

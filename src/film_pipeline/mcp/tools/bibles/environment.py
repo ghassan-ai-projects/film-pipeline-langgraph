@@ -13,6 +13,7 @@ from ..helpers import (
     require_project_state,
 )
 from ._shared import (
+    InvalidBibleOutput,
     _constitution_theme,
     _constitution_visual_language,
     _load_artifact_if_present,
@@ -92,9 +93,13 @@ async def generate_environment_bible(args: dict[str, object]) -> dict[str, objec
                 "script_content": script_text,
                 "project_id": project_id,
             },
+            subject_key="environment_id",
+            subject_id=environment_id,
         )
         return _deliver_environment_bible(
             rt, active, store, project_id, environment_id, result["environment_bible"]
         )
+    except InvalidBibleOutput:
+        return _error("EnvironmentBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"EnvironmentBible generation failed: {exc}")

@@ -13,6 +13,7 @@ from ..helpers import (
     require_project_state,
 )
 from ._shared import (
+    InvalidBibleOutput,
     _constitution_camera_philosophy,
     _load_artifact_if_present,
     _register_active_artifact_ref,
@@ -63,5 +64,7 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
             },
         )
         return _deliver_camera_bible(rt, active, store, project_id, result["camera_bible"])
+    except InvalidBibleOutput:
+        return _error("CameraBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"CameraBible generation failed: {exc}")

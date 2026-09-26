@@ -13,6 +13,7 @@ from ..helpers import (
     require_project_state,
 )
 from ._shared import (
+    InvalidBibleOutput,
     _constitution_tone,
     _constitution_visual_language,
     _load_artifact_if_present,
@@ -74,5 +75,7 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
             },
         )
         return _deliver_style_bible(rt, active, store, project_id, result["style_bible"])
+    except InvalidBibleOutput:
+        return _error("StyleBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")

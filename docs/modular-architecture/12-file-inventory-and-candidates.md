@@ -76,22 +76,26 @@ within one domain), not a misplacement.
 Ordered by value per unit of risk. Sources: `07` §§2,4,7; audit `04` findings
 F-AGENT-01…13; audit `14` (module boundaries).
 
-| # | Candidate | LOC | Finding | Verdict |
+| # | Candidate | LOC at `17dcca1` | Finding | Verdict |
 |---|---|---:|---|---|
-| **C-01** | `agents/model_adapter.py` | 383 | `07` §4 | **DONE** (`f55a23a`) — split into `agents/transports/{gemini,zai,chat_completions}.py`; `model_adapter.py` 383 → 289; dispatch pinned by a test. |
-| **C-02** | `agents/impl/registry.py` | 36 | F-AGENT-02/06/10 | **DONE** (`9b0cfc0`) — collapsed into `agents/registry.py`; the roster now carries `produces`, so all 11 rows match what their `execute()` returns. |
+| **C-01** | `agents/model_adapter.py` | 383 → **290** | `07` §4 | **DONE** (`f55a23a`) — split into `agents/transports/{gemini,zai,chat_completions}.py`; dispatch pinned by a test. |
+| **C-02** | `agents/impl/registry.py` | 36 | F-AGENT-02/06/10 | **DONE** (`9b0cfc0`) — collapsed into `agents/registry.py`; the roster now carries `produces`, so every row matches what its `execute()` returns (11 rows then, 15 after C-07). |
 | **C-03** | `agents/model_routing/__init__.py` | 161 | F-AGENT-01, F-CFG-01 | **Open** — `_FALLBACK_PROFILES` is byte-identical to `profiles/base.studio.yaml`'s `model_profiles` (measured: same 8 keys, same values). A pure duplicate; delete it and read the profile file. |
-| **C-04** | `agents/mvp/__init__.py` | 170 | F-AGENT-01/02/03/10 | **DONE** (`dda3afb`) — relocated to `agents/roster.py`, which is what it is. |
-| **C-05** | `agents/runner.py` | 471 | F-AGENT-06/07 | **Open** — `RCTCOPrompt` remains renderer 1 of 4 (F-AGENT-06). |
+| **C-04** | `agents/mvp/__init__.py` | 170 | F-AGENT-01/02/03/10 | **DONE** (`dda3afb`) — relocated to `agents/roster.py`, which is what it is. That file is now 266 lines, having gained the four bible rows. |
+| **C-05** | `agents/runner.py` | 471 → **447** | F-AGENT-06/07 | **Open** — `RCTCOPrompt` remains renderer 1 of 4 (F-AGENT-06). The 24-line drop is C-06 deleting `create_handoff` from the same file. |
 | **C-06** | `agents/handoff.py` | 51 | F-AGENT-02 | **DONE** (`12263f8`) — deleted with `PromptRunner.create_handoff`; both unreachable. |
-| **C-07** | `mcp/tools/bibles/*` (7) | ~1,100 | F-AGENT-04 (**Critical**) | **DONE** (`7d27083`, `42f8d7a`, `39cb402`) — one agent path. 1,181 → 765 lines; the `model_router.resolve` and `isinstance(raw, dict)` defects are gone; real-model mode verified working. |
+| **C-07** | `mcp/tools/bibles/*` (7) | 1,181 → **840** | F-AGENT-04 (**Critical**) | **DONE** (`7d27083`, `42f8d7a`, `39cb402`) — one agent path. The `model_router.resolve` and `isinstance(raw, dict)` defects are gone; real-model mode verified working. (765 after `39cb402`; 840 after the review fixes added identity stamping and message handling.) |
 | **C-08** | `agents/impl/*_bible_agent.py` (4) | 330 | F-AGENT-04 | **DONE** with C-07 — the four are on the roster with classes, templates, and mocks. |
 | **C-09** | `studio/runtime.py` | 461 | `07` §2, F-RUNTIME-01 | **Open** — `11` §3 deliberately defers it until consumers move. |
 | **C-10** | `storage/store.py` | 832 | `07` §7 | **Do not split the class.** 15 public / 21 private methods, one concern. |
 | **C-11** | `schemas/registries/agent_registry.py` | 28 | F-AGENT-06/10 | **DONE** (`911ff4f`) — deleted; a guard pins the single registration model. |
-| **C-12** | `studio/mock_responses.py` | 435 | F-AGENT-04 | **DONE** with C-07 — it is now the only mock authority; the five per-tool copies are gone. |
-| **C-13** | `orchestration/orchestrator_state.py` | 551 | `07` §3, §6.4 | **DONE** (`860e041`) — declared surface added; three real leaks found and closed. |
+| **C-12** | `studio/mock_responses.py` | 435 → **532** | F-AGENT-04 | **DONE** with C-07 — it is now the only mock authority; the five per-tool copies are gone, and the four bible payloads moved in. |
+| **C-13** | `orchestration/orchestrator_state.py` | 551 → **648** | `07` §3, §6.4 | **DONE** (`860e041`) — declared surface added; three real leaks found and closed. The growth is the `__all__` block and the two accessors the guards required. |
 | **C-14** | `schemas/registries/*` (4) | ~140 | F-AGENT-08 | **Open** — parallel registries that nothing forces to agree. |
+
+LOC is stated as `before` or `before → after` per row. The first number is the
+`17dcca1` measurement the triage was made from; a row with an arrow has been
+re-measured at HEAD. Rows whose file did not change show one number.
 
 ### Status after this round
 

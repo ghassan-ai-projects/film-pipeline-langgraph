@@ -13,6 +13,7 @@ from ..helpers import (
     require_project_state,
 )
 from ._shared import (
+    InvalidBibleOutput,
     _constitution_theme,
     _load_artifact_if_present,
     _load_script_text,
@@ -90,10 +91,14 @@ async def generate_character_bible(args: dict[str, object]) -> dict[str, object]
                 "script_content": script_text,
                 "project_id": project_id,
             },
+            subject_key="character_id",
+            subject_id=character_id,
         )
         return _deliver_character_bible(
             rt, active, store, project_id, character_id, result["character_bible"]
         )
+    except InvalidBibleOutput:
+        return _error("CharacterBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"CharacterBible generation failed: {exc}")
 
