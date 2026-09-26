@@ -8,8 +8,13 @@ Their implementation classes and schema tests remain in the codebase for future
 phases.
 
 This is a data module, not a package: it declares records and nothing else. The
-module that *validates* them and supports lookup is ``agents.registry``; the
-module that binds them to implementation classes is ``agents.impl.registry``.
+module that *validates* them, supports lookup, and binds them to implementation
+classes is ``agents.registry``.
+
+Each row's ``produces`` names the key its ``execute()`` returns the primary
+artifact under — the key consumers read from a run's result dict. That is the
+authoritative field; ``output_artifacts`` is the free-form capability
+vocabulary and is not a result-dict contract.
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["flow_routing", "arbitration", "phase_transition"],
         input_artifacts=["project_profile", "phase_state"],
         output_artifacts=["routing_decision"],
+        produces="action",
         allowed_kb_domains=["operations", "governance"],
         blocked_kb_domains=[],
         prompt_framework="RCTCO",
@@ -39,6 +45,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["input_classification", "signal_extraction"],
         input_artifacts=["user_idea"],
         output_artifacts=["classified_input"],
+        produces="profile",
         allowed_kb_domains=["operations"],
         blocked_kb_domains=["cost"],
         prompt_framework="RCTCO",
@@ -53,6 +60,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["theme_definition", "tone_setting", "visual_language"],
         input_artifacts=["classified_input", "resolved_config"],
         output_artifacts=["film_constitution"],
+        produces="constitution",
         allowed_kb_domains=["creative-writing", "tone"],
         blocked_kb_domains=["cost", "providers"],
         prompt_framework="RCTCO",
@@ -67,6 +75,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["treatment_writing", "act_mapping", "scene_listing"],
         input_artifacts=["film_constitution"],
         output_artifacts=["treatment", "act_map", "scene_list"],
+        produces="treatment",
         allowed_kb_domains=["creative-writing"],
         blocked_kb_domains=["cost", "providers"],
         prompt_framework="RCTCO",
@@ -81,6 +90,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["scene_writing", "dialogue", "scene_intents"],
         input_artifacts=["treatment", "act_map", "scene_list", "film_constitution"],
         output_artifacts=["script", "scene_intents"],
+        produces="script",
         allowed_kb_domains=["creative-writing", "dialogue", "character"],
         blocked_kb_domains=["cost", "providers"],
         prompt_framework="RCTCO",
@@ -95,6 +105,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["structure_extraction", "runtime_estimation", "anchor_identification"],
         input_artifacts=["story_bible", "script"],
         output_artifacts=["execution_brief"],
+        produces="execution_brief",
         allowed_kb_domains=["operations", "creative-writing"],
         blocked_kb_domains=["cost", "providers"],
         prompt_framework="RCTCO",
@@ -109,6 +120,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["reference_planning", "quality_thresholds"],
         input_artifacts=["character_bible", "environment_bible", "film_constitution"],
         output_artifacts=["reference_strategy"],
+        produces="reference_index",
         allowed_kb_domains=["reference-images", "visual-design"],
         blocked_kb_domains=["cost"],
         prompt_framework="RCTCO",
@@ -123,6 +135,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["shot_design", "matrix_assembly", "coverage_planning"],
         input_artifacts=["script", "scene_intents", "character_bible", "environment_bible"],
         output_artifacts=["shot_bible", "master_film_matrix"],
+        produces="shot_matrix",
         allowed_kb_domains=["directing", "camera"],
         blocked_kb_domains=["cost"],
         prompt_framework="RCTCO",
@@ -137,6 +150,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["provider_selection", "cost_estimation"],
         input_artifacts=["prompt_registry", "master_film_matrix", "resolved_config"],
         output_artifacts=["provider_plan"],
+        produces="cost_estimate",
         allowed_kb_domains=["providers", "cost"],
         blocked_kb_domains=[],
         prompt_framework="RCTCO",
@@ -151,6 +165,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["clip_quality", "prompt_adherence", "identity_consistency"],
         input_artifacts=["generated_clip", "prompt_registry", "validation_ledger"],
         output_artifacts=["validation_report"],
+        produces="consensus_report",
         allowed_kb_domains=["validation", "quality"],
         blocked_kb_domains=["cost"],
         prompt_framework="RCTCO",
@@ -165,6 +180,7 @@ MVP_AGENTS: list[AgentRegistration] = [
         capabilities=["error_classification", "recovery_decision", "retry_policy"],
         input_artifacts=["generation_ledger", "provider_error", "budget_state"],
         output_artifacts=["failure_decision"],
+        produces="assembly_manifest",
         allowed_kb_domains=["operations", "providers"],
         blocked_kb_domains=[],
         prompt_framework="RCTCO",

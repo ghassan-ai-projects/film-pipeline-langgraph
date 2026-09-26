@@ -11,6 +11,7 @@ from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
     _save_artifact,
+    produced_artifact,
 )
 from film_pipeline.orchestration.nodes._context import _parse_ref
 from film_pipeline.orchestration.nodes._shared import (
@@ -47,7 +48,7 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
             "prop sheets."
         ),
     )
-    index = result.get("reference_index")
+    index = produced_artifact(new_state, "reference-strategy-planner", result)
     if index is not None:
         ref = _save_artifact(new_state, index, "reference_index", "visual_dev")
         if ref:
@@ -117,7 +118,7 @@ def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
             "environment progression, and pacing style."
         ),
     )
-    brief = extract_result.get("execution_brief")
+    brief = produced_artifact(new_state, "structure-extractor-agent", extract_result)
     if brief is None:
         return
     set_execution_brief(new_state, brief)
@@ -440,7 +441,7 @@ def _design_shot_matrix(
             "movement." + _execution_brief_contract(brief)
         ),
     )
-    shot_matrix = result.get("shot_matrix")
+    shot_matrix = produced_artifact(new_state, "shot-design-agent", result)
     if shot_matrix is None:
         return None
     scene_ids = _script_scene_ids(new_state) if brief is not None else []
@@ -497,7 +498,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
 
 def _save_cost_estimate(new_state: dict[str, Any], result: dict[str, Any]) -> None:
     """Persist the planner's cost estimate and record its ref in state."""
-    cost_estimate = result.get("cost_estimate")
+    cost_estimate = produced_artifact(new_state, "provider-planning-agent", result)
     if cost_estimate is None:
         return
     ref = _save_artifact(new_state, cost_estimate, "cost_estimate", "gen_planning")
@@ -615,6 +616,10 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     _save_cost_estimate(new_state, result)
+    # ``generation_requests``/``shot_groups`` are secondary keys of the plan
+    # result, not the contract's ``produces`` key (``cost_estimate``), so they
+    # stay literal here. Naming them on the roster would require a
+    # multi-artifact contract, which this slice deliberately does not add.
     gen_requests = result.get("generation_requests")
     if gen_requests:
         new_state["generation_requests"] = gen_requests
@@ -625,7 +630,9 @@ def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
         str(new_state.get("shot_matrix_ref", "")),
     )
 
-    _validate_planning_gate(new_state, result.get("cost_estimate"))
+    _validate_planning_gate(
+        new_state, produced_artifact(new_state, "provider-planning-agent", result)
+    )
 
     updates = _collect_updates(
         gate_updates,

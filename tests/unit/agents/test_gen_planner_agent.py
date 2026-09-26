@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
-from film_pipeline.agents.impl.registry import get_agent_class
+from film_pipeline.agents.registry import get_agent_class
 from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.budget import CostEstimate
 from film_pipeline.schemas.handoff import AgentRegistration

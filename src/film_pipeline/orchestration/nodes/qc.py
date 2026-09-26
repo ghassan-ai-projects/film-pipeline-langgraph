@@ -10,6 +10,7 @@ from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
     _save_artifact,
+    produced_artifact,
 )
 from film_pipeline.orchestration.nodes._context import (
     _get_template_registry,
@@ -104,7 +105,7 @@ def _synthesize_consensus_report(state: dict[str, Any]) -> None:
             "pass/fail/block recommendation with actionable feedback."
         ),
     )
-    report = result.get("consensus_report")
+    report = produced_artifact(state, "clip-validator", result)
     if report is not None:
         ref = _save_artifact(state, report, "consensus_report", "qc")
         if ref:

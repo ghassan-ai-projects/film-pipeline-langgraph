@@ -1,15 +1,55 @@
-"""Agent registry — register, lookup by id, capability, or family."""
+"""Agent registry — register, lookup by id, capability, or family.
+
+This module owns agent registration: the validated catalog (``AgentRegistry``)
+*and* the binding from a registered agent id to the class that implements it
+(``AGENT_CLASS_BY_ID``). It is deliberately the only place either lives, so a
+roster row and its implementation cannot be declared in two modules that drift.
+"""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 
+from film_pipeline.agents.base import BaseAgent
+from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
+from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
+from film_pipeline.agents.impl.development_agent import DevelopmentAgent
+from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
+from film_pipeline.agents.impl.intake_agent import IntakeAgent
+from film_pipeline.agents.impl.orchestrator_agent import OrchestratorAgent
+from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
+from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
+from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
+from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
+from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 
 _logger = logging.getLogger(__name__)
+
+# One key per ``MVP_AGENTS`` row: the roster owns which ids exist, and this
+# table owns which class implements each. Nothing else may name an agent id
+# that the roster does not, so there is no unreachable alias here.
+AGENT_CLASS_BY_ID: dict[str, type[BaseAgent]] = {
+    "intake-classifier-agent": IntakeAgent,
+    "film-constitution-agent": ConstitutionAgent,
+    "treatment-agent": DevelopmentAgent,
+    "screenwriter-agent": ScreenwriterAgent,
+    "structure-extractor-agent": StructureExtractorAgent,
+    "shot-design-agent": ShotBibleAgent,
+    "reference-strategy-planner": VisualDevAgent,
+    "provider-planning-agent": GenPlannerAgent,
+    "clip-validator": QCSynthesisAgent,
+    "failure-handling-agent": AssemblyAgent,
+    "orchestrator-agent": OrchestratorAgent,
+}
+
+
+def get_agent_class(agent_id: str) -> type[BaseAgent] | None:
+    """Return the concrete implementation for a registered agent id."""
+    return AGENT_CLASS_BY_ID.get(agent_id)
 
 
 def _default_model_profiles() -> set[str]:

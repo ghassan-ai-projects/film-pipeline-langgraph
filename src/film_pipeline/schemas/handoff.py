@@ -45,6 +45,15 @@ class AgentRegistration(SchemaBase):
     capabilities: list[str] = Field(default_factory=list)
     input_artifacts: list[str] = Field(default_factory=list)
     output_artifacts: list[str] = Field(default_factory=list)
+    produces: str = Field(
+        default="",
+        description=(
+            "The authoritative key this agent's ``execute()`` returns its primary "
+            "artifact under. Consumers read the agent's result through this key "
+            "instead of hardcoding it. ``output_artifacts`` is the free-form "
+            "capability vocabulary and is not what the result dict is keyed by."
+        ),
+    )
     allowed_kb_domains: list[str] = Field(default_factory=list)
     blocked_kb_domains: list[str] = Field(default_factory=list)
     prompt_framework: str = "RCTCO"
