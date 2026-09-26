@@ -989,3 +989,65 @@ earlier corrections in this file exist to catch. Gates are otherwise as stated:
 strict clean; `enola check` exit 0. The unit-scope figure for the same tree is 2181
 passed / 3 skipped / 1 xfailed; the two differ because the full scope includes the
 integration and e2e suites with their own skip marks.
+
+## AGENT-10 — dependency law enforced, and four debt slices (2026-09-26)
+
+Branch `modular-app-4` off merged `main` (`45ba45f`). Four commits, all
+subtractive; the round's theme was the owner's ask: improvement, modularization,
+cut dependencies.
+
+### The round's central measurement
+
+The per-package **Allowed outbound** sets in `03-target-architecture.md` were
+documentation only. Nothing failed when an import crossed them, so **73 edges
+across 12 package pairs** had accumulated while `enola check` reported PASS —
+Enola grades *cycles*, not declared layers. `mcp` alone accounted for 68 of them,
+against a law reading "`filmspec`, `schemas`, `projects`, `governance`,
+`validation`, `operations`. **Nothing else.**" The worst were upward imports of
+`studio` **private** modules (`_operator_runtime`), forbidden twice over.
+
+| Slice | Scope | Evidence | Gates | Commit |
+|---|---|---|---|---|
+| AGENT-10a | Make the law executable: a guard that parses the allowed sets out of the architecture document and grades every import, freezing existing debt by pair and count | Fails on any increase, any new pair, and any stale row too high to catch a regression. Falsified both ways: adding one edge fails with `debt grew (recorded -> actual): {(mcp, generation): (23, 24)}`; a new pair fails with `not recorded as known debt: [(mcp, constraints)]` | PASS — 2,333 passed; ruff, mypy clean; enola exit 0 | `b028bda` |
+| AGENT-10b | One definition of the active-artifact-ref write: it was byte-identical in two modules and inlined in two more | Drift proven test-invisible — removing the `artifact_refs` append from one copy failed **0** tests across unit, smoke, integration and e2e. Also routed four modules through one `helpers.operator_service` seam instead of importing `studio._operator_runtime` | PASS — 2,335 passed; debt 73 -> 70; baseline tightened to match, which the guard demanded | `4d89c40` |
+| AGENT-10c | Default the generation provider through its owner, not hardcoded literals | **A real bug, not just duplication:** the owner's answer depends on runtime mode, so a real-mode run omitting `provider`/`model` planned against the mock provider. Verified live: owner says `seedance-openrouter` where the literals said `mock-video-provider`. The default branch had **no coverage** — every test passed both explicitly | PASS — 2,336 passed | `696533b` |
+| AGENT-10d | Deleted three dead aggregate schemas (`ModelRegistry`, `ProviderRegistry`, `ValidatorRegistry`) and their one self-referential test | AST sweep: zero `src/` references outside their own package; every `src/` hit was a *different* class in the package owning the concern. Entry schemas stay (13–42 refs each). This — not "parallel registries that must agree" — is C-14's real defect | PASS — 2,336 passed | `696533b` |
+
+### Corrections this round forced
+
+**C-03's "pure duplicate; delete it and read the profile file" framing in `12` is wrong.** The
+byte-identity claim holds (8/8 keys, values equal), but emptying `_FALLBACK_PROFILES`
+breaks **2182 of 2182** unit tests through one root cause: the table is the
+*vocabulary source* for `AgentRegistry.known_model_profiles` (`registry.py:63-65`),
+so the roster's profile names stop validating. It also needs
+`config/loader.py:30`'s cwd-relative `Path("profiles")` fixed first — reading the
+YAML from `ModelRouter()` would otherwise make routing depend on process cwd
+(measured: `cwd=/tmp` raises `FileNotFoundError`). Medium risk, low value; left open.
+
+**C-09's deferral premise is now false, but the split is still wrong.** Consumers moved:
+inline `rt.get_active()` 25 -> 4, the three "No active project" wordings -> one
+constant, and `RuntimePort` already matches 24 of 27 methods. But `runtime.py` is
+now a thin delegation shell over three collaborators, so a delegation split would
+re-create the facade that failed in `08` §1. The honest step is **subtraction**:
+delete the four zero-caller methods and add `get_provider` to the port.
+
+### Debt paid
+
+| Measure | Before | After |
+|---|---:|---:|
+| Dependency-law violations | 73 edges / 12 pairs | **70 / 12** |
+| `mcp -> studio` edges | 10 | **7** |
+| Definitions of the active-artifact-ref write | 2 defs + 2 inlines | **1** |
+| Cross-package private reaches (`_persist_project_state`/`_record_audit`) | 11 | **8** |
+| Dead registry aggregate schemas | 3 | **0** |
+
+Still open, ranked: 3b-style literal defaults elsewhere, C-09's four zero-caller
+methods, the remaining 70 law edges (23 of them `mcp -> generation`), C-03, and
+3e's latent budget-threshold divergence. The `mcp -> generation` group is the
+largest single target and needs the same treatment the bible tools got: route the
+handler to the owning domain module rather than importing it directly.
+
+**Process note carried forward from the investigation:** an in-process mutation
+proof must *assert the mutation applied* before trusting a null result. One probe
+silently failed to patch and reported a false "0 failures"; it was caught only by
+checking the patch was present.
