@@ -1051,3 +1051,79 @@ handler to the owning domain module rather than importing it directly.
 proof must *assert the mutation applied* before trusting a null result. One probe
 silently failed to patch and reported a false "0 failures"; it was caught only by
 checking the patch was present.
+
+## AGENT-11 — three MCP generation divergences fixed, and two findings left open (2026-09-26)
+
+Two parallel investigations into the 23 `mcp -> generation` edges (the largest
+group in the frozen law debt). They produced **three real bugs** and **two
+decisions I deliberately did not make alone**.
+
+### The bugs, all fixed in `8792039`
+
+| # | Defect | Evidence |
+|---|---|---|
+| 1 | **The prompt sent to providers was an artifact reference.** `dispatch.py` passed `prompt=row.prompt_ref`; the field is a *reference string*, and `GenerationExecutor._dispatch_row` resolves it via `resolve_shot_prompt` first. | Verified end to end: **before** `'artifact:gen_planning:prompt_package:v1'`, **after** `'Cinematic shot S001 for project p.'`. Every MCP-driven generation was submitting the literal, or an empty string. |
+| 2 | A FAILED row left `next_action='poll'` where the executor sets `wait_human` — telling the operator to keep polling a row that can never advance. | New test reads the persisted row; falsified by removing the field. |
+| 3 | `_sync_generation_requests_from_ledger` was a line-for-line copy of `GenerationExecutor.dispatchable_requests` **minus** its CANCELLED filter, so cancelled requests leaked into graph state. | Now skips CANCELLED, matching the owner. |
+
+**Why the suite was green.** All 27 existing start tests assert counts and ids,
+never payload content — so defect 1, the one that reaches real providers, had
+**zero** coverage. That is the same pattern as the AGENT-08 placeholders and the
+AGENT-10 provider default: the assertions were about shape, not meaning.
+
+### Finding A — an Enola cycle reported only when I removed a different edge
+
+While paying down the last non-`mcp` violation, `schemas -> orchestration`
+(`GraphStateSnapshot.check_state_keys` reached up into the graph layer, admitted
+in its own comment as inverting the order), I made the declared key set a
+parameter. The fix is correct — verified: `import film_pipeline.schemas` no
+longer loads `orchestration` at all.
+
+But `enola check` then failed with a **new** cycle:
+`agents -> agents/impl -> agents`. I established:
+
+- the cycle does **not** exist as a Python import problem: importing
+  `agents.impl.assembly_agent`, `agents.registry`, and `agents` first, each in a
+  fresh interpreter, all succeed;
+- it is **not** caused by the `agents` refactor either — reverting only the
+  `runtime_state` change while keeping every `agents` file at `main` still
+  reports it;
+- it is **absent from `main`'s report entirely**, because removing the
+  `schemas -> orchestration` edge changed which cluster Enola keys, and the
+  previously-masked cycle surfaced.
+
+**I reverted the fix.** A correct layer improvement is not worth a red gate, and
+pinning a fresh Enola baseline to hide the finding would violate the rule this
+repo wrote into `AGENTS.md` ("never lower the count by changing a filter or
+threshold"). The honest state: the layer violation is real and the fix is known,
+but it cannot land until the `agents` cycle is either genuinely broken or Enola's
+clustering is understood well enough to say the finding is spurious. **This needs
+an owner decision** — it is the one thing this round could not settle by
+measurement.
+
+### Finding B — the three hardcoded provider defaults (AGENT-10c) have siblings
+
+Not re-investigated this round; recorded for the next one, from the same
+generation-cluster investigation: `status.py` counts `requires_human_review`,
+`blocked_provider` and `blocked_budget` as ACTIVE because it hand-rolls a
+4-member terminal set from a 10-member enum with no owner; and both `status.py`
+handlers call `mgr.list_rows` without the `has_ledger` guard that exists
+precisely because "the ledger manager's `load` persists a new empty ledger
+artifact when none exists" — so a status read writes an artifact.
+
+### Deliberately not done
+
+Redirecting the five MCP generation handlers through `operations`. Three have no
+`operations` entry point (`operations.plan_generation` does not accept
+`shot_ids`/`provider`/`model`/`prompt_ref`/`mode`), so the redirect needs new
+surface **and** response-envelope mapping to satisfy a rule while increasing
+complexity. `cancel` and `promote` have no `operations`-side caller or test at
+all; adding one would create a second implementation of a lifecycle `AGENTS.md`
+says to remove. Those edges stay, recorded rather than papered over.
+
+### Also found: the Enola config scans build scratch
+
+The advisory output includes findings under `.pre-commit-cache/`, because
+`PRE_COMMIT_HOME` is set to a workspace-local directory during commits and
+`enola-config.yaml` does not ignore it. Harmless to the gate (advisory only) but
+noise; adding it to the ignore list is a one-line follow-up.
