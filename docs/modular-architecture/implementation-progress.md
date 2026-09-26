@@ -1758,3 +1758,67 @@ The guards constrain identity, not behaviour: they do not show that any producti
 path calls `is_known_provider`, because none does. They also say nothing about
 whether mode-scoped identity is the right policy — only that if it is the policy,
 the catalogue cannot silently drift from it.
+
+## AGENT-23 — adversarial verification of the whole round (2026-09-26)
+
+An independent adversarial pass was run against all eight cost-removal commits,
+instructed to assume a defect existed and hunt for it. It found **no BROKEN
+defect**, and it disproved the author's own top suspicion: the `== 2` in
+`test_impl_validators.py` (changed by hand from `== 3` when a required-ref rule was
+deleted) was re-derived from the validator source — 5 required files all supplied
+by the test's fixture, both remaining required refs blanked, `0 + 2 = 2` — rather
+than accepted on the author's word. It is a re-measurement, not a weakened
+assertion.
+
+Verified clean, each with an explicit method rather than by reading:
+
+| Claim | How it was checked |
+|---|---|
+| All four keepers intact | Located each and ran its covering tests |
+| `_known_provider` branches equivalent | Read both bodies: `provider_adapters.get(x) is not None` ≡ `x in list(provider_adapters.keys())` |
+| No producer-less required delivery item | Cross-checked every required file/ref against its producer |
+| No remaining phantom-field kwargs | AST scan over all of `src/` + `tests/` against real model fields |
+| No test pins the deleted prompt text | Grep for the removed strings in `tests/` |
+
+### Fixed as a result
+
+Stale prose in six places, and one drifted test fixture. The fixture is the
+instructive one: `test_gen_planner_agent.py` still declared
+`capabilities=["provider_selection", "cost_estimation"]` after `roster.py` had been
+updated to `dispatch_planning`. It was inert, so nothing failed. **A fixture that
+duplicates production data and is never asserted on cannot detect drift — it only
+hides it.** That is the second instance of this class in one round, after the
+`estimated_cost_usd` test that passed for the wrong reason.
+
+The one user-visible fix: `mcp/tools/review.py` told the operator "budget,
+provider, or quality threshold reached" when triggering `escalate_to_human` — a
+concept that can no longer trigger it.
+
+### A false positive, recorded because it nearly caused a wrong fix
+
+The verifier reported `tests/unit/providers/test_catalog.py` as **untracked**, and
+recommended committing it. It was in fact tracked, in `HEAD`, and pushed — the file
+was created by `51cbf0a` *after* the revision the verifier had inspected (`b9f51f6`).
+The observation was stale, not wrong, and acting on it would have produced a
+no-op commit described as a fix. Checking the claim against `git ls-files` and
+`git cat-file` took one command.
+
+### Pre-existing defects this round did NOT introduce and did NOT fix
+
+Flagged, not repaired, because each is outside this objective and needs its own
+decision:
+
+- **The delivery validator and the packaging agent disagree about completeness.**
+  `REQUIRED_DELIVERY_FILES` matches `final_video.mp4` / `review_cut.mp4` by exact
+  basename, but `build_package` records whatever path the caller passed. Verified:
+  a package built from `video_path="final.mp4"` reports `is_complete=True` from the
+  agent while the validator scores it `0.0` and blocks with 5 missing assets. The
+  documented "happy path" test dodges this by hardcoding the exact basenames. A
+  package can therefore be complete by one definition and empty by another. This
+  survives the cost removal unchanged — notably, the `cost_report.json` rule
+  removed in `3fdd379` was the *only* required item with no producer at all.
+- **`devharness/mock_human.py`**'s `APPROVE_SPEND_UNDER_LIMIT` branch returns
+  "approve" unconditionally and never reads its own `spend_limit_usd` field, making
+  it identical to `APPROVE_ALL`. A surviving budget concept, predating this work.
+
+Both are recorded here so the next round does not rediscover them as new.
