@@ -1,7 +1,7 @@
 """Config conflict detection.
 
 Detects irreconcilable combinations such as:
-- festival quality + free_only budget
+- festival quality + free_only provider routing
 - visual_poetry film type + heavy dialogue requirements
 """
 

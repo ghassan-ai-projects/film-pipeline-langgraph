@@ -146,7 +146,6 @@ class GenerationStatus(StrEnum):
     TIMED_OUT = "timed_out"
     REQUIRES_HUMAN_REVIEW = "requires_human_review"
     BLOCKED_PROVIDER = "blocked_provider"
-    BLOCKED_BUDGET = "blocked_budget"
 
 
 class IssueSeverity(StrEnum):

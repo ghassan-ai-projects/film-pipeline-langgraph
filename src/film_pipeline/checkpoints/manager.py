@@ -16,7 +16,7 @@ class CheckpointManager:
     """Manages semantic checkpoints backed by git.
 
     Every checkpoint creates a git commit + annotated tag with metadata
-    that links artifact versions, approvals, validations, and budget state.
+    that links artifact versions, approvals, and validations.
     """
 
     git: GitBackend

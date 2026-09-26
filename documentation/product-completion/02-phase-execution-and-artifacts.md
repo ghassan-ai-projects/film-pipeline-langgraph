@@ -70,7 +70,7 @@ When this area is complete:
 
 - prompt package artifacts
 - provider plan artifact
-- spend plan artifact
+- generation plan artifact
 
 ### Generation
 

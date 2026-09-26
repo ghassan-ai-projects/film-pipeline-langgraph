@@ -16,7 +16,7 @@ When generation is complete:
 - submit/poll/download transitions are recoverable
 - duplicate provider jobs are prevented
 - provider failures pause work safely
-- budget approval gates work before expensive execution
+- approval gates work before expensive execution
 
 ---
 
@@ -70,6 +70,6 @@ This area is done only when all of the following are true:
 
 - generation is idempotent and recoverable
 - provider failures do not corrupt project state
-- budget and approval policy gate expensive generation
+- approval policy gates expensive generation
 - clip outputs are real artifacts built from the supported workflow
 - clip handoff evidence is real and completeness-validated

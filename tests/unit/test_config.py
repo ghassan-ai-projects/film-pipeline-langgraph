@@ -197,7 +197,6 @@ def test_validator_no_conflicts_on_valid_config() -> None:
     cfg = {
         "quality_profile": "studio",
         "providers": {"order": ["seedance-openrouter"]},
-        "budget": {"project_cap_usd": 50},
         "generation": {"expected_shot_count": 8},
         "film_type": "narrative",
         "writing_style": "",
