@@ -11,7 +11,7 @@ from film_pipeline.mcp.tools import (
     set_active_project,
     submit_idea,
 )
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 
 @pytest.mark.integration
@@ -19,7 +19,7 @@ class TestIntakeConstraints:
     """End-to-end constraints extraction and persistence."""
 
     def setup_method(self) -> None:
-        from film_pipeline.app.runtime import get_runtime, reset_runtime
+        from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
         reset_runtime("mock")
         rt = get_runtime()
@@ -49,7 +49,7 @@ class TestIntakeConstraints:
             )
             assert result["ok"] is True
 
-            rt = __import__("film_pipeline.app.runtime", fromlist=["get_runtime"]).get_runtime()
+            rt = __import__("film_pipeline.studio.runtime", fromlist=["get_runtime"]).get_runtime()
             state = rt.get_project("constraints-01")
             assert state is not None
             assert state["constraints_ref"] == "artifact:intake:project_constraints:v1"

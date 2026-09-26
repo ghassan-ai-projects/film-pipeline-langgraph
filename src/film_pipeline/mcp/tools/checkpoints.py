@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.app.services.operator import OperatorService
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
+from film_pipeline.studio._operator_runtime import operator_service
 
-from .helpers import _active_project_id, _error, _ok
+from .helpers import (
+    _active_project_id,
+    _error,
+    _ok,
+    require_project_state,
+)
 
 _RECENT_CHECKPOINT_LIMIT = 20
 
@@ -39,9 +44,7 @@ async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
 
 async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
-        return _error("No active project.")
+    active = require_project_state(args)
     reason = str(args.get("reason", "manual checkpoint"))
     try:
         cp = rt.create_checkpoint(
@@ -115,11 +118,9 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
         return _error("artifact_id is required.")
     checkpoint_id = str(args.get("checkpoint_id", ""))
     confirmed = bool(args.get("confirmed"))
-    active = rt.get_active()
-    if active is None:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
-    service = OperatorService(rt)
+    service = operator_service(rt)
     checkpoint = service.get_checkpoint(checkpoint_id) if checkpoint_id and not confirmed else None
 
     if not confirmed:
@@ -147,7 +148,7 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
 async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     checkpoint_id = str(args.get("checkpoint_id", ""))
-    service = OperatorService(rt)
+    service = operator_service(rt)
     cp = service.get_checkpoint(checkpoint_id)
     if cp is None:
         return _error(f"Checkpoint not found: {checkpoint_id}")

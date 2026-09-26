@@ -22,7 +22,8 @@ from _scratch_bootstrap import use_scratch_roots
 SCRATCH_ARTIFACTS = use_scratch_roots()
 
 from film_pipeline.app.runtime import get_runtime
-from film_pipeline.schemas._base import FilmPhase
+
+from film_pipeline.schemas.base import FilmPhase
 
 rt = get_runtime()
 rt.server_mode = "real"

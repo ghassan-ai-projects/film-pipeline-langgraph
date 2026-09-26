@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.graph import orchestrator_state as ostate
-from film_pipeline.graph.router import compute_actions
+from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.router import compute_actions
 
 
 def _base_state(phase: str = "script", approved: bool = False) -> dict[str, Any]:
@@ -72,7 +72,7 @@ class TestOrchestratorDecisionLoop:
         ostate.set_candidate_ref(state, "scene_list", "artifact:scene_list:v2")
 
         # Simulate approval
-        from film_pipeline.graph.nodes import approve_phase_node
+        from film_pipeline.orchestration.nodes import approve_phase_node
 
         approved_state = approve_phase_node(state)
         approved_refs = ostate.get_approved_refs(approved_state)

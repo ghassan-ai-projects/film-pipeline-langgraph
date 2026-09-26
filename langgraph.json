@@ -1,7 +1,7 @@
 {
   "dockerfile_lines": [],
   "graphs": {
-    "film_pipeline": "./src/film_pipeline/app/graph_factory.py:graph"
+    "film_pipeline": "./src/film_pipeline/studio/graph_factory.py:graph"
   },
   "python_version": "3.12",
   "dependencies": ["."]

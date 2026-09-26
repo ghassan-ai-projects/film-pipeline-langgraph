@@ -12,7 +12,10 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.filmspec import NO_ACTIVE_PROJECT as NO_ACTIVE_PROJECT
+from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -52,6 +55,11 @@ def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
     return None
 
 
+def _no_active_project() -> dict[str, object]:
+    """The standard "nothing to act on" error response."""
+    return _error(NO_ACTIVE_PROJECT)
+
+
 def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     """Return the active project's state, or ``None`` when none resolves.
 
@@ -60,11 +68,48 @@ def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
     ``film_pipeline.mcp.tools.get_runtime`` by attribute, and only lazy
     binding sees the patch.
     """
-    rt = tools_pkg.get_runtime()
+    rt: StudioRuntime = tools_pkg.get_runtime()
     project_id = _active_project_id(args, rt)
     if project_id is None:
         return None
     return rt.get_project(project_id)
+
+
+def require_project_id(args: dict[str, object]) -> str:
+    """Return the request's project id, assuming the dispatch precondition held.
+
+    `MCPServer.call` checks `ToolContract.requires_active_project` before
+    dispatch and returns a typed error when there is no project, so a handler
+    reached through the operator surface always has one. Handlers therefore
+    state the assumption instead of re-deriving it — the check existed at 48
+    call sites with three wordings and five emptiness tests.
+
+    Raises `ProjectNotFoundError` rather than returning an error response. The
+    dispatch layer already maps service errors to typed MCP errors, so a handler
+    cannot invent a different error shape by accident. A raise here means the
+    guarantee was violated — a bug in the contract declaration, not a user error.
+    """
+    rt: StudioRuntime = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
+    return project_id
+
+
+def require_project_state(args: dict[str, object]) -> dict[str, Any]:
+    """Return the request's project state, assuming the dispatch precondition held.
+
+    See :func:`require_project_id` for why this raises rather than returning an
+    error response.
+    """
+    rt: StudioRuntime = tools_pkg.get_runtime()
+    project_id = _active_project_id(args, rt)
+    if project_id is None:
+        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
+    state = rt.get_project(project_id)
+    if state is None:
+        raise ProjectNotFoundError(f"Project '{project_id}' is not loaded.")
+    return state
 
 
 def _services(rt: object) -> Any:
@@ -192,7 +237,7 @@ def _load_latest_reference_index(
     project_id: str,
     state: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = 0

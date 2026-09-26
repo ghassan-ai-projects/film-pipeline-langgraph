@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from film_pipeline.agents.handoff import HandoffManager
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 

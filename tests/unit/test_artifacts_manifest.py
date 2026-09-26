@@ -5,7 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from film_pipeline.artifacts.manifest import (
+from film_pipeline.storage.manifest import (
     AssetEntry,
     AssetManifest,
     read_manifest,

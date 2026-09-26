@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from film_pipeline.artifacts.project_storage import ProjectStorage
+from film_pipeline.storage.project_storage import ProjectStorage
 
 from ..helpers import _latest_artifact_version, _services
 
@@ -75,8 +75,8 @@ def _save_reference_index_artifact(
 ) -> str | None:
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
     project_id = str(state.get("project_id", ""))
     store = _services(rt).artifact_store

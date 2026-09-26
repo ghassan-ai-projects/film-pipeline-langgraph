@@ -1,6 +1,6 @@
 # Modular architecture: review and decision
 
-**Status (2026-09-25): review complete; the proposed 20-module migration is not approved for execution.** The audit is useful evidence, but its findings, ledger, target design, and 21-phase roadmap do not form a consistent, verified implementation contract. [The independent decision](06-independent-review-and-decision.md) is the current entry point. [The bar review](reviews/bar-conformance.md) records what the original program did and did not demonstrate.
+**Status (2026-09-25): migration in progress by user direction.** The user chose to pursue the 20-module target despite [the earlier independent decision](06-independent-review-and-decision.md). That review remains evidence of risks and inconsistencies, not the current stop decision. The 21-phase roadmap is a source of candidates, not a literal checklist: each move must preserve behavior and reduce a measured Enola finding or a verified ownership violation. [The progress ledger](implementation-progress.md) records the live order and results.
 
 This is an **audit and design package with one small implementation example**, not a completed architecture migration. The independent review changed no source behavior; the later phase-sequence example migrates one internal rule. The baseline studied by the original program is commit `fb85baa0e6b769b709791a96a89980089304bf13`; the same commit was checked for the original decision. Recheck source anchors and counts against the current working tree before using them.
 
@@ -12,7 +12,7 @@ output.
 
 ## Decision in brief
 
-Keep the current package structure while repairing the demonstrated seams. Extract a new module only when a focused change cannot leave one existing package as the clear owner. Prefer a small guard that tests an observable contract over a repository-wide ownership manifest. Preserve the MCP operator boundary, typed artifacts, human gates, and checkpoint recovery required by [the architecture blueprint](../../documentation/architecture-blueprint.md) and [the product standard](../../documentation/product-completion/00-product-standard.md).
+Migrate toward the target modules in small, behavior-preserving rounds. Prioritize measured cycles and duplicate ownership. Preserve the MCP operator boundary, typed artifacts, human gates, and checkpoint recovery required by [the architecture blueprint](../../documentation/architecture-blueprint.md) and [the product standard](../../documentation/product-completion/00-product-standard.md). Defer behavior repairs until the migration is complete.
 
 The independent review found that the proposed design adds 20 target modules, a custom `ModuleContract` declaration in each package, a large AST guard suite, and 21 migration phases before the critical runtime seams are resolved. Its own adversarial reviews report unsatisfied roadmap and evidence gates. Those are reasons to revise the plan, not reasons to discard the evidence.
 
@@ -26,7 +26,7 @@ Use the [implementation progress tracker](implementation-progress.md) for per-sl
 2. [Bar conformance](reviews/bar-conformance.md): honest A1–A9/B1–B9 assessment of the original program.
 3. [00 — methodology](00-methodology-and-quality-bar.md): the original audit's definitions and desired quality bar. Its historical process requirements do not turn unverified claims into facts.
 4. [01 — ownership map](01-ownership-map.md) and [02 — duplication ledger](02-duplication-ledger.md): discovery evidence. Their snapshots and totals are historical and internally out of sync with the current audit corpus. Resolve a finding against the source and its verifier before using it.
-5. [03 — target architecture](03-target-architecture.md), [04 — extraction roadmap](04-extraction-roadmap.md), and [05 — enforcement](05-enforcement-and-guard-tests.md): **superseded proposals**, retained so their tradeoffs and review objections are inspectable. Do not execute them as a migration checklist.
+5. [03 — target architecture](03-target-architecture.md), [04 — extraction roadmap](04-extraction-roadmap.md), and [05 — enforcement](05-enforcement-and-guard-tests.md): the requested migration target and historical sequencing proposals. Apply each boundary against current source and the live quality gates; their stale counts and behavior-changing clauses are not automatic instructions. **`05` is a design that was never implemented** — `tests/architecture/` and `src/film_pipeline/architecture.py` do not exist, `ModuleContract` has no occurrences under `src/`, and 15 of the 16 guards it enumerates are absent. Its edge law is documentation-only, so nothing mechanically blocks a forbidden import.
 
 ## Evidence inventory
 

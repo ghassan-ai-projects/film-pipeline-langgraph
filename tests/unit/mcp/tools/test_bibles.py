@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     generate_camera_bible,
     generate_character_bible,
@@ -17,6 +16,7 @@ from film_pipeline.mcp.tools import (
     generate_style_bible,
 )
 from film_pipeline.mcp.tools.bibles import _extract_script_text
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_extract_script_text_none_returns_empty() -> None:
@@ -59,24 +59,6 @@ def _build_runtime_through_script(tmp_path: Path, project_id: str) -> StudioRunt
     return rt
 
 
-def test_generate_character_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(generate_character_bible({"character_id": "leo"}))
-    assert result["ok"] is False
-
-
-def test_generate_environment_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(generate_environment_bible({"environment_id": "studio"}))
-    assert result["ok"] is False
-
-
 def test_generate_environment_bible_missing_constitution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -92,8 +74,8 @@ def test_generate_environment_bible_missing_constitution(
     # branch rather than the "Script artifact not found" branch.
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata
+    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
     from film_pipeline.schemas.script import Script
 
     assert rt.services is not None
@@ -119,24 +101,6 @@ def test_generate_environment_bible_missing_constitution(
     assert "FilmConstitution not found" in cast(str, result["error"])
 
 
-def test_generate_camera_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(generate_camera_bible({}))
-    assert result["ok"] is False
-
-
-def test_generate_style_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(generate_style_bible({}))
-    assert result["ok"] is False
-
-
 def test_generate_style_bible_missing_constitution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -148,15 +112,6 @@ def test_generate_style_bible_missing_constitution(
     result = asyncio.run(generate_style_bible({}))
     assert result["ok"] is False
     assert "FilmConstitution not found" in cast(str, result["error"])
-
-
-def test_generate_shot_bible_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(generate_shot_bible({}))
-    assert result["ok"] is False
 
 
 def test_generate_character_bible_requires_character_id(

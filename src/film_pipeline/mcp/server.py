@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import Any
 
+from film_pipeline.filmspec import NO_ACTIVE_PROJECT
 from film_pipeline.mcp._stdio_transport import (
     _read_message as _read_message,
 )
@@ -28,7 +29,8 @@ from film_pipeline.mcp.contract import (
 )
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
-from film_pipeline.mcp.resolution import (
+from film_pipeline.operations.errors import ProjectNotFoundError
+from film_pipeline.projects import (
     AmbiguousProjectError,
     ProjectRecord,
     ProjectRegistry,
@@ -64,6 +66,9 @@ class MCPServer:
         confirmation = self._check_confirmation(reg, tool_name, arguments, resolved_envelope)
         if confirmation is not None:
             return confirmation
+        missing_project = self._check_active_project(reg, resolved_envelope)
+        if missing_project is not None:
+            return missing_project
         return await self._dispatch_handler(reg.handler, arguments, resolved_envelope)
 
     def _resolve_tool_and_project(
@@ -103,8 +108,14 @@ class MCPServer:
         reg: ToolRegistration,
         envelope: RequestEnvelope,
     ) -> MCPResponse | RequestEnvelope:
-        """Resolve envelope.project_ref against the registry when present."""
+        """Resolve the request's project, explicit ref first, then the session's."""
         if not envelope.project_ref:
+            # No explicit ref: fall back to the session's active project. The
+            # field was previously write-only — set on a mutating call and
+            # never read — so the dispatch precondition had nothing to consult
+            # and every handler re-derived the active project for itself.
+            if self.active_project_id:
+                return _resolved_envelope(envelope, self.active_project_id)
             return envelope
         try:
             project = self.projects.resolve_or_raise(envelope.project_ref)
@@ -161,7 +172,7 @@ class MCPServer:
         """Register a runtime-known project missing here; None when unknown everywhere."""
         if not project_ref:
             return None
-        from film_pipeline.app.runtime import get_runtime
+        from film_pipeline.studio.runtime import get_runtime
 
         rt = get_runtime()
         rt_project = rt.get_project(project_ref)
@@ -175,6 +186,37 @@ class MCPServer:
         )
         self.projects.register(record)
         return pid
+
+    def _check_active_project(
+        self,
+        registration: ToolRegistration,
+        envelope: RequestEnvelope,
+    ) -> MCPResponse | None:
+        """Return a NO_ACTIVE_PROJECT response, or None when the precondition holds.
+
+        The precondition — "is there a project to act on?" — was checked inside
+        48 handlers with three wordings and five different emptiness tests
+        (`if not active` and `if active is None` disagree on an empty dict).
+        Declaring it on the contract and checking it once at dispatch means the
+        condition has a single answer, and handlers state the requirement rather
+        than re-deriving it.
+
+        The envelope already carries the resolved project, so this needs no
+        resolution work of its own.
+        """
+        if not registration.contract.requires_active_project:
+            return None
+        if envelope.resolved_project_id:
+            return None
+        return MCPResponse(
+            success=False,
+            request_id=envelope.request_id,
+            error=MCPError(
+                code=MCPErrorCode.NO_ACTIVE_PROJECT,
+                message=NO_ACTIVE_PROJECT,
+                details={"tool": registration.contract.name},
+            ),
+        )
 
     def _check_confirmation(
         self,
@@ -215,6 +257,19 @@ class MCPServer:
             return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
+        except ProjectNotFoundError as exc:
+            # Handlers assert the active-project precondition instead of
+            # checking it (`require_project_id`). A raise here means the
+            # precondition did not actually hold, so it is reported with the
+            # same code the dispatch check would have used.
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.NO_ACTIVE_PROJECT,
+                    message=str(exc),
+                ),
+            )
         except Exception as exc:  # pragma: no cover — defensive
             return MCPResponse(
                 success=False,
@@ -238,15 +293,15 @@ def main() -> int:
     server from starting — individual tool calls will fail with actionable
     errors if their required resources are missing.
     """
-    from film_pipeline.app.bootstrap import validate_environment
+    from film_pipeline.studio.bootstrap import validate_environment
 
     if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
 
     # Stdio transport owns stderr's cleanliness; persistent runs also retain a
     # file log under the same runtime root used by StudioRuntime.
-    from film_pipeline.app._persistence import configured_runtime_root
-    from film_pipeline.app.logging_setup import configure_logging
+    from film_pipeline.studio._persistence import configured_runtime_root
+    from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(configured_runtime_root())
 

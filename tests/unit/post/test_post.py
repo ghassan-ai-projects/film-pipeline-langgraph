@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.post.assembly_agent import AssemblyAgent
 from film_pipeline.post.audio_design_agent import AudioDesignAgent
 from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 from film_pipeline.post.subtitle_agent import SubtitleAgent
 from film_pipeline.post.transition_agent import TransitionAgent
 from film_pipeline.post.validators import PostValidator
+from film_pipeline.storage.store import ArtifactStore
 
 
 class TestAssembly:
@@ -84,9 +84,9 @@ class TestTransitions:
         assert plan.transitions[0]["type"] == "dissolve"
 
     def test_transition_types_matches_canonical_home(self) -> None:
-        """post re-exports exactly the canonical vocabulary from schemas/_base."""
+        """post re-exports exactly the canonical vocabulary from schemas/base."""
         from film_pipeline.post.transition_agent import TRANSITION_TYPES
-        from film_pipeline.schemas._base import TRANSITION_TYPES as CANONICAL_TRANSITION_TYPES
+        from film_pipeline.schemas.base import TRANSITION_TYPES as CANONICAL_TRANSITION_TYPES
 
         assert TRANSITION_TYPES == CANONICAL_TRANSITION_TYPES
 
@@ -298,7 +298,7 @@ class TestAssemblyPersist:
         ref = agent.persist(plan, store)
         assert ref.startswith("artifact:")
         # Verify artifact is loadable
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         data = store.load("test-persist", FilmPhase("post"), "assembly_manifest", 1)
         assert data["clip_count"] == 2
@@ -315,7 +315,7 @@ class TestSubtitlePersist:
         )
         ref = agent.persist(plan, store)
         assert ref.startswith("artifact:")
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         data = store.load("test-persist", FilmPhase("post"), "subtitles", 1)
         assert data["cue_count"] == 2
@@ -338,7 +338,7 @@ class TestDeliveryPersist:
         )
         ref = agent.persist(package, store)
         assert ref.startswith("artifact:")
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         data = store.load("test-persist", FilmPhase("delivery"), "delivery_package", 1)
         assert data["is_complete"] is True

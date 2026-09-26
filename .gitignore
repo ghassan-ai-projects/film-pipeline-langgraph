@@ -252,7 +252,7 @@ __marimo__/
 /.claude
 # Legacy default storage root (tests never write here; see
 # documentation/storage-upgrade-plan.md — dev scripts use .scratch/)
-projects/
+/projects/
 .scratch/
 .DS_Store
 

@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 
 from film_pipeline.agents.model_routing import ModelRouter
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 
 _logger = logging.getLogger(__name__)

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _active_project_id, _error, _ok, _services
+from ..helpers import (
+    _error,
+    _ok,
+    _services,
+    require_project_id,
+)
 
 
 async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
@@ -13,9 +18,7 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
+    project_id = require_project_id(args)
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
@@ -37,11 +40,9 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
 async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     """List active (non-terminal) generation rows."""
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
+    project_id = require_project_id(args)
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     terminal = {

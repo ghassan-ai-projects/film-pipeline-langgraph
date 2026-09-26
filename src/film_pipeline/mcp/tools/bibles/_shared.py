@@ -55,7 +55,7 @@ def _extract_script_text(script_data: object | None) -> str:
 
 def _load_versioned_artifact(store: Any, project_id: str, phase: str, artifact_id: str) -> Any:
     """Load the latest version of an artifact from its creation phase."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     version = store.latest_version(project_id, phase, artifact_id)
     return store.load(project_id, FilmPhase(phase), artifact_id, max(1, version))
@@ -118,8 +118,8 @@ def _save_visual_dev_candidate(
     """Persist a bible as the next CANDIDATE version in visual_dev."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), artifact_id) + 1

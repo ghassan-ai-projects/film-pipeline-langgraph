@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from film_pipeline.kb.manifest import KBManifest
-from film_pipeline.schemas._base import KbAuthority
+from film_pipeline.schemas.base import KbAuthority
 
 MANIFEST_PATH = Path("film-knowledge-base/index/kb-manifest.yaml")
 

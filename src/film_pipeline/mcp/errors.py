@@ -11,6 +11,7 @@ class MCPErrorCode(StrEnum):
 
     AMBIGUOUS_PROJECT = "ambiguous_project"
     UNKNOWN_PROJECT = "unknown_project"
+    NO_ACTIVE_PROJECT = "no_active_project"
     UNKNOWN_TOOL = "unknown_tool"
     VALIDATION_ERROR = "validation_error"
     PERMISSION_DENIED = "permission_denied"

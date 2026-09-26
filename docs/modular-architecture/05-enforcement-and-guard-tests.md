@@ -1,11 +1,32 @@
 # 05 — Enforcement and Guard Tests
 
-> **Review status (2026-09-25): superseded proposal.** The proposed manifest
-> and guard suite were not installed or shown to pass CI. The independent review
-> in [06](06-independent-review-and-decision.md) recommends focused behavior and
-> boundary tests before any broad ownership-manifest mechanism.
+> **Review status (2026-09-25): superseded proposal, and not implemented.**
+> Read this document as a design, not as a description of the repository.
+> Verified against the working tree at commit `d726df1`:
+>
+> - **`tests/architecture/` does not exist**, and
+>   **`src/film_pipeline/architecture.py` does not exist**. `ModuleContract` and
+>   `may_import` have **zero** occurrences anywhere under `src/`.
+> - Of the **16** guard test functions this document enumerates, **15 are
+>   absent**. The single present name, `test_known_dead_rows_cite_evidence`,
+>   lives in `tests/unit/config/test_config_contract.py`, not under
+>   `tests/architecture/`. The whole `GUARD_REGISTRY` 12-tuple, `_harness.py`,
+>   and `_guard_registry.py` are unwritten.
+> - The **four legacy AST guards** named in §1.1 below **do** exist and do run
+>   in CI. They are the only mechanical ownership enforcement in the repository.
+>
+> Consequently the edge law in `03-target-architecture.md` §4.6.1 is
+> **documentation-only**: nothing mechanically prevents a new forbidden import
+> from landing. This is not hypothetical — the `operations → studio` edge
+> (FES #3) is presently *declared forbidden* while the four live sites in
+> `app/services/` would create it if moved naively, and no test would fail.
+>
+> The decision recorded in [06](06-independent-review-and-decision.md) still
+> applies: prefer focused behavior and boundary tests over a broad
+> ownership-manifest mechanism. Until someone deliberately builds
+> `tests/architecture/`, treat every "guard" claim in this file as a proposal.
 
-Status: **synthesis (bar B3, B5, B6, B8).** Baseline `fb85baa` (`modular-app`).
+Status: **synthesis (bar B3, B5, B6, B8), superseded.** Baseline `fb85baa` (`modular-app`).
 This is the execution volume of the modularization program: it decides *how*
 ownership is declared and mechanically enforced, condensing
 `design/proposal-B-enforcement.md` (primary source) with
@@ -162,7 +183,7 @@ reviewer — recorded so the same class is visible if it recurs:
 
 | Asset at HEAD | Evidence | Consequence |
 |---|---|---|
-| **Four** hand-written **AST guards** — two import-boundaries + two contract guards | `tests/unit/artifacts/test_storage_boundary.py`, `tests/unit/graph/test_startup_boundaries.py`, `tests/unit/config/test_config_contract.py`, `tests/unit/graph/test_channel_registry.py`. `reviews/verify-14.md` re-verification item 7 confirms **exhaustiveness**: exactly four test files under `tests/` call `ast.parse`, the four listed. | The shape is already proven **four times by hand**. The mechanism is *consolidation*, not invention. This is the ground-truth count — proposal B §2.2 says "five", counting a non-AST guard (below). |
+| **Eight** hand-written **AST guards** at the current revision | `tests/unit/app/test_app_boundaries.py`, `tests/unit/config/test_config_contract.py`, `tests/unit/config/test_profile_resolver.py`, `tests/unit/providers/test_import_boundaries.py`, `tests/unit/graph/test_channel_registry.py`, `tests/unit/graph/test_startup_boundaries.py`, `tests/unit/schemas/test_import_boundaries.py`, `tests/unit/storage/test_storage_boundary.py`. Reproduce: `grep -rln "ast\.parse" tests/ --include='*.py' \| wc -l`. | The shape is proven by hand, repeatedly. **Correction:** the original text here claimed `verify-14` "re-confirmation item 7" established *exactly four* such files. That measurement was already stale when written and is false today: the demonstrated count is **eight**. The migration rounds added `app`, `providers`, `schemas`, and `storage` boundary guards, and retargeted others. Treat the "four" figure, and any plan built on it, as superseded. Note the claim was never checked by a guard of its own. |
 | One further **regex/text** guard (not AST) | `tests/unit/artifacts/test_storage_guards.py:26-47` sweeps `Path("projects")` and `Path.home()` with `re` + `read_text`, not `ast.parse` | The mechanism absorbs its *pattern* (a literal-only-in-owner sweep) but it is not one of the four AST guards. Its two behavioural tests are not generalizable. |
 | One distribution, one gate | `pyproject.toml:59` `packages = ["src/film_pipeline"]`; `Makefile:108` `ci-check: format-check lint typecheck test-cov build product-gate`; `Makefile:111` `ci-verify` | A test under `tests/` is gated with **no YAML change**. |
 | `pytest` already configured for the whole tree | `pyproject.toml:70-90`: `testpaths = ["tests"]`, `-n auto`, `--cov=film_pipeline`, `--cov-fail-under=90` | New guard tests ride the existing step and the existing coverage gate. |
@@ -256,7 +277,7 @@ and **its verdicts supersede the audit's claims** (reconciliation-notes R4).
 
 | Discrepancy | Resolution |
 |---|---|
-| "4 hand-written AST guards" (`audit/14`) vs "5 hand-rolled guards" (proposal B §2.2) | Both count real files but not the same kind. `verify-14` re-verification item 7 re-confirmed exhaustiveness: **exactly four** test files under `tests/` call `ast.parse`. `tests/unit/artifacts/test_storage_guards.py` is a **fifth guard but regex/text-based**. §4 consolidates all five; the AST harness absorbs four. |
+| "4 hand-written AST guards" (`audit/14`) vs "5 hand-rolled guards" (proposal B §2.2) | Both count real files but not the same kind. **Corrected:** this row previously asserted that `verify-14` re-verification item 7 re-confirmed "exactly four" test files calling `ast.parse`. That is **false at the current revision** — the measured count is **eight**, and it was already understated when written. `tests/unit/storage/test_storage_guards.py` remains the one **regex/text-based** guard. Any consolidation plan derived from "four" must be re-derived from the measured eight. |
 | "8 forbidden domain→domain edges" (`audit/14` F-BOUNDARY-01) vs "11 violating statements in 4 pairs" (proposal B §2.3) | Different definitions of *domain*. `verify-14` F-BOUNDARY-01 **CONFIRMED** and independently enumerated **8** edges: `agents→providers` (4 stmts), `config→providers` (2), `generation→providers` (4), `generation→artifacts` (7), `post→validation` (1), `testing→artifacts` (2), `testing→checkpoints` (1), `testing→providers` (1). Proposal B scans a narrower domain set. **Under a layer law, 6 of the 8 become lawful** (downward: `agents→providers`, `generation→artifacts`, `generation→providers`; off-graph: the three `testing→*`), leaving **two genuinely illegal edges**: `config→providers` and `post→validation`. The guards enforce the layer law, so if the layer law is adopted the ledger needs 2 rows, not 8 — and the *measured* 8 remains the number recorded in L-48. |
 | Proposal A's layer law vs its own catalog for `post` | Proposal A §5.12 lists `post` Deps as `filmspec, schemas, storage, validation`, but §6.2 **L1 forbids same-layer imports** and `post`/`validation` are both L6. An internal contradiction in proposal A. **Flagged for `03-target-architecture.md`**; until `03` resolves it, the enforcement doc treats the layer table as provisional and the `post→validation` edge must be recorded in the ledger with the reason "pending the L6 decision in `03`". |
 | Private cross-package import counts | `verify-14` F-BOUNDARY-05 **CONFIRMED (offenders real)**, but note the arithmetic: the verifier's total is **107 private-module sites** while listing 105 `schemas._base` + 1 `app._persistence`. An independent AST re-run in this session gives **107 = 106 `schemas._base` + 1 `app._persistence`**, plus **3 private-symbol sites**. The design uses the *measured* split (106/1) and the verifier's *total* (107); the "105" in `verify-14` §1 is an arithmetic slip, not a finding change. |

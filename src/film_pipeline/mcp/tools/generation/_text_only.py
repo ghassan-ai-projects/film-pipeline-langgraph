@@ -4,36 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..helpers import _ok, _services
+from film_pipeline.filmspec import text_only_generation_requests
 
-_STALE_ISSUE_CODES = frozenset({"empty_generation_requests", "no_generation_requests"})
+from ..helpers import _ok, _services
 
 
 def _is_text_only_policy(state: dict[str, Any]) -> bool:
     return str(state.get("generation_policy", "")).lower() == "text_only"
-
-
-def _completed_request_row(
-    project_id: str,
-    provider: str,
-    model: str,
-    shot_id: str,
-    prompt_payload: dict[str, object],
-) -> dict[str, object]:
-    """Build one completed text-only generation request row."""
-    return {
-        "generation_request_id": f"text-only-{project_id}-{shot_id}",
-        "generation_id": f"text-only-{project_id}-{shot_id}",
-        "project_id": project_id,
-        "shot_id": shot_id,
-        "mode": "text_only",
-        "provider": provider,
-        "model": model,
-        "prompt_ref": "",
-        "prompt_payload": prompt_payload,
-        "reference_refs": [],
-        "status": "completed",
-    }
 
 
 def _text_only_requests(
@@ -41,41 +18,24 @@ def _text_only_requests(
     shot_rows: list[dict[str, Any]],
     provider: str,
     model: str,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """One completed request per shot row, or a single fallback row."""
-    requests: list[dict[str, object]] = []
-    for row in shot_rows:
-        shot_id = str(row.get("shot_id", "") or row.get("scene_id", "")).strip()
-        if not shot_id:
-            continue
-        requests.append(
-            _completed_request_row(
-                project_id, provider, model, shot_id, {"text_only": True, "shot_id": shot_id}
-            )
-        )
-    if not requests:
-        requests.append(
-            _completed_request_row(project_id, provider, model, "all", {"text_only": True})
-        )
-    return requests
+    return text_only_generation_requests(project_id, shot_rows, provider, model)
 
 
 def _apply_text_only_state(active: dict[str, Any], requests: list[dict[str, object]]) -> None:
     """Record requests, flag completion, and drop stale blocking issues."""
     active["generation_requests"] = requests
     active["_text_only_generation_completed"] = True
-    issues = active.get("issues", [])
-    if isinstance(issues, list):
-        active["issues"] = [
-            issue
-            for issue in issues
-            if not (isinstance(issue, dict) and issue.get("code") in _STALE_ISSUE_CODES)
-        ]
+    from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
+    from film_pipeline.orchestration.state_schema import remove_issues_by_code
+
+    remove_issues_by_code(active, STALE_GENERATION_REQUEST_CODES)
 
 
 def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:
     """Add the text-only-delivery entry to the asset manifest once."""
-    from film_pipeline.artifacts.manifest import (
+    from film_pipeline.storage.manifest import (
         AssetEntry,
         AssetManifest,
         read_manifest,

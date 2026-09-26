@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import SchemaBase
+from film_pipeline.schemas.base import SchemaBase
 
 
 class ClipOrderEntry(SchemaBase):
@@ -24,7 +24,7 @@ class TransitionPlan(SchemaBase):
 
     from_shot_id: str
     to_shot_id: str
-    # Canonical values from TRANSITION_TYPES in schemas/_base.py.
+    # Canonical values from TRANSITION_TYPES in filmspec.
     transition_type: str = Field(
         description="'cut' | 'dissolve' | 'fade_in' | 'fade_out' | 'crossfade'."
     )

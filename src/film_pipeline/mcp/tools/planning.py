@@ -6,28 +6,48 @@ import math
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.budget import cap_for
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 
-from .helpers import _error, _latest_artifact_version, _ok, _services
+from .helpers import (
+    _error,
+    _latest_artifact_version,
+    _ok,
+    _services,
+    require_project_state,
+)
+
+#: Fallback cap when neither the caller nor the project supplies one. Kept
+#: explicit and named so it is visible as the last-resort default it is.
+_DEFAULT_CAP_USD: float = 100.0
 
 
 async def initialize_budget(args: dict[str, object]) -> dict[str, object]:
     """Create the initial BudgetState for a project."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
-    try:
-        cap = float(cast(float, args.get("cap_usd", 100.0)))
-    except (TypeError, ValueError):
-        return _error("cap_usd must be a number.")
+    raw_cap = args.get("cap_usd")
+    if raw_cap is None:
+        # Read the project's configured cap rather than carrying a rival literal.
+        # `cap_for` returns unlimited when nothing is configured; that is a real
+        # gap (profiles declare `project_cap_usd`, but no creation path writes it
+        # onto the project), so this preserves the previous *effective* behavior
+        # of "no cap supplied means no limit" instead of silently inventing 100.
+        cap = cap_for(active)
+        if not math.isfinite(cap):
+            cap = _DEFAULT_CAP_USD
+    else:
+        try:
+            cap = float(cast(float, raw_cap))
+        except (TypeError, ValueError):
+            return _error("cap_usd must be a number.")
     if not math.isfinite(cap) or cap < 0:
         return _error("cap_usd must be a finite, non-negative number.")
     store = _services(rt).artifact_store
 
     try:
-        from film_pipeline.schemas._base import ArtifactType
+        from film_pipeline.schemas.base import ArtifactType
         from film_pipeline.schemas.budget import BudgetState
 
         budget = BudgetState(
@@ -68,8 +88,8 @@ def _save_gen_planning_candidate(
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas._base import ArtifactStatus, FilmPhase
     from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
@@ -102,7 +122,7 @@ def _register_active_artifact_ref(
 def _load_master_matrix(store: Any, project_id: str) -> Any:
     """Load and validate the latest MasterFilmMatrix artifact, if it exists."""
     try:
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
         from film_pipeline.schemas.matrix import MasterFilmMatrix
 
         version = max(1, store.latest_version(project_id, "shot_bible", "master_film_matrix"))
@@ -198,7 +218,7 @@ def _build_generation_plan(
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
     """Save the generation plan artifact and link it into the project state."""
-    from film_pipeline.schemas._base import ArtifactType
+    from film_pipeline.schemas.base import ArtifactType
 
     store = _services(rt).artifact_store
     ref = _save_gen_planning_candidate(
@@ -216,9 +236,7 @@ def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -
 async def generate_plan(args: dict[str, object]) -> dict[str, object]:
     """Generate a GenerationPlan from the shot matrix."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

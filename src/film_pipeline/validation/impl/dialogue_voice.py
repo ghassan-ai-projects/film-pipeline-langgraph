@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from film_pipeline.schemas._base import IssueSeverity, ValidationModality, ValidationScope
+from film_pipeline.schemas.base import IssueSeverity, ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
     ValidatorThresholds,

@@ -53,6 +53,7 @@ class ToolContract:
     output_schema: dict[str, Any] = field(default_factory=dict)
     mutates_state: bool = False
     requires_confirmation: bool = False
+    requires_active_project: bool = False
     creates_checkpoint: bool = False
     idempotency_key_field: str | None = None
 
@@ -120,7 +121,7 @@ def make_registry() -> ToolRegistry:
 
     Importing this lazily avoids circular import problems at module load.
     """
-    from film_pipeline.mcp.tools import register_all_tools
+    from film_pipeline.mcp.registry import register_all_tools
 
     registry = ToolRegistry()
     register_all_tools(registry)

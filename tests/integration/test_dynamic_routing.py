@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
+from film_pipeline.orchestration.edges import after_approval, after_phase
+from film_pipeline.orchestration.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
 
 
 @pytest.mark.integration

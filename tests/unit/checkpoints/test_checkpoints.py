@@ -13,7 +13,7 @@ from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.manager import CheckpointManager
 from film_pipeline.checkpoints.resume import ResumeManager
 from film_pipeline.checkpoints.rollback import RollbackManager
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
 
 
 class TestGitBackend:
@@ -36,17 +36,31 @@ class TestGitBackend:
         with tempfile.TemporaryDirectory() as d:
             git = GitBackend.init_temp(Path(d))
             (Path(d) / "f.txt").write_text("x")
-            git.commit("msg", ["f.txt"])
+            commit = git.commit("msg", ["f.txt"])
             git.tag("v1.0", "test tag")
-            # Tagging doesn't error = success
+            # An annotated tag points at the commit and carries its message.
+            assert git._run("rev-parse", "v1.0^{commit}") == commit
+            assert git._run("tag", "-l", "-n1", "v1.0").endswith("test tag")
 
     def test_branch(self) -> None:
         with tempfile.TemporaryDirectory() as d:
             git = GitBackend.init_temp(Path(d))
             (Path(d) / "f.txt").write_text("x")
-            git.commit("msg", ["f.txt"])
+            commit = git.commit("msg", ["f.txt"])
             git.branch("experiment")
-            # Should not error
+            # The branch exists and points at the commit it was created from.
+            assert git._run("rev-parse", "experiment") == commit
+            assert "experiment" in git._run("branch", "--list", "experiment")
+
+    def test_branch_from_explicit_base(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            git = GitBackend.init_temp(Path(d))
+            (Path(d) / "f.txt").write_text("x")
+            first = git.commit("first", ["f.txt"])
+            (Path(d) / "f.txt").write_text("y")
+            git.commit("second", ["f.txt"])
+            git.branch("from-first", base=first)
+            assert git._run("rev-parse", "from-first") == first
 
 
 class TestCheckpointManager:

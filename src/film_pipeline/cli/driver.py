@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.cli.io import read_idea_file
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 class HeadlessDriverError(RuntimeError):
@@ -59,8 +59,8 @@ class HeadlessDriver:
         runtime_root: Path,
     ) -> StudioRuntime:
         """Create and globally install a runtime for the requested mode."""
-        import film_pipeline.app.runtime as rt_mod
-        from film_pipeline.graph.services import GraphServices
+        import film_pipeline.studio.runtime as rt_mod
+        from film_pipeline.orchestration.services import GraphServices
 
         mode = mode.lower().strip()
         if mode not in {"mock", "real"}:
@@ -70,7 +70,7 @@ class HeadlessDriver:
         if mode == "real":
             services = GraphServices.for_real_runtime(artifacts_root=artifacts_root)
         else:
-            from film_pipeline.app.mock_responses import default_mock_responses
+            from film_pipeline.studio.mock_responses import default_mock_responses
 
             services = GraphServices.for_mock_runtime(
                 artifacts_root=artifacts_root,
@@ -136,7 +136,7 @@ class HeadlessDriver:
         Raises ``HeadlessDriverError`` if the target is not reached within
         ``max_phase_iterations`` or a tool error blocks progress.
         """
-        from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
+        from film_pipeline.filmspec import PHASE_SEQUENCE
 
         try:
             target_index = PHASE_SEQUENCE.index(self.target_phase)
@@ -176,7 +176,7 @@ class HeadlessDriver:
         """
         state = dict(self._active_state())
         current_phase = str(state.get("current_phase", ""))
-        from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
+        from film_pipeline.filmspec import PHASE_SEQUENCE
 
         if _phase_order_index(current_phase) > target_index:
             state["current_phase"] = PHASE_SEQUENCE[target_index]
@@ -208,7 +208,7 @@ class HeadlessDriver:
 
 def _phase_order_index(phase: str) -> int:
     """Return the position of ``phase`` in the sequence, or -1 when unknown."""
-    from film_pipeline.graph.phase_sequence import PHASE_SEQUENCE
+    from film_pipeline.filmspec import PHASE_SEQUENCE
 
     try:
         return PHASE_SEQUENCE.index(phase)

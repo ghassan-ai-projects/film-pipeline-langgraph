@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _ok, _services
+from ..helpers import (
+    _ok,
+    _services,
+    require_project_state,
+)
 
 
 async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:
@@ -14,9 +18,7 @@ async def promote_test_to_production(args: dict[str, object]) -> dict[str, objec
     Provide ``shot_ids`` to promote specific shots, or omit to promote all eligible.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 

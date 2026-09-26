@@ -10,13 +10,13 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.router import compute_actions
-from film_pipeline.graph.services import SERVICES_KEY
-from film_pipeline.graph.state_schema import StudioGraphState
 from film_pipeline.mcp.resolution import ProjectRecord
 from film_pipeline.mcp.server import MCPServer
-from film_pipeline.schemas._base import (
+from film_pipeline.orchestration.router import compute_actions
+from film_pipeline.orchestration.services import SERVICES_KEY
+from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import (
     ArtifactStatus,
     ArtifactType,
     FilmPhase,
@@ -25,10 +25,10 @@ from film_pipeline.schemas._base import (
     ValidationScope,
     ValidationStatus,
 )
-from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 from film_pipeline.schemas.validation import ValidationIssue, ValidationReport
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _make_runtime(tmp_path: Path) -> StudioRuntime:
@@ -154,7 +154,7 @@ def test_mcp_operator_mutation_uses_resolved_project(
     ) -> dict[str, Any]:
         return {**state, "current_phase": phase}
 
-    app_graph_exec = importlib.import_module("film_pipeline.app._graph_exec")
+    app_graph_exec = importlib.import_module("film_pipeline.studio._graph_exec")
     monkeypatch.setattr(app_graph_exec, "run_phase_node", record_phase_node)
 
     server = MCPServer()
@@ -240,10 +240,6 @@ def test_mcp_revision_uses_resolved_project(
     assert requested["revision_note"] == "Clarify the character goal."
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="O-01 captures run_validation selecting the runtime active project.",
-)
 def test_mcp_validation_uses_resolved_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -356,7 +352,7 @@ def test_compiled_graph_approval_edge_remains_blocked_after_human_approval() -> 
     from langchain_core.runnables import RunnableConfig
     from langgraph.checkpoint.memory import MemorySaver
 
-    from film_pipeline.app.graph_factory import build_graph
+    from film_pipeline.studio.graph_factory import build_graph
 
     before_approval = _blocked_provider_state()
     gate = compute_actions(before_approval)
@@ -409,7 +405,7 @@ def test_mcp_approval_fallback_remains_blocked_after_human_approval(
         visited_phases.append(phase)
         return {**state, "current_phase": phase}
 
-    app_graph_exec = importlib.import_module("film_pipeline.app._graph_exec")
+    app_graph_exec = importlib.import_module("film_pipeline.studio._graph_exec")
     monkeypatch.setattr(app_graph_exec, "run_phase_node", record_phase_node)
     response = asyncio.run(MCPServer().call("approve_phase", {"confirmed": True}))
     assert response.success is True
@@ -481,7 +477,7 @@ def _compiled_qc_result(
     shot_matrix_ref: str,
 ) -> dict[str, Any]:
     """Run the production QC subgraph with one deterministic validator worker."""
-    qc_module = importlib.import_module("film_pipeline.graph.subgraphs.qc")
+    qc_module = importlib.import_module("film_pipeline.orchestration.subgraphs.qc")
     monkeypatch.setattr(
         qc_module,
         "_resolve_validator_instance",
@@ -550,7 +546,7 @@ def test_app_validation_materializes_qc_row_patch(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import film_pipeline.graph.nodes as nodes
+    import film_pipeline.orchestration.nodes as nodes
 
     runtime = _make_runtime(tmp_path)
     shot_matrix_ref = _save_shot_matrix(runtime, "operator-path")

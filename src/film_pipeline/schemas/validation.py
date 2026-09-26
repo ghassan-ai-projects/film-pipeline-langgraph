@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.base import (
     IssueSeverity,
     SchemaBase,
     ValidationModality,

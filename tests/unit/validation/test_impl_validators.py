@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.schemas._base import ValidationStatus
+from film_pipeline.schemas.base import ValidationStatus
 from film_pipeline.validation.impl.assembly import AssemblyValidator
 from film_pipeline.validation.impl.delivery_completeness import DeliveryCompletenessValidator
 from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator

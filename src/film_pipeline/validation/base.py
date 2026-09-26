@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 from uuid import uuid4
 
-from film_pipeline.schemas._base import IssueSeverity, ValidationModality, ValidationStatus
+from film_pipeline.schemas.base import IssueSeverity, ValidationModality, ValidationStatus
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
 )

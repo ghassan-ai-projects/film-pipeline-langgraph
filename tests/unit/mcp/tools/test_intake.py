@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     approve_intake,
     create_film_project,
@@ -13,18 +12,12 @@ from film_pipeline.mcp.tools import (
     set_active_project,
     submit_idea,
 )
+from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def _make_active_project(project_id: str) -> None:
     asyncio.run(create_film_project({"project_id": project_id}))
     asyncio.run(set_active_project({"project_ref": project_id}))
-
-
-def test_submit_idea_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(submit_idea({"idea": "x"}))
-    assert result["ok"] is False
 
 
 def test_submit_idea_requires_idea_text() -> None:
@@ -51,13 +44,6 @@ def test_submit_idea_propagates_target_scene_count() -> None:
     assert active.get("target_scene_count") == 12
 
 
-def test_get_intake_analysis_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(get_intake_analysis({}))
-    assert result["ok"] is False
-
-
 def test_get_intake_analysis_falls_back_to_raw_idea_or_errors() -> None:
     _make_active_project("intake-analysis-1")
     # Before submitting, no idea and no artifact -> error.
@@ -68,13 +54,6 @@ def test_get_intake_analysis_falls_back_to_raw_idea_or_errors() -> None:
     result2 = asyncio.run(get_intake_analysis({}))
     assert result2["ok"] is True
     assert "analysis" in result2
-
-
-def test_approve_intake_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(approve_intake({"confirmed": True}))
-    assert result["ok"] is False
 
 
 def test_approve_intake_rejects_wrong_phase() -> None:

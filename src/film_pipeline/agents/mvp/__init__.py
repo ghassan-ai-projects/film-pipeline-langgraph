@@ -9,7 +9,7 @@ schema tests remain in the codebase for future phases.
 
 from __future__ import annotations
 
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 
 MVP_AGENTS: list[AgentRegistration] = [

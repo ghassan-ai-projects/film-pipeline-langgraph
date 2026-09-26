@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.kb import KBContextPacket
 

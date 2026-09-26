@@ -9,7 +9,7 @@ from __future__ import annotations
 from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolHandler, ToolRegistry
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
-from film_pipeline.mcp.resolution import (
+from film_pipeline.projects import (
     AmbiguousProjectError,
     ProjectRecord,
     ProjectRegistry,

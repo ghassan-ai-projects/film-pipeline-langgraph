@@ -290,7 +290,7 @@ def test_server_rejects_unconfirmed_mutation() -> None:
 
 
 def test_server_accepts_confirmed_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime, reset_runtime
+    from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
@@ -601,7 +601,7 @@ def test_active_project_set_after_resolution() -> None:
 def test_read_tool_honors_project_ref_without_changing_active(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app.runtime import get_runtime, reset_runtime
+    from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
@@ -629,7 +629,7 @@ def test_read_tool_honors_project_ref_without_changing_active(
 
 
 def test_list_artifacts_honors_project_ref(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime, reset_runtime
+    from film_pipeline.studio.runtime import get_runtime, reset_runtime
 
     reset_runtime("mock")
     rt = get_runtime()
@@ -679,7 +679,7 @@ def test_resolution_result_dataclass() -> None:
 
 
 def test_wired_get_orchestrator_summary() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-os", title="OS Test", slug="os-test")
@@ -694,7 +694,7 @@ def test_wired_get_orchestrator_summary() -> None:
 
 
 def test_wired_get_blockers_empty() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-bl", title="Blocker Test", slug="bl-test")
@@ -709,7 +709,7 @@ def test_wired_get_blockers_empty() -> None:
 
 
 def test_wired_get_blockers_with_issues() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-bl2", title="Blocker Test 2", slug="bl-test2")
@@ -732,7 +732,7 @@ def test_wired_get_blockers_with_issues() -> None:
 
 
 def test_wired_create_and_list_checkpoints() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-cp", title="CP Test", slug="cp-test")
@@ -750,7 +750,7 @@ def test_wired_create_and_list_checkpoints() -> None:
 
 
 def test_wired_get_checkpoint() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-gcp", title="GCP Test", slug="gcp-test")
@@ -771,7 +771,7 @@ def test_wired_get_checkpoint() -> None:
 
 
 def test_wired_compare_versions() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-cv", title="CV Test", slug="cv-test")
@@ -795,7 +795,7 @@ def test_wired_compare_versions() -> None:
 
 
 def test_wired_rollback_to_checkpoint() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-rb", title="RB Test", slug="rb-test")
@@ -812,7 +812,7 @@ def test_wired_rollback_to_checkpoint() -> None:
 
 
 def test_wired_get_invalidation_report() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-ir", title="IR Test", slug="ir-test")
@@ -828,7 +828,7 @@ def test_wired_get_invalidation_report() -> None:
 
 
 def test_wired_get_audit_log() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-audit", title="Audit Test", slug="audit-test")
@@ -841,7 +841,7 @@ def test_wired_get_audit_log() -> None:
 
 
 def test_wired_explain_last_decision() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-eld", title="ELD Test", slug="eld-test")
@@ -855,7 +855,7 @@ def test_wired_explain_last_decision() -> None:
 
 
 def test_wired_provider_health_tools() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.set_provider_health("mock-video-provider", "healthy")
@@ -871,7 +871,7 @@ def test_wired_provider_health_tools() -> None:
 
 
 def test_wired_resolve_provider_block() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.set_provider_health("mock-video-provider", "blocked_quota", "rate limited")
@@ -888,7 +888,7 @@ def test_wired_resolve_provider_block() -> None:
 
 
 def test_wired_get_next_actions() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-na", title="NA Test", slug="na-test")
@@ -953,8 +953,8 @@ def test_wired_inspect_profile() -> None:
 
 
 def test_wired_get_runtime_mode_default_mock(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import get_runtime_mode
+    from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
@@ -965,7 +965,7 @@ def test_wired_get_runtime_mode_default_mock(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app import runtime as runtime_mod
+    from film_pipeline.studio import runtime as runtime_mod
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
@@ -990,8 +990,8 @@ def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_wired_get_runtime_mode_rejects_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import get_runtime_mode
+    from film_pipeline.studio import runtime as runtime_mod
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
@@ -1009,8 +1009,8 @@ def test_wired_get_runtime_mode_rejects_mismatch(monkeypatch: pytest.MonkeyPatch
 def test_wired_create_film_project_rejects_mock_in_real_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio import runtime as runtime_mod
 
     runtime_mod.reset_runtime("real")
     rt = runtime_mod.get_runtime()
@@ -1039,8 +1039,8 @@ def test_wired_create_film_project_rejects_mock_in_real_mode(
 def test_wired_create_film_project_accepts_real_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio import runtime as runtime_mod
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
@@ -1083,8 +1083,8 @@ def test_wired_create_film_project_accepts_real_provider(
 def test_wired_create_film_project_rejects_invalid_runtime_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
@@ -1103,8 +1103,8 @@ def test_wired_create_film_project_rejects_invalid_runtime_mode(
 
 
 def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app import runtime as runtime_mod
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio import runtime as runtime_mod
 
     runtime_mod.reset_runtime("mock")
     rt = runtime_mod.get_runtime()
@@ -1130,8 +1130,8 @@ def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.Mon
 def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio.runtime import reset_runtime
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test-openrouter")
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
@@ -1158,8 +1158,8 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
 def test_wired_create_film_project_reports_all_providers_missing_google_key() -> None:
     from unittest import mock
 
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio.runtime import reset_runtime
 
     def is_configured(provider_id: str) -> bool:
         return provider_id == "seedance-openrouter"
@@ -1204,8 +1204,8 @@ def test_wired_create_film_project_reports_all_providers_missing_google_key() ->
 
 
 def test_wired_create_film_project_rejects_mode_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import create_film_project
+    from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
@@ -1228,8 +1228,8 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import film_pipeline.mcp.tools as mcp_tools
-    from film_pipeline.app import runtime as runtime_mod
-    from film_pipeline.app._provider_factory import build_provider_adapter
+    from film_pipeline.studio import runtime as runtime_mod
+    from film_pipeline.studio._provider_factory import build_provider_adapter
 
     rt = runtime_mod.StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("ref-gen-test", "Reference Test")
@@ -1300,8 +1300,8 @@ def test_tool_registry_has_config_group() -> None:
 
 
 def test_list_providers_real_mode_has_no_mock_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import reset_runtime
     from film_pipeline.mcp.tools import list_providers
+    from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("real")
     _pin_tools_runtime(monkeypatch)

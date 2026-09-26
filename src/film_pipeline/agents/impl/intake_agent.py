@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
-from film_pipeline.schemas._base import FilmType
+from film_pipeline.schemas.base import FilmType
 from film_pipeline.schemas.project import ProjectIdentity, ProjectProfile
 
 

@@ -8,8 +8,8 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import reset_runtime
 from film_pipeline.mcp.tools import add_operator_comment, list_operator_comments
+from film_pipeline.studio.runtime import reset_runtime
 
 
 @pytest.fixture(autouse=True)
@@ -19,21 +19,22 @@ def _reset_to_mock_mode() -> Generator[None, None, None]:
     reset_runtime("mock")
 
 
-def test_add_operator_comment_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(
-        add_operator_comment({"target_type": "scene", "target_id": "s1", "body": "Fix lighting."})
-    )
-    assert result["ok"] is False
-    assert "active project" in cast(str, result["error"]).lower()
-
-
 def test_add_operator_comment_validates_fields() -> None:
+    """Field validation, not the project precondition.
+
+    This previously ran with no project at all, so it passed because the
+    missing-project guard fired before the field checks — it never exercised
+    what its name claims. The precondition is now enforced at dispatch, so the
+    test sets up a project and asserts the field error.
+    """
+    from film_pipeline.mcp.tools import create_film_project, set_active_project
+
+    asyncio.run(create_film_project({"project_id": "op-validate", "title": "T"}))
+    asyncio.run(set_active_project({"project_ref": "op-validate"}))
+
     result = asyncio.run(add_operator_comment({"target_type": "scene"}))
     assert result["ok"] is False
+    assert "target_id" in str(result.get("error", ""))
 
 
 def test_add_and_list_operator_comments() -> None:

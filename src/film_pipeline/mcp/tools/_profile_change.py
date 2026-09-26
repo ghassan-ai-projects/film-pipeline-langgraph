@@ -17,18 +17,23 @@ from uuid import uuid4
 from pydantic import BaseModel
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.app.services import OperatorService
-from film_pipeline.artifacts.registry import sanitize_artifact_id
-from film_pipeline.config.profile_resolver import resolve_project_config
-from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.config.profile_resolver import (
+    resolve_project_config,
+    resolved_config_state_keys,
+)
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.storage.contract import sanitize_artifact_id
+from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
     _active_project_id,
     _error,
     _ok,
     _services,
+    require_project_id,
+    require_project_state,
 )
 
 _PROFILE_STACK_KEYS = (
@@ -49,10 +54,8 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     human approves it via ``approve_profile_change``.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
-    if active is None:
-        return _error("No active project.")
-    project_id, state = active
+    project_id = require_project_id(args)
+    state = require_project_state(args)
 
     reason = str(args.get("reason", "")).strip()
     if not reason:
@@ -101,10 +104,8 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
     downstream artifacts, and records the approval.
     """
     rt = tools_pkg.get_runtime()
-    active = _active_state(rt, args)
-    if active is None:
-        return _error("No active project.")
-    project_id, state = active
+    project_id = require_project_id(args)
+    state = require_project_state(args)
 
     proposal_id = str(args.get("proposal_id", "")).strip()
     if not proposal_id:
@@ -124,7 +125,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    OperatorService(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
+    operator_service(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack
@@ -275,10 +276,7 @@ def _apply_resolved_config(
 ) -> None:
     """Bump the project's profile version and cache the resolved configuration."""
     state["profile_version"] = new_version
-    state["profile_stack"] = new_stack
-    state["resolved_config"] = cast(dict[str, object], resolved.get("raw", {}))
-    state["resolved_config_sources"] = resolved.get("sources", [])
-    state["config_conflicts"] = list(cast(list[Any], resolved.get("conflicts", [])))
+    state.update(resolved_config_state_keys(new_stack, resolved))
 
 
 def _commit_profile_config(

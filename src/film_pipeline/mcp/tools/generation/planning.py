@@ -11,16 +11,22 @@ from film_pipeline.mcp.tools.generation._text_only import (
     _is_text_only_policy,
 )
 
-from ..helpers import _active_project_id, _error, _ok, _services
+from ..helpers import (
+    _error,
+    _ok,
+    _services,
+    require_project_id,
+    require_project_state,
+)
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
 def _resolve_generation_mode(args: dict[str, object]) -> GenerationMode:
     """Map the optional ``mode`` argument to a GenerationMode (default TEST)."""
-    from film_pipeline.schemas._base import GenerationMode
+    from film_pipeline.schemas.base import GenerationMode
 
     mode_str = str(args.get("mode", "test"))
     mode = GenerationMode.TEST
@@ -59,9 +65,7 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     created directly so the graph can advance to delivery.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
 
     if _is_text_only_policy(active):
@@ -130,14 +134,12 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     validate prompts during gen_planning review — before any spend.
     """
     rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return _error("No active project.")
-    from film_pipeline.app.services.errors import ServiceError
-    from film_pipeline.app.services.operator import OperatorService
+    project_id = require_project_id(args)
+    from film_pipeline.operations.errors import ServiceError
+    from film_pipeline.studio._operator_runtime import operator_service
 
     try:
-        previews = OperatorService(rt).preview_generation_prompts(project_id)
+        previews = operator_service(rt).preview_generation_prompts(project_id)
     except ServiceError as exc:
         return _error(str(exc))
     return _ok(previews=previews)
@@ -146,9 +148,7 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
 async def approve_generation_spend(args: dict[str, object]) -> dict[str, object]:
     """Approve spend: mark PREPARED rows as SUBMITTED with optional budget gate."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     if _is_text_only_policy(active):
         return _ok(text_only=True, approved=0)

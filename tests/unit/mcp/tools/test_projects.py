@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     create_film_project,
     find_project,
@@ -14,6 +13,7 @@ from film_pipeline.mcp.tools import (
     list_projects,
     set_active_project,
 )
+from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def test_create_film_project_requires_project_id() -> None:
@@ -73,13 +73,6 @@ def test_set_and_get_active_project() -> None:
 
 def test_set_active_project_unknown_returns_error() -> None:
     result = asyncio.run(set_active_project({"project_ref": "totally-unknown-project"}))
-    assert result["ok"] is False
-
-
-def test_get_project_summary_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(get_project_summary({}))
     assert result["ok"] is False
 
 

@@ -6,9 +6,8 @@ from typing import Any
 
 import pytest
 
-from film_pipeline.app.graph_factory import build_graph
-from film_pipeline.graph.edges import after_approval, after_phase
-from film_pipeline.graph.nodes import (
+from film_pipeline.orchestration.edges import after_approval, after_phase
+from film_pipeline.orchestration.nodes import (
     approve_phase_node,
     constitution_node,
     delivery_node,
@@ -23,7 +22,8 @@ from film_pipeline.graph.nodes import (
     shot_bible_node,
     visual_dev_node,
 )
-from film_pipeline.graph.router import PHASE_ORDER, compute_actions
+from film_pipeline.orchestration.router import PHASE_ORDER, compute_actions
+from film_pipeline.studio.graph_factory import build_graph
 
 
 @pytest.mark.e2e

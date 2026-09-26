@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import cast
 
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     create_film_project,
     explain_agent_routing,
@@ -14,6 +13,7 @@ from film_pipeline.mcp.tools import (
     get_audit_log,
     set_active_project,
 )
+from film_pipeline.studio.runtime import get_runtime as gr
 
 
 def test_get_audit_log_returns_events() -> None:
@@ -43,14 +43,6 @@ def test_explain_last_decision_empty() -> None:
     result = asyncio.run(explain_last_decision({}))
     assert result["ok"] is True
     assert result["message"] == "No decisions recorded yet."
-
-
-def test_explain_agent_routing_no_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(explain_agent_routing({}))
-    assert result["ok"] is True
-    assert result["decisions"] == []
 
 
 def test_explain_agent_routing_no_decisions_yet() -> None:

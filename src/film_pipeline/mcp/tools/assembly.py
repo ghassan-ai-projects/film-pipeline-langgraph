@@ -6,7 +6,11 @@ from typing import cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _error, _ok, _stub
+from .helpers import (
+    _ok,
+    _stub,
+    require_project_state,
+)
 
 
 async def plan_coverage_group(args: dict[str, object]) -> dict[str, object]:
@@ -30,10 +34,8 @@ async def approve_coverage_generation(args: dict[str, object]) -> dict[str, obje
 
 async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
     """Assemble a review cut using the AssemblyAgent."""
-    rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
-        return _error("No active project.")
+    tools_pkg.get_runtime()
+    active = require_project_state(args)
     from film_pipeline.post.assembly_agent import AssemblyAgent
 
     agent = AssemblyAgent()
@@ -52,10 +54,8 @@ async def assemble_final_cut(args: dict[str, object]) -> dict[str, object]:
 
 async def export_delivery_package(args: dict[str, object]) -> dict[str, object]:
     """Export a delivery package using the DeliveryPackagingAgent."""
-    rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if active is None:
-        return _error("No active project.")
+    tools_pkg.get_runtime()
+    active = require_project_state(args)
     from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 
     agent = DeliveryPackagingAgent()

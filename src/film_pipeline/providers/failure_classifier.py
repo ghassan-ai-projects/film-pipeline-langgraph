@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from film_pipeline.providers.health import ProviderHealth
-from film_pipeline.schemas._base import ProviderStatus
+from film_pipeline.schemas.base import ProviderStatus
 
 
 @dataclass

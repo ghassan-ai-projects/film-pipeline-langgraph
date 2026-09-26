@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import ArtifactStatus, SchemaBase
+from film_pipeline.schemas.base import ArtifactStatus, SchemaBase
 from film_pipeline.schemas.validation import ValidationIssue
 
 

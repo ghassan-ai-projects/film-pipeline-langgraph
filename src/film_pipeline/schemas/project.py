@@ -7,7 +7,7 @@ from typing import Literal, cast
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import FilmType, SchemaBase
+from film_pipeline.schemas.base import FilmType, SchemaBase
 
 DeliveryMode = Literal["mp4", "webm", "mov", "gif"]
 

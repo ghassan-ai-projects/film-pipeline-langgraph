@@ -91,9 +91,9 @@ class AssemblyAgent:
         """
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
         from film_pipeline.schemas.assembly import AssemblyPlanArtifact
+        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
         artifact_id = "assembly_manifest"
         model = AssemblyPlanArtifact(

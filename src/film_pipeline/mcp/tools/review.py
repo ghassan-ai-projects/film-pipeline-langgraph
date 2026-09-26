@@ -6,11 +6,16 @@ from typing import TYPE_CHECKING, Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from .helpers import _active_project_state, _error, _ok, _services
+from .helpers import (
+    _error,
+    _ok,
+    _services,
+    require_project_state,
+)
 
 if TYPE_CHECKING:
-    from film_pipeline.schemas._base import FilmPhase
     from film_pipeline.schemas.approval import ReviewPackage
+    from film_pipeline.schemas.base import FilmPhase
 
 
 def _collect_phase_artifacts(
@@ -39,7 +44,7 @@ def _build_review_package(
     blocking_issues: list[dict[str, Any]],
 ) -> ReviewPackage | None:
     """Build the structured review package; None when generation fails."""
-    from film_pipeline.review.generator import ReviewPackageGenerator
+    from film_pipeline.governance.generator import ReviewPackageGenerator
 
     try:
         generator = ReviewPackageGenerator()
@@ -73,14 +78,12 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     open issues, risks, cost impact, and recommended next actions.
     """
     rt = tools_pkg.get_runtime()
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
+    state = require_project_state(args)
     phase = str(args.get("phase", state.get("current_phase", "")))
     if not phase:
         return _error("No phase specified and no active phase.")
     project_id = str(state["project_id"])
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase)
@@ -91,8 +94,8 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     artifact_list = _collect_phase_artifacts(store, project_id, fp)
 
     # Build a review package using the ReviewPackageGenerator
-    from film_pipeline.graph import orchestrator_state as ostate
-    from film_pipeline.graph.router import compute_actions, public_blocked_actions
+    from film_pipeline.orchestration import orchestrator_state as ostate
+    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)

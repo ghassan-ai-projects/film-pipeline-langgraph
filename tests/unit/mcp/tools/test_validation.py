@@ -8,7 +8,6 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     create_film_project,
     get_validation_report,
@@ -16,16 +15,7 @@ from film_pipeline.mcp.tools import (
     run_validation,
     set_active_project,
 )
-
-
-def test_run_validation_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(run_validation({}))
-    assert result["ok"] is False
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_run_validation_unknown_phase(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -99,19 +89,10 @@ def test_run_validation_visual_dev_phase_success(
     assert len(cast(list[object], result["reports"])) >= 1
 
 
-def test_get_validation_report_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(get_validation_report({}))
-    assert result["ok"] is False
-
-
 def test_get_validation_report_uses_qc_stored_reports() -> None:
     asyncio.run(create_film_project({"project_id": "val-stored-1"}))
     asyncio.run(set_active_project({"project_ref": "val-stored-1"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     active = rt.get_active()
@@ -128,7 +109,7 @@ def test_get_validation_report_uses_qc_stored_reports() -> None:
 def test_get_validation_report_no_phase_and_no_stored_reports() -> None:
     asyncio.run(create_film_project({"project_id": "val-no-phase-1"}))
     asyncio.run(set_active_project({"project_ref": "val-no-phase-1"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     active = rt.get_active()
@@ -184,19 +165,10 @@ def test_get_validation_report_live_dispatch_visual_dev_phase(
     assert result["phase"] == "visual_dev"
 
 
-def test_list_validation_issues_requires_active_project() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_validation_issues({}))
-    assert result["ok"] is False
-
-
 def test_list_validation_issues_with_stored_issues() -> None:
     asyncio.run(create_film_project({"project_id": "val-issues-1"}))
     asyncio.run(set_active_project({"project_ref": "val-issues-1"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     active = rt.get_active()
@@ -372,7 +344,7 @@ def test_get_validation_report_phase_branch_missing_artifact(
 def test_list_validation_issues_skips_non_dict_items() -> None:
     asyncio.run(create_film_project({"project_id": "val-issues-skip"}))
     asyncio.run(set_active_project({"project_ref": "val-issues-skip"}))
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     active = rt.get_active()

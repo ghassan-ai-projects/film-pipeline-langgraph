@@ -17,7 +17,7 @@ def test_cli_main_configures_logging_for_request_root(
     idea = tmp_path / "idea.txt"
     idea.write_text("A robot learns to paint.", encoding="utf-8")
     configure = MagicMock()
-    monkeypatch.setattr("film_pipeline.app.logging_setup.configure_logging", configure)
+    monkeypatch.setattr("film_pipeline.studio.logging_setup.configure_logging", configure)
     monkeypatch.setattr(run, "_run_headless_pipeline", lambda _request: {})
     monkeypatch.setattr(run, "_print_summary", lambda _state, _project_id: None)
 
@@ -36,8 +36,8 @@ def test_mcp_main_configures_logging_before_stdio_server(
     runtime_root = tmp_path / "runtime"
     monkeypatch.setenv("FILM_PIPELINE_RUNTIME_ROOT", str(runtime_root))
     configure = MagicMock()
-    monkeypatch.setattr("film_pipeline.app.logging_setup.configure_logging", configure)
-    monkeypatch.setattr("film_pipeline.app.bootstrap.validate_environment", list)
+    monkeypatch.setattr("film_pipeline.studio.logging_setup.configure_logging", configure)
+    monkeypatch.setattr("film_pipeline.studio.bootstrap.validate_environment", list)
     monkeypatch.setattr(server, "_serve_stdio", lambda _server: 0)
 
     assert server.main() == 0

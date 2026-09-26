@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import GenerationMode, GenerationStatus, SchemaBase
+from film_pipeline.schemas.base import GenerationMode, GenerationStatus, SchemaBase
 
 
 class GenerationRequest(SchemaBase):

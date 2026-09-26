@@ -73,7 +73,7 @@ Key architectural changes from the baseline:
 
 ```bash
 # Smoke test
-python -m film_pipeline.app.smoke
+python -m film_pipeline.studio.smoke
 
 # Run all tests
 make test

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import uuid4
 
-from film_pipeline.schemas._base import ValidationStatus
+from film_pipeline.schemas.base import ValidationStatus
 from film_pipeline.schemas.validation import (
     AgreementLevel,
     ConsensusReport,

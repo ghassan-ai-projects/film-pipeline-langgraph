@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.storage import default_run_root
 from film_pipeline.cli.driver import HeadlessDriverError, HeadlessRunSpec, run_headless
 from film_pipeline.cli.io import SUPPORTED_EXTENSIONS, read_constraints_file
+from film_pipeline.storage.storage import default_run_root
 
 
 @dataclass(frozen=True)
@@ -217,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
 
     request = _build_run_request(args, stack)
 
-    from film_pipeline.app.logging_setup import configure_logging
+    from film_pipeline.studio.logging_setup import configure_logging
 
     # The headless runner persists state under the explicit request root, so
     # retain INFO+ logs there as well as the WARNING-capped stderr stream.

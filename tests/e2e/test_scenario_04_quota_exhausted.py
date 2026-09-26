@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.graph.services import GraphServices
+from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.providers.failure_classifier import FailureClassifier
 from film_pipeline.providers.health import ProviderHealth
-from film_pipeline.schemas._base import ProviderStatus
+from film_pipeline.schemas.base import ProviderStatus
 from film_pipeline.schemas.provider_health import ProviderHealthState
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 @pytest.mark.e2e

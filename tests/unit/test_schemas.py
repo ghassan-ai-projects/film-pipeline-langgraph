@@ -907,7 +907,7 @@ def test_routing_decision_explainable() -> None:
 
 
 def test_agent_registration() -> None:
-    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.base import AgentFamily, AgentRole
 
     a = AgentRegistration(
         agent_id="dialogue-agent",
@@ -980,7 +980,7 @@ def test_model_registry_entry() -> None:
 
 
 def test_agent_registry_entry() -> None:
-    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.base import AgentFamily, AgentRole
 
     e = AgentRegistryEntry(
         agent_id="dialogue-agent",

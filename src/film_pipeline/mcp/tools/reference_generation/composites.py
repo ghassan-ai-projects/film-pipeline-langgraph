@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from film_pipeline.artifacts.store import ArtifactStore
+    from film_pipeline.storage.store import ArtifactStore
 
 _logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ def _load_environment_palette(
     project_id: str,
 ) -> list[str] | None:
     """Load the visual-dev EnvironmentBible palette (None when unavailable)."""
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     try:
         version = max(

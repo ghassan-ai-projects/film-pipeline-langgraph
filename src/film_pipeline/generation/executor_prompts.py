@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.artifacts.store import ArtifactStore
-from film_pipeline.schemas._base import FilmPhase
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.storage.store import ArtifactStore
 
 
 def load_latest_artifact(

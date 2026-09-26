@@ -11,8 +11,8 @@ from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
 from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
 from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole, FilmType, ValidationStatus
 from film_pipeline.schemas.assembly import AssemblyManifest
+from film_pipeline.schemas.base import AgentFamily, AgentRole, FilmType, ValidationStatus
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.film_constitution import FilmConstitution
 from film_pipeline.schemas.handoff import AgentRegistration

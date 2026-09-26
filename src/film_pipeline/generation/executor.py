@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.executor_delivery import deliver_completed_job
 from film_pipeline.generation.executor_prompts import (
     load_latest_artifact,
@@ -32,8 +31,9 @@ from film_pipeline.providers.base import (
     ProviderJobStatus,
 )
 from film_pipeline.providers.pricing import estimate_cost_for_duration
-from film_pipeline.schemas._base import FilmPhase, GenerationMode, GenerationStatus
+from film_pipeline.schemas.base import FilmPhase, GenerationMode, GenerationStatus
 from film_pipeline.schemas.generation import GenerationLedgerRow
+from film_pipeline.storage.store import ArtifactStore
 
 
 @dataclass

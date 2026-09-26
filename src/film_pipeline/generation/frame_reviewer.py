@@ -12,7 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.generation.gemini_client import call_gemini
+from film_pipeline.generation.review_parsing import strip_markdown_fences
+from film_pipeline.providers.gemini_review_client import call_gemini
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -175,16 +176,6 @@ def _build_review_prompt(prompt_text: str, subject_type: str) -> str:
     )
 
 
-def _strip_markdown_fences(text: str) -> str:
-    """Remove wrapping markdown code fences, if present."""
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.split("\n", 1)[-1]
-        if stripped.endswith("```"):
-            stripped = stripped[:-3]
-    return stripped.strip()
-
-
 def _candidate_text(response: dict[str, Any]) -> str:
     """Extract the raw text payload of the first Gemini candidate."""
     first = response.get("candidates", [])[0]
@@ -197,7 +188,7 @@ def _parse_response(response: dict[str, Any], *, frame_id: str = "") -> FrameRev
             return FrameReviewResult(
                 frame_id=frame_id, passed=False, error="No candidates in response"
             )
-        text = _strip_markdown_fences(_candidate_text(response))
+        text = strip_markdown_fences(_candidate_text(response))
         data = json.loads(text)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
         return FrameReviewResult(

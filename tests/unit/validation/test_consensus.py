@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.schemas._base import (
+from film_pipeline.schemas.base import (
     IssueSeverity,
     ValidationModality,
     ValidationScope,

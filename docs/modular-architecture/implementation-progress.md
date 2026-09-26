@@ -2,16 +2,41 @@
 
 Updated: 2026-09-25
 
+## Current direction
+
+The user approved the 20-module migration after the independent review and
+asked for minimal-effort, highest-value rounds. Behavior must stay stable until
+the migration is complete. Enola's measured findings are the structural
+burndown signal; a round must not adjust filters or thresholds to lower counts.
+The 21-phase historical roadmap is input, but its stale source paths and
+behavior-changing acceptance clauses do not override this direction.
+
+Order the remaining work by dependency and measured value: finish C-05's MCP
+cycle, establish the pure `filmspec` vocabulary, then migrate duplicate owners
+into `storage`, `projects`, `operations`, `studio`, `governance`, and
+`orchestration` as their boundaries become ready. Keep existing packages
+(`schemas`, `config`, `kb`, `constraints`, `providers`, `checkpoints`, `agents`,
+`validation`, `generation`, `post`, and `mcp`) and add `budget` and
+`devharness` only when their current responsibilities are ready to move.
+Each round names the source and consumers and gets its own commit. From F-02
+onward, tests and Enola were not run by user direction; R2-01 measured the tree
+and found the gate **red**, and repaired it (see the R2-01 row). Every round
+from R2-02 onward runs its own focused proof, the full `make ci-check`, and its
+own Enola check before commit; a round with a red gate is not complete.
+The last measured Enola result applies only to `7254827`. The
+R-01b through R-01e behavior repairs remain deferred.
+
 This log tracks implementation slices from the reviewed direction in
 [06 — independent review and architecture decision](06-independent-review-and-decision.md).
 It does not turn the superseded 20-module proposal into an execution plan.
 
 ## Per-slice quality gates
 
-Each slice records its owner, consumers, three independent review lenses,
-behavior tests, full `make ci-check` result (including coverage of at least 90%),
-Enola result against a comparable baseline, self-review, and commit. Reviewers
-must return actionable findings or an explicit no-findings verdict. Focused
+Each slice records its owner, consumers, review evidence, behavior tests, full
+`make ci-check` result (including coverage of at least 90%), Enola result
+against a comparable baseline, self-review, and commit. Earlier slices used
+three independent review lenses; the current round records self-review only.
+Focused
 test runs use `--no-cov`; only the full suite establishes the coverage gate.
 
 Enola checks use the docs-local snapshot at `enola-out/` with
@@ -36,9 +61,9 @@ the displayed count.
 
 | Enola measure | Baseline | Migration target | Current status |
 |---|---:|---:|---|
-| Directory-level cycle findings | 5 (C1–C5) | 0 | 1 remains (C2); C1, C3, C4, and C5 were removed by C-01 through C-04 |
+| Directory-level cycle findings | 5 (C1–C5) | 0 | Last measured: 0 at `d86db22`; current tree unmeasured |
 | Declared layer violations | Not measured; no layer intent | No violations for any adopted rule | Not measured |
-| Heuristic insights | 110 | Track by explainer; not the cycle gate | 112 in the latest C-04 check; pinned receipt remains at baseline 110 |
+| Heuristic insights | 110 | Track by explainer; not the cycle gate | Last measured: 112 at `d86db22`; current tree unmeasured |
 
 V-01 removed the measured `config → providers` import edge. The live Enola
 report resolved one dependency-depth insight (115 to 114 total insights,
@@ -79,7 +104,171 @@ Enola filter or threshold changed.
 | C-02 | Break C4: `providers` ↔ `providers/adapters`; app owns adapter construction; preserve `providers.adapters` exports and builder behavior | Three plan reviews and three final implementation reviews pass; review findings addressed | PASS — all seven changed suites; builder IDs/aliases, full capabilities, defaults, copy isolation, and unsupported-ID behavior covered | PASS — `make ci-check`; 2,041 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:08 UTC; clean, C4 removed (4→3 current cycles), no new finding; 114 total / 111 heuristic vs. 115 / 110 pinned baseline | `d02e439` | Complete |
 | C-03 | Break C5: `schemas` ↔ `schemas/registries`; keep registry records owned/exported by `schemas.registries` | Three plan reviews and three final implementation reviews pass; findings addressed | PASS — schema contract and import-boundary suites; registry exports and import forms covered | PASS — `make ci-check`; 2,043 passed / 8 skipped / 11 xfailed; 91.73% coverage; source/wheel builds and product gate pass | PASS — committed-tree check at 21:26 UTC; clean, C5 removed (3→2 current cycles), no new finding, one dependency-depth advisory resolved; 112 total / 110 heuristic vs. 115 / 110 pinned baseline | `efd451e` | Complete |
 | C-04 | Break C3: `graph` ↔ `graph/nodes` ↔ `graph/orchestrator_validators` ↔ `graph/subgraphs`, preserving callable and state contracts | Three plan and three implementation lenses pass; no remaining findings | PASS — 184 passed / 2 skipped / 10 xfailed across changed graph/app suites; moved graph factory compiles | PASS — `make ci-check`; 2,050 passed / 8 skipped / 11 xfailed; 91.73% coverage; strict mypy, source/wheel builds, and product gate pass | PASS — committed-tree check at 22:06 UTC; clean, C3 removed (2→1 cycles), no new findings; 113 total / 112 heuristic vs. pinned 115 / 110 | `1e3bf33` | Complete |
-| C-05 | Break C2: `app` / `app/services` / `mcp` tool subpackages, preserving startup and operator contracts | Three plan lenses and three implementation lenses pass for the first cut; scope extension under review | PASS — 20 app-boundary/product-gate tests; moved CLI command prints `Product gate: PASS`; old-path search is clean | Pending | Enola still reports 1 cycle, now wholly within the MCP package; target remains 0 | Pending | Implementation — cycle cut incomplete |
+| C-05 | Break C2: move product gate to CLI, then move MCP registry assembly out of the eager tool facade | First cut reviewed; final self-review below | PASS — 430 MCP/CLI/graph tests with 1 skip and 11 expected failures; facade identity checked | PASS — `make ci-check` with offline build; 2,058 passed / 8 skipped / 11 xfailed; 91.72% coverage | PASS — clean against pinned baseline; 0 current cycle findings, 112 current insights versus 115 pinned and 113 before this round | `d86db22` | Complete |
+| F-01 | Establish `filmspec` ownership of `FilmPhase`, immutable phase order, and successor; preserve schema/graph aliases | Self-review below | PASS — 5 phase tests, including identity and all successor edges | Same full gate as C-05 | Included in C-05 Enola check; no new cycle | `d86db22` | Complete |
+| F-02 | Move pure artifact, agent, generation, validation, and issue enum vocabularies into `filmspec`; preserve schema aliases | Source owner and aliases inspected | Compatibility alias cases added, not run by user direction | Not run by user direction | Not run by user direction | `8085f3b` | Migrated; verification deferred |
+| F-03 | Move phase gate, provider-dependence, and transition vocabularies into `filmspec`; preserve graph and schema aliases | Source tables and consumers inspected | Compatibility and phase-set cases added, not run by user direction | Not run by user direction | Not run by user direction | `0f7ba2a` | Migrated; verification deferred |
+| S-01 | Move `schemas._base` to public `schemas.base`, retarget production imports, and keep explicit old-path aliases | Mechanical source import inventory; no old-path source import remains | Alias cases added, not run by user direction | Not run by user direction | Not run by user direction | `227eccc` | Migrated; verification deferred |
+| P-01 | Move project reference resolution from MCP to `projects`; keep MCP aliases and retarget server | Pure resolution module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `15124c9` | Migrated; verification deferred |
+| G-02 | Move pure review action policy into `governance`; keep review aliases and retarget package generation | Pure policy module inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `224a6cc` | Migrated; verification deferred |
+| ST-01 | Move canonical project/phase/media path layout into `storage`; keep artifact path aliases and retarget store consumers | Pure path owner and direct consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `9e94779` | Migrated; verification deferred |
+| ST-02 | Move artifact ID validation and sanitization into `storage.contract`; preserve registry aliases and retarget store/MCP consumers | Identifier helpers and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `e3c9c93` | Migrated; verification deferred |
+| G-03 | Move review package generation and artifact diff into `governance`; keep review aliases and retarget MCP | Review modules and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `d1344d5` | Migrated; verification deferred |
+| OP-01 | Move operator view models and service errors into `operations`; preserve app-service aliases and retarget consumers | Leaf contracts and imports inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `42b9aa5` | Migrated; verification deferred |
+| ST-03 | Move immutable `KindSpec` and renderer type into `storage.contract`; preserve registry aliases and retarget store | Registry value object and consumers inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `d10c18b` | Migrated; verification deferred |
+| DH-01 | Move mock actors, in-memory Git, storage fixtures, and scenarios into `devharness`; keep `testing` aliases and wheel content during behavior freeze | Harness source modules inspected | Alias identity case added, not run by user direction | Not run by user direction | Not run by user direction | `0167bd9` | Migrated; packaging seal deferred |
+| R2-01 | Repair the tree so the quality gate can run again: fix the broken test collection, the strict-mypy re-export errors, and the shim surfaces that caused them | Independent audit of the whole tree; no behavior change claimed | PASS — review, governance, testing, devharness, graph-boundary, and artifact suites; full `pytest --collect-only` over `tests/` | PASS — `make ci-check`; 1,986 passed / 7 skipped / 11 xfailed; 91.75% coverage; strict mypy, source/wheel builds, product gate | PASS — live docs-local check at 23:34 UTC; clean, zero cycle findings; 8,240 facts | `7254827` | Complete |
+| R2-02 | Retire the `testing` compatibility package now that `devharness` owns the harness; retarget consumers and repair the startup-boundary guard that still watched the old path | Full-tree audit of shim consumers; every caller was a test, none in `src/` | PASS — conftest, e2e conftest, five artifact suites, graph startup-boundary suite, consolidated harness suite | PASS — `make ci-check`; 2,064 passed / 8 skipped / 11 xfailed; 91.75% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `bfc5106` | Complete |
+| R2-03 | Replace nine hand-written alias-identity test modules with one suite derived from each alias's own export list | Verified the two suites were the same behaviour and the test tree was organized opposite to code ownership | PASS — 53 derived alias cases plus importability checks; governance behavior suites run from their new owner-aligned location | PASS — `make ci-check`; 2,100 passed / 8 skipped / 11 xfailed; 91.75% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `452f0b0` | Complete |
+| R2-04 | Give the three duplicated runtime rules one owner: the stale-generation-request codes (3 copies), the text-only request row (2 copies), and the markdown-fence unwrapper (2 copies) | Reproduced all three against current source with `path:line` anchors before changing anything | PASS — filmspec vocabulary suite and generation review-parsing suite, including producer/consumer agreement and both-generation-path parity | PASS — `make ci-check`; 2,119 passed / 8 skipped / 11 xfailed; 91.87% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `9c8e1ae` | Complete |
+| ST-04 | Complete the `storage` ownership move: relocate the artifact store, envelope, manifest, registry, project storage, renderers, layout, and serialization out of `artifacts`; retarget every consumer; keep `artifacts` as an identity-preserving facade | Independent plan with a scratch-copy dry run that reproduced two breakages before implementation | PASS — full suite; new `test_module_ownership.py` proves facade identity and single layout ownership; `langgraph.json` entrypoint imports | PASS — `make ci-check`; 2,150 passed / 8 skipped / 11 xfailed; 91.91% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `5a9819d` | Complete |
+| R2-05 | Make weak assertions prove the behavior they name: two assertion-free git tests, an assertion-free import smoke test, a checkpointer test that never inspected the checkpointer, and a node test that never called the node; cover the three untested defensive branches in `graph/consistency.py` | Full-suite audit of assertion quality; each change verified against real behavior rather than assumed | PASS — checkpoints, graph, smoke, and new consistency suites; `graph/consistency.py` reaches 100% | PASS — `make ci-check`; 2,162 passed / 8 skipped / 11 xfailed; 91.95% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `d726df1` | Complete |
+| D-02 | Correct `05-enforcement-and-guard-tests.md`: state that the guard suite was never implemented, and fix the false "exactly four `ast.parse` test files" measurement | Verified every claim against the tree: `tests/architecture/` absent, `architecture.py` absent, zero `ModuleContract` occurrences, 15 of 16 guards missing, measured count 8 not 4 | Documentation only; no test run required | N/A — docs-only change | N/A | `ef2fa73` | Complete |
+| P-02 | Move project classification policy (folder-name kind rule, explicit-kind validation, derived title) from `app/services/_project_discovery.py` into `projects.classification`; keep the runtime-coupled discovery helpers in app | Verified the pure half has no runtime dependency and that removing it deletes one of the four FES #3 blockers | PASS — new classification suite covering the substring rule, canonicalization, actionable error, precedence, and owner re-export | PASS — `make ci-check`; 2,187 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `018babb` | Complete |
+| OP-02a | Break FES #3 without moving `OperatorService`: declare `operations.ports.RuntimePort` structurally, widen `_persistence.storage_for`/`artifact_root` to the port, and guard that no `operations` module imports `film_pipeline.app` | Plan review found the move as originally briefed would materialize a forbidden edge; verified the remaining coupling is only `runtime.services.artifact_store` | PASS — new runtime-port suite: protocol conformance for the real runtime and a fake, store/absent-services branches, and a source-level FES #3 guard with mutation cases | PASS — `make ci-check`; 2,200 passed / 8 skipped / 11 xfailed; 92.00% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `ea0df4e` | Complete |
+| OP-02b | Remove the remaining forbidden `app.services → app.*` imports: extend `RuntimePort` to the measured surface, add `ProviderComposition`, supply the concrete bindings from `app/_operator_runtime.py`, and move the runtime-to-storage gateway into `storage.runtime_gateway` | Type checker caught two real protocol errors (settable `services`, mapping-typed `project_roots`/`provider_adapters`); `_persist_project_state` reach-in recorded as O7 debt rather than renamed | PASS — updated runtime-port suite proving the real runtime conforms, both injected collaborators conform, the service module has no module-level composition-root import, and the guard detects its claimed forms | PASS — `make ci-check`; 2,202 passed / 8 skipped / 11 xfailed; 91.99% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `157387a` | Complete |
+
+| OP-02c | Physical move: `operator.py`, `_browse_ops.py`, `_checkpoint_ops.py`, `_generation_ops.py` -> `operations`; `_project_discovery.py` -> `projects/discovery.py`; `app/services` becomes a facade | Found and fixed a real import cycle (`projects.classification` -> `operations.errors` -> eager facade -> `operations.operator` -> `projects`) by resolving the service lazily through module `__getattr__` | PASS — full suite, MCP server and `langgraph.json` entrypoints import, facade identity probes | PASS — `make ci-check`; 2,205 passed / 8 skipped / 11 xfailed; 91.96% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycle findings; non-gating advisories 35 -> 39, mostly rename churn, with one real cost: `mcp` depth 14 -> 15 | `6b0cd34` | Complete |
+
+| B-02 | Create the `budget` module: `cap_for` as the single cap reader, `authorize_spend` as the single refusal path, `BudgetLedger` with derived spend, `budget_cap_prompt_value`; retarget the MCP planning tool's invented `100.0` default | Verified against `audit/12` F-BUD-01/02/03/04: four cap shapes, eight gate sites, zero `SpendRecord` writers. Found a real gap: profiles declare `project_cap_usd` but no creation path writes it, so every project resolves to no cap | PASS — 27 new budget cases covering the single reader, inclusive boundary, refusal payload, derived spend, and a guard that `budget` imports neither `config` nor `generation` | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.98% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycle findings; two advisory additions are in untouched modules | `665581a` | Complete |
+
+| G-04 | Move `scope_contract.py` and `consistency.py` from `graph` to `governance`; make the approved-ref registry an injected parameter so `governance` (L8) stops reaching up into `orchestration` (L9); retarget consumers, add shims, move behavior tests to their owner | Found an upward dependency the (nonexistent) guard suite could not catch: `check_staleness` imported `graph.orchestrator_state` lazily | PASS — governance consistency and scope-contract suites, plus the full run | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `81adc8f` | Complete |
+
+| G-05 | Complete `governance`: move `_action_routing.py` and `orchestrator_validators/` out of `graph`; supply the seven orchestrator reads through a new `GateFacts` port; inject the artifact store into `brief.py`; point `router` at `filmspec` for `APPROVAL_GATES` | Found and fixed a **silent** regression the suite caught: a storeless `load_execution_brief` stops using the store-backed fallback rather than failing loudly. Also corrected a guard whose sibling-package rule a blanket rewrite had pointed outside `graph` | PASS — full suite including the shot-bible structure test that surfaced the regression | PASS — `make ci-check`; 2,232 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings; the one new advisory is pre-existing complexity re-keyed to the new path | `ec178ad` | Complete |
+
+| O-01 | Rename `graph` -> `orchestration` as a package move; delete the four in-package shims already owned by `governance`; bind `compute_actions` to the concrete `GATE_FACTS` in `router`; add a `graph` compatibility package; retarget 51 test files and three source-sweeping guards | Chose a package rename over a 28-file piecewise move because the files import each other heavily and a partial move leaves both packages holding real code | PASS — full suite; MCP server and `langgraph.json` entrypoints import | PASS — `make ci-check`; 2,233 passed / 8 skipped / 11 xfailed; 91.81% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycles; advisories 41 -> 56 (mostly re-keyed paths), with two real increases: `mcp` depth 15 -> 16 and `app/services` 13 -> 14 from the compatibility shim | `b893936` | Complete |
+
+| S-01b | Rename `app` -> `studio`; delete the moved-package `services/` (the operator surface already lives in `operations`); migrate the `langgraph.json` graph entry in the same change; add an `app` compatibility package; retarget 83 test files, the Makefile/README smoke paths, and three guards | Chose rename-over-move for the same reason as O-01; the entry-point migration is roadmap-scoped (W11) and must land with the rename so no commit leaves the configured graph unresolvable | PASS — full suite; `langgraph.json` entry resolves and carries a `graph` object; MCP server imports; shim identity probe | PASS — `make ci-check`; 2,233 passed / 8 skipped / 11 xfailed; 91.14% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `8c28bba` | Complete |
+
+| SHIM-01 | Remove every compatibility shim (`artifacts`, `graph`, `review`, `app`, `app/services` — 70 files); retarget all consumers to the owners; delete the ownership test that existed only to verify the `artifacts` shim | Predicted the depth cost would recover, and it did; two defects surfaced that the shims were hiding (`mcp/tools/__init__.pyi` pointed at a removed path; `helpers.py` returned `Any` through the lazy facade) | PASS — full suite including the 71 monkeypatch sites the lazy runtime facade serves | PASS — `make ci-check`; 2,172 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS on the gating explainer — 0 cycles; `mcp` depth recovers 16 -> 15; advisories 56 -> 71, mostly findings re-keyed from shim paths to owner paths with identical fan-in/out | `ff5b8e2` | Complete |
+
+| SC-01 | Remove `schemas/_base.py` and retarget its 62 consumers | Source was already clean; the consumers were tests plus, critically, four under `scripts/` that ruff excludes and pytest never runs | PASS — full suite; `scripts/` verified by import rather than by test | PASS — `make ci-check`; 2,172 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | PASS — clean, zero cycle findings | `dc086c7` | Complete |
+| W-01 | Exclude `devharness` from the wheel (D6); drop the dead `*/testing/*` coverage omits | Measured zero production importers before excluding, rather than assuming dev-only | PASS — wheel inspection: 0 `devharness` entries of 292 modules; full suite unaffected | PASS — `make ci-check`; 2,172 passed / 8 skipped / 11 xfailed; 91.97% coverage; strict mypy, source/wheel builds, product gate | N/A — packaging only | `2eed330` | Complete |
+
+| LAYER-01 | Break the gating cycle `operations -> projects -> studio -> operations`: move `projects/discovery.py` to `operations`, replace `classification.py`'s `operations.errors` dependency with a local `ValueError` subclass, and remove the lazy `studio` default from `OperatorService` | `enola check` exit 1. Traced both illegal edges against `03` §3.8 (`projects` L4 may import only `filmspec`/`schemas`/`storage`), and measured that no production call site used zero-arg construction | PASS — full suite; new guards assert `projects` imports no higher layer and `operations` imports `studio` at no nesting level | PASS — `make ci-check`; 2,175 passed / 8 skipped / 11 xfailed; 91.95% coverage; strict mypy, source/wheel builds, product gate | **PASS — exit 0, `no structural regression`, cycles explainer 0 insights** | `c1c7d29` | Complete |
+
+### OP-02c — the remaining physical move
+
+**Done in OP-02c (`6b0cd34`).** The four operator modules now live in
+`operations`, `_project_discovery.py` lives in `projects/discovery.py`, and
+`app/services` is a compatibility facade. The move required breaking one real
+cycle: `projects.classification` imports `operations.errors`, so an eager
+`OperatorService` import in the `operations` facade made `film_pipeline.mcp.server`
+unimportable; the facade now resolves it through a module `__getattr__`.
+
+**The tree now contains only target modules (SHIM-01 `ff5b8e2`).** No
+compatibility shim remains, so the former names (`artifacts`, `graph`,
+`review`, `testing`, `app`) no longer resolve.
+
+**All eight target modules now exist.** `storage` (ST-04), `projects` (P-02),
+`operations` (OP-02c), `governance` (G-04/G-05), `orchestration` (O-01),
+`studio` (S-01b), `budget` (B-02), and `devharness` (DH-01). What remains is
+removing the compatibility shims (`artifacts`, `graph`, `review`, `app`,
+`app/services`) once their consumers migrate, the `schemas._base` retarget, the
+`devharness` wheel exclusion, and the deferred R-01 behavior repairs.
+
+**`governance` is now complete (G-04 `81adc8f`, G-05 `ec178ad`).** It holds the
+human-gate law, the review action/diff/generator policy, scope contracts,
+consistency checks, and the gate validators — with **zero** references back into
+`graph`. The orchestrator reads the law needs arrive through two narrow ports
+(`GateFacts`, plus the structural reads in `governance.orchestrator_reads`), and
+the artifact store is injected into the validators rather than imported.
+
+### OP-02 — why the round was rescoped
+
+The ledger previously listed "move `OperatorService` and its helper operations
+out of `app/services` into `operations`" as a single round. Planning it found
+that the move as briefed **cannot be done legally**: `03` §4.6.1 names
+`operations → studio` as forbidden edge #3, and the four imports the move would
+carry are exactly the four sites that section lists under "Removed by".
+
+Because the edge law has no mechanical enforcement (`tests/architecture/` does
+not exist), that violation would have landed silently. The round was therefore
+split:
+
+- **OP-02a (done, `ea0df4e`)** removes the runtime coupling structurally
+  instead of relocating it. `operations.ports.RuntimePort` declares what the
+  operator surface needs; `StudioRuntime` conforms without subclassing; the two
+  persistence helpers accept the port. A source-level guard now fails if any
+  `operations` module imports `film_pipeline.app`.
+- **OP-02b (remaining)** is the physical file move. It is now unblocked for
+  `_browse_ops`, `_checkpoint_ops`, and `_generation_ops`, but `operator.py`
+  still imports `film_pipeline.app._provider_profiles` and the runtime
+  accessors `get_runtime` / `reset_runtime`, which the port does not yet cover.
+  Those need the same treatment before the move, and the `_project_discovery`
+  helpers must reach `projects` rather than `operations`.
+
+### R2-01 — the gate was broken, not merely unverified
+
+F-02 through DH-01 recorded "not run by user direction" and were therefore
+never actually validated. R2-01 measured the tree and found it **red**: three
+independent defects that made `make ci-check` impossible to pass, all of them
+consequences of the migration rounds themselves.
+
+1. **The whole test suite could not be collected.** `tests/unit/review/test_diff.py`
+   imported the private `_id_stem` from `film_pipeline.review.diff`, a four-line
+   alias module created by G-03 that never carried the private helper. pytest
+   aborted collection with `ImportError`, so *no* test in the repository could
+   run. Fixed by importing from the owner, `film_pipeline.governance.diff`,
+   which is the same pattern the other alias tests use.
+2. **Strict mypy failed with 16 errors in six files.** `graph/_action_routing.py`
+   bound `APPROVAL_GATES` through a plain `import ... as`, which mypy does not
+   accept as an explicit re-export, and the five `testing/*` shims re-exported
+   standard-library names (`Path`, `dataclass`, `field`, `Any`, `StrEnum`) that
+   merely leaked out of the `devharness` modules they alias.
+3. **The shim surfaces were wider than any consumer needed.** The `testing/*`
+   shims now re-export only the symbols that are actually used and declare
+   `__all__`. Object identity is unchanged, and the removed names had no
+   consumer in `src/`, `tests/`, or `scripts/`.
+
+The behavior freeze held: no functional code path changed, and the diff is
+limited to import surfaces. The Enola check is clean against the docs-local
+receipt with zero cycle findings.
+
+A full-tree audit run alongside this round also corrected two premises that
+later rounds depended on, and they are recorded here rather than in a chat log:
+
+- `src/film_pipeline/testing/*.py` are **alias shims, not duplicate copies**.
+  `git show --stat 0167bd9` shows the modules were reduced, not added
+  (`testing/in_memory_git.py | 202 +--------------------`); today every line is
+  an `X as X` re-export, and they have live consumers in `tests/`. They are
+  retarget-first material, never "delete as duplicated".
+- `src/film_pipeline/schemas/_base.py` is **not a pure shim** despite being
+  small: it has roughly 90 import sites, including four under `scripts/` that
+  pytest never executes and that would therefore break silently. It is the most
+  expensive retarget in the repository and must be scheduled late, not early.
+
+## Remaining migration work
+
+The target module names now exist except `budget`, `orchestration`, and
+`studio`. Presence is not completion: several newly created packages own only
+their pure contracts while stateful code still lives at the old path. The next
+rounds should keep existing behavior and use the lowest-risk dependency order:
+
+1. Move the remaining artifact registry, envelope, store, manifest, and project
+   storage implementation into `storage`, retaining read/write format and old
+   import aliases. Then move project discovery and the active-project authority
+   into `projects`.
+2. Move `OperatorService` and its helper operations out of `app/services` into
+   `operations`, with MCP consumers retargeted and the existing runtime lookup
+   behavior preserved during the move.
+3. Move graph execution/composition into `orchestration`, and runtime,
+   bootstrap, logging, and entry-point composition into `studio`. This requires
+   a deliberate `langgraph.json` path migration and compatibility review for
+   import-time checkpointer creation and persisted state.
+4. Establish `budget` as the owner of the existing spend rules without
+   changing ceilings or approval behavior. Complete the outstanding governance
+   routing and generation/validation ownership moves after their callers use
+   the new package boundaries.
+5. Retarget test harness consumers to `devharness`, remove obsolete aliases
+   after consumers are migrated, make the requested wheel exclusion, and align
+   `AGENTS.md`, operator docs, and boundary guards with the delivered tree.
+
+The production code still has compatibility modules under `artifacts`,
+`app/services`, `graph`, `review`, `mcp.resolution`, `schemas._base`, and
+`testing`. They are intentional migration shims for now; deleting them before
+their consumers move would change imports. R-01b through R-01e remain behavior
+repairs for after the migration.
 | R-01b | Keep provider-blocked generation paused after approval in compiled graph and app fallback | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01c | Share validation result handoff, issue identity, and QC row-patch persistence across graph, app, and MCP | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
 | R-01d | Read and write MCP stdio as newline-delimited JSON at the process boundary | Deferred behavior fix; not part of migration scope | Pending | Pending | Pending | Pending | Deferred until migration exit |
@@ -87,16 +276,13 @@ Enola filter or threshold changed.
 | B-01 | Review and migrate the remaining measured import-boundary debt against `AGENTS.md` and the approved ownership map; make no package-count-driven moves | Pending boundary inventory and three lenses per seam | Pending | Pending | Pending | Pending | Queued after cycle burndown |
 | D-01 | Align product documentation with exercised operator behavior | Not started | Not started | Pending | Pending | Pending | Queued |
 
-The C-01 through C-05 rows are a measured cycle burndown, not authorization for
-the superseded 20-module proposal. Each row requires its own boundary-preserving
-plan, three independent reviews, validation, Enola count, and commit.
-Behavior repairs resume only after cycle burndown reaches zero and the measured
-ownership seams selected under B-01 have a code owner and a consumer-boundary
-guard. D-01 remains after the relevant behavior work because it must describe
-exercised behavior.
+The C-01 through C-05 rows are a measured cycle burndown. The user has now
+authorized the larger target migration. The remaining behavior repairs stay
+deferred until the migration is complete. D-01 follows the relevant behavior
+work so that it describes exercised behavior.
 
-The user's Enola cycle exit bar is **zero total cycle findings**, so C-05 must
-follow C-04; completing the graph slice alone is not migration completion.
+The user's Enola cycle exit bar is **zero total cycle findings**. C-05 meets
+that bar; completing the graph slice alone did not.
 
 ## C-04 plan — graph composition and shared-owner imports
 
@@ -245,10 +431,28 @@ follow C-04; completing the graph slice alone is not migration completion.
   three implementation reviews pass for this cut. However, Enola still reports
   one cycle: `mcp` → `mcp/tools` → `mcp/tools/bibles` →
   `mcp/tools/generation` → `mcp/tools/reference_generation` → `mcp`. This
-  remaining finding is wholly within the MCP package, so the app-to-MCP move
-  alone does not meet the zero-cycle exit bar. C-05 stays open while three
-  independent lenses review a migration-only extension; full CI and a clean
-  committed-tree Enola result remain pending.
+  remaining finding was wholly within the MCP package, so the app-to-MCP move
+  alone did not meet the zero-cycle exit bar. The extension moved registry
+  assembly from `mcp.tools.registry` to `mcp.registry` and made the tool facade
+  lazy. A `.pyi` file preserves static callable types without eagerly loading
+  every handler. The public facade, registry function, and test runtime hook
+  retain their identities. Enola now reports zero cycles and 112 total insights
+  against the original pinned 115. The full gate passed with an offline build;
+  this avoids an unavailable PyPI DNS lookup without changing dependencies.
+
+## Current round self-review
+
+- The registry move deletes its old module and changes only its import owner.
+  Runtime registration order remains the source order of the moved function.
+- The lazy tool facade preserves `__all__`, `dir()`, callable identity, and the
+  `tools.get_runtime` patch point. Focused MCP tests cover all operator paths;
+  the new facade test checks the three formerly cyclic subpackages directly.
+- `filmspec.FilmPhase` is the one class; `schemas.FilmPhase` is an alias.
+  `PHASE_SEQUENCE` and `next_phase` are likewise aliases from the old graph
+  path. No serialized value or routing result changed.
+- No dead copy of the registry or phase enum remains. No duplicate behavior
+  test was added; the new assertion checks export identity across the moved
+  boundary. Known xfailed behavior is unchanged.
 
 ## V-01 plan
 

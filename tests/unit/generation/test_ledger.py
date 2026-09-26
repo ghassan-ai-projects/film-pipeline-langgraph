@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from film_pipeline.artifacts.store import ArtifactStore
 from film_pipeline.generation.ledger import GenerationLedgerManager
-from film_pipeline.schemas._base import GenerationMode, GenerationStatus
+from film_pipeline.schemas.base import GenerationMode, GenerationStatus
+from film_pipeline.storage.store import ArtifactStore
 
 
 class TestGenerationLedgerManager:

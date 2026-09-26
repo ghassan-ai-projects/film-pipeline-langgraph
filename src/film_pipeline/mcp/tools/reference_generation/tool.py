@@ -34,7 +34,13 @@ from film_pipeline.mcp.tools.reference_generation.retry_loop import (
     _run_retry_attempts,
 )
 
-from ..helpers import _error, _load_latest_reference_index, _ok, _services
+from ..helpers import (
+    _error,
+    _load_latest_reference_index,
+    _ok,
+    _services,
+    require_project_state,
+)
 
 
 def _persist_updated_index(
@@ -88,10 +94,7 @@ def _resolve_generation_inputs(
     args: dict[str, object],
 ) -> _GenerationInputs | dict[str, object]:
     """Validate request-level inputs; return an error payload or the inputs."""
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
-
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     data = _load_latest_reference_index(rt, project_id, active)
     if data is None:

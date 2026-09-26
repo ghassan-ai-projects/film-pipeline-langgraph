@@ -8,13 +8,13 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app._provider_factory import build_provider_adapter
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     generate_reference_images,
     get_validation_report,
     inspect_reference,
 )
+from film_pipeline.studio._provider_factory import build_provider_adapter
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 @pytest.mark.integration

@@ -26,7 +26,7 @@ def idea_file(tmp_path: Path) -> Path:
 @pytest.fixture
 def isolated_runtime() -> Any:
     """Save and restore the global runtime singleton around the test."""
-    import film_pipeline.app.runtime as rt_mod
+    import film_pipeline.studio.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
     previous_override = rt_mod._RUNTIME_MODE_OVERRIDE

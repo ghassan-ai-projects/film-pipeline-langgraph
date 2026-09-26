@@ -11,12 +11,12 @@ import hashlib
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from film_pipeline.artifacts.manifest import (
+from film_pipeline.storage.manifest import (
     AssetEntry,
     AssetManifest,
     read_manifest,
 )
-from film_pipeline.artifacts.project_storage import ProjectStorage
+from film_pipeline.storage.project_storage import ProjectStorage
 
 if TYPE_CHECKING:
     from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob

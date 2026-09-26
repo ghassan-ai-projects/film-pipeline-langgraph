@@ -142,8 +142,8 @@ class DeliveryPackagingAgent:
         """
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas._base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
         from film_pipeline.schemas.delivery import DeliveryPackage as DeliveryPackageModel
 
         artifact_id = "delivery_package"

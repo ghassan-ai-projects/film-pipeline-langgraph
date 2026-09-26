@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-from .helpers import _active_project_state, _error, _ok
+from .helpers import (
+    _ok,
+    require_project_state,
+)
 
 
 async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
+    state = require_project_state(args)
     return _ok(current_phase=state.get("current_phase", ""))
 
 
 async def get_film_state(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
+    state = require_project_state(args)
     # Return a sanitized copy (no internal keys)
     safe = {
         k: v
@@ -26,12 +25,10 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
+    state = require_project_state(args)
 
-    from film_pipeline.graph import orchestrator_state as ostate
-    from film_pipeline.graph.router import compute_actions, public_blocked_actions
+    from film_pipeline.orchestration import orchestrator_state as ostate
+    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)
@@ -60,10 +57,8 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
 
 
 async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
-    from film_pipeline.graph.router import compute_actions, public_blocked_actions
+    state = require_project_state(args)
+    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     actions = compute_actions(dict(state))
     return _ok(
@@ -81,10 +76,8 @@ async def get_blockers(args: dict[str, object]) -> dict[str, object]:
     see one truthful picture. Response shape is stable:
     ``{blockers: [{action, reason}], has_blockers: bool}``.
     """
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
-    from film_pipeline.graph.router import get_blockers_for_state
+    state = require_project_state(args)
+    from film_pipeline.orchestration.router import get_blockers_for_state
 
     blockers = get_blockers_for_state(state)
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)

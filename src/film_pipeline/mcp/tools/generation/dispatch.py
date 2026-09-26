@@ -9,12 +9,17 @@ from film_pipeline.mcp.tools.generation._text_only import (
     _is_text_only_policy,
 )
 
-from ..helpers import _error, _ok, _services
+from ..helpers import (
+    _error,
+    _ok,
+    _services,
+    require_project_state,
+)
 
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
@@ -26,7 +31,7 @@ def _submit_failure(
     reason: str,
 ) -> dict[str, str]:
     """Mark a ledger row FAILED and build its failure record."""
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -95,7 +100,7 @@ def _mark_row_running(
     provider_job_id: str,
 ) -> dict[str, str]:
     """Persist the provider_job_id on the row and build its success record."""
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -118,16 +123,14 @@ async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
     in the ledger row. Partial failures are recorded per-row.
     """
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     if _is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
 
     from film_pipeline.generation.executor import GenerationExecutor
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
@@ -182,7 +185,7 @@ def _poll_row_status(
 def _generation_status(provider_status: str) -> GenerationStatus:
     """Map a provider job status to its ledger generation status."""
     from film_pipeline.providers.base import ProviderJobStatus
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     try:
         job_status = ProviderJobStatus(provider_status)
@@ -202,9 +205,7 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     from datetime import UTC, datetime
 
@@ -257,12 +258,10 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
     if not generation_id:
         return _error("generation_id is required.")
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas._base import GenerationStatus
+    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)

@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import (
     approve_phase,
     create_film_project,
@@ -17,18 +16,7 @@ from film_pipeline.mcp.tools import (
     set_active_project,
     submit_idea,
 )
-
-
-def test_review_phase_artifacts_requires_active_project(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(review_phase_artifacts({}))
-    assert result["ok"] is False
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def test_review_phase_artifacts_requires_phase(
@@ -73,7 +61,7 @@ def test_review_phase_artifacts_success() -> None:
 
 
 def test_approve_phase_no_active_project_errors() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -92,7 +80,7 @@ def test_approve_phase_success() -> None:
 
 
 def test_request_revision_no_active_project_errors() -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
+    from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
@@ -122,7 +110,7 @@ def test_review_phase_artifacts_generator_fallback(
     rt.set_active("review-fallback")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.review.generator import ReviewPackageGenerator
+    from film_pipeline.governance.generator import ReviewPackageGenerator
 
     def _raise(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("boom")

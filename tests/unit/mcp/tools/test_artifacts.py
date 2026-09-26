@@ -8,8 +8,6 @@ from typing import cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
-from film_pipeline.app.runtime import get_runtime as gr
 from film_pipeline.mcp.tools import (
     create_film_project,
     inspect_artifact,
@@ -21,6 +19,7 @@ from film_pipeline.mcp.tools import (
     list_shots,
     set_active_project,
 )
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
@@ -40,13 +39,6 @@ def _build_runtime_through_shot_bible(tmp_path: Path, project_id: str) -> Studio
 def _make_active_project(project_id: str) -> None:
     asyncio.run(create_film_project({"project_id": project_id}))
     asyncio.run(set_active_project({"project_ref": project_id}))
-
-
-def test_list_artifacts_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_artifacts({}))
-    assert result["ok"] is False
 
 
 def test_list_artifacts_empty_for_new_project() -> None:
@@ -170,7 +162,7 @@ def test_inspect_scene_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     rt.projects["proj-artifacts-19"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     assert rt.services is not None
     script_data = rt.services.artifact_store.load(
@@ -241,7 +233,7 @@ def test_inspect_reference_success(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     rt.projects["proj-artifacts-15"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     assert rt.services is not None
     data = rt.services.artifact_store.load(
@@ -274,13 +266,6 @@ def test_inspect_reference_not_found_with_index(
     assert result["ok"] is False
 
 
-def test_list_assets_requires_active_project() -> None:
-    rt = gr()
-    rt.active_project_id = ""
-    result = asyncio.run(list_assets({}))
-    assert result["ok"] is False
-
-
 def test_list_assets_empty_when_no_manifest() -> None:
     _make_active_project("proj-assets-1")
     result = asyncio.run(list_assets({}))
@@ -294,7 +279,7 @@ def test_list_assets_returns_entries(tmp_path: Path, monkeypatch: pytest.MonkeyP
     rt.set_active("proj-assets-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    from film_pipeline.artifacts.manifest import AssetEntry, AssetManifest, write_manifest
+    from film_pipeline.storage.manifest import AssetEntry, AssetManifest, write_manifest
 
     assert rt.services is not None
     write_manifest(

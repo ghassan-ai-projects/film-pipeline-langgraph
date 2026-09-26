@@ -146,27 +146,27 @@ READERS: dict[tuple[str, ...], tuple[str, str]] = {
     # prove this container-level reader. _model_overrides_for passes each
     # selected profile through to the router at runtime.
     ("model_profiles",): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("model_profiles", "creative_writer", "primary"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("model_profiles", "creative_writer", "max_tokens"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("model_profiles", "creative_writer", "temperature"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("model_profiles", "strict_validator", "primary"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("model_profiles", "strict_validator", "max_tokens"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_model_overrides_for",
     ),
     ("providers", "image"): (
@@ -178,15 +178,15 @@ READERS: dict[tuple[str, ...], tuple[str, str]] = {
         "_collect_profile_models",
     ),
     ("budget", "project_cap_usd"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_inject_config_context",
     ),
     ("budget", "max_total_usd"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_inject_config_context",
     ),
     ("context", "max_chars_per_artifact"): (
-        "src/film_pipeline/graph/nodes/_context.py",
+        "src/film_pipeline/orchestration/nodes/_context.py",
         "_artifact_context_max_chars",
     ),
 }
@@ -351,12 +351,12 @@ def test_reader_annotations_name_real_consumers() -> None:
 def test_annotated_reader_paths_are_exercised() -> None:
     """Annotations must prove runtime extraction, not just name a function."""
     from film_pipeline.config.profile_resolver import provider_specs_from_raw
-    from film_pipeline.graph.nodes._context import (
+    from film_pipeline.mcp.tools.helpers import _collect_profile_models
+    from film_pipeline.orchestration.nodes._context import (
         _artifact_context_max_chars,
         _inject_config_context,
         _model_overrides_for,
     )
-    from film_pipeline.mcp.tools.helpers import _collect_profile_models
 
     state = {
         "resolved_config": {

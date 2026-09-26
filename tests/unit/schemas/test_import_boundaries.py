@@ -5,34 +5,14 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-
-def _import_targets(node: ast.AST, package_parts: tuple[str, ...]) -> list[str]:
-    if isinstance(node, ast.Import):
-        return [alias.name for alias in node.names]
-    if not isinstance(node, ast.ImportFrom):
-        return []
-
-    if node.level:
-        parent_size = len(package_parts) - node.level + 1
-        base = package_parts[: max(parent_size, 0)]
-    else:
-        base = ()
-    module_parts = tuple(node.module.split(".")) if node.module else ()
-    imported_parts = (*base, *module_parts)
-    targets = [".".join(imported_parts)] if imported_parts else []
-    targets.extend(
-        ".".join((*imported_parts, *alias.name.split(".")))
-        for alias in node.names
-        if alias.name != "*"
-    )
-    return targets
+from tests.unit._import_guard import import_targets
 
 
 def _imports_registry_subpackage(node: ast.AST, package_parts: tuple[str, ...]) -> bool:
     registry_package = "film_pipeline.schemas.registries"
     return any(
         target == registry_package or target.startswith(f"{registry_package}.")
-        for target in _import_targets(node, package_parts)
+        for target in import_targets(node, package_parts)
     )
 
 

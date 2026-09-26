@@ -8,7 +8,7 @@ from film_pipeline.providers.failure_classifier import (
     is_token_limit_exceeded,
 )
 from film_pipeline.providers.health import ProviderHealth, ProviderHealthTracker
-from film_pipeline.schemas._base import ProviderStatus
+from film_pipeline.schemas.base import ProviderStatus
 
 
 class TestFailureClassifier:

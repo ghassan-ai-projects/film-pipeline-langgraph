@@ -66,7 +66,7 @@ def _maybe_cache_character_bible(
     if subject_type != "character" or not subject_id or subject_id in char_bibles:
         return
     try:
-        from film_pipeline.schemas._base import FilmPhase
+        from film_pipeline.schemas.base import FilmPhase
 
         version = max(1, store.latest_version(project_id, "visual_dev", "character_bible"))
         bible = store.load(project_id, FilmPhase("visual_dev"), "character_bible", version)

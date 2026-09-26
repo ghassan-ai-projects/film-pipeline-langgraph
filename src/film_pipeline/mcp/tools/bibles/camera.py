@@ -6,7 +6,12 @@ from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
 
-from ..helpers import _error, _ok, _services
+from ..helpers import (
+    _error,
+    _ok,
+    _services,
+    require_project_state,
+)
 from ._shared import (
     _chat_json_or_mock,
     _constitution_camera_philosophy,
@@ -62,7 +67,7 @@ def _request_camera_bible_output(
 def _execute_camera_bible_agent(model_output: dict[str, Any]) -> dict[str, Any] | None:
     """Run CameraBibleAgent over the model output; None signals invalid output."""
     from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
-    from film_pipeline.schemas._base import AgentFamily, AgentRole
+    from film_pipeline.schemas.base import AgentFamily, AgentRole
     from film_pipeline.schemas.handoff import AgentRegistration
 
     agent = CameraBibleAgent(
@@ -85,7 +90,7 @@ def _deliver_camera_bible(
     rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas._base import ArtifactType
+    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
@@ -102,9 +107,7 @@ def _deliver_camera_bible(
 async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
     """Generate a CameraLanguageBible from FilmConstitution."""
     rt = tools_pkg.get_runtime()
-    active = rt.get_active()
-    if not active:
-        return _error("No active project.")
+    active = require_project_state(args)
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from film_pipeline.schemas._base import ValidationModality, ValidationScope
+from film_pipeline.schemas.base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import ValidatorRegistryEntry
 
 

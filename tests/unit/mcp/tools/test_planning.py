@@ -8,8 +8,8 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.app.runtime import StudioRuntime
 from film_pipeline.mcp.tools import generate_plan, generate_shot_bible, initialize_budget
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
@@ -33,16 +33,6 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
         mcp_tools.get_runtime = original_get_runtime
     assert result["ok"] is True, result
     return rt
-
-
-def test_initialize_budget_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(initialize_budget({}))
-    assert result["ok"] is False
 
 
 def test_initialize_budget_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -133,7 +123,7 @@ def test_generate_plan_validates_raw_persisted_matrix(
     assert result["ok"] is True
     assert cast(int, result["shot_count"]) > 0
     assert rt.services is not None
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     stored = rt.services.artifact_store.load(
         "plan-success-1", FilmPhase("gen_planning"), "generation_plan", 1
@@ -160,17 +150,6 @@ def test_initialize_budget_save_failure(tmp_path: Path, monkeypatch: pytest.Monk
     result = asyncio.run(initialize_budget({}))
     assert result["ok"] is False
     assert "Budget initialization failed" in cast(str, result["error"])
-
-
-def test_generate_plan_requires_active_project(monkeypatch: pytest.MonkeyPatch) -> None:
-    from film_pipeline.app.runtime import get_runtime as gr
-
-    rt = gr()
-    rt.active_project_id = ""
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(generate_plan({}))
-    assert result["ok"] is False
-    assert "No active project" in cast(str, result["error"])
 
 
 def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -251,7 +230,7 @@ def test_generate_plan_uses_configured_seedance_rate_and_route(
     assert result["ok"] is True
     assert cast(float, result["total_estimated_cost"]) > 0.0
     assert rt.services is not None
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     stored = rt.services.artifact_store.load(
         "plan-seedance-1", FilmPhase("gen_planning"), "generation_plan", 1

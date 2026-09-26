@@ -7,7 +7,7 @@ from typing import Any
 
 from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
 from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
-from film_pipeline.schemas._base import AgentFamily, AgentRole
+from film_pipeline.schemas.base import AgentFamily, AgentRole
 from film_pipeline.schemas.camera import CameraLanguageBible
 from film_pipeline.schemas.handoff import AgentRegistration
 from film_pipeline.schemas.style import StyleBible

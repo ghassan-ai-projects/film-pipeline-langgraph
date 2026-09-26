@@ -5,20 +5,22 @@ from __future__ import annotations
 from typing import Any, cast
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.app.services import OperatorService
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
+    resolved_config_state_keys,
 )
+from film_pipeline.operations.operator import OperatorService
+from film_pipeline.studio._operator_runtime import operator_service
 
 from .helpers import (
-    _active_project_state,
     _coerce_runtime_arg,
     _collect_profile_models,
     _collect_profile_providers,
     _error,
     _ok,
     _services,
+    require_project_state,
 )
 
 
@@ -115,11 +117,9 @@ def _populate_project_state(
                 quality if quality.startswith("quality.") else f"quality.{quality}"
             )
     state["runtime_mode"] = runtime_mode
-    state["profile_stack"] = effective_stack
     state["server_mode"] = server_mode
-    state["resolved_config"] = cast(dict[str, object], resolved_config.get("raw", {}))
-    state["resolved_config_sources"] = resolved_config["sources"]
-    state["config_conflicts"] = _extract_conflicts(resolved_config)
+    # `config` owns profile resolution and therefore the projection onto state.
+    state.update(resolved_config_state_keys(effective_stack, resolved_config))
     state["generation_policy"] = str(args.get("generation_policy", "generate"))
     user_runtime = _coerce_runtime_arg(args)
     if user_runtime > 0:
@@ -175,7 +175,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        service = OperatorService(rt)
+        service = operator_service(rt)
         profile_error = _validate_resolved_profile(
             profile_stack, resolved_config, runtime_mode, service
         )
@@ -243,9 +243,7 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
 
 
 async def get_active_project(args: dict[str, object]) -> dict[str, object]:
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project set")
+    state = require_project_state(args)
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
@@ -253,7 +251,7 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     """Summarize every stored artifact of a project across all film phases."""
     # Imported here to match the lazy-import pattern used by tools.helpers,
     # which keeps tool-module import time independent of schema enum loading.
-    from film_pipeline.schemas._base import FilmPhase
+    from film_pipeline.schemas.base import FilmPhase
 
     summaries: list[dict[str, object]] = []
     for phase in FilmPhase:
@@ -277,11 +275,9 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
 async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
     rt = tools_pkg.get_runtime()
-    state = _active_project_state(args)
-    if state is None:
-        return _error("No active project.")
+    state = require_project_state(args)
     project_id = str(state["project_id"])
-    from film_pipeline.graph.router import get_blockers_for_state
+    from film_pipeline.orchestration.router import get_blockers_for_state
 
     artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])

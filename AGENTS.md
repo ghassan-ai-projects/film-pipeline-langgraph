@@ -48,22 +48,42 @@ The full pipeline runs `make ci-check`: ruff format, ruff lint, mypy strict, pyt
 
 ## Sub-Package Boundaries
 
-The 12 sub-packages under `src/film_pipeline/` map 1:1 to implementation phases. `graph` and `mcp` may import across all sub-packages; domain modules must not import each other directly — they communicate through `artifacts`.
+The packages under `src/film_pipeline/` map to implementation phases and to the
+ownership boundaries in `docs/modular-architecture/03-target-architecture.md`.
+`orchestration` and `mcp` may import across all sub-packages; domain modules must
+not import each other directly — they communicate through `storage` (the owner
+of artifact identity and layout).
 
-| Sub-package | Phase |
-|-------------|-------|
-| `config` | 03 — Profile loading, merging |
-| `schemas` | 01 — Pydantic contracts |
-| `artifacts` | 04 — Versioned storage |
-| `graph` | 05 — LangGraph state machine |
-| `kb` | 06 — Knowledge base |
-| `agents` | 07 — Agent registry, prompts |
-| `review` | 08 — Review packages |
-| `validation` | 09 — Validator registry |
-| `providers` | 10, 13 — Provider adapters |
-| `checkpoints` | 11 — Checkpoints, resume |
-| `mcp` | 02 — MCP tool surface |
-| `post` | 14 — Post-production |
+The migration is complete: every package under `src/film_pipeline/` is a target
+module that owns its concern. The pre-migration names — `artifacts`, `graph`,
+`review`, `testing`, and `app` — have been removed along with their
+compatibility shims, and all consumers import the owners directly.
+
+| Sub-package | Phase | Notes |
+|-------------|-------|-------|
+| `filmspec` | — | Pure vocabulary: phases, enums, transitions, generation-request codes |
+| `config` | 03 — Profile loading, merging | |
+| `schemas` | 01 — Pydantic contracts | |
+| `storage` | 04 — Artifact identity, layout, versioning | Owner of `ProjectStorage`, `ArtifactStore`, `KindSpec` |
+| `orchestration` | 05 — LangGraph state machine | Formerly `graph` |
+| `kb` | 06 — Knowledge base | |
+| `agents` | 07 — Agent registry, prompts | |
+| `governance` | 08 — Review packages, gate law | Formerly `review` plus the graph gate modules |
+| `validation` | 09 — Validator registry | |
+| `providers` | 10, 13 — Provider adapters | |
+| `checkpoints` | 11 — Checkpoints, resume | |
+| `mcp` | 02 — MCP tool surface | |
+| `post` | 14 — Post-production | |
+| `operations` | — | Operator use cases, view models, runtime ports |
+| `projects` | — | Project identity, classification, resolution |
+| `budget` | — | Spend cap policy and refusal |
+| `studio` | — | Composition root; formerly `app` |
+| `devharness` | — | Test doubles and scenarios; formerly `testing` |
+
+The former owners map to their replacements as follows: `artifacts` ->
+`storage`, `graph` -> `orchestration` (with the gate law and validators in
+`governance`), `review` -> `governance`, `testing` -> `devharness`, and `app` ->
+`studio` (with the operator surface in `operations`). Import the new names.
 
 ## Operating Rules
 

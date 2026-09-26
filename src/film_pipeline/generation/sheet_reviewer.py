@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.generation.gemini_client import call_gemini
+from film_pipeline.generation.review_parsing import strip_markdown_fences
+from film_pipeline.providers.gemini_review_client import call_gemini
 
 # ── Data types ────────────────────────────────────────────────────────────
 
@@ -174,15 +175,6 @@ def _candidate_text(candidates: list[Any]) -> str:
     return text.strip()
 
 
-def _strip_code_fence(text: str) -> str:
-    if not text.startswith("```"):
-        return text
-    stripped = text.split("\n", 1)[-1]
-    if stripped.endswith("```"):
-        stripped = stripped[:-3]
-    return stripped.strip()
-
-
 def _normalized_scores(data: dict[str, Any]) -> tuple[dict[str, dict[str, object]], float]:
     scores: dict[str, dict[str, object]] = {}
     total = 0.0
@@ -217,7 +209,7 @@ def _parse_sheet_response(
         candidates = response.get("candidates", [])
         if not candidates:
             return _failed_result(subject_id, sheet_type, "No candidates")
-        text = _strip_code_fence(_candidate_text(candidates))
+        text = strip_markdown_fences(_candidate_text(candidates))
         data = json.loads(text)
     except (json.JSONDecodeError, KeyError, IndexError) as exc:
         return _failed_result(subject_id, sheet_type, f"Parse error: {exc}")

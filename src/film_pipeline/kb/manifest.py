@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from film_pipeline.schemas._base import KbAuthority
+from film_pipeline.schemas.base import KbAuthority
 from film_pipeline.schemas.kb import KBItemMetadata
 
 

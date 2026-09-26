@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from film_pipeline.schemas._base import FilmPhase, SchemaBase
+from film_pipeline.schemas.base import FilmPhase, SchemaBase
 
 ApprovalAction = Literal["approve", "request_revision", "reject", "escalate"]
 ProfileChangeStatus = Literal["pending", "approved", "rejected", "superseded"]
