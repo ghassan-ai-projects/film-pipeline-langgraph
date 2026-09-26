@@ -747,3 +747,60 @@ def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
     assert rows[0].next_action == "wait_human", (
         f"a failed row should wait for a human, got {rows[0].next_action!r}"
     )
+
+
+def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> None:
+    """A status read must not write an artifact.
+
+    The ledger manager's `load()` persists a new empty ledger when none exists,
+    so an unguarded read on an unplanned project turns every status refresh into
+    an artifact write. `GenerationExecutor.has_ledger` exists for this reason;
+    the MCP handler did not use it.
+    """
+    import asyncio
+
+    from film_pipeline.schemas.base import FilmPhase
+
+    assert rt.services is not None
+    store = rt.services.artifact_store
+    assert not store.mutable_exists("gen-start-test", FilmPhase.GENERATION, "generation_ledger")
+
+    result = asyncio.run(list_active_generations({}))
+    assert result["ok"] is True
+    assert result["count"] == 0
+
+    assert not store.mutable_exists("gen-start-test", FilmPhase.GENERATION, "generation_ledger"), (
+        "listing active generations created a ledger artifact"
+    )
+
+
+def test_active_generations_excludes_terminal_and_keeps_waiting_rows(
+    rt: StudioRuntime,
+) -> None:
+    """Terminality is the ledger's rule, and blocked rows are still active.
+
+    The handler used to hand-roll a four-member terminal set from a ten-member
+    enum. A row blocked on a provider or budget is waiting on something that can
+    still change, so it must still be listed as active.
+    """
+    import asyncio
+
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+    from film_pipeline.schemas.base import GenerationStatus
+
+    assert rt.services is not None
+    mgr = GenerationLedgerManager(rt.services.artifact_store)
+    ledger = mgr.plan_batch(
+        "gen-start-test", ["S001", "S002", "S003"], "mock-video-provider", "mock-fast"
+    )
+    by_shot = {r.shot_id: r.generation_id for r in ledger.rows}
+    mgr.update_row("gen-start-test", by_shot["S001"], status=GenerationStatus.COMPLETED.value)
+    mgr.update_row(
+        "gen-start-test", by_shot["S002"], status=GenerationStatus.BLOCKED_PROVIDER.value
+    )
+
+    result = asyncio.run(list_active_generations({}))
+    assert result["ok"] is True
+    listed = {row["shot_id"] for row in cast(list[dict[str, object]], result["rows"])}
+    assert "S001" not in listed, "a COMPLETED row is terminal and must not be active"
+    assert "S002" in listed, "a provider-blocked row is still active"

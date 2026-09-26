@@ -27,6 +27,28 @@ from film_pipeline.storage.store import ArtifactStore
 
 LEDGER_ARTIFACT_ID = "generation_ledger"
 
+#: Statuses a row can never leave. The ledger's state machine is owned here, so
+#: this is the single definition of terminality. It was hand-rolled in three
+#: places — this module, the executor's cost sum, and the MCP status handler —
+#: which is three opportunities to disagree about when a row is finished.
+#:
+#: ``requires_human_review``, ``blocked_provider`` and ``blocked_budget`` are
+#: deliberately NOT terminal: each waits on something that can still change, so
+#: the row is still live and must not be filtered out of an "active" listing.
+TERMINAL_GENERATION_STATUSES: frozenset[GenerationStatus] = frozenset(
+    {
+        GenerationStatus.COMPLETED,
+        GenerationStatus.FAILED,
+        GenerationStatus.CANCELLED,
+        GenerationStatus.TIMED_OUT,
+    }
+)
+
+
+def is_terminal(status: GenerationStatus) -> bool:
+    """Return whether a generation row has reached a status it cannot leave."""
+    return status in TERMINAL_GENERATION_STATUSES
+
 
 class GenerationLedgerManager:
     """Create and mutate the generation ledger for a project.
@@ -123,13 +145,7 @@ class GenerationLedgerManager:
     def estimate_total_cost(self, project_id: str) -> float:
         """Sum estimated_cost_usd for all non-terminal rows."""
         ledger = self.load(project_id)
-        terminal = {
-            GenerationStatus.COMPLETED,
-            GenerationStatus.FAILED,
-            GenerationStatus.CANCELLED,
-            GenerationStatus.TIMED_OUT,
-        }
-        return sum(r.estimated_cost_usd for r in ledger.rows if r.status not in terminal)
+        return sum(r.estimated_cost_usd for r in ledger.rows if not is_terminal(r.status))
 
     # ── promote ──────────────────────────────────────────────────────────
 

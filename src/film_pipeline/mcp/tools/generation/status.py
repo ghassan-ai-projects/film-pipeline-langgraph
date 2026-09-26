@@ -41,18 +41,25 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
     """List active (non-terminal) generation rows."""
     rt = tools_pkg.get_runtime()
     project_id = require_project_id(args)
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas.base import GenerationStatus
+    from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
+    from film_pipeline.schemas.base import FilmPhase
 
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-    terminal = {
-        GenerationStatus.COMPLETED,
-        GenerationStatus.FAILED,
-        GenerationStatus.CANCELLED,
-        GenerationStatus.TIMED_OUT,
-    }
-    all_rows = mgr.list_rows(project_id)
-    active_rows = [r for r in all_rows if r.status not in terminal]
+    # Guard against the read creating an artifact: the ledger manager's load()
+    # persists a new empty ledger when none exists, so without this a status
+    # refresh on an unplanned project writes one. GenerationExecutor.has_ledger
+    # carries the same guard, expressed as these two store primitives.
+    store = _services(rt).artifact_store
+    has_ledger = (
+        store.mutable_exists(project_id, FilmPhase.GENERATION, "generation_ledger")
+        or store.next_version(project_id, FilmPhase.GENERATION.value, "generation_ledger") > 1
+    )
+    if not has_ledger:
+        return _ok(count=0, rows=[])
+
+    # Terminality is owned by the ledger's state machine. This handler used to
+    # hand-roll the same four-member set from a ten-member enum.
+    mgr = GenerationLedgerManager(store)
+    active_rows = [r for r in mgr.list_rows(project_id) if not is_terminal(r.status)]
     return _ok(
         count=len(active_rows),
         rows=[
