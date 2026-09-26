@@ -1,11 +1,16 @@
 """The agent roster — which agents exist, and what each one is contracted to do.
 
-``MVP_AGENTS`` is the set of agents the current graph wires into phases. Agents
-that are not yet invoked by a graph phase (character-dossier, prompt-composition,
-continuity-ledger, generation-scheduler, scene-continuity-validator,
-full-movie-flow-validator, kb-curator) are kept out until they are wired in.
-Their implementation classes and schema tests remain in the codebase for future
-phases.
+``MVP_AGENTS`` is the set of agents this system runs. Most are wired into a
+graph phase; the four visual-development bible creators are invoked through MCP
+(``mcp.tools.bibles``) instead. Both kinds live here, because a roster row is
+what makes an agent resolvable — its contract, implementation class, prompt
+template, model profile, and mock response are all looked up by id.
+
+Agents that are not invoked by anything yet (character-dossier,
+prompt-composition, continuity-ledger, generation-scheduler,
+scene-continuity-validator, full-movie-flow-validator, kb-curator) are kept out
+until they are wired in. Their implementation classes and schema tests remain in
+the codebase for future phases.
 
 This is a data module, not a package: it declares records and nothing else. The
 module that *validates* them, supports lookup, and binds them to implementation
@@ -15,6 +20,10 @@ Each row's ``produces`` names the key its ``execute()`` returns the primary
 artifact under — the key consumers read from a run's result dict. That is the
 authoritative field; ``output_artifacts`` is the free-form capability
 vocabulary and is not a result-dict contract.
+
+Registration is not routing: being on this roster does not put an agent into a
+graph phase. Which agent a phase routes to is ``orchestration._agent_routing``'s
+decision and is deliberately untouched by membership here.
 """
 
 from __future__ import annotations
@@ -187,5 +196,71 @@ MVP_AGENTS: list[AgentRegistration] = [
         default_model_profile="operations_triage",
         reviewed_by=["orchestrator-agent"],
         failure_modes=["wrong_error_class", "premature_retry", "missed_escalation"],
+    ),
+    # --- Visual-development bible creators ---------------------------------
+    # Invoked through MCP (`mcp.tools.bibles`) rather than a graph phase, but
+    # they are agents like any other: the roster declares them so the MCP path
+    # and the graph path resolve contracts, implementations, templates, and
+    # mocks from one place. The contracts below were the MCP tools' own local
+    # literals before this move; they are copied verbatim so nothing drifts.
+    AgentRegistration(
+        agent_id="camera-bible-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["camera_design"],
+        input_artifacts=["film_constitution"],
+        output_artifacts=["camera_language_bible"],
+        produces="camera_bible",
+        allowed_kb_domains=["visual-design", "camera"],
+        blocked_kb_domains=["cost", "providers"],
+        prompt_framework="RCTCO",
+        default_model_profile="creative_writer",
+        reviewed_by=["orchestrator-agent", "human"],
+        failure_modes=["generic_lenses", "unfilmable_movement", "missing_default_profile"],
+    ),
+    AgentRegistration(
+        agent_id="character-bible-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["character_development"],
+        input_artifacts=["script", "film_constitution"],
+        output_artifacts=["character_bible"],
+        produces="character_bible",
+        allowed_kb_domains=["character", "creative-writing"],
+        blocked_kb_domains=["cost", "providers"],
+        prompt_framework="RCTCO",
+        default_model_profile="creative_writer",
+        reviewed_by=["orchestrator-agent", "human"],
+        failure_modes=["flat_identity", "unusable_identity_block", "missing_voice_rules"],
+    ),
+    AgentRegistration(
+        agent_id="environment-bible-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["environment_design"],
+        input_artifacts=["script", "film_constitution"],
+        output_artifacts=["environment_bible"],
+        produces="environment_bible",
+        allowed_kb_domains=["visual-design", "creative-writing"],
+        blocked_kb_domains=["cost", "providers"],
+        prompt_framework="RCTCO",
+        default_model_profile="creative_writer",
+        reviewed_by=["orchestrator-agent", "human"],
+        failure_modes=["missing_zones", "inconsistent_lighting", "weak_locked_prompt_block"],
+    ),
+    AgentRegistration(
+        agent_id="style-bible-agent",
+        family=AgentFamily.DEVELOPMENT,
+        role=AgentRole.CREATOR,
+        capabilities=["style_definition"],
+        input_artifacts=["film_constitution", "environment_bible"],
+        output_artifacts=["style_bible"],
+        produces="style_bible",
+        allowed_kb_domains=["visual-design", "tone"],
+        blocked_kb_domains=["cost", "providers"],
+        prompt_framework="RCTCO",
+        default_model_profile="creative_writer",
+        reviewed_by=["orchestrator-agent", "human"],
+        failure_modes=["generic_palette", "tone_mismatch", "unstated_mood"],
     ),
 ]

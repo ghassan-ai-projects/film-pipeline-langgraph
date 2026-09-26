@@ -13,8 +13,11 @@ from dataclasses import dataclass, field
 
 from film_pipeline.agents.base import BaseAgent
 from film_pipeline.agents.impl.assembly_agent import AssemblyAgent
+from film_pipeline.agents.impl.camera_bible_agent import CameraBibleAgent
+from film_pipeline.agents.impl.character_bible_agent import CharacterBibleAgent
 from film_pipeline.agents.impl.constitution_agent import ConstitutionAgent
 from film_pipeline.agents.impl.development_agent import DevelopmentAgent
+from film_pipeline.agents.impl.environment_bible_agent import EnvironmentBibleAgent
 from film_pipeline.agents.impl.gen_planner_agent import GenPlannerAgent
 from film_pipeline.agents.impl.intake_agent import IntakeAgent
 from film_pipeline.agents.impl.orchestrator_agent import OrchestratorAgent
@@ -22,6 +25,7 @@ from film_pipeline.agents.impl.qc_synthesis_agent import QCSynthesisAgent
 from film_pipeline.agents.impl.screenwriter_agent import ScreenwriterAgent
 from film_pipeline.agents.impl.shot_bible_agent import ShotBibleAgent
 from film_pipeline.agents.impl.structure_extractor_agent import StructureExtractorAgent
+from film_pipeline.agents.impl.style_bible_agent import StyleBibleAgent
 from film_pipeline.agents.impl.visual_dev_agent import VisualDevAgent
 from film_pipeline.agents.model_routing import ModelRouter
 from film_pipeline.schemas.base import AgentFamily, AgentRole
@@ -44,6 +48,10 @@ AGENT_CLASS_BY_ID: dict[str, type[BaseAgent]] = {
     "clip-validator": QCSynthesisAgent,
     "failure-handling-agent": AssemblyAgent,
     "orchestrator-agent": OrchestratorAgent,
+    "camera-bible-agent": CameraBibleAgent,
+    "character-bible-agent": CharacterBibleAgent,
+    "environment-bible-agent": EnvironmentBibleAgent,
+    "style-bible-agent": StyleBibleAgent,
 }
 
 

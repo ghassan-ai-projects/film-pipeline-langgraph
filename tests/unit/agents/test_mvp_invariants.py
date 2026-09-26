@@ -158,3 +158,30 @@ class TestRosterDeclaresWhatItsAgentsProduce:
         claimed = [agent.produces for agent in MVP_AGENTS]
         duplicates = sorted({key for key in claimed if claimed.count(key) > 1})
         assert not duplicates, f"Multiple agents declare the same produces key: {duplicates}"
+
+    @pytest.mark.parametrize("agent", MVP_AGENTS, ids=lambda a: a.agent_id)
+    def test_mock_response_satisfies_the_agent_it_is_registered_for(self, agent: Any) -> None:
+        """A registered mock must actually pass its agent's own ``validate()``.
+
+        The mock authority is keyed by agent id, so a payload can be present and
+        still be unusable: shape drift between the canned JSON and the agent's
+        schema makes the agent reject it, and the tool then reports "produced
+        invalid output" while the mock looks fine. This calls the real
+        ``execute()`` and the real ``validate()`` on the registered payload, so
+        that failure mode cannot ship silently.
+        """
+        impl = get_agent_class(agent.agent_id)
+        assert impl is not None, f"{agent.agent_id} has no implementation class"
+        payload = default_mock_responses()[agent.agent_id]
+
+        result = impl(agent).execute(payload)
+
+        assert impl(agent).validate(result), (
+            f"{agent.agent_id} rejects its own registered mock response in "
+            "studio/mock_responses.py — the mock's shape does not match the schema "
+            "the agent parses"
+        )
+        assert agent.produces in result, (
+            f"{agent.agent_id}'s mock does not yield its declared produces key "
+            f"'{agent.produces}'; got {sorted(result)}"
+        )

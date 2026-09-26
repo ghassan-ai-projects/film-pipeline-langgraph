@@ -416,3 +416,214 @@ def _orchestrator_review() -> PromptTemplate:
         ),
         output_schema_ref="orchestrator.OrchestratorDecision",
     )
+
+
+# --- Visual-development bible creators ---------------------------------------
+# These four are invoked through MCP (``mcp.tools.bibles``) rather than a graph
+# phase. Their prose was previously assembled inline in each MCP tool; it lives
+# here now so the MCP path and the graph path render prompts the same way, from
+# the same registry. Versions start at 1 because no template existed before.
+
+
+def _camera_bible_creator() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="camera-bible-creator-v1",
+        agent_id="camera-bible-agent",
+        version=1,
+        role=(
+            "You are a camera language specialist. Given a film's camera "
+            "philosophy, define the lens, framing, and movement vocabulary the "
+            "film will be shot with."
+        ),
+        core_task=(
+            "Create a CameraLanguageBible for a film whose camera philosophy is:\n"
+            "{camera_philosophy}\n\n"
+            "Define reusable camera profiles, and name one as the default."
+        ),
+        context_template=(
+            "{constraints}\n\n"
+            "Camera philosophy: {camera_philosophy}\n"
+            "Project ID: {project_id}\n"
+            "KB refs: {kb_refs}"
+        ),
+        constraints=(
+            "Every profile must be filmable with a real lens and support. "
+            "Movement must be achievable without specialized rigs beyond a "
+            "gimbal, dolly, or tripod. Exactly one profile_id must equal "
+            "default_profile_id."
+        ),
+        output_format=(
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "camera_bible": {\n'
+            '    "project_id": "...",\n'
+            '    "profiles": [\n'
+            "      {\n"
+            '        "profile_id": "default",\n'
+            '        "use_case": "...",\n'
+            '        "lens": "...",\n'
+            '        "framing": "...",\n'
+            '        "movement": "...",\n'
+            '        "depth_of_field": "...",\n'
+            '        "composition_rules": ["..."],\n'
+            '        "transition_rules": ["..."],\n'
+            '        "emotional_meaning": "..."\n'
+            "      }\n"
+            "    ],\n"
+            '    "default_profile_id": "default"\n'
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="camera.CameraLanguageBible",
+    )
+
+
+def _character_bible_creator() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="character-bible-creator-v1",
+        agent_id="character-bible-agent",
+        version=1,
+        role=(
+            "You are a character development specialist. Given a script and film "
+            "constitution, produce a detailed CharacterBible for a single character."
+        ),
+        core_task=(
+            "Create a CharacterBible for character '{character_name}' (id: {character_id})."
+        ),
+        context_template=(
+            "{constraints}\n\n"
+            "Film Constitution:\n{constitution_content}\n\n"
+            "Script:\n{script_content}\n\n"
+            "Character: {character_name} (id: {character_id})\n"
+            "Project ID: {project_id}\n"
+            "KB refs: {kb_refs}"
+        ),
+        constraints=(
+            "locked_prompt_block must be a one-paragraph physical description "
+            "injected verbatim into every image prompt for this character — "
+            "specific, durable, and free of transient state. "
+            "identity must contain only appearance facts that never change. "
+            "voice_rules must describe how the character speaks, not what they say."
+        ),
+        output_format=(
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "character_bible": {\n'
+            '    "project_id": "...",\n'
+            '    "character_id": "...",\n'
+            '    "identity": {"age_range": "...", "gender_presentation": "...", '
+            '"build": "...", "distinguishing_marks": ["..."]},\n'
+            '    "voice_rules": {"register": "...", "pace": "...", '
+            '"verbal_tics": ["..."]},\n'
+            '    "wardrobe_rules": {"palette": ["#rrggbb"], "silhouette": "...", '
+            '"must_not_change": ["..."]},\n'
+            '    "emotional_arc": {"start_state": "...", "end_state": "...", '
+            '"turning_points": ["..."]},\n'
+            '    "relationships": [],\n'
+            '    "locked_prompt_block": "..."\n'
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="character.CharacterBible",
+    )
+
+
+def _environment_bible_creator() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="environment-bible-creator-v1",
+        agent_id="environment-bible-agent",
+        version=1,
+        role=(
+            "You are an environment design specialist. Given a script and film "
+            "constitution, produce a detailed EnvironmentBible for a single location."
+        ),
+        core_task=(
+            "Create an EnvironmentBible for environment '{environment_name}' "
+            "(id: {environment_id})."
+        ),
+        context_template=(
+            "{constraints}\n\n"
+            "Film Theme: {theme}\n"
+            "Visual Language: {visual_language}\n\n"
+            "Script:\n{script_content}\n\n"
+            "Environment: {environment_name} (id: {environment_id})\n"
+            "Project ID: {project_id}\n"
+            "KB refs: {kb_refs}"
+        ),
+        constraints=(
+            "locked_prompt_block must be a one-paragraph description of the "
+            "environment injected verbatim into every prompt — specific and durable. "
+            "fingerprint.text must be a compressed invariant block (2-3 sentences) "
+            "capturing the essence of the space. "
+            "zones are sub-areas, each with allowed viewpoints. "
+            "viewpoints are approved camera positions with lens and framing. "
+            "lighting_states must be named and repeatable (at least 2). "
+            "color_palette must be 4-8 hex color codes."
+        ),
+        output_format=(
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "environment_bible": {\n'
+            '    "environment_id": "...",\n'
+            '    "project_id": "...",\n'
+            '    "name": "...",\n'
+            '    "locked_prompt_block": "...",\n'
+            '    "invariants": [],\n'
+            '    "zones": [],\n'
+            '    "viewpoints": [],\n'
+            '    "lighting_states": [],\n'
+            '    "color_palette": ["#rrggbb"],\n'
+            '    "fingerprint": {"text": "..."},\n'
+            '    "reference_assets": [],\n'
+            '    "must_not_change": ["locked_prompt_block"]\n'
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="environment.EnvironmentBible",
+    )
+
+
+def _style_bible_creator() -> PromptTemplate:
+    return PromptTemplate(
+        template_id="style-bible-creator-v1",
+        agent_id="style-bible-agent",
+        version=1,
+        role=(
+            "You are a visual style specialist. Given a film's visual language, "
+            "tone, and existing environment palettes, define one consistent look "
+            "the whole film is graded and rendered to."
+        ),
+        core_task=(
+            "Create a StyleBible. Visual language: {visual_language}. "
+            "Tone: {tone}. Palette hints: {palette_hint}."
+        ),
+        context_template=(
+            "{constraints}\n\n"
+            "Visual language: {visual_language}\n"
+            "Tone: {tone}\n"
+            "Palette hints: {palette_hint}\n"
+            "Project ID: {project_id}\n"
+            "KB refs: {kb_refs}"
+        ),
+        constraints=(
+            "color_palette must be 4-8 hex codes and must be consistent with the "
+            "existing environment palettes. texture, grain, and visual_mood must "
+            "each be concrete enough to steer a render. "
+            "must_not_change names the values later phases may not alter."
+        ),
+        output_format=(
+            "Respond with valid JSON:\n"
+            "{\n"
+            '  "style_bible": {\n'
+            '    "project_id": "...",\n'
+            '    "color_palette": ["#rrggbb"],\n'
+            '    "texture": "...",\n'
+            '    "grain": "...",\n'
+            '    "visual_mood": "...",\n'
+            '    "reference_stills": [],\n'
+            '    "must_not_change": ["color_palette"]\n'
+            "  }\n"
+            "}"
+        ),
+        output_schema_ref="style.StyleBible",
+    )

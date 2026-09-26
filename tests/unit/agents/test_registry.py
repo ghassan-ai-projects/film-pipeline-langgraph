@@ -126,7 +126,9 @@ class TestAgentRegistry:
     def test_register_many(self) -> None:
         registry = AgentRegistry()
         registry.register_many(MVP_AGENTS)
-        assert len(registry) == 11
+        # Compared against the roster, not a literal: the point of the test is
+        # that register_many takes every row, not that the roster is a size.
+        assert len(registry) == len(MVP_AGENTS)
 
     def test_lookup_by_id(self) -> None:
         registry = AgentRegistry()

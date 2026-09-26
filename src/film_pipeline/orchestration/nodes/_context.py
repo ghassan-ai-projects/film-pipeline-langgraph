@@ -31,7 +31,10 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
     "reference-strategy-planner": "visual_reasoner",
     "visual-dev-agent": "visual_reasoner",
     "character-dossier-agent": "creative_writer",
+    "camera-bible-agent": "creative_writer",
+    "character-bible-agent": "creative_writer",
     "environment-bible-agent": "creative_writer",
+    "style-bible-agent": "creative_writer",
     "prompt-composition-agent": "creative_writer",
     # Analytical/structural agents → strict profiles
     "structure-extractor-agent": "strict_validator",
