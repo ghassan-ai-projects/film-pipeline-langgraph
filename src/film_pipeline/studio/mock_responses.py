@@ -495,11 +495,19 @@ def default_mock_responses() -> dict[str, dict[str, Any]]:
             }
         },
         "environment-bible-agent": {
+            # Static, like the character row above and for the same reason: a
+            # registered mock is keyed by agent id and cannot interpolate the
+            # requested environment. The tool returns locked_prompt_block in its
+            # own response, so in mock mode it describes the mock rather than
+            # the environment asked for. Real model output is per-environment.
             "environment_bible": {
                 "environment_id": "wasteland",
                 "project_id": "demo",
                 "name": "Wasteland",
-                "locked_prompt_block": "A vast, empty wasteland at dawn — generated in mock mode.",
+                "locked_prompt_block": (
+                    "A vast, empty wasteland at dawn — the canned environment "
+                    "bible used in mock mode. Replace with real model output."
+                ),
                 "invariants": [],
                 "zones": [],
                 "viewpoints": [],

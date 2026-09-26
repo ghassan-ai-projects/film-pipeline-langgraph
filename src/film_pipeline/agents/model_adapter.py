@@ -36,6 +36,7 @@ from film_pipeline.providers.http_transport import (
 from film_pipeline.providers.http_transport import (
     _open_with_timeout as _open_with_timeout,
 )
+from film_pipeline.providers.http_transport import post_json as post_json
 
 _ZAI_MODEL_PREFIX = ZAI_MODEL_PREFIX
 _GEMINI_MODEL_PREFIX = "google/"
