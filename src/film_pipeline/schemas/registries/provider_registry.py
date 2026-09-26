@@ -40,9 +40,3 @@ class ProviderRegistryEntry(SchemaBase):
     cost_profile: CostProfile = Field(default_factory=CostProfile)
     failure_modes: list[str] = Field(default_factory=list)
     enabled: bool = True
-
-
-class ProviderRegistry(SchemaBase):
-    """Aggregate provider registry."""
-
-    providers: list[ProviderRegistryEntry] = Field(default_factory=list)

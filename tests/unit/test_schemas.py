@@ -108,12 +108,9 @@ from film_pipeline.schemas import (
 )
 from film_pipeline.schemas.registries import (
     CostProfile,
-    ModelRegistry,
     ModelRegistryEntry,
     ProviderCapabilities,
-    ProviderRegistry,
     ProviderRegistryEntry,
-    ValidatorRegistry,
     ValidatorRegistryEntry,
     ValidatorThresholds,
 )
@@ -1050,12 +1047,3 @@ def test_reference_index_aggregate() -> None:
     )
     idx = ReferenceIndex(project_id="p", entries=[e])
     assert idx.entries[0].reference_id == "ref:1"
-
-
-def test_registries_aggregates() -> None:
-    p_reg = ProviderRegistry(providers=[])
-    v_reg = ValidatorRegistry(validators=[])
-    m_reg = ModelRegistry(models=[])
-    assert p_reg.providers == []
-    assert v_reg.validators == []
-    assert m_reg.models == []

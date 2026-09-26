@@ -76,8 +76,12 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
-    provider = str(args.get("provider", "mock-video-provider"))
-    model = str(args.get("model", "mock-fast"))
+    # Default through the owner rather than the literal pair: the default
+    # depends on the runtime mode (real mode prefers a credentialed provider),
+    # so hardcoding the mock pair here planned a real run against a mock.
+    default_provider, default_model = rt.default_video_provider()
+    provider = str(args.get("provider", default_provider))
+    model = str(args.get("model", default_model))
     prompt_ref = str(args.get("prompt_ref", ""))
     mode = _resolve_generation_mode(args)
     shot_ids = _collect_shot_ids(args, rt, project_id)

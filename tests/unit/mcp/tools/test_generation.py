@@ -612,3 +612,45 @@ class TestTextOnlyGenerationPolicy:
         result = asyncio.run(start_generation_batch({}))
         assert result["ok"] is True
         assert result.get("text_only") is True
+
+
+def test_plan_generation_batch_defaults_provider_through_the_runtime(
+    rt: StudioRuntime,
+) -> None:
+    """Omitting provider/model must use the runtime's default pair, not a literal.
+
+    The handler hardcoded ("mock-video-provider", "mock-fast") while seven other
+    call sites used `rt.default_video_provider()`, whose answer depends on the
+    runtime mode. In real mode that meant planning a real run against the mock
+    provider. No existing test covered the default branch — every one passed
+    provider and model explicitly — so the divergence was invisible.
+    """
+    import asyncio
+
+    expected_provider, expected_model = rt.default_video_provider()
+
+    result = asyncio.run(plan_generation_batch({"shot_ids": ["S001"]}))
+    assert result["ok"] is True, result.get("error")
+
+    # Assert on the durable ledger row, not the response envelope: the row is
+    # what generation later executes against.
+    from film_pipeline.generation.ledger import GenerationLedgerManager
+
+    assert rt.services is not None
+    ledger_row = GenerationLedgerManager(rt.services.artifact_store).list_rows("gen-start-test")[0]
+    assert (ledger_row.provider, ledger_row.model) == (expected_provider, expected_model)
+
+
+def test_the_mock_literals_are_gone_from_the_handler() -> None:
+    """The literal pair must not reappear; the owner is the only source."""
+    import inspect
+    import re
+
+    from film_pipeline.mcp.tools.generation import planning as generation_planning
+
+    source = inspect.getsource(generation_planning)
+    offenders = re.findall(r'"(?:mock-video-provider|mock-fast)"', source)
+    assert not offenders, (
+        "the generation planning handler hardcodes provider/model again: "
+        f"{offenders}. Use rt.default_video_provider()."
+    )
