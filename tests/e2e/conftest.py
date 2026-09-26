@@ -23,7 +23,6 @@ from film_pipeline.providers.health import ProviderHealthTracker
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.providers.registry import ProviderRegistry
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -77,7 +76,6 @@ def mock_provider() -> MockVideoProvider:
             max_duration_seconds=30,
             aspect_ratios=["16:9"],
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
     )
     return MockVideoProvider(entry=entry)
 

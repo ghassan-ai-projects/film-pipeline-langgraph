@@ -9,7 +9,6 @@ from film_pipeline.providers.base import BaseProviderAdapter
 from film_pipeline.providers.mock_image_provider import MockImageProvider
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -28,7 +27,6 @@ def build_provider_adapter(
         provider_type=provider_type,
         models=model_list,
         capabilities=_default_capabilities(provider_id, provider_type),
-        cost_profile=_default_cost_profile(provider_id),
     )
 
     if provider_id == "seedance-openrouter":
@@ -101,11 +99,3 @@ def _default_capabilities(provider_id: str, provider_type: str) -> ProviderCapab
         aspect_ratios=["16:9"],
         supported_resolutions=["480p", "720p"],
     )
-
-
-def _default_cost_profile(provider_id: str) -> CostProfile:
-    from film_pipeline.providers.pricing import PROVIDER_PRICING, rate_for, unit_for
-
-    if provider_id in PROVIDER_PRICING:
-        return CostProfile(unit=unit_for(provider_id), estimated_rate_usd=rate_for(provider_id))
-    return CostProfile(unit="second", estimated_rate_usd=0.0)

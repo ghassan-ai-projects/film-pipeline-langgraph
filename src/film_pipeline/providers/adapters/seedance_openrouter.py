@@ -161,12 +161,6 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
             "provider": self.entry.provider_id,
         }
 
-    def estimate_cost(self, duration: float, model: str | None = None) -> float:
-        _ = model
-        from film_pipeline.providers.pricing import rate_for
-
-        return duration * rate_for("seedance-openrouter")
-
     def cancel(self, job: ProviderJob) -> bool:
         try:
             self._request("DELETE", f"/generation/{job.job_id}", {})

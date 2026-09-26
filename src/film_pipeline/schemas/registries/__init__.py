@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from film_pipeline.schemas.registries.model_registry import ModelRegistryEntry
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -26,7 +25,6 @@ from film_pipeline.schemas.registries.validator_registry import (
 )
 
 __all__ = [
-    "CostProfile",
     "ModelRegistryEntry",
     "ProviderCapabilities",
     "ProviderRegistryEntry",

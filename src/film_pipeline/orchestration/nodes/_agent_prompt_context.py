@@ -44,12 +44,8 @@ def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[
         "min_scene_count": "",
         "target_shot_count": "",
         "preferred_providers": "",
-        "provider_pricing": "",
         "constraints": "",
     }
-    from film_pipeline.providers.pricing import pricing_prompt_block
-
-    context_vars["provider_pricing"] = pricing_prompt_block()
     return context_vars
 
 

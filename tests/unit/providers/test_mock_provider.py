@@ -12,7 +12,6 @@ from film_pipeline.providers.mock_provider import (
     ScenarioStep,
 )
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -33,7 +32,6 @@ def entry() -> ProviderRegistryEntry:
             supports_audio=True,
             supports_seed=True,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
         failure_modes=[
             "timeout",
             "quota",
@@ -231,7 +229,6 @@ class TestMockImageProvider:
             provider_type="image",
             models=["mock-fast"],
             capabilities=ProviderCapabilities(text_to_image=True),
-            cost_profile=CostProfile(unit="image", estimated_rate_usd=0.0),
         )
 
     def test_build_payload(self, img_entry: ProviderRegistryEntry) -> None:

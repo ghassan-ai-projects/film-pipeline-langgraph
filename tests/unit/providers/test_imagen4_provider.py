@@ -13,7 +13,6 @@ import pytest
 
 from film_pipeline.providers.adapters.imagen4_gemini import Imagen4GeminiProvider
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -32,7 +31,6 @@ def entry() -> ProviderRegistryEntry:
             aspect_ratios=["16:9", "1:1"],
             supported_resolutions=["1024x1024"],
         ),
-        cost_profile=CostProfile(unit="image", estimated_rate_usd=0.0),
     )
 
 

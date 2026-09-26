@@ -14,7 +14,6 @@ from film_pipeline.providers.adapters.seedance_openrouter import (
     SeedanceOpenRouterProvider,
 )
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -46,7 +45,6 @@ def entry() -> ProviderRegistryEntry:
             max_duration_seconds=15,
             aspect_ratios=["16:9", "9:16"],
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.18),
         failure_modes=["timeout", "quota", "moderation", "download_failure"],
     )
 
@@ -63,11 +61,6 @@ class TestSeedanceAdapter:
         provider = _make_provider(entry)
         payload = provider.build_payload("test", references=["ref1.png", "ref2.png"])
         assert payload["images"] == ["ref1.png", "ref2.png"]
-
-    def test_estimate_cost(self, entry: ProviderRegistryEntry) -> None:
-        provider = _make_provider(entry)
-        cost = provider.estimate_cost(10.0)
-        assert cost == pytest.approx(1.80)
 
     def test_extract_metadata(self, entry: ProviderRegistryEntry) -> None:
         provider = _make_provider(entry)

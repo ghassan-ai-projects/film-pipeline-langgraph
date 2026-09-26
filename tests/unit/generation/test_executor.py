@@ -15,7 +15,6 @@ from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.registries.provider_registry import (
-    CostProfile,
     ProviderCapabilities,
     ProviderRegistryEntry,
 )
@@ -49,7 +48,6 @@ def entry() -> ProviderRegistryEntry:
             supports_audio=True,
             supports_seed=True,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
     )
 
 
@@ -255,9 +253,6 @@ class TestGenerationExecutor:
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
 
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
-
         executor = GenerationExecutor(
             store,
             providers={"fail-provider": FailAdapter(entry=reg_entry)},
@@ -342,9 +337,6 @@ class TestGenerationExecutor:
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
 
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
-
         executor = GenerationExecutor(
             store,
             providers={"error-provider": SubmitErrorAdapter(entry=reg_entry)},
@@ -389,9 +381,6 @@ class TestGenerationExecutor:
 
             def extract_metadata(self, file_path: str) -> dict[str, Any]:
                 return {}
-
-            def estimate_cost(self, duration: float, model: str | None = None) -> float:
-                return 0.0
 
         executor = GenerationExecutor(
             store,

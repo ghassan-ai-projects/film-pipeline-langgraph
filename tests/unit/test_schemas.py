@@ -105,7 +105,6 @@ from film_pipeline.schemas import (
     WardrobeRules,
 )
 from film_pipeline.schemas.registries import (
-    CostProfile,
     ModelRegistryEntry,
     ProviderCapabilities,
     ProviderRegistryEntry,
@@ -924,11 +923,9 @@ def test_provider_registry_entry() -> None:
             return_last_frame=True,
             max_duration_seconds=30,
         ),
-        cost_profile=CostProfile(unit="second", estimated_rate_usd=0.0),
         failure_modes=["timeout", "quota"],
     )
     assert e.capabilities.return_last_frame is True
-    assert e.cost_profile.estimated_rate_usd == 0.0
 
 
 def test_validator_registry_entry() -> None:

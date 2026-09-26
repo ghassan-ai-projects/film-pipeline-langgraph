@@ -14,7 +14,6 @@ class ModelRegistryEntry(SchemaBase):
     provider: str
     strengths: list[str] = Field(default_factory=list)
     weaknesses: list[str] = Field(default_factory=list)
-    cost_profile_ref: str = ""
     context_limit_tokens: int = Field(default=128_000, ge=0)
     modalities: list[str] = Field(default_factory=lambda: ["text"])
     preferred_tasks: list[str] = Field(default_factory=list)
