@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.governance.validators._shared import (
@@ -9,19 +10,20 @@ from film_pipeline.governance.validators._shared import (
     _blocking_with_id,
     _extract_rows,
     _row_attr,
+    _state_int,
 )
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 
 
-def validate_scene_count(state: dict[str, Any], scene_count: int) -> list[dict[str, Any]]:
+def validate_scene_count(state: Mapping[str, object], scene_count: int) -> list[dict[str, Any]]:
     """Gate S (development): scene count must meet the Scope Contract floor.
 
     Directly targets the "not enough scenes" symptom: the development phase can
     no longer pass with a thin scene list when the contract demands more.
     """
-    min_scenes = int(state.get("min_scene_count", 0) or 0)
-    target = int(state.get("target_scene_count", 0) or 0)
-    runtime = int(state.get("target_runtime_seconds", 0) or 0)
+    min_scenes = _state_int(state, "min_scene_count")
+    target = _state_int(state, "target_scene_count")
+    runtime = _state_int(state, "target_runtime_seconds")
     if min_scenes and scene_count < min_scenes:
         return [
             _blocking_with_id(
@@ -36,13 +38,13 @@ def validate_scene_count(state: dict[str, Any], scene_count: int) -> list[dict[s
 
 
 def validate_script_scene_preservation(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     script_scene_count: int,
     development_scene_count: int,
 ) -> list[dict[str, Any]]:
     """Gate S (script): the script must not silently drop or under-fill scenes."""
     issues: list[dict[str, Any]] = []
-    min_scenes = int(state.get("min_scene_count", 0) or 0)
+    min_scenes = _state_int(state, "min_scene_count")
     if development_scene_count and script_scene_count < development_scene_count:
         issues.append(
             _blocking_with_id(
@@ -132,7 +134,7 @@ def _runtime_tolerance_issues(
 
 
 def validate_shot_structure(
-    _state: dict[str, Any],
+    _state: Mapping[str, object],
     brief: ExecutionBrief,
     shot_matrix: Any,
 ) -> list[dict[str, Any]]:

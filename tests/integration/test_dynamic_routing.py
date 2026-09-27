@@ -8,6 +8,7 @@ import pytest
 
 from film_pipeline.orchestration.edges import after_approval, after_phase
 from film_pipeline.orchestration.router import APPROVAL_GATES, PHASE_ORDER, compute_actions
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
 @pytest.mark.integration
@@ -118,39 +119,63 @@ def _base_state(*, phase: str = "intake", approved: bool = False) -> dict[str, A
     }
 
 
+def _typed_state(*, phase: str = "intake", approved: bool = False) -> StudioGraphState:
+    """The same seeded state, built as a literal against the graph contract.
+
+    Built here rather than by annotating :func:`_base_state` because
+    ``compute_actions`` takes a plain ``dict[str, Any]`` and a TypedDict is not
+    assignable to one; only ``after_phase`` requires ``StudioGraphState``.
+    """
+    return {
+        "current_phase": phase,
+        "approved": approved,
+        "human_approval_required": False,
+        "issues": [],
+        "_orchestrator__candidate_refs": {},
+        "_orchestrator__approved_refs": {},
+        "_orchestrator__active_review_cycles": [],
+        "_orchestrator__pending_revisions": [],
+        "_orchestrator__routing_decisions": [],
+        "_orchestrator__convergence": {},
+        "_orchestrator__failure_decisions": [],
+        "_orchestrator__provider_health_snapshot": {},
+        "_orchestrator__execution_brief": {},
+    }
+
+
 @pytest.mark.integration
 class TestAfterPhaseEdges:
     """after_phase() maps RouterResult actions to graph node names."""
 
     def test_wait_for_human_goes_to_consistency_check(self) -> None:
-        state = _base_state(phase="constitution")
+        state = _typed_state(phase="constitution")
         state["human_approval_required"] = True
         assert after_phase(state) == "consistency_check"
 
     def test_handle_blockers_goes_to_repair(self) -> None:
-        state = _base_state(phase="shot_bible")
+        state = _typed_state(phase="shot_bible")
         state["issues"].append(
             {"severity": "blocking", "code": "shot_count_mismatch", "message": "x"}
         )
         assert after_phase(state) == "repair"
 
     def test_advance_goes_to_phase_node(self) -> None:
-        state = _base_state(phase="generation", approved=True)
+        state = _typed_state(phase="generation", approved=True)
         assert after_phase(state) == "qc"
 
     def test_advance_to_end_goes_to_end(self) -> None:
-        state = _base_state(phase="delivery", approved=True)
+        state = _typed_state(phase="delivery", approved=True)
         assert after_phase(state) == "end"
 
     def test_repair_action_goes_to_await_approval(self) -> None:
-        state = _base_state(phase="script")
+        state = _typed_state(phase="script")
         state["_orchestrator__pending_revisions"].append(
             {"artifact_refs": ["artifact:script:v1"], "resolved": False}
         )
         assert after_phase(state) == "await_approval"
 
     def test_unknown_action_defaults_to_consistency_check(self) -> None:
-        state = _base_state(phase="constitution", approved=False)
+        state = _typed_state(phase="constitution", approved=False)
         # present_review_package is not in the explicit action map, so the
         # fallback path should still route through the human gate.
         assert after_phase(state) == "consistency_check"

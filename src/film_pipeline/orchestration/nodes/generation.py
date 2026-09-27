@@ -18,10 +18,11 @@ from film_pipeline.orchestration.nodes._shared import (
     _phase_gate_updates,
 )
 from film_pipeline.orchestration.services import GraphServices, _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 
 
-def _gate_dispatch_readiness(new_state: dict[str, Any]) -> None:
+def _gate_dispatch_readiness(new_state: StudioGraphState) -> None:
     """Gate C: validate dispatch readiness over the enriched requests."""
     gen_requests = new_state.get("generation_requests")
     if gen_requests is None:
@@ -67,7 +68,9 @@ def _row_updates_marking_generated(
     return row_updates
 
 
-def _mark_matrix_rows_generated(new_state: dict[str, Any], services: GraphServices | None) -> None:
+def _mark_matrix_rows_generated(
+    new_state: StudioGraphState, services: GraphServices | None
+) -> None:
     """Emit a matrix patch marking requested shots generated with asset refs."""
     gen_requests = new_state.get("generation_requests")
     shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
@@ -101,8 +104,8 @@ def _mark_matrix_rows_generated(new_state: dict[str, Any], services: GraphServic
             new_state.setdefault("artifact_refs", []).append(patch_ref)
 
 
-def generation_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
+def generation_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
     original = state
     gate_updates = _phase_gate_updates(new_state, phase="generation", gate="generation_batch")
     new_state.update(gate_updates)
@@ -112,17 +115,28 @@ def generation_node(state: dict[str, Any]) -> dict[str, Any]:
     _gate_dispatch_readiness(new_state)
     _mark_matrix_rows_generated(new_state, services)
 
-    updates: dict[str, Any] = dict(gate_updates)
+    # A plain mapping, not the TypedDict: `_propagate_side_effects` writes the
+    # registry-driven channel keys into this object and a TypedDict rejects a
+    # computed key (`[literal-required]`). Each key set on it below is still a
+    # literal, so the writes keep being contract-checked by the guard.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
     if new_refs:
         updates["artifact_refs"] = new_refs
     new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
-    for key in ("generation_ledger_ref", "generation_patch_ref"):
-        val = new_state.get(key)
-        if val:
-            updates[key] = val
+    # Spelled out rather than looped over a key tuple: a dynamic key cannot be
+    # checked against the contract, and checking keys is the point.
+    if new_state.get("generation_ledger_ref"):
+        updates["generation_ledger_ref"] = new_state["generation_ledger_ref"]
+    if new_state.get("generation_patch_ref"):
+        updates["generation_patch_ref"] = new_state["generation_patch_ref"]
     if "generation_requests" in new_state:
         # The generation_requests reducer upserts by request id, so returning
         # the enriched list updates entries in place without duplication.

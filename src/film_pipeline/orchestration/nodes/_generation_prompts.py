@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.orchestration.nodes._context import (
@@ -11,7 +12,7 @@ from film_pipeline.orchestration.services import GraphServices
 
 
 def _load_artifact_data(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     ref: str,
 ) -> Any:
@@ -38,7 +39,7 @@ def _load_artifact_data(
 
 
 def _load_matrix_rows(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
 ) -> list[dict[str, Any]]:
     """Load rows from the master film matrix artifact."""
@@ -96,7 +97,7 @@ def _load_visual_dev_bible(
 
 
 def _build_prompt_from_matrix_row(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     row: dict[str, Any],
 ) -> str:
@@ -149,7 +150,7 @@ def _compose_prompt_from_rctco(rctco: dict[str, Any]) -> str:
 
 
 def _resolve_prompt_for_request(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     req: dict[str, Any],
     matrix_rows: list[dict[str, Any]],

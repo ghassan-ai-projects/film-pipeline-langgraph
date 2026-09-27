@@ -144,12 +144,16 @@ _SERVICES_CTX: contextvars.ContextVar[GraphServices | None] = contextvars.Contex
 )
 
 
-def _get_services(state: dict[str, Any]) -> GraphServices | None:
+def _get_services(state: Mapping[str, Any]) -> GraphServices | None:
     """Return graph services from state, falling back to runtime context.
 
     LangGraph may drop undeclared state keys between node boundaries. The
     context variable keeps runtime services available without checkpointing
     them into graph state.
+
+    ``Mapping[str, Any]`` rather than ``Mapping[str, object]``: the value is an
+    injected opaque handle (tests substitute sentinels for it), so it is
+    returned as-is on presence rather than narrowed by ``isinstance``.
     """
     svc = state.get(SERVICES_KEY)
     if svc is not None:

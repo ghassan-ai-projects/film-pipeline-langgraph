@@ -12,13 +12,14 @@ orchestrator-state facade.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 #: Orchestrator namespace prefix, mirrored from `orchestrator_state`.
 _ORCH_NS = "_orchestrator"
 
 
-def get_execution_brief(state: dict[str, Any]) -> dict[str, Any] | None:
+def get_execution_brief(state: Mapping[str, object]) -> dict[str, Any] | None:
     """Return the cached ExecutionBrief payload, or ``None`` when unset."""
     value = state.get(f"{_ORCH_NS}__execution_brief")
     if value is None:
@@ -26,7 +27,7 @@ def get_execution_brief(state: dict[str, Any]) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
-def get_approved_refs(state: dict[str, Any]) -> dict[str, str]:
+def get_approved_refs(state: Mapping[str, object]) -> dict[str, str]:
     """Return the approved artifact ref for each artifact id."""
     value = state.get(f"{_ORCH_NS}__approved_refs", {})
     return dict(value) if isinstance(value, dict) else {}

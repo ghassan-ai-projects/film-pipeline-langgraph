@@ -10,9 +10,19 @@ import pytest
 
 from film_pipeline.orchestration import orchestrator_state as ostate
 from film_pipeline.orchestration.router import compute_actions
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
 def _base_state(phase: str = "script", approved: bool = False) -> dict[str, Any]:
+    """A minimal state for the orchestrator-state helpers and the gate law.
+
+    Deliberately a plain mapping: `compute_actions`, `set_candidate_ref`,
+    `set_approved_ref`, `add_revision_request`, `update_provider_health`,
+    `add_failure_decision` and `ensure_orchestrator_state` all index the state by
+    a *computed* module-constant key, which a TypedDict rejects
+    (`[literal-required]`). `_typed_state()` builds the same content for the
+    functions that do take the contract.
+    """
     state: dict[str, Any] = {
         "current_phase": phase,
         "approved": approved,
@@ -22,6 +32,22 @@ def _base_state(phase: str = "script", approved: bool = False) -> dict[str, Any]
     }
     ostate.ensure_orchestrator_state(state)
     return state
+
+
+def _typed_state(phase: str = "script", approved: bool = False) -> StudioGraphState:
+    """The same minimal state, as the graph contract.
+
+    A second builder rather than a cast: `init_convergence`,
+    `increment_convergence_round` and `approve_phase_node` take
+    `StudioGraphState`, and a plain dict is not assignable to a TypedDict.
+    """
+    return {
+        "current_phase": phase,
+        "approved": approved,
+        "human_approval_required": False,
+        "issues": [],
+        "project_id": "e2e-test",
+    }
 
 
 @pytest.mark.e2e
@@ -57,7 +83,7 @@ class TestOrchestratorDecisionLoop:
 
     def test_multi_round_revision_increments_counter(self) -> None:
         """Multiple revision rounds advance the convergence counter."""
-        state = _base_state("script", approved=False)
+        state = _typed_state("script", approved=False)
         ostate.init_convergence(state, "script")
         ostate.increment_convergence_round(state, "script")
         ostate.increment_convergence_round(state, "script")
@@ -67,9 +93,14 @@ class TestOrchestratorDecisionLoop:
 
     def test_candidate_promoted_to_approved_on_approval(self) -> None:
         """Approving a phase promotes candidate refs to approved."""
-        state = _base_state("script", approved=False)
-        ostate.set_candidate_ref(state, "script", "artifact:script:v3")
-        ostate.set_candidate_ref(state, "scene_list", "artifact:scene_list:v2")
+        state = _typed_state("script", approved=False)
+        # `set_candidate_ref` indexes state by a computed module-constant key,
+        # which a TypedDict rejects, so it works on a plain copy; the one key it
+        # changes is then written back by its literal name.
+        seeding: dict[str, Any] = dict(state)
+        ostate.set_candidate_ref(seeding, "script", "artifact:script:v3")
+        ostate.set_candidate_ref(seeding, "scene_list", "artifact:scene_list:v2")
+        state["_orchestrator__candidate_refs"] = seeding["_orchestrator__candidate_refs"]
 
         # Simulate approval
         from film_pipeline.orchestration.nodes import approve_phase_node
@@ -136,7 +167,7 @@ class TestOrchestratorDecisionLoop:
 
     def test_stalled_phase_detected(self) -> None:
         """Five rounds without convergence marks phase as stalled."""
-        state = _base_state("script")
+        state = _typed_state("script")
         ostate.init_convergence(state, "script")
         for _ in range(5):
             ostate.increment_convergence_round(state, "script")

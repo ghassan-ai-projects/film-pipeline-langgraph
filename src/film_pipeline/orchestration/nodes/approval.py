@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any, cast
+from typing import Any
 
 from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _run_agent
@@ -14,13 +15,14 @@ from film_pipeline.orchestration.nodes._repair_loop import (
 from film_pipeline.orchestration.nodes._shared import _apply_external_state
 from film_pipeline.orchestration.orchestrator_state import require_human_approval
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 # The bounded repair loop lives in ``_repair_loop``; these re-exports keep the
 # historical ``graph.nodes.approval`` import paths working.
 __all__ = ["_PHASE_NODES", "repair_phase_node"]
 
 
-def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
+def _run_orchestrator_agent(state: StudioGraphState) -> dict[str, Any] | None:
     """Run the orchestrator agent to decide approve/revise/escalate.
 
     Returns the agent's decision dict or ``None`` if the agent is unavailable
@@ -48,13 +50,13 @@ def _run_orchestrator_agent(state: dict[str, Any]) -> dict[str, Any] | None:
     return result
 
 
-def _count_blocking_issues(state: dict[str, Any]) -> int:
+def _count_blocking_issues(state: Mapping[str, object]) -> int:
     """Count blocking-severity entries in state's issues (pure read)."""
     issues = state.get("issues", []) or []
     return len(blocking_issues(issues))
 
 
-def _orchestrator_working_state(state: dict[str, Any]) -> dict[str, Any]:
+def _orchestrator_working_state(state: Mapping[str, object]) -> dict[str, Any]:
     """Deep-copied ``_orchestrator__*`` slice of state with defaults ensured."""
     from film_pipeline.orchestration.orchestrator_state import ensure_orchestrator_state
 
@@ -65,7 +67,7 @@ def _orchestrator_working_state(state: dict[str, Any]) -> dict[str, Any]:
     return working
 
 
-def _apply_headless_decision(state: dict[str, Any], stalled: bool) -> dict[str, Any] | None:
+def _apply_headless_decision(state: StudioGraphState, stalled: bool) -> StudioGraphState | None:
     """Apply an autonomous orchestrator decision; ``None`` falls through to the fallback."""
     if stalled:
         return None
@@ -85,7 +87,7 @@ def _apply_headless_decision(state: dict[str, Any], stalled: bool) -> dict[str, 
     return None
 
 
-def _advisory_recommendation(state: dict[str, Any], stalled: bool) -> dict[str, Any] | None:
+def _advisory_recommendation(state: StudioGraphState, stalled: bool) -> dict[str, Any] | None:
     """Run the orchestrator agent for an advisory recommendation; the human decides."""
     if stalled:
         return None
@@ -100,7 +102,7 @@ def _advisory_recommendation(state: dict[str, Any], stalled: bool) -> dict[str, 
 
 
 def _build_gate_payload(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     phase: str,
     stalled: bool,
     recommendation: dict[str, Any] | None,
@@ -148,33 +150,33 @@ def _normalize_decision(decision: Any) -> tuple[str, str, dict[str, Any]]:
 
 
 def _merge_external_fixes(
-    state: dict[str, Any],
-    state_updates: dict[str, Any],
-) -> dict[str, Any]:
+    state: StudioGraphState,
+    state_updates: StudioGraphState,
+) -> StudioGraphState:
     """Merge externally resolved issues into state before the approval guard runs.
 
     Ordering matters: stale blockers (already fixed outside the graph) would
-    otherwise wedge the gate.
+    otherwise wedge the gate. Returns a fresh state with only ``issues``
+    rewritten, so the result can be named as the contract.
     """
     if not state_updates.get("issues"):
         return state
     from film_pipeline.orchestration.state_schema import merge_issues
 
-    return {
-        **state,
-        "issues": merge_issues(
-            cast("list[dict[str, object]]", state.get("issues", [])),
-            cast("list[dict[str, object]]", state_updates["issues"]),
-        ),
-    }
+    merged: StudioGraphState = deepcopy(state)
+    merged["issues"] = merge_issues(
+        state.get("issues", []),
+        state_updates["issues"],
+    )
+    return merged
 
 
 def _route_decision(
-    state: dict[str, Any],
+    state: StudioGraphState,
     action: str,
     note: str,
-    updates: dict[str, Any],
-) -> dict[str, Any]:
+    updates: StudioGraphState,
+) -> StudioGraphState:
     """Dispatch a normalized gate decision; unrecognized actions yield bare updates."""
     if action in ("approve", "approve_phase"):
         result = approve_phase_node(state)
@@ -189,7 +191,7 @@ def _route_decision(
     return updates
 
 
-def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
+def await_approval_node(state: StudioGraphState) -> StudioGraphState:
     """Pause the graph for human review. Resumes via Command(resume=decision).
 
     When ``require_human_approval`` is enabled (the default), the node always
@@ -238,7 +240,7 @@ def await_approval_node(state: dict[str, Any]) -> dict[str, Any]:
     return _route_decision(state, action, note, state_updates)
 
 
-def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
+def approve_phase_node(state: StudioGraphState) -> StudioGraphState:
     """Approve the current phase. Returns a partial state update.
 
     Returning the full state would re-append every entry of the
@@ -257,7 +259,7 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     )
 
     working = _orchestrator_working_state(state)
-    for family, ref in get_candidate_refs(state).items():
+    for family, ref in get_candidate_refs(dict(state)).items():
         set_approved_ref(working, family, ref)
 
     return {
@@ -268,7 +270,7 @@ def approve_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def request_revision_node(state: dict[str, Any]) -> dict[str, Any]:
+def request_revision_node(state: StudioGraphState) -> StudioGraphState:
     """Route the current phase to revision. Returns a partial state update."""
     revision_note = str(state.get("_revision_note", ""))
     # Record durable revision request via orchestrator state helpers

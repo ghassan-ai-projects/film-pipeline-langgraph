@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -25,6 +26,7 @@ from film_pipeline.orchestration.nodes._shared import (
     _phase_gate_updates,
 )
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.constraints import ProjectConstraints
 
 _logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ def _runtime_directive(user_runtime: int) -> str:
     return " Estimate a realistic runtime from the story's scope."
 
 
-def _extract_intake_constraints(state: dict[str, Any]) -> ProjectConstraints:
+def _extract_intake_constraints(state: Mapping[str, object]) -> ProjectConstraints:
     """Extract user-intent constraints before intake classification.
 
     This is deterministic/heuristic and runs offline so the intake agent and
@@ -55,7 +57,7 @@ def _extract_intake_constraints(state: dict[str, Any]) -> ProjectConstraints:
     )
 
 
-def _classify_film_idea(state: dict[str, Any], user_runtime: int) -> Any:
+def _classify_film_idea(state: StudioGraphState, user_runtime: int) -> Any:
     """Run the intake classifier and return its project profile."""
     result = _run_agent(
         state,
@@ -78,9 +80,9 @@ def _lock_profile_runtime(profile: Any, user_runtime: int) -> Any:
     return profile
 
 
-def _profile_state_updates(profile: Any, user_runtime: int) -> dict[str, Any]:
+def _profile_state_updates(profile: Any, user_runtime: int) -> StudioGraphState:
     """State keys derived from the classified profile (runtime, film type)."""
-    out: dict[str, Any] = {}
+    out: StudioGraphState = {}
     if user_runtime > 0:
         out["target_runtime_seconds"] = user_runtime
     elif hasattr(profile, "target_runtime_seconds"):
@@ -92,7 +94,7 @@ def _profile_state_updates(profile: Any, user_runtime: int) -> dict[str, Any]:
 
 def _merge_profile_into_constraints(
     constraints: ProjectConstraints,
-    updates: dict[str, Any],
+    updates: Mapping[str, object],
 ) -> dict[str, Any]:
     """Merge profile-derived values into constraints where they were not already
     supplied explicitly, so the artifact reflects the locked project config."""
@@ -104,10 +106,19 @@ def _merge_profile_into_constraints(
     return merged
 
 
-def intake_node(state: dict[str, Any]) -> dict[str, Any]:
+def intake_node(state: StudioGraphState) -> dict[str, Any]:
     """Intake: classify input, infer config, present for approval."""
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(new_state, phase="intake", gate="config")
+    new_state: StudioGraphState = deepcopy(state)
+    gate_updates = _phase_gate_updates(new_state, phase="intake", gate="config")
+    # Seeded from the gate keys rather than `dict(gate_updates)`: the accumulator
+    # must be a plain mapping because `_propagate_side_effects` writes
+    # registry-driven channel keys into it, which a TypedDict rejects.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs: list[str] = []
 
     # User-supplied runtime (seeded before the graph ran) is authoritative.
@@ -146,7 +157,7 @@ def intake_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _attach_scope_contract(
-    state: dict[str, Any],
+    state: StudioGraphState,
     updates: dict[str, Any],
     new_refs: list[str],
 ) -> None:
@@ -187,11 +198,18 @@ def _attach_scope_contract(
 # ── Constitution ─────────────────────────────────────────────────────────────
 
 
-def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(
-        new_state, phase="constitution", gate="constitution"
-    )
+def constitution_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    gate_updates = _phase_gate_updates(new_state, phase="constitution", gate="constitution")
+    # Seeded from the gate keys rather than `dict(gate_updates)`: the accumulator
+    # must be a plain mapping because `_propagate_side_effects` writes
+    # registry-driven channel keys into it, which a TypedDict rejects.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs: list[str] = []
 
     result = _run_agent(
@@ -220,9 +238,18 @@ def constitution_node(state: dict[str, Any]) -> dict[str, Any]:
 # ── Development ──────────────────────────────────────────────────────────────
 
 
-def development_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(new_state, phase="development", gate="treatment")
+def development_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    gate_updates = _phase_gate_updates(new_state, phase="development", gate="treatment")
+    # Seeded from the gate keys rather than `dict(gate_updates)`: the accumulator
+    # must be a plain mapping because `_propagate_side_effects` writes
+    # registry-driven channel keys into it, which a TypedDict rejects.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs: list[str] = []
 
     result = _run_agent(
@@ -271,9 +298,18 @@ def development_node(state: dict[str, Any]) -> dict[str, Any]:
 # ── Script ───────────────────────────────────────────────────────────────────
 
 
-def script_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(new_state, phase="script", gate="script")
+def script_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    gate_updates = _phase_gate_updates(new_state, phase="script", gate="script")
+    # Seeded from the gate keys rather than `dict(gate_updates)`: the accumulator
+    # must be a plain mapping because `_propagate_side_effects` writes
+    # registry-driven channel keys into it, which a TypedDict rejects.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs: list[str] = []
 
     result = _run_agent(
@@ -323,7 +359,7 @@ def script_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _report_new_issues(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     updates: dict[str, Any],
     node_issues: list[dict[str, Any]],
 ) -> None:
@@ -360,7 +396,7 @@ def _withhold_auto_approval_on_blockers(
         updates["human_approval_required"] = False
 
 
-def _development_scene_count(state: dict[str, Any]) -> int:
+def _development_scene_count(state: Mapping[str, object]) -> int:
     """Count scenes in the approved development scene list (0 if unavailable)."""
     services = _get_services(state)
     ref = str(state.get("scene_list_ref", "") or "")

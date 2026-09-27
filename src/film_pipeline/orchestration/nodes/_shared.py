@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.orchestration.orchestrator_state import require_human_approval
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 _NUMBER_WORDS: dict[str, int] = {
     "one": 1,
@@ -31,7 +33,7 @@ _NUMBER_WORDS: dict[str, int] = {
 }
 
 
-def _extract_target_scene_count(state: dict[str, Any]) -> int | None:
+def _extract_target_scene_count(state: Mapping[str, object]) -> int | None:
     """Return an explicit user scene-count if one was provided or mentioned.
 
     Priority:
@@ -69,12 +71,13 @@ _CRITICAL_CONTEXT: dict[str, list[str]] = {
 }
 
 
-def _critical_context_issues(state: dict[str, Any], phase: str) -> list[dict[str, Any]]:
+def _critical_context_issues(state: Mapping[str, object], phase: str) -> list[dict[str, Any]]:
     """Blocking issues for critical upstream context that failed to load."""
     required = _CRITICAL_CONTEXT.get(phase, [])
     if not required:
         return []
-    failures = set(state.get("_context_load_failures", []) or [])
+    raw_failures = state.get("_context_load_failures")
+    failures = set(raw_failures) if isinstance(raw_failures, list) else set()
     issues: list[dict[str, Any]] = []
     for key in required:
         ref = str(state.get(key, "") or "").strip()
@@ -94,7 +97,7 @@ def _critical_context_issues(state: dict[str, Any], phase: str) -> list[dict[str
     return issues
 
 
-def _coerce_user_runtime(state: dict[str, Any]) -> int:
+def _coerce_user_runtime(state: Mapping[str, object]) -> int:
     """Return the user-supplied target runtime (seconds), or 0 if not provided.
 
     Seeded into state before the graph runs by the create/submit entry points.
@@ -104,17 +107,20 @@ def _coerce_user_runtime(state: dict[str, Any]) -> int:
     if raw is None or isinstance(raw, bool):
         return 0
     try:
-        value = int(raw)
+        value = int(str(raw))
     except (TypeError, ValueError):
         return 0
     return value if value > 0 else 0
 
 
-def _phase_gate_updates(state: dict[str, Any], *, phase: str, gate: str) -> dict[str, Any]:
+def _phase_gate_updates(state: Mapping[str, object], *, phase: str, gate: str) -> StudioGraphState:
     """State updates that park a completed phase at its human approval gate.
 
     With ``require_human_approval=False`` (auto-approve profiles) the gate is
     pre-approved so the graph advances without pausing.
+
+    Returns a partial update: every key below is declared on
+    :class:`StudioGraphState`.
     """
     auto = not require_human_approval(state)
     return {
@@ -131,9 +137,9 @@ def _generation_request_key(request: dict[str, Any]) -> str:
 
 
 def _apply_external_state(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     external_state: dict[str, Any],
-) -> dict[str, Any]:
+) -> StudioGraphState:
     """Replay external MCP mutations into graph state before processing a resume.
 
     MCP tools update the active project state outside the graph (e.g. planning
@@ -141,10 +147,11 @@ def _apply_external_state(
     we carry them in ``Command(resume={"_external_state": ...})`` and merge
     them here. Returns a partial update dict for LangGraph to merge.
     """
-    updates: dict[str, Any] = {}
+    updates: StudioGraphState = {}
     incoming_requests = external_state.get("generation_requests")
     if incoming_requests:
-        existing = state.get("generation_requests", []) or []
+        raw_existing = state.get("generation_requests")
+        existing = raw_existing if isinstance(raw_existing, list) else []
         existing_ids = {_generation_request_key(r) for r in existing if isinstance(r, dict)}
         new_requests = [
             r
@@ -159,27 +166,31 @@ def _apply_external_state(
     return updates
 
 
-def _is_new_ref(ref: str, original_state: dict[str, Any]) -> bool:
+def _is_new_ref(ref: str, original_state: Mapping[str, object]) -> bool:
     """Return True if *ref* was not present in the original state's artifact_refs."""
-    orig_refs = set(original_state.get("artifact_refs", []) or [])
+    existing = original_state.get("artifact_refs")
+    orig_refs = set(existing) if isinstance(existing, list) else set()
     return ref not in orig_refs
 
 
-def _is_new_issue(issue: dict[str, Any], original_state: dict[str, Any]) -> bool:
+def _is_new_issue(issue: dict[str, Any], original_state: Mapping[str, object]) -> bool:
     """Return True if *issue* has a novel issue_id not in the original state."""
     iid = issue.get("issue_id")
     if not iid:
         return False
+    existing = original_state.get("issues")
     orig_ids = {
-        i.get("issue_id") for i in (original_state.get("issues", []) or []) if i.get("issue_id")
+        i.get("issue_id")
+        for i in (existing if isinstance(existing, list) else [])
+        if isinstance(i, dict) and i.get("issue_id")
     }
     return iid not in orig_ids
 
 
 def _collect_updates(
-    gate_updates: dict[str, Any],
-    new_state: dict[str, Any],
-    original: dict[str, Any],
+    gate_updates: Mapping[str, object],
+    new_state: Mapping[str, object],
+    original: Mapping[str, object],
     ref_keys: tuple[str, ...],
 ) -> dict[str, Any]:
     """Compute the partial update from a before/after diff of the node state.
@@ -189,12 +200,21 @@ def _collect_updates(
     `visual`, which meant the node-boundary update rule — which refs and issues
     cross the boundary, and which keys are carried — had two authors and no
     test pinning them to each other.
+
+    All three state parameters are read-only, so they take ``Mapping``: that
+    accepts the graph-state TypedDict its callers hold. The return stays
+    ``dict[str, Any]`` because ``ref_keys`` is a runtime tuple, and a TypedDict
+    cannot be written through a computed key (``[literal-required]``).
     """
     updates: dict[str, Any] = dict(gate_updates)
-    new_refs = [r for r in (new_state.get("artifact_refs", []) or []) if _is_new_ref(r, original)]
+    refs = new_state.get("artifact_refs")
+    candidates = refs if isinstance(refs, list) else []
+    new_refs = [str(r) for r in candidates if _is_new_ref(str(r), original)]
     if new_refs:
         updates["artifact_refs"] = new_refs
-    new_issues = [i for i in (new_state.get("issues", []) or []) if _is_new_issue(i, original)]
+    raw_issues = new_state.get("issues")
+    listed = raw_issues if isinstance(raw_issues, list) else []
+    new_issues = [i for i in listed if isinstance(i, dict) and _is_new_issue(i, original)]
     if new_issues:
         updates["issues"] = new_issues
     for key in ref_keys:

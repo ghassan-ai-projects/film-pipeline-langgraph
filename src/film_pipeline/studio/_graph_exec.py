@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
 from film_pipeline.orchestration.services import _SERVICES_CTX
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 from film_pipeline.storage.project_storage import graph_state_location
@@ -322,7 +323,6 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
     refreshed issues and validation reports are merged back and persisted.
     """
     from film_pipeline.orchestration.nodes import _run_validators
-    from film_pipeline.orchestration.services import SERVICES_KEY
 
     active = rt.get_project(project_id) if project_id else rt.get_active()
     if active is None:
@@ -334,16 +334,73 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
         for issue in cast(list[dict[str, Any]], active.get("issues", []))
         if not (isinstance(issue, dict) and issue.get("validator_id"))
     ]
-    working = dict(active)
-    working[SERVICES_KEY] = rt.services
-    working["issues"] = list(preserved_issues)
-    working["_validation_reports"] = []
-    working.pop("_pending_row_updates", None)
+    # `_run_validators` takes the graph-state contract, but this path holds a
+    # persisted *project-state* mapping. A TypedDict cannot be built from a
+    # computed key (`[literal-required]`) and a plain dict is not assignable to
+    # one, so the projection names literally every key the validator chain reads
+    # or writes. That set is closed, and was enumerated from the chain's own
+    # writes: reading one key less would hand a validator a missing value, and
+    # writing one key less would silently drop a mutation on the way back.
+    # The `_orchestrator__` key grammar has one author, so the candidate refs are
+    # read through the accessor rather than by rebuilding the key here (the
+    # orchestrator-surface guard enforces exactly that).
+    from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
+
+    seeded_candidates = get_candidate_refs(active)
+    # Project-state values are `object` here, so each collection is narrowed by
+    # `isinstance` rather than asserted with a `cast`: a cast would claim a shape
+    # this path has no evidence for, and an unexpected shape should degrade to an
+    # empty collection rather than travel on as a lie.
+    raw_artifact_refs = active.get("artifact_refs")
+    artifact_refs = (
+        [str(ref) for ref in raw_artifact_refs] if isinstance(raw_artifact_refs, list) else []
+    )
+    raw_routing = active.get("_routing_decisions")
+    routing_decisions = (
+        [entry for entry in raw_routing if isinstance(entry, dict)]
+        if isinstance(raw_routing, list)
+        else []
+    )
+    raw_pending = active.get("_pending_row_updates")
+    pending_row_updates = list(raw_pending) if isinstance(raw_pending, list) else []
+    working: StudioGraphState = {
+        # read by the chain
+        "project_id": project_id_value,
+        "current_phase": str(active.get("current_phase", "")),
+        "artifact_refs": artifact_refs,
+        # read and written by the chain
+        "issues": list(preserved_issues),
+        "_validation_reports": [],
+        "consensus_report_ref": str(active.get("consensus_report_ref", "")),
+        "qc_patch_ref": str(active.get("qc_patch_ref", "")),
+        "shot_matrix_ref": str(active.get("shot_matrix_ref", "")),
+        # written only on paths `_save_artifact`/`_run_agent` reach
+        "_orchestrator__candidate_refs": dict(seeded_candidates),
+        "_last_kb_context_ref": str(active.get("_last_kb_context_ref", "")),
+        "_routing_decisions": routing_decisions,
+        "_repair_feedback": str(active.get("_repair_feedback", "")),
+        "_pending_row_updates": pending_row_updates,
+    }
+    # `_services` is a declared graph-state key, so the literal spelling is
+    # used here: a TypedDict cannot be indexed by the imported constant.
+    working["_services"] = rt.services
     _run_validators(working)
-    working.pop(SERVICES_KEY, None)
+    working.pop("_services", None)
 
     active["issues"] = list(working.get("issues", []))
     active["_validation_reports"] = list(working.get("_validation_reports", []))
+    # Every key the chain can write is carried back, not only the two this
+    # function reports: dropping the rest would lose validator side effects.
+    for side_effect_key in (
+        "_orchestrator__candidate_refs",
+        "_last_kb_context_ref",
+        "_routing_decisions",
+        "_repair_feedback",
+        "qc_patch_ref",
+    ):
+        side_effect_value = working.get(side_effect_key)
+        if side_effect_value:
+            active[side_effect_key] = side_effect_value
     consensus_ref = working.get("consensus_report_ref")
     if consensus_ref:
         active["consensus_report_ref"] = consensus_ref

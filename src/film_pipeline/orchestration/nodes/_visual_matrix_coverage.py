@@ -7,6 +7,7 @@ appending ``auto_filled`` placeholder rows for any missing scene.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import BaseModel
@@ -15,7 +16,7 @@ from film_pipeline.orchestration.services import GraphServices, _get_services
 from film_pipeline.schemas.matrix import MasterFilmMatrixRow
 
 
-def _load_script_scenes(state: dict[str, Any], services: GraphServices) -> list[Any]:
+def _load_script_scenes(state: Mapping[str, object], services: GraphServices) -> list[Any]:
     """Load raw scene entries from the script artifact referenced in state."""
     script_ref = state.get("script_ref")
     if not script_ref or not isinstance(script_ref, str):
@@ -99,7 +100,7 @@ def _write_back_rows(matrix: Any, rows: list[Any]) -> Any:
 
 
 def _ensure_matrix_scene_coverage(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     shot_matrix: Any,
 ) -> Any:
     """Guarantee every scene_id in the script appears in at least one matrix row.

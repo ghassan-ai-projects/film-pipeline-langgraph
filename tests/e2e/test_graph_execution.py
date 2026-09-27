@@ -23,6 +23,7 @@ from film_pipeline.orchestration.nodes import (
     visual_dev_node,
 )
 from film_pipeline.orchestration.router import PHASE_ORDER, compute_actions
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.studio.graph_factory import build_graph
 
 
@@ -157,12 +158,22 @@ class TestGraphExecution:
 
     def test_after_approval_repair_path(self) -> None:
         """Not approved but has issues → repair."""
-        result = after_approval({"current_phase": "script", "approved": False, "issues": ["bad"]})
+        state: StudioGraphState = {
+            "current_phase": "script",
+            "approved": False,
+            "issues": [{"code": "bad"}],
+        }
+        result = after_approval(state)
         assert result == "repair"
 
     def test_after_approval_await(self) -> None:
         """Not approved, no issues → stay awaiting."""
-        result = after_approval({"current_phase": "script", "approved": False, "issues": []})
+        state: StudioGraphState = {
+            "current_phase": "script",
+            "approved": False,
+            "issues": [],
+        }
+        result = after_approval(state)
         assert result == "await_approval"
 
     def test_router_blocking_issues(self) -> None:

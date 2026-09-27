@@ -16,6 +16,7 @@ from film_pipeline.governance.validators import (
     validate_shot_scene_references,
     validate_shot_structure,
 )
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.execution_brief import ExecutionBrief, MovementSpec
 
 # ── Test helpers ───────────────────────────────────────────────────────────
@@ -333,7 +334,7 @@ class TestApprovalEnforcement:
     def test_approve_phase_node_blocks_with_issues(self) -> None:
         from film_pipeline.orchestration.nodes import approve_phase_node
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "current_phase": "shot_bible",
             "approved": False,
             "issues": [
@@ -347,7 +348,7 @@ class TestApprovalEnforcement:
     def test_approve_phase_node_passes_without_blocking_issues(self) -> None:
         from film_pipeline.orchestration.nodes import approve_phase_node
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "current_phase": "shot_bible",
             "approved": False,
             "issues": [],

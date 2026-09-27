@@ -7,11 +7,25 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
 def _empty_state() -> dict[str, Any]:
     state: dict[str, Any] = {"project_id": "test-p1", "current_phase": "script"}
     ostate.ensure_orchestrator_state(state)
+    return state
+
+
+def _typed_state() -> StudioGraphState:
+    """Same base state as :func:`_empty_state`, named as the graph-state contract.
+
+    The convergence helpers (``init_convergence`` et al.) take the typed contract
+    rather than a bare mapping, so tests that drive them need the annotation. The
+    orchestrator helpers this file also exercises still take ``dict[str, Any]``,
+    which a TypedDict is not assignable to — hence two builders rather than one.
+    """
+    state: StudioGraphState = {"project_id": "test-p1", "current_phase": "script"}
+    ostate.ensure_orchestrator_state(dict(state))
     return state
 
 
@@ -150,7 +164,7 @@ def test_get_latest_routing_decision_empty() -> None:
 
 
 def test_convergence_stalls_after_max_rounds() -> None:
-    state = _empty_state()
+    state = _typed_state()
     ostate.init_convergence(state, "script")
     for _ in range(5):
         ostate.increment_convergence_round(state, "script")
@@ -158,14 +172,14 @@ def test_convergence_stalls_after_max_rounds() -> None:
 
 
 def test_convergence_not_stalled_below_max() -> None:
-    state = _empty_state()
+    state = _typed_state()
     ostate.init_convergence(state, "script")
     ostate.increment_convergence_round(state, "script")
     assert ostate.is_stalled(state, "script", max_rounds=5) is False
 
 
 def test_mark_stalled() -> None:
-    state = _empty_state()
+    state = _typed_state()
     ostate.mark_stalled(state, "script", "validator score frozen at 70")
     assert ostate.is_stalled(state, "script") is True
 

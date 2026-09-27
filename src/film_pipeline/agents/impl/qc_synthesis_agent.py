@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
@@ -31,7 +32,7 @@ class QCSynthesisAgent(BaseAgent):
 
     def prepare(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: object,
         task: str,
     ) -> dict[str, Any]:

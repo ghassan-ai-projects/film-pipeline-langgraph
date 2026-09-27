@@ -6,7 +6,7 @@ phase's agent needs. Replaces loading ALL artifacts and truncating at 6000 chars
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ class _ContextPacketSources(Protocol):
     def artifact_store(self) -> _ArtifactLoader: ...
 
 
-def build_constitution_context(state: dict[str, Any]) -> str:
+def build_constitution_context(state: Mapping[str, object]) -> str:
     """Constitution phase: just the idea and classification."""
     idea = str(state.get("idea", ""))
     film_type = str(state.get("film_type", ""))
@@ -44,7 +44,7 @@ def build_constitution_context(state: dict[str, Any]) -> str:
     )
 
 
-def build_development_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
+def build_development_context(state: Mapping[str, object], services: _ContextPacketSources) -> str:
     """Development phase: constitution summary + target runtime."""
     parts: list[str] = []
     constitution = _load_state_ref(state, services, "constitution_ref")
@@ -57,7 +57,7 @@ def build_development_context(state: dict[str, Any], services: _ContextPacketSou
     return "\n\n".join(parts)
 
 
-def build_script_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
+def build_script_context(state: Mapping[str, object], services: _ContextPacketSources) -> str:
     """Script phase: treatment summary + scene list count + constitution style."""
     parts: list[str] = []
     treatment = _load_state_ref(state, services, "treatment_ref")
@@ -74,7 +74,7 @@ def build_script_context(state: dict[str, Any], services: _ContextPacketSources)
     return "\n\n".join(parts)
 
 
-def build_visual_dev_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
+def build_visual_dev_context(state: Mapping[str, object], services: _ContextPacketSources) -> str:
     """Visual dev phase: script scene count + constitution style."""
     parts: list[str] = []
     constitution = _load_state_ref(state, services, "constitution_ref")
@@ -91,7 +91,7 @@ def build_visual_dev_context(state: dict[str, Any], services: _ContextPacketSour
     return "\n\n".join(parts)
 
 
-def build_shot_bible_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
+def build_shot_bible_context(state: Mapping[str, object], services: _ContextPacketSources) -> str:
     """Shot bible phase: execution brief summary + script scene list.
 
     Does NOT load the full matrix (it doesn't exist yet in this phase).
@@ -107,7 +107,7 @@ def build_shot_bible_context(state: dict[str, Any], services: _ContextPacketSour
     return "\n\n".join(parts)
 
 
-def build_gen_planning_context(state: dict[str, Any], services: _ContextPacketSources) -> str:
+def build_gen_planning_context(state: Mapping[str, object], services: _ContextPacketSources) -> str:
     """Gen planning phase: row count summary + provider policy."""
     parts: list[str] = []
     matrix = _load_state_ref(state, services, "shot_matrix_ref")
@@ -133,7 +133,7 @@ PHASE_BUILDERS: dict[str, Callable[..., str]] = {
 }
 
 
-def _render_target_and_type(state: dict[str, Any]) -> str:
+def _render_target_and_type(state: Mapping[str, object]) -> str:
     """Render the shared target-runtime / film-type summary line."""
     target = state.get("target_runtime_seconds", 0)
     film_type = str(state.get("film_type", ""))
@@ -166,15 +166,18 @@ def _count_rows_per_act(rows: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _load_state_ref(
-    state: dict[str, Any], services: _ContextPacketSources, ref_key: str
+    state: Mapping[str, object], services: _ContextPacketSources, ref_key: str
 ) -> dict[str, Any] | None:
     """Load the artifact referenced at ``state[ref_key]``; None when unset or unloadable."""
-    ref = state.get(ref_key, "")
+    raw_ref = state.get(ref_key)
+    # A `Mapping[str, object]` read yields `object`; `_load_ref` takes a ref
+    # string, and an absent or non-string value means there is nothing to load.
+    ref = raw_ref if isinstance(raw_ref, str) else ""
     return _load_ref(state, services, ref) if ref else None
 
 
 def _load_ref(
-    state: dict[str, Any], services: _ContextPacketSources, ref: str
+    state: Mapping[str, object], services: _ContextPacketSources, ref: str
 ) -> dict[str, Any] | None:
     """Load an artifact's content by ref string. Returns None on failure."""
     try:

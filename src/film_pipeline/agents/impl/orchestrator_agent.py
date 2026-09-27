@@ -9,6 +9,7 @@ output is fundamentally wrong).
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError
@@ -37,7 +38,7 @@ class OrchestratorAgent(BaseAgent):
 
     def prepare(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: object,
         task: str,
     ) -> dict[str, Any]:

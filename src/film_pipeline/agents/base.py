@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.schemas.handoff import AgentRegistration
@@ -26,11 +27,16 @@ class BaseAgent(ABC):
     @abstractmethod
     def prepare(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: KBContextPacket,
         task: str,
     ) -> dict[str, Any]:
-        """Assemble prompt inputs from state and KB context."""
+        """Assemble prompt inputs from state and KB context.
+
+        ``state`` is read-only here: every implementation reads via ``.get``.
+        Typed structurally rather than as ``StudioGraphState`` because
+        ``agents`` does not import ``orchestration`` (that would be a back-edge).
+        """
         ...
 
     @abstractmethod
@@ -45,12 +51,16 @@ class BaseAgent(ABC):
 
     def run(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: KBContextPacket,
         task: str,
         model_output: dict[str, Any],
     ) -> dict[str, Any]:
-        """Full lifecycle: prepare → execute → validate."""
+        """Full lifecycle: prepare → execute → validate.
+
+        ``state`` is read-only: ``prepare`` is the only consumer and no
+        implementation mutates it.
+        """
         # prepare() runs as the lifecycle step; the graph node layer assembles
         # the actual prompt context, so its inputs are not consumed here.
         self.prepare(state, kb_context, task)

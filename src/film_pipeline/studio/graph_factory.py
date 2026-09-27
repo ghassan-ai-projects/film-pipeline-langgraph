@@ -159,14 +159,14 @@ def build_graph(
     )
 
 
-def _passthrough(state: dict[str, Any]) -> dict[str, Any]:
+def _passthrough(state: StudioGraphState) -> dict[str, Any]:
     # Routing-only node: returning the full state would re-append every
     # reducer-channel entry, so return an empty update.
     _ = state
     return {}
 
 
-def _route_current_phase(state: dict[str, Any]) -> str:
+def _route_current_phase(state: StudioGraphState) -> str:
     if state.get("_resume_to_repair"):
         return "repair"
     phase = str(state.get("current_phase", ""))

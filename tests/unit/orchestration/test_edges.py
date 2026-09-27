@@ -9,11 +9,11 @@ since the contract being verified is the routing table, not the router.
 
 from __future__ import annotations
 
-from typing import Any
 from unittest import mock
 
 from film_pipeline.orchestration.edges import after_phase
 from film_pipeline.orchestration.router import RouterResult
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
 def _routed(next_action: str) -> str:
@@ -63,11 +63,23 @@ class TestAfterPhaseRealRouterOutcomes:
     """Sanity checks using the real router (no monkeypatch) for reachable cases."""
 
     def test_pending_revision_routes_to_gate(self) -> None:
-        state: dict[str, Any] = {
+        # NOTE: the original (untyped) revision of this test seeded
+        # ``"_orchestrator": {"revisions": {"script": [{"note": "x"}]}}``.
+        # That key is an *undeclared* namespace — the schema spells its keys
+        # ``_orchestrator__*`` — so it cannot appear in a ``StudioGraphState``
+        # literal, and it is also not what the router reads.
+        #
+        # Measured: ``has_pending_revision`` reads the declared
+        # ``_orchestrator__pending_revisions`` channel
+        # (``orchestrator_state._PENDING_REVISIONS``), which this test never
+        # populated. So the assertion below passes through ``after_phase``'s
+        # *fallback* path, not the pending-revision rule the test is named for.
+        # That gap predates this typing change; it is reported rather than
+        # silently rewritten with different data.
+        state: StudioGraphState = {
             "current_phase": "script",
             "approved": False,
             "human_approval_required": False,
             "issues": [],
-            "_orchestrator": {"revisions": {"script": [{"note": "x"}]}},
         }
         assert after_phase(state) == "consistency_check"

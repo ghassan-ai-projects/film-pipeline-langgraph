@@ -7,14 +7,15 @@ translate actions into concrete graph routing.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
 
 from film_pipeline.filmspec import next_phase as next_phase
 from film_pipeline.orchestration.orchestrator_state import is_stalled as is_stalled
 from film_pipeline.orchestration.router import compute_actions as compute_actions
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
-def _is_auto_mode(state: dict[str, Any]) -> bool:
+def _is_auto_mode(state: Mapping[str, object]) -> bool:
     """True when the resolved config disables human approval (headless runs)."""
     cfg = state.get("resolved_config", {})
     if isinstance(cfg, dict):
@@ -36,14 +37,21 @@ _HUMAN_GATE_ACTIONS = (
 _REPAIR_ACTIONS = ("handle_blockers",)
 
 
-def after_phase(state: dict[str, Any]) -> str:
+def after_phase(state: StudioGraphState) -> str:
     """Route after a phase node completes.
 
     Maps the orchestrator's next_action to a graph node name.
     Actions that should pause for a human gate map to ``consistency_check``,
     which always flows into ``await_approval``.
+
+    ``compute_actions`` reaches ``ensure_orchestrator_state`` through the
+    gate-facts port, which *seeds* the orchestrator keys with ``setdefault``
+    under computed module-constant names. A TypedDict cannot be indexed by a
+    computed key, so the call goes through a plain dict copy. Discarding that
+    copy is safe: every seed is an empty container, and every reader of those
+    keys uses ``.get(key, default)``, so the seeds are initialisation only.
     """
-    result = compute_actions(state)
+    result = compute_actions(dict(state))
     action = result.next_action
 
     if action in _HUMAN_GATE_ACTIONS:
@@ -69,7 +77,7 @@ def after_phase(state: dict[str, Any]) -> str:
     return "consistency_check"
 
 
-def _record_stall(state: dict[str, Any], phase: str) -> None:
+def _record_stall(state: StudioGraphState, phase: str) -> None:
     """Flag the gate as requiring a human and record a deduplicated blocker."""
     state["human_approval_required"] = True
     state["_stalled_phase"] = phase
@@ -89,7 +97,7 @@ def _record_stall(state: dict[str, Any], phase: str) -> None:
         )
 
 
-def after_approval(state: dict[str, Any]) -> str:
+def after_approval(state: StudioGraphState) -> str:
     """Route after the human approval gate.
 
     If approved, advance to the next phase. If stalled, stay at the gate

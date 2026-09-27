@@ -11,6 +11,7 @@ from film_pipeline.governance.validators import (
 )
 from film_pipeline.orchestration import nodes
 from film_pipeline.orchestration.edges import _is_auto_mode, after_approval
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
 class TestGateSValidators:
@@ -115,7 +116,7 @@ class TestEdgesAutoMode:
     def test_after_approval_terminates_on_stall_in_auto_mode(self) -> None:
         from film_pipeline.orchestration import orchestrator_state as ostate
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "current_phase": "development",
             "approved": False,
             "resolved_config": {"studio": {"require_human_approval": False}},
@@ -125,7 +126,7 @@ class TestEdgesAutoMode:
         assert state.get("completed") is True
 
     def test_after_approval_routes_blockers_to_repair(self) -> None:
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "current_phase": "development",
             "approved": False,
             "issues": [{"severity": "blocking", "code": "x"}],
