@@ -8,7 +8,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 
 | Step | Slice | Commit | Check | Enola |
 |---:|---|---|---|---|
-| 0 | Regenerate baseline; ignore `.pre-commit-cache/**`; `make enola` | `74490e2` + this commit | `enola check` exits 0; 0 facts for `app`/`graph`/`artifacts`/`review`/`testing` | 0 |
+| 0 | Regenerate baseline; ignore `.pre-commit-cache/**`; `make enola` | `ba193d0` | `enola check` exits 0; 0 facts for `app`/`graph`/`artifacts`/`review`/`testing` | 0 |
+| 1 | Delete the `nodes.approval` re-export shim | `_pending_` | module-level SCCs 2 → 1 (`measure.py`) | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -35,3 +36,17 @@ cannot catch a *new* cycle. That check stays in
 
 The baseline artifacts are gitignored (`/docs/modular-architecture/enola-out/`), so
 this slice's committed content is the config ignore entry and the `make enola` target.
+
+## Step 1 — one fewer module cycle (2026-09-28)
+
+`orchestration/nodes/approval.py` re-exported `_PHASE_NODES` and `repair_phase_node`
+from `_repair_loop` "to keep the historical `graph.nodes.approval` import paths
+working" — but the `graph` package no longer exists. That eager back-import was one
+half of the `approval <-> _repair_loop` module cycle.
+
+Pointed the two consumers (`studio/_graph_exec.run_phase_node` and
+`orchestration/nodes/__init__`) at the owner, `nodes._repair_loop`, and deleted the
+re-export plus its now-empty `__all__`.
+
+Evidence: `measure.py` module-level SCCs **2 → 1** (only `mcp.contract <-> registry`
+remains). `enola check` exit 0. Full `make ci-check` green on the committed tree.

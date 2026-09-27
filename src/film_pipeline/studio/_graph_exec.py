@@ -505,7 +505,7 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
 
 
 def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict[str, Any]:
-    from film_pipeline.orchestration.nodes.approval import _PHASE_NODES
+    from film_pipeline.orchestration.nodes import _PHASE_NODES
     from film_pipeline.orchestration.services import SERVICES_KEY
 
     node = _PHASE_NODES[phase]

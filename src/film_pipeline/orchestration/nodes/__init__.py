@@ -24,6 +24,8 @@ from film_pipeline.orchestration.nodes._context import (
     _model_overrides_for,
     _parse_ref,
 )
+from film_pipeline.orchestration.nodes._repair_loop import _PHASE_NODES as _PHASE_NODES
+from film_pipeline.orchestration.nodes._repair_loop import repair_phase_node
 from film_pipeline.orchestration.nodes._shared import (
     _apply_external_state,
     _coerce_user_runtime,
@@ -36,7 +38,6 @@ from film_pipeline.orchestration.nodes._shared import (
 from film_pipeline.orchestration.nodes.approval import (
     approve_phase_node,
     await_approval_node,
-    repair_phase_node,
     request_revision_node,
 )
 from film_pipeline.orchestration.nodes.generation import generation_node

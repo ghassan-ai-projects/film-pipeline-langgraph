@@ -8,18 +8,10 @@ from typing import Any
 
 from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _run_agent
-from film_pipeline.orchestration.nodes._repair_loop import (
-    _PHASE_NODES,
-    repair_phase_node,
-)
 from film_pipeline.orchestration.nodes._shared import _apply_external_state
 from film_pipeline.orchestration.orchestrator_state import require_human_approval
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
-
-# The bounded repair loop lives in ``_repair_loop``; these re-exports keep the
-# historical ``graph.nodes.approval`` import paths working.
-__all__ = ["_PHASE_NODES", "repair_phase_node"]
 
 
 def _run_orchestrator_agent(state: StudioGraphState) -> dict[str, Any] | None:
