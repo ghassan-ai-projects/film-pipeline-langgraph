@@ -176,3 +176,39 @@ both tests pass while checking nothing.
 
 Both `qc` and the six-channel walk were confirmed against the live tree before the
 tests were written, not inferred from the document.
+
+## Step 5 — one reducer source (2026-09-28)
+
+`studio/_graph_exec.run_phase_node` carried its own literal reducer table. It is
+gone; the merge rule is now derived from the declaration that LangGraph itself
+reads.
+
+New in `orchestration/state_schema.py` — the module that already owns the
+reducers, so the rule has one owner rather than two:
+
+- `channel_reducers()` — walks
+  `get_type_hints(StudioGraphState, include_extras=True)` and returns
+  `{channel: reducer}` for every `Annotated[T, reducer]` field. Cached, and the
+  hints are read **with** `include_extras=True`: the default strips `Annotated`
+  metadata, which would have returned an empty mapping and silently turned every
+  caller into a last-write merge.
+- `apply_node_update(state, update)` — LangGraph's rule and the whole of it:
+  annotated channels merge through their reducer, every other key is a last write.
+
+`run_phase_node` now calls `apply_node_update`. One behaviour change follows from
+the rule, and it is the correct direction: a channel **present** in the update
+merges even when the incoming value is empty, because an explicit clear is a
+merge, not an omission. The old table skipped falsy incoming values.
+
+Evidence — the Step 4 tests flipped. Before: 9 failing cases with 4 channels
+divergent. After:
+
+```text
+test_manual_merge_matches_graph_reducer[all 6 channels]   PASSED
+test_non_annotated_keys_are_last_write                    PASSED
+test_update_channels_are_not_hard_coded                   PASSED
+test_phase_nodes_match_graph                              FAILED   <- Step 6
+```
+
+The only remaining failure is `qc`, which is Step 6's slice, not this one. Full
+`make ci-check`: 2381 passed, 1 failed (that test). `mypy src tests` clean.

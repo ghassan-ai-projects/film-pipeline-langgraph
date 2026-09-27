@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
@@ -507,37 +506,18 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
 def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict[str, Any]:
     from film_pipeline.orchestration.nodes import _PHASE_NODES
     from film_pipeline.orchestration.services import SERVICES_KEY
+    from film_pipeline.orchestration.state_schema import apply_node_update
 
     node = _PHASE_NODES[phase]
     # Inject graph services so nodes can invoke agents and persist artifacts
     state = dict(state)
     state[SERVICES_KEY] = rt.services
     node_result = node(state)
-    # Merge node result back into state using the same reducer semantics
-    # the graph applies (direct node calls bypass channel accumulation).
-    from film_pipeline.orchestration.state_schema import (
-        merge_generation_requests,
-        merge_issues,
-        merge_unique,
-    )
-
-    merged = dict(state)
-    merged.update(node_result)
-    reducers: dict[str, Callable[[list[Any] | None, list[Any] | None], list[Any]]] = {
-        "artifact_refs": merge_unique,
-        "issues": merge_issues,
-        "validation_report_refs": merge_unique,
-        "generation_requests": merge_generation_requests,
-    }
-    for key, reducer in reducers.items():
-        new = node_result.get(key, [])
-        if new:
-            merged[key] = reducer(list(state.get(key, [])), list(new))
-    for key in ("_routing_decisions", "_validation_reports"):
-        prev = state.get(key, [])
-        new = node_result.get(key, [])
-        if new:
-            merged[key] = list(prev) + [item for item in new if item not in prev]
+    # Direct node calls bypass channel accumulation, so replay the graph's own
+    # merge rule from the state schema's `Annotated` declarations. This used to
+    # be a hand-written reducer table here, which disagreed with the schema on
+    # four channels and could not see a channel added later.
+    merged = apply_node_update(state, node_result)
     # Strip runtime-only keys that must not leak into persisted state
     merged.pop(SERVICES_KEY, None)
     return merged

@@ -40,8 +40,7 @@ from typing import Any
 import pytest
 
 from film_pipeline.orchestration.nodes._repair_loop import _PHASE_NODES
-from film_pipeline.orchestration.state_schema import StudioGraphState
-from film_pipeline.studio import _graph_exec
+from film_pipeline.orchestration.state_schema import StudioGraphState, apply_node_update
 from film_pipeline.studio.graph_factory import build_graph
 
 
@@ -132,18 +131,16 @@ def test_manual_merge_matches_graph_reducer(channel: str) -> None:
     to carry its own table, which disagreed with this rule on ``_routing_decisions``,
     ``_validation_reports``, ``_qc_reports`` and ``_qc_raw_reports``.
 
-    The stub node returns a *list* for a list-shaped channel, because the
-    reducers are list-merging functions (``operator.add``, ``merge_unique``,
-    ``merge_issues``, ``merge_generation_requests``) rather than the
-    LangGraph-conventional callables.
+    The sample values are shaped to the channel's declared element type:
+    ``merge_unique`` is a **string**-ref reducer and raises on a dict, so feeding
+    it dicts would test the sample rather than the merge rule.
     """
     reducer = _annotated_channels()[channel]
-    # The reducers are list-merging functions, so both sides are lists. A scalar
-    # left-hand value would be a TypeError rather than a failed assertion.
+    element: Any = "artifact:script:v1" if channel.endswith("_refs") else {"marker": channel}
     existing: Any = []
-    incoming = [{"channel": channel, "marker": "incoming"}]
+    incoming = [element]
 
-    merged = _graph_exec.apply_node_update({channel: existing}, {channel: incoming})
+    merged = apply_node_update({channel: existing}, {channel: incoming})
 
     expected = reducer(existing, incoming)
     assert merged[channel] == expected, (
@@ -155,7 +152,7 @@ def test_manual_merge_matches_graph_reducer(channel: str) -> None:
 
 def test_non_annotated_keys_are_last_write() -> None:
     """A key with no ``Annotated`` reducer is replaced, not accumulated."""
-    merged = _graph_exec.apply_node_update(
+    merged = apply_node_update(
         {"current_phase": "intake", "_stalled_phase": "old"},
         {"current_phase": "script"},
     )
@@ -177,7 +174,7 @@ def test_update_channels_are_not_hard_coded() -> None:
             continue
         reducer = channels[channel]
         incoming = [{"marker": channel}]
-        merged = _graph_exec.apply_node_update({channel: []}, {channel: incoming})
+        merged = apply_node_update({channel: []}, {channel: incoming})
         assert merged[channel] == reducer([], incoming), (
             f"'{channel}' was one of the four channels the manual reducer table "
             f"disagreed on; it must merge through {getattr(reducer, '__name__', reducer)!r}."

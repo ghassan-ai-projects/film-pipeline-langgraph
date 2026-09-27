@@ -3,13 +3,19 @@
 Implements the typed state contract defined in Phase 2 of the implementation
 plan. Scalar fields use the default reducer (last write wins). Fields annotated
 with ``Annotated[T, add]`` accumulate across nodes.
+
+This module is also the single source of truth for *how* a channel merges:
+:func:`channel_reducers` reads the ``Annotated`` declarations and
+:func:`apply_node_update` replays LangGraph's merge rule for callers that invoke
+a node outside the compiled graph.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
+from functools import lru_cache
 from operator import add
-from typing import Annotated, Any, TypedDict, cast
+from typing import Annotated, Any, TypedDict, cast, get_origin, get_type_hints
 
 from film_pipeline.orchestration.services import GraphServices as GraphServices
 
@@ -283,3 +289,57 @@ def undeclared_state_keys(state: Mapping[str, object]) -> list[str]:
     ``orchestration`` already imports ``schemas``.
     """
     return sorted(key for key in state if key not in StudioGraphState.__annotations__)
+
+
+@lru_cache(maxsize=1)
+def channel_reducers() -> dict[str, Callable[[Any, Any], Any]]:
+    """Map every ``Annotated[T, reducer]`` channel of the state to its reducer.
+
+    Derived from the live type hints — the same declaration LangGraph reads — so
+    there is exactly one source of truth for how a channel merges. Read with
+    ``include_extras=True`` because the default strips ``Annotated`` metadata,
+    which would silently return an empty mapping and turn every caller into a
+    last-write merge.
+
+    Cached: the hints are static for the life of the process, and
+    ``get_type_hints`` resolves the whole class each call.
+    """
+    hints = get_type_hints(StudioGraphState, include_extras=True)
+    return {
+        name: hint.__metadata__[0]
+        for name, hint in hints.items()
+        if get_origin(hint) is Annotated and hint.__metadata__
+    }
+
+
+def apply_node_update(
+    state: Mapping[str, Any],
+    update: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Merge a node's returned ``update`` over ``state`` exactly as the graph does.
+
+    This is LangGraph's rule, and the whole of it: a channel declared
+    ``Annotated[T, reducer]`` merges through that reducer; every other key is a
+    last write.
+
+    It exists because calling a node function *outside* the compiled graph
+    bypasses channel accumulation, so a direct caller has to replay the rule. That
+    caller used to carry its own hand-written reducer table, which disagreed with
+    this declaration on four of eight accumulating channels — and, worse, was
+    invisible to any channel added later. Deriving the table here removes the
+    second copy rather than keeping it in sync.
+
+    ``update`` may be a partial update or a full state dict; both occur in the
+    resume paths. Only keys the update actually carries are merged.
+    """
+    reducers = channel_reducers()
+    merged = dict(state)
+    merged.update(update)
+    for key, reducer in reducers.items():
+        if key not in update:
+            continue
+        # A channel present in the update always merges through its reducer,
+        # even when the incoming value is empty or falsy — an explicit clear is
+        # a merge, not an omission.
+        merged[key] = reducer(state.get(key), update[key])
+    return merged
