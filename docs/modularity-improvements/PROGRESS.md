@@ -11,7 +11,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 0 | Regenerate baseline; ignore `.pre-commit-cache/**`; `make enola` | `ba193d0` | `enola check` exits 0; 0 facts for `app`/`graph`/`artifacts`/`review`/`testing` | 0 |
 | 1 | Delete the `nodes.approval` re-export shim | `f83e496` | module-level SCCs 2 → 1 (`measure.py`) | 0 |
 | 2 | Delete dead functions, `generation/gemini_client.py`, cost residue | `fc80b18` | each deleted name greps to 0 in `src`/`tests`/`scripts` | 0 |
-| 3 | One `ORCH_NS`; one vendor-endpoint module | `_pending_` | duplicated literals all → 1 (`measure.py`) | 0 |
+| 3 | One `ORCH_NS`; one vendor-endpoint module | `2bd8eff` | duplicated literals all → 1 (`measure.py`) | 0 |
+| 4 | **Test first:** `_PHASE_NODES` identity + reducer parity | `_pending_` | both tests **fail** (9 cases), by design | n/a |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -135,3 +136,43 @@ gone from the facade).
 
 CLI/MCP import time is unchanged (`import film_pipeline.mcp.server` ≈ 0.17 s),
 so no hoist here pulled in LangGraph.
+
+## Step 4 — the two correctness defects, as failing tests (2026-09-28)
+
+New `tests/unit/orchestration/test_graph_manual_path_parity.py`. **This commit is
+deliberately red**: 07 asks for the failing test on the old tree first, so Step 5
+and Step 6 are proven by the test flipping rather than by the absence of failures.
+
+Reproduced on this tree:
+
+```text
+test_phase_nodes_match_graph                        FAILED
+  divergent: {'qc': ('qc_node', 'CompiledStateGraph')}
+
+test_manual_merge_matches_graph_reducer[artifact_refs]           FAILED
+test_manual_merge_matches_graph_reducer[issues]                  FAILED
+test_manual_merge_matches_graph_reducer[validation_report_refs]  FAILED
+test_manual_merge_matches_graph_reducer[generation_requests]     FAILED
+test_manual_merge_matches_graph_reducer[_qc_reports]             FAILED
+test_manual_merge_matches_graph_reducer[_qc_raw_reports]         FAILED
+test_non_annotated_keys_are_last_write                           FAILED
+test_update_channels_are_not_hard_coded                          FAILED
+```
+
+All eight reducer cases currently fail at the same line — `studio._graph_exec`
+has no `apply_node_update` — because this test names the seam Step 5 introduces.
+The divergence 02 documented by reading is encoded as the named regression
+`test_update_channels_are_not_hard_coded` over `_routing_decisions`,
+`_validation_reports`, `_qc_reports`, `_qc_raw_reports`.
+
+**The parity test does not enumerate a fixed channel list.** It walks
+`typing.get_type_hints(StudioGraphState, include_extras=True)`, so a channel added
+to the schema tomorrow is graded the day it is added — which is the whole defect
+class: the hand-maintained table is invisible to new channels. Two
+guard-the-guard tests (`test_the_schema_still_declares_annotated_channels`,
+`test_phase_nodes_covers_the_whole_sequence`) fail if the parametrization ever
+becomes vacuous, since an empty channel set or a short `_PHASE_NODES` would make
+both tests pass while checking nothing.
+
+Both `qc` and the six-channel walk were confirmed against the live tree before the
+tests were written, not inferred from the document.
