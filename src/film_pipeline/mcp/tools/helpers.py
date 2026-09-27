@@ -60,21 +60,6 @@ def _no_active_project() -> dict[str, object]:
     return _error(NO_ACTIVE_PROJECT)
 
 
-def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
-    """Return the active project's state, or ``None`` when none resolves.
-
-    ``get_runtime`` must keep being resolved through the package attribute at
-    call time (never via a ``from`` import): tests monkeypatch
-    ``film_pipeline.mcp.tools.get_runtime`` by attribute, and only lazy
-    binding sees the patch.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    return rt.get_project(project_id)
-
-
 def require_project_id(args: dict[str, object]) -> str:
     """Return the request's project id, assuming the dispatch precondition held.
 

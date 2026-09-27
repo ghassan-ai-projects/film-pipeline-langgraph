@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from typing import Any
 
-_SEEDANCE_RATE_USD_PER_SECOND = 0.18
-
 # The demo film's single source of truth: per-movement shot durations.
 # Constraints baked into these numbers:
 #   - total runtime 104s == 16 shots x 6.5s (standard pacing), so

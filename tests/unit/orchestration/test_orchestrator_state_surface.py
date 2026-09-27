@@ -1,6 +1,6 @@
 """Public-surface contract for ``orchestration.orchestrator_state``.
 
-The module carries 39 public symbols across eight state slices, which made it
+The module carries 38 public symbols across eight state slices, which made it
 one of the widest surfaces in the repository (``07`` §3, §6.4: "97% public").
 Adding a declared surface is the fix — the diagnosis was a *surface* problem,
 not a size one, so the module is deliberately not split.

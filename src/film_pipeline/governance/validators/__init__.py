@@ -3,7 +3,7 @@
 These run at phase boundaries to enforce film-level invariants:
 - Gate S (development/script): scene counts survive each hop
 - Gate A (shot_bible): shot-count per movement, runtime totals
-- Gate B (gen_planning): field completeness, non-placeholder cost estimates
+- Gate B (gen_planning): row field completeness, plan has clips
 - Gate C (generation): dispatch readiness — real clip counts, executable requests
 
 On failure they append blocking issues to ``state["issues"]``, which the

@@ -50,7 +50,6 @@ __all__ = [
     "get_provider_health_snapshot",
     "get_routing_decisions",
     "has_blocking_failure",
-    "has_execution_brief",
     "has_pending_revision",
     "increment_convergence_round",
     "init_convergence",
@@ -603,11 +602,6 @@ def get_execution_brief(state: Mapping[str, object]) -> Any | None:
     before use. Returns ``None`` if no brief has been set.
     """
     return state.get(_EXECUTION_BRIEF)
-
-
-def has_execution_brief(state: Mapping[str, object]) -> bool:
-    """Return True if an ExecutionBrief exists in orchestrator state."""
-    return bool(state.get(_EXECUTION_BRIEF))
 
 
 # --- Initialization ----------------------------------------------------------

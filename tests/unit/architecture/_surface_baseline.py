@@ -56,7 +56,7 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "constraints": Surface(4, 1),
     "devharness": Surface(4, 5),
     "filmspec": Surface(22, 0),
-    "generation": Surface(18, 15),
+    "generation": Surface(18, 14),
     "generation.compositor": Surface(6, 3),
     "governance": Surface(12, 11),
     "governance.validators": Surface(8, 3),

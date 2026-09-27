@@ -82,13 +82,6 @@ def missing_profile_credentials(
     return missing_provider_credentials(provider_ids)
 
 
-def runtime_for(service_runtime: RuntimePort | None) -> RuntimePort:
-    """Resolve an explicitly supplied runtime or fall back to the singleton."""
-    if service_runtime is not None:
-        return service_runtime
-    return get_runtime()
-
-
 class _ProfileProviderComposition:
     """The concrete :class:`ProviderComposition` bound to this package."""
 
@@ -121,7 +114,6 @@ __all__ = [
     "profile_provider_composition",
     "register_profile_providers",
     "reset_runtime",
-    "runtime_for",
 ]
 
 

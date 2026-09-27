@@ -20,7 +20,6 @@ class DecisionProfile(StrEnum):
 class MockHumanActor:
     profile: DecisionProfile = DecisionProfile.APPROVE_ALL
     script_revision_count: int = field(default=0, init=False)
-    spend_limit_usd: float = 5.0
     test_mode: bool = True
 
     def decide(self, phase: str, review_type: str, summary: str = "") -> str:
