@@ -12,9 +12,9 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from film_pipeline.providers.adapters.seedance_openrouter import OPENROUTER_API
 from film_pipeline.providers.credentials import lookup
 from film_pipeline.providers.http_transport import post_json
+from film_pipeline.providers.vendor_endpoints import OPENROUTER_API_BASE
 
 OPENROUTER_ERROR_PREFIX = "OpenRouter chat completions failed"
 
@@ -69,7 +69,7 @@ def send_chat_completion(
 ) -> dict[str, Any]:
     """POST a chat-completion request to OpenRouter."""
     return post_json(
-        f"{OPENROUTER_API}/chat/completions",
+        f"{OPENROUTER_API_BASE}/chat/completions",
         chat_completions_payload(request),
         http_opener=http_opener,
         timeout_seconds=timeout_seconds,

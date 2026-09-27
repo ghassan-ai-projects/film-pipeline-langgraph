@@ -17,9 +17,9 @@ from typing import Any
 
 from film_pipeline.providers.credentials import lookup
 from film_pipeline.providers.http_transport import post_json
+from film_pipeline.providers.vendor_endpoints import GEMINI_API_BASE
 
 GEMINI_MODEL_PREFIX = "google/"
-GEMINI_API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
 GEMINI_ERROR_PREFIX = "Gemini generateContent failed"
 
 
@@ -46,7 +46,7 @@ def gemini_api_key(configured_api_key: str | None) -> str:
 def gemini_url(model: str, api_key: str) -> str:
     """Build the generateContent endpoint URL for ``model``."""
     gemini_model = model.removeprefix(GEMINI_MODEL_PREFIX)
-    return f"{GEMINI_API_ROOT}/{gemini_model}:generateContent?key={api_key}"
+    return f"{GEMINI_API_BASE}/{gemini_model}:generateContent?key={api_key}"
 
 
 def build_gemini_payload(request: GeminiRequest) -> dict[str, Any]:

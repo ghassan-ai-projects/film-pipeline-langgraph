@@ -242,10 +242,14 @@ def main() -> None:
 
     print("\n== Duplicated literals")
     print(
-        "  Gemini API base URL definitions:",
+        "  Gemini API base URL / models endpoints:",
         grep_count(r'"https://generativelanguage\.googleapis\.com/v1beta/models"'),
     )
-    print("  _ORCH_NS definitions:", grep_count(r'^_ORCH_NS = "_orchestrator"'))
+    print("  OpenRouter API base URL:", grep_count(r'"https://openrouter\.ai/api/v1"'))
+    # Counts the literal, whatever the constant is called: the original pattern
+    # matched only the private spelling, so renaming the survivor to the public
+    # ORCH_NS reported 0 definitions instead of 1.
+    print("  _orchestrator namespace literal:", grep_count(r'= "_orchestrator"'))
 
 
 if __name__ == "__main__":

@@ -10,7 +10,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 |---:|---|---|---|---|
 | 0 | Regenerate baseline; ignore `.pre-commit-cache/**`; `make enola` | `ba193d0` | `enola check` exits 0; 0 facts for `app`/`graph`/`artifacts`/`review`/`testing` | 0 |
 | 1 | Delete the `nodes.approval` re-export shim | `f83e496` | module-level SCCs 2 → 1 (`measure.py`) | 0 |
-| 2 | Delete dead functions, `generation/gemini_client.py`, cost residue | `_pending_` | each deleted name greps to 0 in `src`/`tests`/`scripts` | 0 |
+| 2 | Delete dead functions, `generation/gemini_client.py`, cost residue | `fc80b18` | each deleted name greps to 0 in `src`/`tests`/`scripts` | 0 |
+| 3 | One `ORCH_NS`; one vendor-endpoint module | `_pending_` | duplicated literals all → 1 (`measure.py`) | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -91,3 +92,46 @@ Two recorded counts were re-measured rather than edited to match, per AGENTS.md:
 
 Evidence: every deleted name greps to 0; `enola check` exit 0; full `make ci-check`
 green on the committed tree with no test edits beyond the recorded-code tests above.
+
+## Step 3 — one `ORCH_NS`, one vendor-endpoint module (2026-09-28)
+
+**`ORCH_NS`.** The `_orchestrator` namespace prefix was defined twice — in
+`governance/orchestrator_reads.py` and in `orchestration/orchestrator_state.py`.
+Two copies of one literal is the "one policy, N sites" shape: had they drifted,
+`get_execution_brief` would have returned `None` and the brief gate
+(`governance/validators/brief.py`) would have seen no brief, with no test tying the
+two. `orchestration -> governance` is already an edge, so
+`orchestrator_state` imports `ORCH_NS` from `orchestrator_reads` with no new edge
+and no cycle. The owner is `governance` (it is the reader that must not import
+upward); `orchestration` binds it as `_ORCH_NS` to keep the ten f-string key
+constants, and the parity test that reads them, unchanged.
+
+**Vendor endpoints.** New `providers/vendor_endpoints.py` owns the two base URLs,
+beside `providers/credentials.py`, which already owns the other half of "talking to
+a vendor" — which env var holds its key. Four sites now import from it:
+
+| Was | Now |
+|---|---|
+| `agents.transports.gemini.GEMINI_API_ROOT` | `GEMINI_API_BASE` |
+| `providers.adapters.imagen4_gemini.GEMINI_API` | `GEMINI_API_BASE` |
+| `providers.gemini_review_client.GEMINI_API_BASE` | `GEMINI_API_BASE` |
+| `providers.adapters.seedance_openrouter.OPENROUTER_API` | `OPENROUTER_API_BASE` |
+
+The fourth fixes a worse defect than a duplicate: `agents.transports.chat_completions`
+— a *text*-LLM transport — imported the OpenRouter base from a *video* adapter module
+for a string. It now imports `providers.vendor_endpoints` directly, so the
+`agents -> providers.adapters` edge for that constant is gone. The z.ai bases stay in
+`agents.transports.zai`: they are defined once each, two distinct hosts, and that
+module owns its own allowlisted-base-URL rule.
+
+Evidence — `measure.py` reports **1 / 1 / 1** for the Gemini, OpenRouter and
+`_orchestrator` literals (was 3 / 1 / 2). `measure.py`'s `_ORCH_NS` pattern was
+also corrected: it matched only the private spelling, so renaming the survivor
+reported **0** definitions rather than 1 — a measurement that would have read as a
+pass while checking nothing. Two recorded counts moved with the change and were
+re-measured, not edited to match: `providers` public modules 13 → **14** (the new
+module) and `agents.transports` declared names 20 → **19** (`GEMINI_API_ROOT` is
+gone from the facade).
+
+CLI/MCP import time is unchanged (`import film_pipeline.mcp.server` ≈ 0.17 s),
+so no hoist here pulled in LangGraph.

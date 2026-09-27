@@ -19,7 +19,6 @@ from film_pipeline.agents.transports.chat_completions import (
     send_chat_completion,
 )
 from film_pipeline.agents.transports.gemini import (
-    GEMINI_API_ROOT,
     GEMINI_ERROR_PREFIX,
     GEMINI_MODEL_PREFIX,
     GeminiRequest,
@@ -40,7 +39,6 @@ from film_pipeline.agents.transports.zai import (
 )
 
 __all__ = [
-    "GEMINI_API_ROOT",
     "GEMINI_ERROR_PREFIX",
     "GEMINI_MODEL_PREFIX",
     "ZAI_API_BASE",

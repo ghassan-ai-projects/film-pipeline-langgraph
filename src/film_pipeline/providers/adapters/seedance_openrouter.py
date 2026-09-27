@@ -22,9 +22,9 @@ from film_pipeline.providers.base import (
     ProviderJobStatus,
 )
 from film_pipeline.providers.credentials import lookup, redact
+from film_pipeline.providers.vendor_endpoints import OPENROUTER_API_BASE
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
-OPENROUTER_API = "https://openrouter.ai/api/v1"
 POLLING_CONFIG = {
     "initial_delay_seconds": 20,
     "poll_interval_seconds": 30,
@@ -63,7 +63,7 @@ class SeedanceOpenRouterProvider(BaseProviderAdapter):
 
         In tests, ``_http_opener`` can be a mock that returns canned responses.
         """
-        url = f"{OPENROUTER_API}{path}"
+        url = f"{OPENROUTER_API_BASE}{path}"
         data = json.dumps(body).encode() if body else None
         req = urllib.request.Request(
             url,

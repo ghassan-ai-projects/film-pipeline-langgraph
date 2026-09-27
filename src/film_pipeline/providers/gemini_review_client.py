@@ -21,8 +21,7 @@ from typing import Any
 
 from film_pipeline.providers.credentials import lookup
 from film_pipeline.providers.http_transport import post_json
-
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+from film_pipeline.providers.vendor_endpoints import GEMINI_API_BASE as GEMINI_API_BASE
 
 #: Provider id whose credential unlocks the review model.
 _REVIEW_PROVIDER_ID = "gemini-imagen-4"
