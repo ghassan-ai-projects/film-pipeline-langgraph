@@ -15,6 +15,7 @@ import pytest
 
 from film_pipeline.orchestration._agent_routing import route_agent
 from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.studio.mock_responses import default_mock_responses
 
 
@@ -81,19 +82,21 @@ def test_extraction_produces_execution_brief_through_full_lifecycle(
 ) -> None:
     """The DF-F2 causal chain end-to-end with mock services, no graph needed."""
     from film_pipeline.orchestration.nodes.visual import _ensure_execution_brief
-    from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY
+    from film_pipeline.orchestration.services import _SERVICES_CTX
 
     svc = GraphServices.for_mock_runtime(
         artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
     )
     token = _SERVICES_CTX.set(svc)
     try:
-        state: dict[str, Any] = {
+        # ``_services`` is spelled literally: a TypedDict key must be a string
+        # literal, so the ``SERVICES_KEY`` constant cannot be used here.
+        state: StudioGraphState = {
             "project_id": "dff2-root-cause",
             "idea": "A lighthouse keeper who mails letters to the future.",
             "current_phase": "shot_bible",
             "target_runtime_seconds": 300,
-            SERVICES_KEY: svc,
+            "_services": svc,
             "resolved_config": {"studio": {"require_human_approval": False}},
             "artifact_refs": [],
         }

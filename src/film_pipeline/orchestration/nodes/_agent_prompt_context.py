@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.constraints import render_constraints
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from film_pipeline.schemas.kb import KBContextPacket
 
 
-def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[str, str]:
+def _build_template_context(state: Mapping[str, object], kb: KBContextPacket) -> dict[str, str]:
     """Seed template variables with defaults before upstream state is copied in."""
     context_vars: dict[str, str] = {
         "project_id": str(state.get("project_id", "")),
@@ -49,7 +50,7 @@ def _build_template_context(state: dict[str, Any], kb: KBContextPacket) -> dict[
     return context_vars
 
 
-def _populate_state_fields(context_vars: dict[str, str], state: dict[str, Any]) -> None:
+def _populate_state_fields(context_vars: dict[str, str], state: Mapping[str, object]) -> None:
     """Copy truthy upstream refs and typed targets into prompt variables."""
     # Refs first, then numeric/typed fields (incl. Story Scope Contract targets)
     for key in (
@@ -73,7 +74,7 @@ def _populate_state_fields(context_vars: dict[str, str], state: dict[str, Any]) 
             context_vars[key] = str(val)
 
 
-def _render_constraint_block(context_vars: dict[str, str], state: dict[str, Any]) -> None:
+def _render_constraint_block(context_vars: dict[str, str], state: Mapping[str, object]) -> None:
     """Render user-intent constraints into the prompt block."""
     raw_constraints = state.get("constraints")
     if raw_constraints and isinstance(raw_constraints, (ProjectConstraints, dict)):
@@ -82,7 +83,7 @@ def _render_constraint_block(context_vars: dict[str, str], state: dict[str, Any]
 
 def _maybe_add_orchestrator_context(
     context_vars: dict[str, str],
-    state: dict[str, Any],
+    state: Mapping[str, object],
     agent_id: str,
 ) -> None:
     """Inject orchestrator review context when this is the orchestrator agent."""
@@ -92,7 +93,7 @@ def _maybe_add_orchestrator_context(
 
 def _attach_scoped_packet(
     context_vars: dict[str, str],
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     phase: str,
 ) -> None:
@@ -111,9 +112,14 @@ def _attach_scoped_packet(
             context_vars["scoped_context"] = builder(state, services)
 
 
-def _attach_validator_issues(context_vars: dict[str, str], state: dict[str, Any]) -> None:
+def _attach_validator_issues(context_vars: dict[str, str], state: Mapping[str, object]) -> None:
     """Inject accumulated validator issues for QC synthesis."""
-    issues_list: list[dict[str, Any]] = state.get("issues", [])
+    raw_issues = state.get("issues")
+    issues_list: list[dict[str, Any]] = (
+        [issue for issue in raw_issues if isinstance(issue, dict)]
+        if isinstance(raw_issues, list)
+        else []
+    )
     if issues_list:
         context_vars["validator_issues"] = json.dumps(issues_list, indent=2)
 
@@ -130,7 +136,7 @@ def _set_script_scene_count(context_vars: dict[str, str]) -> None:
 
 def _augment_phase_context(
     context_vars: dict[str, str],
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     phase: str,
     agent_id: str,

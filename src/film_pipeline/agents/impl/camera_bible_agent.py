@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.agents.base import BaseAgent
@@ -15,7 +16,7 @@ class CameraBibleAgent(BaseAgent):
     Output artifact: ``CameraLanguageBible``
     """
 
-    def prepare(self, state: dict[str, Any], kb_context: object, task: str) -> dict[str, Any]:
+    def prepare(self, state: Mapping[str, object], kb_context: object, task: str) -> dict[str, Any]:
         _ = kb_context
         return {
             "project_id": str(state.get("project_id", "")),

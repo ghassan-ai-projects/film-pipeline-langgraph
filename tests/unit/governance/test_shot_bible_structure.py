@@ -10,7 +10,8 @@ from typing import Any
 from film_pipeline.governance.validators import validate_shot_structure
 from film_pipeline.orchestration.nodes import shot_bible_node
 from film_pipeline.orchestration.nodes.visual import _reconcile_shot_matrix_to_brief
-from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
+from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.execution_brief import ExecutionBrief
@@ -154,7 +155,9 @@ def test_five_scene_film_shot_matrix_conforms_to_three_act_brief(
         return original_runner(*args, **kwargs)
 
     monkeypatch.setattr(services.prompt_runner, "run_from_template", capture_runner)
-    state: dict[str, Any] = {
+    # ``_services`` is spelled literally: a TypedDict key must be a string
+    # literal, so the ``SERVICES_KEY`` constant cannot be used here.
+    state: StudioGraphState = {
         "project_id": "third-interval",
         "current_phase": "shot_bible",
         "target_runtime_seconds": 600,
@@ -165,8 +168,7 @@ def test_five_scene_film_shot_matrix_conforms_to_three_act_brief(
         "script_ref": "artifact:script:script:v1",
         "artifact_refs": ["artifact:script:script:v1"],
         "resolved_config": {"studio": {"require_human_approval": False}},
-        "_orchestrator__execution_brief": None,
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     token = _SERVICES_CTX.set(services)

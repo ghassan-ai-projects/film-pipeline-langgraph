@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from film_pipeline.orchestration.state_schema import StudioGraphState
+
 
 class TestGraphWithCheckpointer:
     def test_graph_compiles_with_checkpointer(self) -> None:
@@ -95,7 +97,7 @@ class TestAfterApproval:
         """Approved intake routes to constitution."""
         from film_pipeline.orchestration.edges import after_approval
 
-        state: dict[str, object] = {
+        state: StudioGraphState = {
             "current_phase": "intake",
             "approved": True,
             "_orchestrator__convergence": {},
@@ -106,7 +108,7 @@ class TestAfterApproval:
         """Unapproved issues route to repair (when not stalled)."""
         from film_pipeline.orchestration.edges import after_approval
 
-        state: dict[str, object] = {
+        state: StudioGraphState = {
             "current_phase": "intake",
             "approved": False,
             "issues": [{"severity": "blocking"}],
@@ -118,7 +120,7 @@ class TestAfterApproval:
         """Stalled phase stays at await_approval (not repair → infinite loop)."""
         from film_pipeline.orchestration.edges import after_approval
 
-        state: dict[str, object] = {
+        state: StudioGraphState = {
             "current_phase": "shot_bible",
             "approved": False,
             "issues": [{"severity": "blocking"}],
@@ -133,7 +135,7 @@ class TestAfterApproval:
         assert after_approval(state) == "await_approval"
         assert state["human_approval_required"] is True
         assert state["_stalled_phase"] == "shot_bible"
-        issues = cast(list[dict[str, object]], state["issues"])
+        issues = state["issues"]
         stalled_issues = [
             issue
             for issue in issues
@@ -141,7 +143,7 @@ class TestAfterApproval:
         ]
         assert len(stalled_issues) == 1
         assert after_approval(state) == "await_approval"
-        issues = cast(list[dict[str, object]], state["issues"])
+        issues = state["issues"]
         stalled_issues = [
             issue
             for issue in issues
@@ -213,7 +215,7 @@ class TestHumanGateMandatory:
             lambda _state: {"action": "approve", "feedback": "looks good", "preserve": []},
         )
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "test-human-gate",
             "current_phase": "script",
             "human_approval_phase": "script",
@@ -267,7 +269,7 @@ class TestAutoApprove:
         """await_approval_node returns no updates when already approved."""
         from film_pipeline.orchestration.nodes import await_approval_node
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "approved": True,
             "current_phase": "script",
             "human_approval_phase": "script",
@@ -284,7 +286,7 @@ class TestAutoApprove:
         from film_pipeline.orchestration.nodes import intake_node
         from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "test-auto",
             "idea": "A test idea.",
             "resolved_config": {
@@ -301,7 +303,7 @@ class TestAutoApprove:
         """Phase node sets approved=False when require_human_approval is on."""
         from film_pipeline.orchestration.nodes import intake_node
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "test-manual",
             "idea": "A test idea.",
             "resolved_config": {
@@ -388,7 +390,7 @@ class TestExternalStateReplay:
             lambda _state: None,
         )
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "test-external",
             "current_phase": "generation",
             "human_approval_phase": "generation_batch",

@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+from pydantic import ValidationError
+
 from film_pipeline.schemas.base import (
     IssueSeverity,
     ValidationModality,
@@ -163,3 +168,69 @@ class TestConsensusBuilder:
         r2 = _make_report("v2", 84, ValidationStatus.PASS_WITH_NOTES)
         consensus = builder.build([r1, r2])
         assert consensus.consensus_status == ValidationStatus.PASS_WITH_NOTES
+
+    def test_accepts_serialized_report_mappings(self) -> None:
+        """The QC path feeds `report.model_dump()` output, i.e. plain dicts.
+
+        `_validation_reports` is declared `list[dict[str, Any]]` and every writer
+        appends `model_dump()`, but `build` used to require `ValidationReport`
+        models and attribute-access them, raising
+        `AttributeError: 'dict' object has no attribute 'validator_id'`. The QC
+        node wrapped that call in a bare `except Exception: return`, so consensus
+        reports were silently never produced. This pins the mapping shape so the
+        regression cannot return.
+        """
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 85, ValidationStatus.PASS)
+        r2 = _make_report("v2", 90, ValidationStatus.PASS)
+        consensus = builder.build([r1.model_dump(), r2.model_dump()], ["art:1"])
+        assert consensus.consensus_status == ValidationStatus.PASS
+        assert len(consensus.reviewers) == 2
+        assert consensus.artifact_refs == ["art:1"]
+
+    def test_mapping_and_model_inputs_agree(self) -> None:
+        """The two accepted shapes must synthesize the same consensus."""
+        builder = ConsensusBuilder()
+        r1 = _make_report("v1", 70, ValidationStatus.NEEDS_REVISION, blocking_codes=["b1"])
+        r2 = _make_report("v2", 72, ValidationStatus.NEEDS_REVISION, blocking_codes=["b1"])
+        from_models = builder.build([r1, r2])
+        from_mappings = builder.build([r1.model_dump(), r2.model_dump()])
+        # `review_id` is a fresh uuid per build, so compare the synthesized content.
+        assert from_models.reviewers == from_mappings.reviewers
+        assert from_models.agreement_level == from_mappings.agreement_level
+        assert from_models.consensus_status == from_mappings.consensus_status
+        assert from_models.shared_findings == from_mappings.shared_findings
+
+    def test_serialized_report_round_trips_without_loss(self) -> None:
+        """Every scored field the synthesis reads survives the mapping round trip.
+
+        `build` reads `validator_id`, `score` and `status`; if `model_dump()`
+        dropped or renamed one, the mapping path would synthesize a different
+        consensus from identical input. This asserts field-level agreement rather
+        than only that no exception was raised.
+        """
+        report = _make_report("v1", 88, ValidationStatus.PASS_WITH_NOTES, warning_codes=["w1"])
+        dumped = report.model_dump()
+        assert dumped["validator_id"] == "v1"
+        assert dumped["score"] == 88
+        assert dumped["status"] == ValidationStatus.PASS_WITH_NOTES
+
+    def test_non_mapping_entry_raises_a_named_error(self) -> None:
+        """A non-report, non-mapping entry fails with the module's own error type.
+
+        The call is made through `Any` deliberately: the guard exists for callers
+        holding untyped data (a JSON list, a legacy snapshot), which is exactly
+        the case mypy cannot describe. `Any` is used here in a *test* to reach a
+        runtime guard, not to widen a production signature.
+        """
+        from film_pipeline.validation.consensus import UnknownReportShapeError
+
+        untyped: Any = ["oops"]
+        with pytest.raises(UnknownReportShapeError):
+            ConsensusBuilder().build(untyped)
+
+    def test_malformed_mapping_is_rejected(self) -> None:
+        """A dict that is not a report shape fails validation rather than passing."""
+        malformed: dict[str, object] = {"unknown_field": 1}
+        with pytest.raises(ValidationError):
+            ConsensusBuilder().build([malformed])

@@ -7,7 +7,7 @@ with ``Annotated[T, add]`` accumulate across nodes.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from operator import add
 from typing import Annotated, Any, TypedDict, cast
 
@@ -181,16 +181,35 @@ class StudioGraphState(TypedDict, total=False):
     execution_brief_ref: str
     consensus_report_ref: str
     assembly_manifest_ref: str
-    prompt_registry_ref: str
     provider_plan_ref: str
-    generation_schedule_ref: str
-    delivery_manifest_ref: str
 
     # ── Patch / feedback refs ─────────────────────────────────────────────
     gen_planning_patch_ref: str
     generation_patch_ref: str
     qc_patch_ref: str
     repair_feedback_ref: str
+    # Written by `_persist_planned_ledger` once the generation ledger is
+    # persisted, and returned by `generation_node`; read back by the
+    # generation-batch path. `generation_patch_ref` above was declared while
+    # this was not — a straight omission, not a deliberate private key.
+    generation_ledger_ref: str
+
+    # ── Internal plumbing that crosses a node boundary ────────────────────
+    # These are declared because nodes genuinely write and read them, so
+    # `undeclared_state_keys` was warning about each one on every persist.
+    # Declaring them names the owner and makes the crossing checkable.
+    #
+    # Set by `_track_matrix_row_updates` (qc) and consumed by
+    # `_emit_matrix_patch_from_findings`, which pops it. Transient: it must not
+    # survive the QC node, and `_graph_exec` also pops it before persisting.
+    # Holds `MatrixRowUpdate` models, not dicts — the writer appends model
+    # instances and the consumer passes them straight to `MatrixPatch`.
+    _pending_row_updates: list[Any]
+    # Written by `_open_kb_session` and read as the provenance
+    # `kb_context_ref` when an artifact is saved.
+    _last_kb_context_ref: str
+    # Set by the text-only generation path so a resumed run does not repeat it.
+    _text_only_generation_completed: bool
 
     # ── Append-only channels ──────────────────────────────────────────────
     artifact_refs: Annotated[list[str], merge_unique]
@@ -199,14 +218,21 @@ class StudioGraphState(TypedDict, total=False):
     generation_requests: Annotated[list[dict[str, object]], merge_generation_requests]
 
     # ── Snapshot channels ─────────────────────────────────────────────────
-    provider_health_snapshot: dict[str, object]
+    # `provider_health_snapshot` was declared here but is written and read
+    # nowhere in `src/`; the live key is the orchestrator-namespaced
+    # `_orchestrator__provider_health_snapshot` below. A declaration whose key
+    # no code path names is the same invisibility the `resolved_config_sources`
+    # comment describes, from the other direction, so it was deleted rather
+    # than left to look like a contract.
     resolved_config: dict[str, object]
     profile_stack: dict[str, str]
     # The producer (`config.resolve_project_config`) emits profile file
     # stems as a list; the declaration previously said `dict`, and the
     # mismatch was invisible because nothing reads this key.
     resolved_config_sources: list[str]
-    config_conflicts: list[dict[str, object]]
+    # The producer emits the raw conflict entries as `list[object]`, not as
+    # dicts, so the element type is `object`.
+    config_conflicts: list[object]
 
     # ── Operator annotations (persisted with project state) ──────────────
     _operator_comments: list[dict[str, Any]]
@@ -237,7 +263,7 @@ class StudioGraphState(TypedDict, total=False):
     _qc_raw_reports: Annotated[list[dict[str, Any]], add]
 
 
-def undeclared_state_keys(state: dict[str, Any]) -> list[str]:
+def undeclared_state_keys(state: Mapping[str, object]) -> list[str]:
     """Return the state keys that :class:`StudioGraphState` does not declare.
 
     The state schema declares every graph-state key with a type, but nothing

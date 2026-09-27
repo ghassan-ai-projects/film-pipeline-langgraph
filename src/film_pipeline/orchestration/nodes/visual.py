@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -25,15 +26,23 @@ from film_pipeline.orchestration.nodes._visual_matrix_coverage import (
     _load_script_scenes,
 )
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.matrix import MasterFilmMatrix
 
 
-def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(
-        new_state, phase="visual_dev", gate="visual_bible"
-    )
+def visual_dev_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    gate_updates = _phase_gate_updates(new_state, phase="visual_dev", gate="visual_bible")
+    # Seeded from the gate keys rather than `dict(gate_updates)`: the accumulator
+    # must be a plain mapping because `_propagate_side_effects` writes
+    # registry-driven channel keys into it, which a TypedDict rejects.
+    updates: dict[str, Any] = {
+        "current_phase": gate_updates["current_phase"],
+        "approved": gate_updates["approved"],
+        "human_approval_required": gate_updates["human_approval_required"],
+        "human_approval_phase": gate_updates["human_approval_phase"],
+    }
     new_refs: list[str] = []
 
     result = _run_agent(
@@ -60,7 +69,7 @@ def visual_dev_node(state: dict[str, Any]) -> dict[str, Any]:
     return updates
 
 
-def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
+def _ensure_execution_brief(new_state: StudioGraphState) -> None:
     """Load or extract the structural contract needed by shot generation.
 
     Persisted states from older runs may contain the cache key with a null
@@ -111,7 +120,7 @@ def _ensure_execution_brief(new_state: dict[str, Any]) -> None:
     new_state.setdefault("issues", []).extend(brief_issues)
 
 
-def _latest_execution_brief_ref(state: dict[str, Any]) -> str:
+def _latest_execution_brief_ref(state: Mapping[str, object]) -> str:
     """Return the latest stored execution-brief ref, if one exists."""
     services = _get_services(state)
     if services is None:
@@ -157,7 +166,7 @@ def _execution_brief_contract(brief: ExecutionBrief | None) -> str:
     )
 
 
-def _script_scene_ids(new_state: dict[str, Any]) -> list[str]:
+def _script_scene_ids(new_state: Mapping[str, object]) -> list[str]:
     """Return the scripted scene ids available for deterministic backfill."""
     services = _get_services(new_state)
     if services is None:
@@ -404,7 +413,7 @@ def _reconcile_durations(
 
 
 def _design_shot_matrix(
-    new_state: dict[str, Any], brief: ExecutionBrief | None = None
+    new_state: StudioGraphState, brief: ExecutionBrief | None = None
 ) -> Any | None:
     """Run the shot design agent, backfill scene coverage, reconcile, and save."""
     result = _run_agent(
@@ -435,7 +444,7 @@ def _design_shot_matrix(
     return shot_matrix
 
 
-def _validate_shot_structure_gate(new_state: dict[str, Any], shot_matrix: Any) -> None:
+def _validate_shot_structure_gate(new_state: StudioGraphState, shot_matrix: Any) -> None:
     """Validate the shot structure against the execution brief."""
     if shot_matrix is None:
         return
@@ -450,9 +459,9 @@ def _validate_shot_structure_gate(new_state: dict[str, Any], shot_matrix: Any) -
     new_state.setdefault("issues", []).extend(struct_issues)
 
 
-def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    original = state  # keep reference for diff computation
+def shot_bible_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    original: StudioGraphState = state  # keep reference for diff computation
     gate_updates = _phase_gate_updates(new_state, phase="shot_bible", gate="shot_bible")
     new_state.update(gate_updates)
 
@@ -475,7 +484,7 @@ def shot_bible_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_generation_plan_patch(
-    new_state: dict[str, Any],
+    new_state: StudioGraphState,
     shot_groups: list[Any],
     shot_matrix_ref: str,
 ) -> None:
@@ -523,7 +532,7 @@ def _build_generation_plan_patch(
         new_state.setdefault("artifact_refs", []).append(patch_ref)
 
 
-def _validate_planning_gate(new_state: dict[str, Any]) -> None:
+def _validate_planning_gate(new_state: StudioGraphState) -> None:
     """Validate planning completeness and script/shot scene references."""
     shot_matrix_ref = str(new_state.get("shot_matrix_ref", ""))
     if not shot_matrix_ref:
@@ -564,9 +573,9 @@ def _validate_planning_gate(new_state: dict[str, Any]) -> None:
         pass
 
 
-def gen_planning_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    original = state
+def gen_planning_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    original: StudioGraphState = state
     gate_updates = _phase_gate_updates(new_state, phase="gen_planning", gate="generation_spend")
     new_state.update(gate_updates)
 

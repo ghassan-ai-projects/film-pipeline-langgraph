@@ -148,3 +148,104 @@ work.
 The `extra="forbid"` experiment is the model — 96 failures became a work list.
 Analysis without a falsifiable check has been, in this session, the less
 productive half.
+
+## 7. Measured and rejected: flattening the orchestrator key constants
+
+**Decision: leave `orchestrator_state.py` lines 77–114 alone. Do not flatten the
+nine `f"{_ORCH_NS}__..."` constants to literals, and do not delete
+`_COMPUTED_KEY_WRITERS`.** Measured on `11a0f99`, clean tree.
+
+The proposal was: replace the nine computed module-constant state keys with
+literal-typed values, which would let the nine computed-key writers take
+`StudioGraphState` and let the guard's `_COMPUTED_KEY_WRITERS` table be deleted.
+
+It fails on two independent counts. Either one is sufficient.
+
+### 7.1 It breaks the channel-registry guard, as predicted
+
+`tests/unit/orchestration/test_channel_registry.py::_ast_orchestrator_keys`
+discovers the key set by matching `ast.JoinedStr` values containing a
+`FormattedValue` whose `Name.id == "_ORCH_NS"`. Flattening removes every such
+node. Reproduced by executing the guard's own discovery function against a
+flattened tree:
+
+| | constants discovered | registry rows | assertion |
+|---|---:|---:|---|
+| committed tree | 9 | 9 | passes |
+| flattened | **0** | 9 | `AssertionError: registry rows without orchestrator constant:` + all 9 |
+
+`test_every_orchestrator_constant_has_a_registry_row` fails on its **`unknown`**
+branch, not `missing` — the direction that reads as "the registry has rows for
+constants that no longer exist". The guard's discovery mechanism is the thing
+being broken, not the tree it grades. Note the guard would still *pass* if it
+had only the `missing` assertion, so this is a case of a guard whose two
+branches have different sensitivity: the failure surfaces on the weaker-tested
+one.
+
+### 7.2 It does not actually unlock the writers — this is the real blocker
+
+The premise is that a TypedDict rejects a computed key because the key is
+*computed*. It rejects it because the key is **a name**. Moving the string into
+the constant's value changes nothing: mypy resolves the name at the write site,
+not the value at the definition. Probed directly (`mypy --strict`):
+
+```python
+_CANDIDATE_REFS: str = "_orchestrator__candidate_refs"   # flattened literal
+
+def writer(state: StudioGraphState) -> None:
+    state[_CANDIDATE_REFS] = {}                  # error: [literal-required]
+    state.setdefault(_CANDIDATE_REFS, {})        # error: [misc]
+```
+
+`Final` does not rescue it either — `_X: Final = "_orchestrator__convergence"`
+still yields `Expected TypedDict key to be string literal [misc]`. Only the
+**literal spelled inline at the write site** type-checks:
+
+```python
+def writer_ok(state: StudioGraphState) -> None:
+    state["_orchestrator__candidate_refs"] = {}          # clean
+    state.setdefault("_orchestrator__convergence", {})   # clean
+```
+
+So the change that would delete `_COMPUTED_KEY_WRITERS` is not "flatten the
+constants" — it is "inline the literal spelling at all ~10 write sites and lose
+the single-definition constant", which is the opposite of the ownership
+direction this program has been moving in. The constants have 53 references in
+their own module; nine of them are the write sites, the rest are reads that
+currently work *because* the read path goes through `Mapping`.
+
+### 7.3 The exemption table is not what blocks the callers anyway
+
+The nine `_COMPUTED_KEY_WRITERS` rows are one row per writer function, and the
+boundary copies they sit behind are **deliberate, and not caused by the
+constants**:
+
+- `_agent_artifacts._publish_candidate_ref` *already takes* `StudioGraphState`,
+  then takes `dict(state)` explicitly to hand a dict to the helpers, then writes
+  the one changed key back by literal name. Its docstring states the reason.
+- `approval._orchestrator_working_state` builds a `_orchestrator__*`-filtered
+  **slice**, not a copy of state — the writers must not see non-orchestrator
+  keys, and `ensure_orchestrator_state` seeds defaults into it.
+
+Retyping the writers would not delete either copy, so the exemption rows would
+have to move rather than disappear.
+
+### 7.4 What this does *not* establish
+
+It does not establish that `_COMPUTED_KEY_WRITERS` is permanent, only that
+*this* step does not remove it. The table holds eleven rows: the nine writer
+functions named above, plus `compute_actions` and `remove_issues_by_code`,
+whose recorded reasons (transitive mutation through the fact port; plain-dict
+callers in `mcp`/`operations`) are unrelated to these constants and would
+outlive any flattening. Even in the best case the table would shrink by nine
+rows only under the inline-literal spelling, which trades a checkable exemption
+table for nine unstated copies of the same key strings. That is not a better
+trade.
+
+The scope of the proposed step was also overstated in its own framing: it is
+**nine** constants (lines 77–114), not ten, and nine writers, not ten.
+
+If this is ever revisited, the falsifiable check is the one used here, and it is
+cheap: run `_ast_orchestrator_keys()` against the modified module and assert it
+still returns the registered key set. That single command would have caught the
+guard break before any edit was committed.

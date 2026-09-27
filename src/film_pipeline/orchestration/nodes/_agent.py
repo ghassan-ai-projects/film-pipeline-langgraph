@@ -8,6 +8,7 @@ The historical import surface (``_run_agent``, ``_save_artifact``,
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -31,6 +32,7 @@ from film_pipeline.orchestration.nodes._context import (
     _model_overrides_for,
 )
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 if TYPE_CHECKING:
     from film_pipeline.agents.base import BaseAgent
@@ -48,7 +50,7 @@ __all__ = [
 
 
 def produced_artifact(
-    scope: dict[str, Any],
+    scope: Mapping[str, object],
     agent_id: str,
     result: dict[str, Any],
 ) -> Any:
@@ -66,7 +68,7 @@ def produced_artifact(
     return result.get(contract.produces)
 
 
-def _contract_for(scope: dict[str, Any], agent_id: str) -> AgentRegistration | None:
+def _contract_for(scope: Mapping[str, object], agent_id: str) -> AgentRegistration | None:
     """Look up a registered agent's contract; ``None`` when services are absent."""
     services = _get_services(scope)
     registry = services.agent_registry if services is not None else None
@@ -95,7 +97,7 @@ class _ModelOutcome:
 
 
 def _resolve_routing(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     phase: str,
     task_type: str,
@@ -129,7 +131,7 @@ def _resolve_routing(
 
 
 def _open_kb_session(
-    state: dict[str, Any],
+    state: StudioGraphState,
     services: GraphServices,
     agent_id: str,
     phase: str,
@@ -148,7 +150,7 @@ def _open_kb_session(
 
 
 def _generate_model_output(
-    state: dict[str, Any],
+    state: StudioGraphState,
     services: GraphServices,
     kb: KBContextPacket,
     routing: _Routing,
@@ -201,7 +203,7 @@ def _execute_agent(
     kb: KBContextPacket,
     task: str,
     model_output: dict[str, Any],
-    state: dict[str, Any],
+    state: Mapping[str, object],
 ) -> dict[str, Any]:
     """Instantiate the routed agent implementation and run it against the task."""
     impl = cast("type[BaseAgent]", routing.impl)
@@ -211,7 +213,7 @@ def _execute_agent(
 
 
 def _run_agent(
-    state: dict[str, Any],
+    state: StudioGraphState,
     agent_id: str,
     phase: str,
     task: str,

@@ -19,9 +19,12 @@ never by building a key themselves. The guard suite enforcing both rules is
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, cast
+
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 __all__ = [
     "ORCH_CHANNELS",
@@ -111,7 +114,7 @@ _PROVIDER_HEALTH_SNAPSHOT = f"{_ORCH_NS}__provider_health_snapshot"
 _EXECUTION_BRIEF = f"{_ORCH_NS}__execution_brief"
 
 
-def require_human_approval(state: dict[str, Any]) -> bool:
+def require_human_approval(state: Mapping[str, object]) -> bool:
     """Read the human-approval requirement from resolved graph config.
 
     Defaults to ``True`` when the key is missing or the config is
@@ -235,12 +238,12 @@ def init_refs(state: dict[str, Any]) -> None:
         state[_APPROVED_REFS] = {}
 
 
-def get_candidate_refs(state: dict[str, Any]) -> dict[str, str]:
+def get_candidate_refs(state: Mapping[str, object]) -> dict[str, str]:
     """Return the latest candidate ref for each artifact family."""
     return cast(dict[str, str], state.get(_CANDIDATE_REFS, {}))
 
 
-def get_approved_refs(state: dict[str, Any]) -> dict[str, str]:
+def get_approved_refs(state: Mapping[str, object]) -> dict[str, str]:
     """Return the latest approved ref for each artifact family."""
     return cast(dict[str, str], state.get(_APPROVED_REFS, {}))
 
@@ -256,7 +259,7 @@ def set_approved_ref(state: dict[str, Any], family: str, ref: str) -> None:
 
 
 def resolve_artifact(
-    state: dict[str, Any], family: str, *, require_approved: bool = False
+    state: Mapping[str, object], family: str, *, require_approved: bool = False
 ) -> str | None:
     """Resolve the best available ref for an artifact family.
 
@@ -275,11 +278,12 @@ def resolve_artifact(
 # --- Review cycles -----------------------------------------------------------
 
 
-def get_active_review_cycle(state: dict[str, Any], phase: str) -> dict[str, Any] | None:
+def get_active_review_cycle(state: Mapping[str, object], phase: str) -> dict[str, Any] | None:
     """Return the active review cycle for a phase, if any."""
-    cycles: list[dict[str, Any]] = state.get(_ACTIVE_REVIEW_CYCLES, [])
+    raw_cycles = state.get(_ACTIVE_REVIEW_CYCLES)
+    cycles = raw_cycles if isinstance(raw_cycles, list) else []
     for c in cycles:
-        if c.get("phase") == phase:
+        if isinstance(c, dict) and c.get("phase") == phase:
             return c
     return None
 
@@ -302,7 +306,7 @@ def start_review_cycle(
     return cycle
 
 
-def advance_review_round(state: dict[str, Any], phase: str) -> dict[str, Any] | None:
+def advance_review_round(state: Mapping[str, object], phase: str) -> dict[str, Any] | None:
     """Increment the round counter for an active review cycle."""
     cycle = get_active_review_cycle(state, phase)
     if cycle is None:
@@ -311,7 +315,9 @@ def advance_review_round(state: dict[str, Any], phase: str) -> dict[str, Any] | 
     return cycle
 
 
-def close_review_cycle(state: dict[str, Any], phase: str, *, status: str = "completed") -> None:
+def close_review_cycle(
+    state: Mapping[str, object], phase: str, *, status: str = "completed"
+) -> None:
     """Close the active review cycle for a phase."""
     cycle = get_active_review_cycle(state, phase)
     if cycle:
@@ -340,13 +346,14 @@ def add_revision_request(
     return revision
 
 
-def get_pending_revisions(state: dict[str, Any]) -> list[dict[str, Any]]:
+def get_pending_revisions(state: Mapping[str, object]) -> list[dict[str, Any]]:
     """Return all unresolved revision requests."""
-    revisions: list[dict[str, Any]] = state.get(_PENDING_REVISIONS, [])
-    return [r for r in revisions if not r.get("resolved", False)]
+    raw_revisions = state.get(_PENDING_REVISIONS)
+    revisions = raw_revisions if isinstance(raw_revisions, list) else []
+    return [r for r in revisions if isinstance(r, dict) and not r.get("resolved", False)]
 
 
-def get_all_revisions(state: dict[str, Any]) -> list[dict[str, Any]]:
+def get_all_revisions(state: Mapping[str, object]) -> list[dict[str, Any]]:
     """Return the whole revision slice, resolved entries included.
 
     The accessor exists for the node that must carry the slice across the
@@ -357,16 +364,21 @@ def get_all_revisions(state: dict[str, Any]) -> list[dict[str, Any]]:
     return list(revisions) if isinstance(revisions, list) else []
 
 
-def has_pending_revision(state: dict[str, Any]) -> bool:
+def has_pending_revision(state: Mapping[str, object]) -> bool:
     """Return True if any revision request is unresolved."""
     return len(get_pending_revisions(state)) > 0
 
 
-def resolve_revision(state: dict[str, Any], artifact_ref: str) -> None:
-    """Mark a revision request as resolved for a specific artifact."""
-    revisions: list[dict[str, Any]] = state.get(_PENDING_REVISIONS, [])
+def resolve_revision(state: Mapping[str, object], artifact_ref: str) -> None:
+    """Mark a revision request as resolved for a specific artifact.
+
+    ``Mapping`` rather than a plain dict so a graph-state TypedDict is accepted;
+    the entries are mutated in place, which the read-only container type allows.
+    """
+    pending = state.get(_PENDING_REVISIONS)
+    revisions: list[dict[str, Any]] = pending if isinstance(pending, list) else []
     for r in revisions:
-        if artifact_ref in r.get("artifact_refs", []):
+        if isinstance(r, dict) and artifact_ref in r.get("artifact_refs", []):
             r["resolved"] = True
             r["resolved_at"] = datetime.now().isoformat()
 
@@ -397,12 +409,12 @@ def record_routing_decision(
     return decision
 
 
-def get_routing_decisions(state: dict[str, Any]) -> list[dict[str, Any]]:
+def get_routing_decisions(state: Mapping[str, object]) -> list[dict[str, Any]]:
     """Return all routing decisions for this project."""
     return cast(list[dict[str, Any]], state.get(_ROUTING_DECISIONS, []))
 
 
-def get_latest_routing_decision(state: dict[str, Any]) -> dict[str, Any] | None:
+def get_latest_routing_decision(state: Mapping[str, object]) -> dict[str, Any] | None:
     """Return the most recent routing decision."""
     decisions = get_routing_decisions(state)
     return decisions[-1] if decisions else None
@@ -411,7 +423,7 @@ def get_latest_routing_decision(state: dict[str, Any]) -> dict[str, Any] | None:
 # --- Convergence tracking ----------------------------------------------------
 
 
-def get_convergence(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def get_convergence(state: Mapping[str, object]) -> dict[str, dict[str, Any]]:
     """Return the whole convergence slice, keyed by phase.
 
     The accessor exists so a node that needs to *carry* the slice across the
@@ -425,7 +437,7 @@ def get_convergence(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return deepcopy(raw) if isinstance(raw, dict) else {}
 
 
-def get_convergence_round(state: dict[str, Any], phase: str) -> int:
+def get_convergence_round(state: Mapping[str, object], phase: str) -> int:
     """Return the recorded round count for a phase, defaulting to 1.
 
     Reads through this accessor rather than indexing the slice so the
@@ -440,35 +452,43 @@ def get_convergence_round(state: dict[str, Any], phase: str) -> int:
     return int(phase_conv.get("round_count", 1) or 1)
 
 
-def init_convergence(state: dict[str, Any], phase: str) -> None:
+def init_convergence(state: StudioGraphState, phase: str) -> None:
     """Initialize convergence tracking for a phase."""
-    state.setdefault(_CONVERGENCE, {})[phase] = {
+    state.setdefault("_orchestrator__convergence", {})[phase] = {
         "round_count": 0,
         "stalled": False,
         "escalation_reason": "",
     }
 
 
-def increment_convergence_round(state: dict[str, Any], phase: str) -> int:
+def increment_convergence_round(state: StudioGraphState, phase: str) -> int:
     """Increment the convergence round counter. Returns the new count."""
-    conv = state.setdefault(_CONVERGENCE, {}).setdefault(
+    conv = state.setdefault("_orchestrator__convergence", {}).setdefault(
         phase, {"round_count": 0, "stalled": False, "escalation_reason": ""}
     )
     conv["round_count"] += 1
     return cast(int, conv["round_count"])
 
 
-def is_stalled(state: dict[str, Any], phase: str, *, max_rounds: int = 5) -> bool:
-    """Return True if the phase has exceeded the max rounds without converging."""
-    conv = state.get(_CONVERGENCE, {}).get(phase)
-    if conv is None:
+def is_stalled(state: Mapping[str, object], phase: str, *, max_rounds: int = 5) -> bool:
+    """Return True if the phase has exceeded the max rounds without converging.
+
+    Read-only. The key is the module constant ``_CONVERGENCE``, which a TypedDict
+    cannot be indexed by, so this reads structurally through ``Mapping`` rather
+    than naming ``StudioGraphState``.
+    """
+    raw = state.get(_CONVERGENCE, {})
+    if not isinstance(raw, dict):
+        return False
+    conv = raw.get(phase)
+    if not isinstance(conv, dict):
         return False
     return bool(conv.get("stalled", False)) or conv.get("round_count", 0) >= max_rounds
 
 
-def mark_stalled(state: dict[str, Any], phase: str, reason: str) -> None:
+def mark_stalled(state: StudioGraphState, phase: str, reason: str) -> None:
     """Mark a phase as non-convergent with a reason."""
-    conv = state.setdefault(_CONVERGENCE, {}).setdefault(
+    conv = state.setdefault("_orchestrator__convergence", {}).setdefault(
         phase, {"round_count": 0, "stalled": False, "escalation_reason": ""}
     )
     conv["stalled"] = True
@@ -483,18 +503,18 @@ def add_failure_decision(state: dict[str, Any], decision: dict[str, Any]) -> Non
     state.setdefault(_FAILURE_DECISIONS, []).append(decision)
 
 
-def get_failure_decisions(state: dict[str, Any]) -> list[dict[str, Any]]:
+def get_failure_decisions(state: Mapping[str, object]) -> list[dict[str, Any]]:
     """Return all failure decisions for this project."""
     return cast(list[dict[str, Any]], state.get(_FAILURE_DECISIONS, []))
 
 
-def get_latest_failure_decision(state: dict[str, Any]) -> dict[str, Any] | None:
+def get_latest_failure_decision(state: Mapping[str, object]) -> dict[str, Any] | None:
     """Return the most recent unresolved failure decision."""
     decisions = get_failure_decisions(state)
     return decisions[-1] if decisions else None
 
 
-def has_blocking_failure(state: dict[str, Any]) -> bool:
+def has_blocking_failure(state: Mapping[str, object]) -> bool:
     """Return True if any failure decision has severity='blocking'."""
     return any(d.get("severity") == "blocking" for d in get_failure_decisions(state))
 
@@ -509,12 +529,17 @@ def update_provider_health(state: dict[str, Any], provider_id: str, health: dict
     snapshot[provider_id] = health
 
 
-def get_provider_health_snapshot(state: dict[str, Any], provider_id: str) -> dict[str, Any] | None:
+def get_provider_health_snapshot(
+    state: Mapping[str, object], provider_id: str
+) -> dict[str, Any] | None:
     """Return the cached health state for a provider."""
-    return cast(dict[str, Any] | None, state.get(_PROVIDER_HEALTH_SNAPSHOT, {}).get(provider_id))
+    raw_snapshot = state.get(_PROVIDER_HEALTH_SNAPSHOT)
+    snapshot = raw_snapshot if isinstance(raw_snapshot, dict) else {}
+    health = snapshot.get(provider_id)
+    return health if isinstance(health, dict) else None
 
 
-def is_provider_blocked(state: dict[str, Any], provider_id: str) -> bool:
+def is_provider_blocked(state: Mapping[str, object], provider_id: str) -> bool:
     """Return True if the cached health status indicates the provider is blocked."""
     health = get_provider_health_snapshot(state, provider_id)
     if health is None:
@@ -523,44 +548,55 @@ def is_provider_blocked(state: dict[str, Any], provider_id: str) -> bool:
     return cast(bool, status.startswith("blocked_") or status == "disabled_by_user")
 
 
-def get_blocked_providers(state: dict[str, Any]) -> list[str]:
+def get_blocked_providers(state: Mapping[str, object]) -> list[str]:
     """Return the list of provider IDs that are currently blocked."""
-    snapshot = state.get(_PROVIDER_HEALTH_SNAPSHOT, {})
+    raw_snapshot = state.get(_PROVIDER_HEALTH_SNAPSHOT)
+    snapshot = raw_snapshot if isinstance(raw_snapshot, dict) else {}
     return [
         pid
         for pid, health in snapshot.items()
+        if isinstance(health, dict)
         if health.get("status", "").startswith("blocked_")
         or health.get("status") == "disabled_by_user"
     ]
 
 
-def get_healthy_providers(state: dict[str, Any]) -> list[str]:
+def get_healthy_providers(state: Mapping[str, object]) -> list[str]:
     """Return the list of provider IDs that are healthy or degraded."""
-    snapshot = state.get(_PROVIDER_HEALTH_SNAPSHOT, {})
+    raw_snapshot = state.get(_PROVIDER_HEALTH_SNAPSHOT)
+    snapshot = raw_snapshot if isinstance(raw_snapshot, dict) else {}
     return [
-        pid for pid, health in snapshot.items() if health.get("status") in ("healthy", "degraded")
+        pid
+        for pid, health in snapshot.items()
+        if isinstance(health, dict) and health.get("status") in ("healthy", "degraded")
     ]
 
 
 # --- Execution brief ---------------------------------------------------------
 
 
-def set_execution_brief(state: dict[str, Any], brief: Any) -> None:
+def set_execution_brief(state: StudioGraphState, brief: Any) -> None:
     """Cache the ExecutionBrief in orchestrator state.
 
     The brief is stored as a dict for serialisation compatibility with the
     graph state. Callers can pass either an ``ExecutionBrief`` instance or a
     dict with the same shape.
+
+    Takes the graph-state contract rather than a plain dict: the key is declared
+    in ``StudioGraphState``, and it is written below by its literal spelling.
+    ``_EXECUTION_BRIEF`` is the same string, but a TypedDict cannot be indexed by
+    a constant (``[literal-required]``), so the literal is used here and the
+    constant remains the one definition the *readers* resolve through.
     """
     if hasattr(brief, "model_dump"):
-        state[_EXECUTION_BRIEF] = brief.model_dump(mode="json")
+        state["_orchestrator__execution_brief"] = brief.model_dump(mode="json")
     elif isinstance(brief, dict):
-        state[_EXECUTION_BRIEF] = dict(brief)
+        state["_orchestrator__execution_brief"] = dict(brief)
     else:
-        state[_EXECUTION_BRIEF] = brief
+        state["_orchestrator__execution_brief"] = brief
 
 
-def get_execution_brief(state: dict[str, Any]) -> Any | None:
+def get_execution_brief(state: Mapping[str, object]) -> Any | None:
     """Return the cached ExecutionBrief from orchestrator state.
 
     Returns the raw cached dict/object. Callers should validate the shape
@@ -569,7 +605,7 @@ def get_execution_brief(state: dict[str, Any]) -> Any | None:
     return state.get(_EXECUTION_BRIEF)
 
 
-def has_execution_brief(state: dict[str, Any]) -> bool:
+def has_execution_brief(state: Mapping[str, object]) -> bool:
     """Return True if an ExecutionBrief exists in orchestrator state."""
     return bool(state.get(_EXECUTION_BRIEF))
 

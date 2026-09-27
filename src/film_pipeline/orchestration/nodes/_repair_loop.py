@@ -6,6 +6,8 @@ and returns control to the human gate instead of cycling forever.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, cast
 
 from film_pipeline.filmspec import blocking_issues
@@ -24,6 +26,7 @@ from film_pipeline.orchestration.nodes.visual import (
     visual_dev_node,
 )
 from film_pipeline.orchestration.nodes.wrapup import delivery_node, post_node
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 if TYPE_CHECKING:
     from film_pipeline.schemas.repair import (
@@ -51,7 +54,7 @@ _PHASE_NODES: dict[str, Any] = {
 
 
 def _start_round(
-    state: dict[str, Any], phase: str
+    state: StudioGraphState, phase: str
 ) -> tuple[int, dict[str, Any], dict[str, Any] | None]:
     """Advance convergence once; return (round_num, convergence_update, stall_update).
 
@@ -138,7 +141,7 @@ def _build_row_instructions(
 
 
 def _build_repair_feedback(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     phase: str,
     round_num: int,
     row_issues: dict[str, list[dict[str, str]]],
@@ -162,7 +165,7 @@ def _build_repair_feedback(
 
 
 def _persist_feedback(
-    state: dict[str, Any],
+    state: StudioGraphState,
     feedback: RepairFeedback,
     phase: str,
 ) -> None:
@@ -182,7 +185,7 @@ def _persist_feedback(
     state["_repair_feedback"] = feedback.to_agent_context()
 
 
-def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
+def repair_phase_node(state: StudioGraphState) -> dict[str, Any]:
     """Generic repair: re-run the current phase's agent to fix issues.
 
     Checks convergence tracking — after 3 repair rounds without resolution,
@@ -195,16 +198,18 @@ def repair_phase_node(state: dict[str, Any]) -> dict[str, Any]:
     # interrupt. The graph entry route marks that recovery case explicitly;
     # materialize the same revision update that await_approval would have
     # produced before entering the normal bounded repair loop.
-    revision_update: dict[str, Any] = {}
+    revision_update: StudioGraphState = {}
     if state.get("_resume_to_repair"):
         from film_pipeline.orchestration.nodes.approval import request_revision_node
         from film_pipeline.orchestration.state_schema import merge_issues
 
         revision_update = request_revision_node(state)
         existing_issues = list(state.get("issues", []) or [])
-        state = dict(state)
-        state.update(revision_update)
-        state["issues"] = merge_issues(existing_issues, revision_update.get("issues", []))
+        # `deepcopy` (not `dict(state)`) keeps the declared type: a plain dict
+        # copy is not assignable to the TypedDict.
+        merged: StudioGraphState = deepcopy(state)
+        merged["issues"] = merge_issues(existing_issues, revision_update.get("issues", []))
+        state = merged
 
     phase = str(state.get("current_phase", ""))
     phase_fn = _PHASE_NODES.get(phase)

@@ -16,6 +16,7 @@ from film_pipeline.orchestration.services import (
     GraphServices,
     _get_services,
 )
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import (
     AgentFamily,
@@ -44,7 +45,7 @@ def test_get_services_prefers_state_then_uses_context_fallback() -> None:
 
 
 def test_save_artifact_no_services(tmp_path: Path) -> None:
-    state: dict[str, object] = {}
+    state: StudioGraphState = {}
     ref = _save_artifact(state, Script(project_id="p1", title="T"), "script", "script")
     assert ref is None
 
@@ -52,9 +53,9 @@ def test_save_artifact_no_services(tmp_path: Path) -> None:
 def test_save_artifact_with_services(tmp_path: Path) -> None:
     store = ArtifactStore(root=tmp_path / "artifacts")
     services = GraphServices(artifact_store=store)
-    state = {
+    state: StudioGraphState = {
         "project_id": "p1",
-        SERVICES_KEY: services,
+        "_services": services,
     }
     ref = _save_artifact(state, Script(project_id="p1", title="T", scenes=[]), "script", "script")
     assert ref is not None
@@ -64,10 +65,10 @@ def test_save_artifact_with_services(tmp_path: Path) -> None:
 def test_save_artifact_records_kb_context_ref(tmp_path: Path) -> None:
     store = ArtifactStore(root=tmp_path / "artifacts")
     services = GraphServices(artifact_store=store)
-    state = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "_last_kb_context_ref": "kbctx:p1:agent:test-1234",
-        SERVICES_KEY: services,
+        "_services": services,
     }
     ref = _save_artifact(state, Script(project_id="p1", title="T", scenes=[]), "script", "script")
     assert ref is not None
@@ -80,10 +81,10 @@ def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) 
     services = GraphServices.for_mock_runtime(
         artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
     )
-    state: dict[str, object] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A test film.",
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     updates = script_node(state)
@@ -103,7 +104,7 @@ def test_script_node_persists_story_bible_and_script_separately(tmp_path: Path) 
 
 
 def test_run_agent_no_services() -> None:
-    state: dict[str, object] = {}
+    state: StudioGraphState = {}
     result = _run_agent(state, "test-agent", "script", "task")
     assert result == {"status": "no_services", "agent": "test-agent"}
 
@@ -112,7 +113,7 @@ def test_run_agent_not_found() -> None:
     """Dynamically-routed agent resolves to default for phase but registry is empty."""
     registry = AgentRegistry()
     services = GraphServices(agent_registry=registry)
-    state = {"project_id": "p1", SERVICES_KEY: services}
+    state: StudioGraphState = {"project_id": "p1", "_services": services}
     result = _run_agent(state, "nonexistent", "script", "task")
     # Routing resolves 'nonexistent' → 'screenwriter-agent' (default for script phase)
     # Empty registry → agent_not_found for resolved agent
@@ -138,7 +139,7 @@ def test_run_agent_no_impl() -> None:
     registry.register(contract)
     runner = PromptRunner(mock_responses={"task": {"output": "data"}})
     services = GraphServices(prompt_runner=runner, agent_registry=registry)
-    state = {"project_id": "p1", SERVICES_KEY: services}
+    state: StudioGraphState = {"project_id": "p1", "_services": services}
     result = _run_agent(state, "custom-review-agent", "script", "task", task_type="review")
     assert result["status"] == "no_impl"
     assert result["agent"] == "custom-review-agent"
@@ -186,10 +187,10 @@ def test_run_agent_with_intake_agent(tmp_path: Path) -> None:
         agent_registry=registry,
         artifact_store=store,
     )
-    state: dict[str, object] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A test film.",
-        SERVICES_KEY: services,
+        "_services": services,
     }
     result = _run_agent(
         state,
@@ -285,11 +286,11 @@ def test_run_agent_injects_artifact_content_into_prompt(tmp_path: Path) -> None:
         agent_registry=registry,
         artifact_store=store,
     )
-    state: dict[str, object] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A memory story.",
         "constitution_ref": "artifact:constitution:film_constitution:v1",
-        SERVICES_KEY: services,
+        "_services": services,
     }
     result = _run_agent(
         state,
@@ -386,12 +387,12 @@ def test_run_agent_applies_configured_artifact_context_budget(tmp_path: Path) ->
         agent_registry=registry,
         artifact_store=store,
     )
-    state: dict[str, object] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A memory story.",
         "constitution_ref": "artifact:constitution:film_constitution:v1",
         "resolved_config": {"context": {"max_chars_per_artifact": 700}},
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     result = _run_agent(

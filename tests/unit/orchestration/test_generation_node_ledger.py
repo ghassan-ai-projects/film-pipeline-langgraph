@@ -6,7 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from film_pipeline.orchestration.nodes import generation_node
-from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
+from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.film_constitution import FilmConstitution
@@ -83,7 +84,9 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
     shot_matrix_ref = _save_matrix(services.artifact_store, project_id)
     constitution_ref = _save_constitution(services.artifact_store, project_id)
 
-    state: dict[str, object] = {
+    # ``_services`` is spelled literally: a TypedDict key must be a string
+    # literal, so the ``SERVICES_KEY`` constant cannot be used here.
+    state: StudioGraphState = {
         "project_id": project_id,
         "shot_matrix_ref": shot_matrix_ref,
         "constitution_ref": constitution_ref,
@@ -97,7 +100,7 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
                 "prompt_ref": "",
             }
         ],
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     updates = generation_node(state)
@@ -125,7 +128,7 @@ def test_generation_node_creates_ledger_and_resolves_prompts(tmp_path: Path) -> 
 
 
 def test_generation_node_falls_back_without_services(tmp_path: Path) -> None:
-    state: dict[str, object] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "shot_matrix_ref": "artifact:shot_bible:shot_matrix:v1",
         "current_phase": "gen_planning",

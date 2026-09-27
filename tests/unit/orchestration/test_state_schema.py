@@ -78,6 +78,7 @@ class TestStudioGraphState:
         asserted away.
         """
         from film_pipeline.orchestration.nodes import intake_node
+        from film_pipeline.orchestration.state_schema import StudioGraphState
 
         state: dict[str, object] = {
             "project_id": "test",
@@ -85,7 +86,17 @@ class TestStudioGraphState:
             "idea": "a quiet film about a lighthouse keeper",
             "unrelated_channel": "must survive the merge",
         }
-        updates = intake_node(dict(state))
+        # The node's contract is `StudioGraphState`, whose keys are all
+        # declared — so `unrelated_channel` cannot be part of the typed input.
+        # It is seeded in `state` (the accumulated snapshot this test merges
+        # over) and kept out of `seeded`, the node's typed view of the same
+        # channels. The assertion below is what proves the node never echoes it.
+        seeded: StudioGraphState = {
+            "project_id": "test",
+            "current_phase": "intake",
+            "idea": "a quiet film about a lighthouse keeper",
+        }
+        updates = intake_node(seeded)
 
         assert isinstance(updates, dict)
         assert updates, "intake_node should report at least a phase update"

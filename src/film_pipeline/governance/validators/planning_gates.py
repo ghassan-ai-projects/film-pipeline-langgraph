@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.governance.validators._shared import (
@@ -97,7 +98,7 @@ def _clip_gate_issues(shot_matrix: Any) -> list[dict[str, Any]]:
 
 
 def validate_planning_completeness(
-    _state: dict[str, Any],
+    _state: Mapping[str, object],
     shot_matrix: Any,
 ) -> list[dict[str, Any]]:
     """Gate B: Check field completeness and that the plan has clips.
@@ -211,7 +212,7 @@ def _undispatchable_request_issues(requests: list[Any]) -> list[dict[str, Any]]:
 
 
 def validate_dispatch_readiness(
-    _state: dict[str, Any],
+    _state: Mapping[str, object],
     generation_requests: Any,
 ) -> list[dict[str, Any]]:
     """Gate C: Check that generation requests are dispatchable.

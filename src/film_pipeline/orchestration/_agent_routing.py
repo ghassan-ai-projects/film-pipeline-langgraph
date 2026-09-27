@@ -113,7 +113,7 @@ def _review_candidates(registry: Any) -> list[Any]:
     return candidates
 
 
-def _review_route(state: dict[str, Any], registry: Any, phase: str) -> AgentRouteResult:
+def _review_route(state: Mapping[str, object], registry: Any, phase: str) -> AgentRouteResult:
     """Review path: reviewer/validator agents with profile-driven strategy."""
     review_strategy = _resolve_review_strategy(state)
     candidates = _review_candidates(registry)
@@ -141,7 +141,7 @@ def _capability_route(registry: Any, phase: str, capability: str) -> AgentRouteR
 
 
 def route_agent(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     phase: str,
     task_type: str = "create",
     *,
@@ -201,7 +201,7 @@ def _build_kb_context_ref(agent: Any) -> str:
     return f"kbctx:{agent.agent_id}:{'+'.join(sorted(allowed))}"
 
 
-def _resolve_review_strategy(state: dict[str, Any]) -> str:
+def _resolve_review_strategy(state: Mapping[str, object]) -> str:
     """Resolve the review strategy from the active profile's resolved config."""
     resolved_config = state.get("resolved_config", {})
     if isinstance(resolved_config, dict):

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.orchestration.orchestrator_state import get_convergence_round
 from film_pipeline.orchestration.services import GraphServices, _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.artifact import ArtifactRef as _ArtifactRef
 from film_pipeline.schemas.base import ArtifactType as _ArtifactType
 from film_pipeline.schemas.base import FilmPhase
@@ -53,7 +55,7 @@ _AGENT_PROFILE_MAP: dict[str, str] = {
 }
 
 
-def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
+def _build_phase_context(state: Mapping[str, object]) -> dict[str, str]:
     """Build context vars for the orchestrator review agent.
 
     Summarises the target film, current phase output, and structural metrics
@@ -65,7 +67,7 @@ def _build_phase_context(state: dict[str, Any]) -> dict[str, str]:
     return ctx
 
 
-def _initial_phase_context(state: dict[str, Any]) -> dict[str, str]:
+def _initial_phase_context(state: Mapping[str, object]) -> dict[str, str]:
     """Default context values with the orchestrator convergence round resolved."""
     ctx: dict[str, str] = {
         "target_runtime_seconds": str(state.get("target_runtime_seconds", "300")),
@@ -84,7 +86,7 @@ def _initial_phase_context(state: dict[str, Any]) -> dict[str, str]:
     return ctx
 
 
-def _constitution_summary(state: dict[str, Any]) -> str:
+def _constitution_summary(state: Mapping[str, object]) -> str:
     """Constitution digest for prompts, or the placeholder when unavailable."""
     constitution_ref = state.get("constitution_ref", "")
     if not (constitution_ref and isinstance(constitution_ref, str) and constitution_ref.strip()):
@@ -230,7 +232,7 @@ def _metrics_summary(target: int, scenes: int, shots: int) -> str:
     return "\n".join(metrics_parts) if metrics_parts else "(no metrics)"
 
 
-def _consistency_warnings_text(state: dict[str, Any]) -> str:
+def _consistency_warnings_text(state: Mapping[str, object]) -> str:
     """Joined consistency warnings, truncated past 800 chars."""
     warnings = state.get("consistency_warnings", [])
     if not warnings:
@@ -241,7 +243,7 @@ def _consistency_warnings_text(state: dict[str, Any]) -> str:
     return text
 
 
-def _apply_phase_output_sections(state: dict[str, Any], ctx: dict[str, str]) -> None:
+def _apply_phase_output_sections(state: Mapping[str, object], ctx: dict[str, str]) -> None:
     """Fill phase output summary, metrics, and warnings sections in place.
 
     No-op when services are unavailable so the placeholder defaults survive.
@@ -268,7 +270,7 @@ def _apply_phase_output_sections(state: dict[str, Any], ctx: dict[str, str]) -> 
     ctx["consistency_warnings"] = _consistency_warnings_text(state)
 
 
-def _build_dependency_map(state: dict[str, Any]) -> dict[str, str]:
+def _build_dependency_map(state: Mapping[str, object]) -> dict[str, str]:
     """Build built_from map from current state artifact refs."""
     ref_keys = [
         "profile_ref",
@@ -334,7 +336,7 @@ _UPSTREAM_CONTENT_SOURCES: dict[str, tuple[str, str]] = {
 
 
 def _inject_artifact_context(
-    state: dict[str, Any],
+    state: StudioGraphState,
     services: GraphServices,
     context_vars: dict[str, str],
 ) -> None:
@@ -355,7 +357,7 @@ def _inject_artifact_context(
 
 
 def _compact_upstream_content(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     project_id: str,
     ref: str,
@@ -372,7 +374,7 @@ def _compact_upstream_content(
 
 
 def _record_context_load_failure(
-    state: dict[str, Any],
+    state: StudioGraphState,
     ref_key: str,
     ref: str,
     exc: Exception,
@@ -392,7 +394,7 @@ def _record_context_load_failure(
         failures.append(ref_key)
 
 
-def _model_overrides_for(state: dict[str, Any], model_profile: str) -> dict[str, Any] | None:
+def _model_overrides_for(state: Mapping[str, object], model_profile: str) -> dict[str, Any] | None:
     """Return per-profile model overrides from resolved config, if any.
 
     Profiles may declare a ``model_profiles`` map to swap the model or sampling
@@ -409,7 +411,7 @@ def _model_overrides_for(state: dict[str, Any], model_profile: str) -> dict[str,
     return override if isinstance(override, dict) and override else None
 
 
-def _inject_config_context(state: dict[str, Any], context_vars: dict[str, str]) -> None:
+def _inject_config_context(state: Mapping[str, object], context_vars: dict[str, str]) -> None:
     """Expose resolved config details that matter for planning prompts."""
     resolved_config = state.get("resolved_config", {})
     if not isinstance(resolved_config, dict):
@@ -436,7 +438,7 @@ def _preferred_providers(providers: Any) -> list[str]:
     return []
 
 
-def _artifact_context_max_chars(state: dict[str, Any]) -> int:
+def _artifact_context_max_chars(state: Mapping[str, object]) -> int:
     resolved_config = state.get("resolved_config", {})
     if not isinstance(resolved_config, dict):
         return DEFAULT_MAX_CONTEXT_CHARS

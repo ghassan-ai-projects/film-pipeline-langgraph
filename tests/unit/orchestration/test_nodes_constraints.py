@@ -7,7 +7,8 @@ from typing import Any
 from pytest import MonkeyPatch
 
 from film_pipeline.orchestration.nodes import _run_agent, intake_node
-from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
+from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.studio.mock_responses import default_mock_responses
 
@@ -18,14 +19,14 @@ def test_intake_node_extracts_constraints_and_persists_artifact(
     services = GraphServices.for_mock_runtime(
         artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
     )
-    state: dict[str, Any] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": (
             "A dark 4 minute sci-fi thriller with 8 scenes, no violence, "
             "themes: isolation, technology."
         ),
         "constraints_hints": {"target_audience": "adults"},
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     updates = intake_node(state)
@@ -51,10 +52,10 @@ def test_intake_node_constraints_seed_scene_count_for_scope_contract(
     services = GraphServices.for_mock_runtime(
         artifacts_root=str(tmp_path / "artifacts"), mock_responses=default_mock_responses()
     )
-    state: dict[str, Any] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A short film with exactly 5 scenes.",
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     updates = intake_node(state)
@@ -97,7 +98,7 @@ def test_run_agent_includes_constraints_in_context_vars(
 
     monkeypatch.setattr(services.prompt_runner, "run_from_template", fake_run_from_template)
 
-    state: dict[str, Any] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A hopeful 90 second film.",
         "constraints": {
@@ -106,7 +107,7 @@ def test_run_agent_includes_constraints_in_context_vars(
             "tone": "hopeful",
             "themes": ["friendship"],
         },
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     _run_agent(
@@ -161,10 +162,10 @@ def test_run_agent_constraints_default_empty_when_absent(
 
     monkeypatch.setattr(services.prompt_runner, "run_from_template", fake_run_from_template)
 
-    state: dict[str, Any] = {
+    state: StudioGraphState = {
         "project_id": "p1",
         "idea": "A short film.",
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
     _run_agent(

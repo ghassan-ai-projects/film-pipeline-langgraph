@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -11,6 +12,7 @@ from film_pipeline.orchestration.nodes._context import (
     _parse_ref,
 )
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.base import ArtifactType as _ArtifactType
 
 if TYPE_CHECKING:
@@ -38,19 +40,28 @@ def _resolve_artifact_type(artifact_type: str | None, artifact: Any) -> _Artifac
     return _infer_artifact_type(artifact)
 
 
-def _publish_candidate_ref(state: dict[str, Any], artifact_id: str, ref: str) -> None:
-    """Record the candidate ref in orchestrator state."""
+def _publish_candidate_ref(state: StudioGraphState, artifact_id: str, ref: str) -> None:
+    """Record the candidate ref in orchestrator state.
+
+    ``ensure_orchestrator_state``/``set_candidate_ref`` write under *computed*
+    module-constant keys, which a TypedDict cannot be indexed by
+    (``[literal-required]``), so they take a plain dict. The copy at the
+    boundary is what makes the two contracts meet without a ``cast``; the one
+    key this function actually changes is then written back by its literal name.
+    """
     from film_pipeline.orchestration.orchestrator_state import (
         ensure_orchestrator_state,
         set_candidate_ref,
     )
 
-    ensure_orchestrator_state(state)
-    set_candidate_ref(state, artifact_id, ref)
+    mutable_state: dict[str, Any] = dict(state)
+    ensure_orchestrator_state(mutable_state)
+    set_candidate_ref(mutable_state, artifact_id, ref)
+    state["_orchestrator__candidate_refs"] = mutable_state["_orchestrator__candidate_refs"]
 
 
 def _build_artifact_metadata(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: GraphServices,
     artifact_id: str,
     artifact_type: _ArtifactType,
@@ -69,7 +80,8 @@ def _build_artifact_metadata(
     project_id = str(state.get("project_id", ""))
     version = services.artifact_store.next_version(project_id, provenance.phase, artifact_id)
     parents: list[ArtifactRef] = []
-    for raw_ref in state.get("artifact_refs", []):
+    raw_refs = state.get("artifact_refs")
+    for raw_ref in raw_refs if isinstance(raw_refs, list) else []:
         try:
             parents.append(_parse_ref(raw_ref))
         except ValueError:
@@ -92,7 +104,7 @@ def _build_artifact_metadata(
 
 
 def _resolve_provenance(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     phase: str,
     *,
     change_summary: str,
@@ -100,18 +112,21 @@ def _resolve_provenance(
     kb_context_ref: str | None,
 ) -> _ArtifactProvenance:
     """Capture provenance once per save, defaulting to the current graph context."""
+    stored_ref = state.get("_last_kb_context_ref")
     return _ArtifactProvenance(
         phase=phase,
         built_from=built_from if built_from is not None else _build_dependency_map(state),
         kb_context_ref=(
-            kb_context_ref if kb_context_ref is not None else state.get("_last_kb_context_ref")
+            kb_context_ref
+            if kb_context_ref is not None
+            else (str(stored_ref) if stored_ref is not None else None)
         ),
         change_summary=change_summary,
     )
 
 
 def _save_artifact(
-    state: dict[str, Any],
+    state: StudioGraphState,
     artifact: Any,
     artifact_id: str,
     phase: str,

@@ -22,6 +22,10 @@ If two options both work, choose the one that is easier to read, easier to test,
 
 Before editing code, plan: files to touch, why each is needed, validation commands, risks.
 
+A plan is a starting point, not a deliverable — see
+[Run the command; do not narrate it](#run-the-command-do-not-narrate-it). State the
+next action and take it in the same turn.
+
 ## Build, Test, and Lint
 
 Primary commands:
@@ -263,6 +267,40 @@ deleting it; it was a live member of the failure taxonomy.
    round of code plus tests produced more than all of them.
 5. State what the slice does **not** establish. Analysis that is not backed by a
    falsifiable check is the less productive half.
+
+### Run the command; do not narrate it
+
+A plan is not progress. The state-typing migration is the cautionary example: it
+was estimated at roughly four rounds and took twelve, because several rounds
+ended with a description of the next step instead of its result — "let me look at
+`repair_phase_node`", "I'll extract the offender list", "I'll build the exemption
+table" — each followed by no tool call. The code that eventually landed was the
+same code the earlier rounds had already scoped; only the clock changed.
+
+The cost is not the wasted tokens. A narrated step cannot fail, so it cannot
+correct you, and the plan silently outranks the tree. Twice in that program the
+narration was *wrong* and only execution revealed it: the assumption that the
+graph state was untyped (it was `StudioGraphState` already, wired to
+`StateGraph`, with 0 of 47 functions naming it), and an AST classifier asserted
+to find mutators that missed nested, transitive and accumulator mutation three
+separate times. Both errors survived exactly as long as they went unexecuted.
+
+So:
+
+- **If the next step is a command, run it in the same turn you describe it.**
+  Reading a file, grepping, running mypy — these are cheap and they are the
+  evidence. Prose about them is not.
+- **A claim you have not re-measured is a memory, not a fact.** Re-read the
+  tree before acting on an earlier round's summary, including your own: a
+  subagent's "the baseline is 67 errors" was stale within the hour, and a
+  `grep -c "^PASSED"` under `pytest-xdist` interleaves output and miscounts —
+  both cost a round.
+- **Prefer the smallest command that could prove you wrong.** `pytest -rA` on
+  the one failing test beats reasoning about which test fails.
+- **When a step stalls twice, change the step, not the wording.** Two rounds
+  spent restating the same plan is the signal that the plan is the problem —
+  usually it is too large, or it is waiting on a decision that should have been
+  made already.
 
 ## Operating Rules
 

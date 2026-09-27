@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.governance.validators._shared import (
@@ -12,7 +13,7 @@ from film_pipeline.schemas.execution_brief import ExecutionBrief
 # ── Helpers: load ExecutionBrief from state or artifact store ─────────────
 
 
-def _load_brief_from_state(state: dict[str, Any]) -> ExecutionBrief | None:
+def _load_brief_from_state(state: Mapping[str, object]) -> ExecutionBrief | None:
     """Load the brief cached in orchestrator state, coerced to the model.
 
     ``set_execution_brief`` persists ``model_dump(mode="json")``, so live
@@ -29,7 +30,7 @@ def _load_brief_from_state(state: dict[str, Any]) -> ExecutionBrief | None:
         return None
 
 
-def _load_brief_from_store(state: dict[str, Any], store: Any) -> ExecutionBrief | None:
+def _load_brief_from_store(state: Mapping[str, object], store: Any) -> ExecutionBrief | None:
     """Load the ExecutionBrief from the artifact store."""
     if store is None:
         return None
@@ -66,7 +67,7 @@ def _load_brief_from_store(state: dict[str, Any], store: Any) -> ExecutionBrief 
     return None
 
 
-def load_execution_brief(state: dict[str, Any], store: Any = None) -> ExecutionBrief | None:
+def load_execution_brief(state: Mapping[str, object], store: Any = None) -> ExecutionBrief | None:
     """Load the ExecutionBrief, trying the state cache first, then the store."""
     brief = _load_brief_from_state(state)
     if brief is not None:
@@ -161,7 +162,7 @@ def _scene_coverage_issues(bible_data: dict[str, Any], total_shots: int) -> list
 
 
 def _story_bible_cross_check(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     brief: ExecutionBrief,
     total_shots: int,
     store: Any = None,
@@ -194,7 +195,7 @@ def _story_bible_cross_check(
 
 
 def validate_execution_brief(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     brief: ExecutionBrief,
     store: Any = None,
 ) -> list[dict[str, Any]]:

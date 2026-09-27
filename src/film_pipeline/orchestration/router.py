@@ -15,6 +15,7 @@ of truth for all routing-relevant state beyond the base graph fields.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.filmspec import PHASE_GATES as APPROVAL_GATES
@@ -51,7 +52,7 @@ __all__ = [
 
 
 def get_blockers_for_state(
-    state: dict[str, Any], *, routing: RouterResult | None = None
+    state: Mapping[str, object], *, routing: RouterResult | None = None
 ) -> list[dict[str, str]]:
     """Return one canonical, deduplicated blocker list for live project state.
 

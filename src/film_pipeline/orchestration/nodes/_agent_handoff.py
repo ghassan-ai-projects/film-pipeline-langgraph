@@ -14,16 +14,19 @@ channel-registry parity tests enforce.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
+
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 if TYPE_CHECKING:
     from film_pipeline.orchestration.router import AgentRouteResult
 
 
 def _propagate_append_only_entries(
-    source: dict[str, Any],
+    source: Mapping[str, object],
     dest: dict[str, Any],
-    original: dict[str, Any] | None,
+    original: Mapping[str, object] | None,
     key: str,
 ) -> None:
     """Propagate only entries appended after the node's input snapshot.
@@ -31,21 +34,28 @@ def _propagate_append_only_entries(
     ``issues`` and ``validation_report_refs`` are append-only reducer channels;
     slicing against ``original`` keeps the reducer from re-appending entries
     the node merely carried through.
+
+    ``source``/``original`` are read-only graph state. ``dest`` is the caller's
+    partial-update accumulator, written under a *computed* channel key, so it
+    has to stay ``dict[str, Any]``: a TypedDict cannot be indexed by a computed
+    key (``TypedDict key must be a string literal [literal-required]``).
     """
     if key not in source:
         return
-    entries = list(source.get(key, []) or [])
+    raw = source.get(key)
+    entries = list(raw) if isinstance(raw, list) else []
     if original is not None:
-        prior = len(list(original.get(key, []) or []))
+        prior_raw = original.get(key)
+        prior = len(prior_raw) if isinstance(prior_raw, list) else 0
         entries = entries[prior:]
     if entries or original is None:
         dest[key] = entries
 
 
 def _propagate_side_effects(
-    source: dict[str, Any],
+    source: Mapping[str, object],
     dest: dict[str, Any],
-    original: dict[str, Any] | None = None,
+    original: Mapping[str, object] | None = None,
 ) -> None:
     """Copy registered side-effect keys from ``source`` to ``dest``.
 
@@ -56,6 +66,9 @@ def _propagate_side_effects(
 
     When ``original`` (the node's input state) is provided, append-only
     reducer channels contribute only newly appended entries.
+
+    ``dest`` is the caller's partial-update accumulator, written under computed
+    channel keys, so it stays ``dict[str, Any]`` rather than a TypedDict.
     """
     from film_pipeline.orchestration.orchestrator_state import ORCH_CHANNELS
 
@@ -73,7 +86,7 @@ def _propagate_side_effects(
         dest[spec.key] = value
 
 
-def _prepend_repair_feedback(task: str, state: dict[str, Any]) -> str:
+def _prepend_repair_feedback(task: str, state: Mapping[str, object]) -> str:
     """Prefix ``task`` with repair feedback injected by repair_phase_node."""
     feedback = str(state.get("_repair_feedback", "") or "")
     if feedback:
@@ -82,7 +95,7 @@ def _prepend_repair_feedback(task: str, state: dict[str, Any]) -> str:
 
 
 def _capture_run_outcome(
-    state: dict[str, Any],
+    state: StudioGraphState,
     result: dict[str, Any],
     had_feedback: bool,
 ) -> dict[str, Any]:
@@ -107,7 +120,7 @@ def _is_duplicate_handoff(routes: list[dict[str, Any]], phase: str, task: str) -
 
 
 def _record_handoff(
-    state: dict[str, Any],
+    state: StudioGraphState,
     agent_id: str,
     phase: str,
     task: str,

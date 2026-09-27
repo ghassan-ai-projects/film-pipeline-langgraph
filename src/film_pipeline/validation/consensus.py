@@ -20,10 +20,22 @@ class ConsensusBuilder:
 
     def build(
         self,
-        reports: list[ValidationReport],
+        reports: list[ValidationReport] | list[dict[str, object]],
         artifact_refs: list[str] | None = None,
     ) -> ConsensusReport:
-        """Synthesize multiple reviewer reports into one consensus."""
+        """Synthesize multiple reviewer reports into one consensus.
+
+        ``reports`` accepts either the models or their serialized mappings,
+        because the two real callers differ: ``_validation_reports`` in graph
+        state holds ``report.model_dump()`` output (every writer and every other
+        reader in the tree treats it as dicts), while direct callers pass models.
+        Coercing here rather than narrowing the parameter keeps the synthesis
+        logic below object-typed; taking the dicts on trust and attribute-accessing
+        them raised ``AttributeError: 'dict' object has no attribute
+        'validator_id'`` on the QC path, which a bare ``except Exception`` then
+        swallowed silently.
+        """
+        reports = [_as_report(report) for report in reports]
         if not reports:
             return ConsensusReport(
                 review_id=_new_review_id(),
@@ -58,6 +70,28 @@ class ConsensusBuilder:
 def _new_review_id() -> str:
     """Fresh identifier for one synthesized consensus report."""
     return f"consensus:{uuid4().hex[:8]}"
+
+
+class UnknownReportShapeError(ValueError):
+    """Raised when a consensus input is neither a report nor a report mapping."""
+
+
+def _as_report(report: ValidationReport | dict[str, object]) -> ValidationReport:
+    """Coerce one consensus input to a :class:`ValidationReport`.
+
+    A mapping is re-validated through the model rather than read by key, so a
+    malformed entry fails loudly here instead of silently contributing a wrong
+    score. A non-mapping that is not already a report is a programming error and
+    is reported as one.
+    """
+    if isinstance(report, ValidationReport):
+        return report
+    if isinstance(report, dict):
+        return ValidationReport.model_validate(report)
+    raise UnknownReportShapeError(
+        "consensus inputs must be ValidationReport or its mapping form, got "
+        f"{type(report).__name__}"
+    )
 
 
 def _reviewer_scores(reports: list[ValidationReport]) -> list[ReviewerScore]:

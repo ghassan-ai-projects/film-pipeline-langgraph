@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -17,12 +18,12 @@ class _ConcreteAgent(BaseAgent):
 
     def prepare(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: KBContextPacket,
         task: str,
     ) -> dict[str, Any]:
         _ = kb_context  # Used in real agents, not in test stub
-        return {"state": state, "task": task}
+        return {"state": dict(state), "task": task}
 
     def execute(self, model_output: dict[str, Any]) -> dict[str, Any]:
         return {"result": model_output.get("value", "empty")}

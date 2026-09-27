@@ -2,9 +2,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.schemas.base import IssueSeverity
+
+
+def _state_int(state: Mapping[str, object], key: str, default: int = 0) -> int:
+    """Read an integer state value, falling back to ``default`` when unusable.
+
+    A ``Mapping[str, object]`` read yields ``object``, so the coercion has to be
+    explicit. Persisted state degrades through ``str()`` on the write path, so a
+    value here may legitimately be a string or missing; anything that is neither
+    an int nor a digit string yields ``default`` rather than raising.
+    """
+    value = state.get(key)
+    if isinstance(value, bool) or value is None:
+        return default
+    if isinstance(value, int):
+        return value
+    try:
+        return int(str(value))
+    except ValueError:
+        return default
 
 
 def _blocking(code: str, message: str) -> dict[str, Any]:

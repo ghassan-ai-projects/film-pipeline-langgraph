@@ -5,6 +5,7 @@ Phase 3: informational staleness warnings. Non-blocking until Phase 6.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 
@@ -38,7 +39,7 @@ def _staleness_warnings(
 
 def check_staleness(
     artifact_ref: str,
-    state: dict[str, Any],
+    state: Mapping[str, object],
     store: Any,
     approved_refs: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
@@ -70,12 +71,17 @@ def check_staleness(
 
 
 def check_phase_consistency(
-    state: dict[str, Any],
+    state: Mapping[str, object],
     services: Any,
     approved_refs: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """Run staleness checks on all artifacts created in the current phase."""
-    artifact_refs = state.get("artifact_refs", [])
+    refs = state.get("artifact_refs", [])
+    # A `Mapping[str, object]` read yields `object`, and this channel holds a
+    # list of ref strings. Coerced explicitly rather than asserted: the channel
+    # degrades through `str()` on the write path, so an unexpected shape should
+    # yield no refs here rather than raise inside a validator.
+    artifact_refs = [str(ref) for ref in refs] if isinstance(refs, list) else []
     store = services.artifact_store
 
     all_warnings: list[dict[str, Any]] = []

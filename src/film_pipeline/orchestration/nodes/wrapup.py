@@ -1,4 +1,12 @@
-"""Wrap-up phase nodes: post, delivery, and the consistency check."""
+"""Wrap-up phase nodes: post, delivery, and the consistency check.
+
+Nodes take the graph state contract (``StudioGraphState``) and return a partial
+update. The return stays ``dict[str, Any]`` rather than the TypedDict because
+``_propagate_side_effects`` writes the accumulator under *computed* channel keys
+(from ``ORCH_CHANNELS``), and a TypedDict cannot be indexed by a computed key
+(``TypedDict key must be a string literal [literal-required]``). Declaring the
+TypedDict return would require a ``cast``, which this migration forbids.
+"""
 
 from __future__ import annotations
 
@@ -15,11 +23,12 @@ from film_pipeline.orchestration.nodes._shared import (
     _phase_gate_updates,
 )
 from film_pipeline.orchestration.services import _get_services
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 
-def post_node(state: dict[str, Any]) -> dict[str, Any]:
-    new_state = deepcopy(state)
-    updates: dict[str, Any] = _phase_gate_updates(new_state, phase="post", gate="assembly")
+def post_node(state: StudioGraphState) -> dict[str, Any]:
+    new_state: StudioGraphState = deepcopy(state)
+    updates: dict[str, Any] = dict(_phase_gate_updates(new_state, phase="post", gate="assembly"))
     new_refs: list[str] = []
 
     result = _run_agent(
@@ -37,15 +46,15 @@ def post_node(state: dict[str, Any]) -> dict[str, Any]:
 
     if new_refs:
         updates["artifact_refs"] = new_refs
-    _propagate_side_effects(new_state, updates, state)
+    _propagate_side_effects(new_state, updates, dict(state))
     return updates
 
 
-def delivery_node(state: dict[str, Any]) -> dict[str, Any]:
+def delivery_node(state: StudioGraphState) -> StudioGraphState:
     return _phase_gate_updates(state, phase="delivery", gate="final_delivery")
 
 
-def consistency_check_node(state: dict[str, Any]) -> dict[str, Any]:
+def consistency_check_node(state: StudioGraphState) -> dict[str, Any]:
     """Post-phase consistency check: are our outputs still valid?
 
     Runs staleness detection on all artifacts created in the current phase.
@@ -59,6 +68,9 @@ def consistency_check_node(state: dict[str, Any]) -> dict[str, Any]:
     from film_pipeline.orchestration.orchestrator_state import get_approved_refs
 
     # `governance` sits below `orchestration` and must not read orchestrator
-    # state itself, so the approved-ref registry is supplied from here.
-    warnings = check_phase_consistency(state, services, get_approved_refs(state))
+    # state itself, so the approved-ref registry is supplied from here. Its
+    # helpers still take `dict[str, Any]` (naming StudioGraphState there would
+    # be the forbidden back-edge), hence the plain copy at this boundary.
+    mutable_state: dict[str, Any] = dict(state)
+    warnings = check_phase_consistency(mutable_state, services, get_approved_refs(mutable_state))
     return {"consistency_warnings": warnings} if warnings else {}

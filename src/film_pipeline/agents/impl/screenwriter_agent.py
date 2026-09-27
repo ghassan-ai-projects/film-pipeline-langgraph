@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
@@ -32,7 +33,7 @@ class ScreenwriterAgent(BaseAgent):
 
     def prepare(
         self,
-        state: dict[str, Any],
+        state: Mapping[str, object],
         kb_context: object,
         task: str,
     ) -> dict[str, Any]:

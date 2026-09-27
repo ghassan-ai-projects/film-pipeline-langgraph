@@ -10,6 +10,7 @@ from film_pipeline.orchestration.nodes._generation_prompts import (
     _resolve_prompt_for_request,
 )
 from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
@@ -27,7 +28,7 @@ def _parse_generation_mode(mode_str: str) -> GenerationMode:
 
 
 def _resolve_request_prompts(
-    new_state: dict[str, Any],
+    new_state: StudioGraphState,
     services: GraphServices,
 ) -> list[dict[str, Any]]:
     """Stamp each generation request with its resolved prompt text."""
@@ -37,12 +38,16 @@ def _resolve_request_prompts(
     matrix_rows = _load_matrix_rows(new_state, services)
 
     resolved_requests: list[dict[str, Any]] = []
-    for req in gen_requests:
-        if not isinstance(req, dict):
-            continue
-        req = dict(req)
+    for raw_req in gen_requests:
+        # No `isinstance(raw_req, dict)` guard: `generation_requests` is declared
+        # `list[dict[str, object]]` on StudioGraphState, so the check is provably
+        # always true and mypy reports it as unreachable.
+        req: dict[str, Any] = dict(raw_req)
         resolved_prompt = _resolve_prompt_for_request(new_state, services, req, matrix_rows)
-        req.setdefault("prompt_payload", {})["resolved_prompt"] = resolved_prompt
+        payload = req.get("prompt_payload")
+        request_payload: dict[str, Any] = payload if isinstance(payload, dict) else {}
+        request_payload["resolved_prompt"] = resolved_prompt
+        req["prompt_payload"] = request_payload
         resolved_requests.append(req)
     new_state["generation_requests"] = resolved_requests
     return resolved_requests
@@ -68,7 +73,7 @@ def _group_requests_by_batch(
 
 
 def _persist_planned_ledger(
-    new_state: dict[str, Any],
+    new_state: StudioGraphState,
     mgr: GenerationLedgerManager,
     project_id: str,
 ) -> None:
@@ -95,7 +100,7 @@ def _persist_planned_ledger(
     new_state.setdefault("artifact_refs", []).append(ledger_ref)
 
 
-def _plan_generation_ledger(new_state: dict[str, Any], services: GraphServices | None) -> None:
+def _plan_generation_ledger(new_state: StudioGraphState, services: GraphServices | None) -> None:
     """Resolve prompts, plan the batch by grouping key, approve spend, persist ledger."""
     gen_requests = new_state.get("generation_requests")
     if not gen_requests or services is None:

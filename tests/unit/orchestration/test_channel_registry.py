@@ -229,6 +229,10 @@ WRITER_DISPOSITIONS: dict[tuple[str, str], str] = {
         "known-dropped:headless auto-revise feedback dies at the "
         "request_revision_node boundary; triage with D13/P1 wire-or-delete"
     ),
+    # `_merge_external_fixes` previously rebuilt state as `{**state, "issues": ...}`,
+    # which the AST sweep could not see. Typing the return as the contract made an
+    # explicit `merged["issues"] = ...` necessary, so the same write is now visible.
+    ("approval.py", "issues"): "explicit-writer",
     ("generation.py", "artifact_refs"): "explicit-writer",
     ("generation.py", "generation_requests"): "explicit-writer",
     ("generation.py", "issues"): "explicit-writer",
@@ -240,6 +244,11 @@ WRITER_DISPOSITIONS: dict[tuple[str, str], str] = {
         "known-dropped:gen_planning request write dies at the boundary; deferred to D13/P1#12"
     ),
     ("wrapup.py", "artifact_refs"): "explicit-writer",
+    # `_publish_candidate_ref` cannot index a TypedDict by its module-constant
+    # key (`[literal-required]`), so it mutates a `dict(state)` copy and writes
+    # the one changed key back by its literal name. The write is deliberate and
+    # reaches the boundary by design.
+    ("_agent_artifacts.py", "_orchestrator__candidate_refs"): "explicit-writer",
 }
 
 
@@ -314,6 +323,34 @@ def test_execution_brief_survives_propagation() -> None:
     assert dest["_orchestrator__execution_brief"] == brief
 
 
+def _merge_node_updates(state: StudioGraphState, updates: dict[str, Any]) -> StudioGraphState:
+    """Apply a node's returned update over accumulated state, LangGraph-style.
+
+    ``updates`` is an opaque ``dict[str, Any]`` accumulator (it carries
+    registry-driven channel keys), so it cannot be splatted into a TypedDict.
+    Only the contract keys this replay test depends on are carried forward, by
+    their literal names.
+    """
+    brief = updates.get("_orchestrator__execution_brief")
+    merged: StudioGraphState = {
+        "project_id": "dff2-regression",
+        "idea": "A lighthouse keeper who mails letters to the future.",
+        "current_phase": "shot_bible",
+        "story_bible_ref": state.get("story_bible_ref", ""),
+        "script_ref": state.get("script_ref", ""),
+        "shot_matrix_ref": state.get("shot_matrix_ref", ""),
+        "target_runtime_seconds": state.get("target_runtime_seconds", 0),
+        "resolved_config": state.get("resolved_config", {}),
+        "artifact_refs": state.get("artifact_refs", []),
+    }
+    if isinstance(brief, dict):
+        merged["_orchestrator__execution_brief"] = brief
+    services = state.get("_services")
+    if services is not None:
+        merged["_services"] = services
+    return merged
+
+
 class TestShotBibleBriefReachesUpdates:
     """End-to-end: the brief written mid-node must land in ``shot_bible_node``'s update."""
 
@@ -330,7 +367,13 @@ class TestShotBibleBriefReachesUpdates:
         yield
         _SERVICES_CTX.reset(self._token)
 
-    def _state(self) -> dict[str, Any]:
+    def _state(self) -> StudioGraphState:
+        """Build the regression state as the typed graph-state contract.
+
+        The services handle is written under its literal ``_services`` key: a
+        TypedDict literal only accepts a literal key, and the fixture's
+        ``SERVICES_KEY`` lookup would be a computed one.
+        """
         return {
             "project_id": "dff2-regression",
             "idea": "A lighthouse keeper who mails letters to the future.",
@@ -339,7 +382,7 @@ class TestShotBibleBriefReachesUpdates:
             "script_ref": "artifact:script:v1",
             "shot_matrix_ref": "artifact:shot_matrix:v1",
             "target_runtime_seconds": 300,
-            self._services_key: self._svc,
+            "_services": self._svc,
             "resolved_config": {"studio": {"require_human_approval": False}},
             "artifact_refs": [],
         }
@@ -359,7 +402,10 @@ class TestShotBibleBriefReachesUpdates:
 
         state = self._state()
         first = shot_bible_node(state)
-        merged = {**state, **first}
+        # LangGraph merge semantics: the node's partial update is applied over
+        # the accumulated state. ``first`` is an opaque dict accumulator (it
+        # carries registry-driven channel keys), so the merge is done per key.
+        merged = _merge_node_updates(state, first)
         second = shot_bible_node(merged)
 
         assert second["_orchestrator__execution_brief"] == first["_orchestrator__execution_brief"]

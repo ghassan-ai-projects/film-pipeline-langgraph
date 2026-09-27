@@ -17,7 +17,8 @@ import pytest
 import film_pipeline.orchestration.nodes.wrapup as wrapup_module
 from film_pipeline.orchestration.nodes import consistency_check_node, delivery_node, post_node
 from film_pipeline.orchestration.orchestrator_state import set_approved_ref
-from film_pipeline.orchestration.services import SERVICES_KEY, GraphServices
+from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.film_constitution import FilmConstitution
@@ -31,12 +32,12 @@ def _services(tmp_path: Path) -> GraphServices:
     )
 
 
-def _post_state(services: GraphServices) -> dict[str, Any]:
+def _post_state(services: GraphServices) -> StudioGraphState:
     return {
         "project_id": "p1",
         "constitution_ref": "artifact:constitution:film_constitution:v1",
         "artifact_refs": ["artifact:development:treatment:v1"],
-        SERVICES_KEY: services,
+        "_services": services,
     }
 
 
@@ -140,7 +141,7 @@ class TestPostNodeApprovalGate:
 
 class TestPostNodeAgentFailurePropagation:
     def test_without_services_returns_only_gate_updates(self) -> None:
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "p1",
             "constitution_ref": "artifact:constitution:film_constitution:v1",
         }
@@ -247,7 +248,7 @@ class TestDeliveryNodeGate:
         }
 
     def test_pre_approves_in_auto_mode(self) -> None:
-        state: dict[str, Any] = {"resolved_config": {"studio": {"require_human_approval": False}}}
+        state: StudioGraphState = {"resolved_config": {"studio": {"require_human_approval": False}}}
 
         updates = delivery_node(state)
 
@@ -266,21 +267,25 @@ class TestConsistencyCheckNode:
         _save_constitution_version(store, "p1", 1)
         _save_constitution_version(store, "p1", 2)
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "p1",
             "constitution_ref": "artifact:constitution:film_constitution:v1",
-            SERVICES_KEY: services,
+            "_services": services,
         }
         manifest_ref = post_node(state)["assembly_manifest_ref"]
 
-        check_state: dict[str, Any] = {
+        check_state: StudioGraphState = {
             "project_id": "p1",
             "artifact_refs": [manifest_ref],
-            SERVICES_KEY: services,
+            "_services": services,
         }
+        approved_working: dict[str, Any] = {}
         set_approved_ref(
-            check_state, "film_constitution", "artifact:constitution:film_constitution:v2"
+            approved_working, "film_constitution", "artifact:constitution:film_constitution:v2"
         )
+        check_state["_orchestrator__approved_refs"] = approved_working[
+            "_orchestrator__approved_refs"
+        ]
 
         updates = consistency_check_node(check_state)
 
@@ -297,20 +302,24 @@ class TestConsistencyCheckNode:
         services = _services(tmp_path)
         _save_constitution_version(services.artifact_store, "p1", 1)
 
-        state: dict[str, Any] = {
+        state: StudioGraphState = {
             "project_id": "p1",
             "constitution_ref": "artifact:constitution:film_constitution:v1",
-            SERVICES_KEY: services,
+            "_services": services,
         }
         manifest_ref = post_node(state)["assembly_manifest_ref"]
 
-        check_state: dict[str, Any] = {
+        check_state: StudioGraphState = {
             "project_id": "p1",
             "artifact_refs": [manifest_ref],
-            SERVICES_KEY: services,
+            "_services": services,
         }
+        approved_working: dict[str, Any] = {}
         set_approved_ref(
-            check_state, "film_constitution", "artifact:constitution:film_constitution:v1"
+            approved_working, "film_constitution", "artifact:constitution:film_constitution:v1"
         )
+        check_state["_orchestrator__approved_refs"] = approved_working[
+            "_orchestrator__approved_refs"
+        ]
 
         assert consistency_check_node(check_state) == {}
