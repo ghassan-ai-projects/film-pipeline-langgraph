@@ -17,6 +17,10 @@ ignore:
   - "**/.venv/**"
   - "**/site-packages/**"
   - ".uv-cache/**"
+  # Vendored pre-commit hook sources (gitignored, not application code). Without
+  # this the fact store picks up ~963 facts of third-party hook code, which then
+  # surface as "new coupling" on every run.
+  - ".pre-commit-cache/**"
   - "**/__pycache__/**"
   - "**/.mypy_cache/**"
   - "**/.pytest_cache/**"
