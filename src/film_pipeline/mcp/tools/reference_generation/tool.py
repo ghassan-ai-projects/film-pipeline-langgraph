@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.reference_generation.composites import (
     _build_composites,
@@ -33,6 +35,7 @@ from film_pipeline.mcp.tools.reference_generation.outcomes import (
 from film_pipeline.mcp.tools.reference_generation.retry_loop import (
     _run_retry_attempts,
 )
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -211,3 +214,26 @@ async def generate_reference_images(ctx: ToolContext, args: dict[str, object]) -
         results=batch.results,
         reference_index_ref=ref,
     )
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateReferenceImagesArgs(ToolArgs):
+    """Arguments for `generate_reference_images`."""
+
+    force: bool = Field(default=False, description="Regenerate entries that already have an image.")
+
+
+GENERATE_REFERENCE_IMAGES = ToolSpec(
+    name="generate_reference_images",
+    group=ToolGroup.GENERATION,
+    description=(
+        "Generate the reference images the visual-dev reference index calls for, "
+        "with identity and geometry consistency across views."
+    ),
+    args=GenerateReferenceImagesArgs,
+    handler=generate_reference_images,
+    mutates=True,
+)

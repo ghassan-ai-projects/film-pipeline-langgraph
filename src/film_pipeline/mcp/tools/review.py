@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
+from pydantic import Field
+
 from film_pipeline.filmspec import blocking_issues as _blocking_issues_of
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
@@ -172,3 +175,54 @@ async def request_revision(ctx: ToolContext, args: dict[str, object]) -> dict[st
         )
     except ValueError as e:
         return _error(str(e))
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class ReviewPhaseArtifactsArgs(ToolArgs):
+    """Arguments for `review_phase_artifacts`."""
+
+    phase: str = Field(default="", description="Phase to review; empty uses the current one.")
+
+
+class ApprovePhaseArgs(ToolArgs):
+    """Arguments for `approve_phase` (none)."""
+
+
+class RequestRevisionArgs(ToolArgs):
+    """Arguments for `request_revision`."""
+
+    note: str = Field(description="What needs revising.")
+
+
+REVIEW_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="review_phase_artifacts",
+        group=ToolGroup.REVIEW,
+        description="Review the artifacts a phase produced and report what needs attention.",
+        args=ReviewPhaseArtifactsArgs,
+        handler=review_phase_artifacts,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_phase",
+        group=ToolGroup.REVIEW,
+        description="Approve the current phase and advance the project to the next.",
+        args=ApprovePhaseArgs,
+        handler=approve_phase,
+        mutates=True,
+        confirm=True,
+        checkpoint=True,
+    ),
+    ToolSpec(
+        name="request_revision",
+        group=ToolGroup.REVIEW,
+        description="Send the current phase back for revision with a note.",
+        args=RequestRevisionArgs,
+        handler=request_revision,
+        mutates=True,
+        confirm=True,
+    ),
+)

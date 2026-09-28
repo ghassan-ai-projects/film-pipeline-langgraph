@@ -14,13 +14,14 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from film_pipeline.config.profile_resolver import (
     resolve_project_config,
     resolved_config_state_keys,
 )
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
@@ -453,3 +454,54 @@ def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -
         status=ArtifactStatus.CANDIDATE,
         created_by="approve_profile_change",
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class ProposeProfileChangeArgs(ToolArgs):
+    """Arguments for `propose_profile_change`.
+
+    The five profile fields are the stack `_PROFILE_STACK_KEYS` reads; a blank one
+    leaves that slot unchanged.
+    """
+
+    reason: str = Field(default="", description="Why the change is proposed.")
+    proposed_by: str = Field(default="", description="Who proposed it.")
+    film_type_profile: str = Field(default="", description="New film-type profile stem.")
+    quality_profile: str = Field(default="", description="New quality profile stem.")
+    provider_profile: str = Field(default="", description="New provider profile stem.")
+    review_profile: str = Field(default="", description="New review profile stem.")
+    auto_approve_profile: str = Field(default="", description="New auto-approve profile stem.")
+
+
+class ApproveProfileChangeArgs(ToolArgs):
+    """Arguments for `approve_profile_change`."""
+
+    proposal_id: str = Field(description="Pending proposal to approve.")
+    note: str = Field(default="", description="Note to record with the approval.")
+    approved_by: str = Field(default="", description="Who approved it.")
+
+
+PROFILE_CHANGE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="propose_profile_change",
+        group=ToolGroup.CONFIG,
+        description="Propose a mid-project change to the profile stack for human approval.",
+        args=ProposeProfileChangeArgs,
+        handler=propose_profile_change,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_profile_change",
+        group=ToolGroup.CONFIG,
+        description="Approve a pending profile change and apply it to the project.",
+        args=ApproveProfileChangeArgs,
+        handler=approve_profile_change,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)

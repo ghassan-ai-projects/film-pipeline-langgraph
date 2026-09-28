@@ -23,7 +23,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `8f182f1` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
 | 11b | `checkpoints` (8) + `projects` (6) declared | `ec1c323` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
 | 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `cc83fcd` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
-| 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `_pending_` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
+| 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `9446b27` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
+| 11e | **remaining 25 tools + dead `_register` path + derived facade** | `_pending_` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -804,3 +805,70 @@ Final state, all re-measured against HEAD:
 25 tools in 8 groups: `assembly` (7 incl. coverage), `config` (5), `intake` (3),
 `operator` (2), `provider` (3), `review` (3), plus `generate_plan` and
 `generate_reference_images`.
+
+## Step 11e — slice 1 complete: every tool delivers its contract (2026-09-28)
+
+```text
+tools: 75
+with input_schema: 75        (was 0)
+with output_schema: 0
+with generic 'MCP tool: <name>' description: 0    (was 75)
+```
+
+**Doc 04 slice 1's falsifiable check is met.** Every tool now publishes a real JSON
+Schema for its arguments and a real description, and `extra="forbid"` means an
+unknown argument is a typed `VALIDATION_ERROR` rather than a silent no-op.
+
+### What this slice removed, beyond the declarations
+
+Two of the three places the tool list was written are now gone:
+
+1. **`registry._register(...)` and `_tool_contract(...)` deleted** — 46 lines. Every
+   tool registers through `registry.register_spec(spec)`, so the older path had no
+   callers. The contract, the args model and the handler are one declaration.
+2. **`tools/__init__._TOOL_MODULES` is derived, not written.** The mapping used to
+   be a hand-maintained `name -> module` dict, and it was the second copy of the
+   list. It is now parsed from the `ToolSpec` declarations at first use — parsed
+   rather than imported, because importing every tool module would defeat the
+   laziness this facade exists to provide. Verified: the derived set equals the
+   registered set exactly, plus one explicit non-tool export (`register_all_tools`)
+   that the previous mapping also served.
+
+The third copy, the `.pyi` stub, is unchanged; `measure.py`'s
+`registered tools missing from the .pyi stub: []` shows it is already in step.
+
+### Three real callers sending arguments no handler reads
+
+`extra="forbid"` found them, exactly as doc 04 predicted:
+
+| Argument | Tool | Verdict |
+|---|---|---|
+| `phase` | `approve_phase` | The handler is `_ = args` — it approves the *current* phase. Two tests were sending a vestigial `phase`; corrected. |
+| `confirmed` | any `confirm=True` tool | Protocol field; now declared once on `ToolArgs`. |
+| `project_ref` | any tool | Protocol field consumed by `MCPServer.call` into the envelope; declared once. |
+
+The first is the interesting one: the strict boundary turned an ignored argument
+into a refused one, and the fix was in the caller.
+
+### Verification, re-measured at the end against HEAD
+
+- tools: **75**, tool set **IDENTICAL**
+- flag diff: **NONE**
+- registration order: **IDENTICAL**
+- args-coverage sweep: **75 specs, 0 with undeclared keys**
+- `get_runtime()` in `mcp`: **3** (all dispatch, from Step 10b)
+- cycle count: **1** (only the known `orchestration` root-collapse artifact)
+
+### What this slice does not establish
+
+`output_schema` remains **0**. Doc 04 lists it, and this slice only did
+`input_schema`; a tool's *result* shape is still undocumented at the boundary.
+That is the remaining half of the doc-04 finding and is deliberately not claimed
+here.
+
+### Evidence
+
+- `measure.py`: `input_schema` **50 → 75** (of 75); generic descriptions **25 → 0**.
+- `make ci-check`: **2342 passed, 91.74% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+- Recorded surface growth: `mcp.tools.reference_generation` 14 → 15.

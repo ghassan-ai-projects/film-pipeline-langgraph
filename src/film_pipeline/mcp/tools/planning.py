@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
@@ -202,3 +203,22 @@ async def generate_plan(ctx: ToolContext, args: dict[str, object]) -> dict[str, 
         )
     except Exception as exc:
         return _error(f"Plan generation failed: {exc}")
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GeneratePlanArgs(ToolArgs):
+    """Arguments for `generate_plan` (none)."""
+
+
+GENERATE_PLAN = ToolSpec(
+    name="generate_plan",
+    group=ToolGroup.GENERATION,
+    description="Turn the master shot matrix into an ordered production plan.",
+    args=GeneratePlanArgs,
+    handler=generate_plan,
+    mutates=True,
+    active_project=True,
+)

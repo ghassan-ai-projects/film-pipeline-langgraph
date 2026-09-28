@@ -24,9 +24,13 @@ from film_pipeline.mcp.tools.reference_generation.index_files import (
     _select_image_provider,
     _write_reference_index_files,
 )
-from film_pipeline.mcp.tools.reference_generation.tool import generate_reference_images
+from film_pipeline.mcp.tools.reference_generation.tool import (
+    GENERATE_REFERENCE_IMAGES,
+    generate_reference_images,
+)
 
 __all__ = [
+    "GENERATE_REFERENCE_IMAGES",
     "_build_composites",
     "_build_optional_sheets",
     "_group_and_sort_entries",

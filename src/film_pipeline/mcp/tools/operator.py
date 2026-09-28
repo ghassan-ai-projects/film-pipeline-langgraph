@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
@@ -62,3 +65,46 @@ async def list_operator_comments(ctx: ToolContext, args: dict[str, object]) -> d
         return _ok(comments=comments)
     except Exception as e:
         return _error(str(e))
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class AddOperatorCommentArgs(ToolArgs):
+    """Arguments for `add_operator_comment`."""
+
+    body: str = Field(description="Comment text.")
+    target_type: str = Field(default="", description="What the comment is about.")
+    target_id: str = Field(default="", description="Id of the thing commented on.")
+    phase: str = Field(default="", description="Phase the comment belongs to.")
+    source: str = Field(default="", description="Where the comment came from.")
+
+
+class ListOperatorCommentsArgs(ToolArgs):
+    """Arguments for `list_operator_comments`."""
+
+    include_resolved: bool = Field(
+        default=False, description="Include comments already marked resolved."
+    )
+
+
+OPERATOR_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="add_operator_comment",
+        group=ToolGroup.OPERATOR,
+        description="Record an operator comment against a project, phase or artifact.",
+        args=AddOperatorCommentArgs,
+        handler=add_operator_comment,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_operator_comments",
+        group=ToolGroup.OPERATOR,
+        description="List the operator comments recorded for the active project.",
+        args=ListOperatorCommentsArgs,
+        handler=list_operator_comments,
+        active_project=True,
+    ),
+)

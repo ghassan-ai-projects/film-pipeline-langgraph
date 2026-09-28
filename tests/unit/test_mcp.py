@@ -272,7 +272,7 @@ def test_server_resolves_then_dispatches_mutation() -> None:
     resp = asyncio.run(
         server.call(
             "approve_phase",
-            {"project_ref": "memory-in-rain", "phase": "script", "confirmed": True},
+            {"project_ref": "memory-in-rain", "confirmed": True},
         )
     )
     # approve_phase is wired to runtime — returns ok=False without active project
@@ -284,9 +284,7 @@ def test_server_resolves_then_dispatches_mutation() -> None:
 
 def test_server_rejects_unconfirmed_mutation() -> None:
     server = _build_server_with_projects()
-    resp = asyncio.run(
-        server.call("approve_phase", {"project_ref": "memory-in-rain", "phase": "script"})
-    )
+    resp = asyncio.run(server.call("approve_phase", {"project_ref": "memory-in-rain"}))
     assert resp.success is False
     assert resp.error is not None
     assert resp.error.code == MCPErrorCode.CONFIRMATION_REQUIRED

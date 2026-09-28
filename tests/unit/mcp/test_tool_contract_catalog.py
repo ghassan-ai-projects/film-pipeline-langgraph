@@ -23,9 +23,10 @@ behind it, and it is the one boundary AGENTS.md's "Pydantic v2 for all schemas
 
 ## The ratchet
 
-`ratchet up only` while doc 04's migration is in flight: the counts below may
-rise as groups move, never fall. Once every tool declares itself, the assertion
-inverts to "all 75" and the per-tool `_register(...)` path is deleted.
+**The migration is complete: every tool declares itself.** The floor is now 75,
+which is the whole registry, so a tool that loses its `ToolSpec` fails this
+immediately. The per-tool `_register(...)` path in `registry.py` is now unused by
+every tool and is deleted in the same commit.
 
 A decrease is not a pass — it means a spec was replaced by a bare registration, so
 this fails with the tool name rather than only the count.
@@ -39,10 +40,10 @@ from film_pipeline.mcp.contract import make_registry
 
 #: Tools that publish a real `input_schema` and a real description.
 #:
-#: Raised group by group as doc 04's per-tool `ToolSpec` declarations land. It is
-#: a floor, not a target: `test_the_catalog_floor_has_not_fallen` fails if a tool
-#: loses its spec.
-TOOLS_WITH_DECLARED_ARGS = 50
+#: 75 is the whole registry, so this is no longer a ratchet with headroom: it is
+#: the completion assertion. `test_the_catalog_floor_has_not_fallen` fails if any
+#: tool loses its spec.
+TOOLS_WITH_DECLARED_ARGS = 75
 
 
 @pytest.fixture(scope="module")

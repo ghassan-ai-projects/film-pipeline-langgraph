@@ -1,99 +1,87 @@
 """Tool export facade with lazy handlers and the runtime injection hook.
 
 Handlers are imported on first use so registration never imports a tool package
-while that package is initializing. The public names and callable identities
-stay the same as the original eager facade.
+while that package is initializing. The public names and callable identities stay
+the same as the original eager facade.
+
+## Why the tool list is derived, not written here
+
+This mapping used to be a hand-maintained `name -> module` dict, one of **three**
+places the tool list was declared: `registry.py`'s `_register(...)` calls, this
+dict, and the `.pyi` stub beside it. Adding a tool meant editing all three, and
+nothing failed if you forgot one — the tool simply was not importable by name, or
+not registered, depending on which copy you missed.
+
+The list now comes from the `ToolSpec` declarations themselves, which are the one
+place a tool states its name and its module. `registry.register_all_tools` remains
+the authority for *what is registered*; this is only the lazy import path for
+`from film_pipeline.mcp.tools import <handler>`, which tests and the CLI use.
 """
 
 from __future__ import annotations
 
+import ast
+from functools import lru_cache as _lru_cache
 from importlib import import_module
+from pathlib import Path as _Path
 from typing import Any
 
 from film_pipeline.studio.runtime import get_runtime as get_runtime
 
-_TOOL_MODULES: dict[str, str] = {
-    "add_operator_comment": "film_pipeline.mcp.tools.operator",
-    "approve_coverage_generation": "film_pipeline.mcp.tools.assembly",
-    "approve_intake": "film_pipeline.mcp.tools.intake",
-    "approve_phase": "film_pipeline.mcp.tools.review",
-    "approve_profile_change": "film_pipeline.mcp.tools.config",
-    "assemble_final_cut": "film_pipeline.mcp.tools.assembly",
-    "assemble_review_cut": "film_pipeline.mcp.tools.assembly",
-    "cancel_generation_request": "film_pipeline.mcp.tools.generation",
-    "check_provider_health": "film_pipeline.mcp.tools.providers",
-    "compare_versions": "film_pipeline.mcp.tools.checkpoints",
-    "create_checkpoint": "film_pipeline.mcp.tools.checkpoints",
-    "create_film_project": "film_pipeline.mcp.tools.projects",
-    "explain_agent_routing": "film_pipeline.mcp.tools.audit",
-    "explain_kb_context": "film_pipeline.mcp.tools.audit",
-    "explain_last_decision": "film_pipeline.mcp.tools.audit",
-    "export_delivery_package": "film_pipeline.mcp.tools.assembly",
-    "find_project": "film_pipeline.mcp.tools.projects",
-    "generate_camera_bible": "film_pipeline.mcp.tools.bibles",
-    "generate_character_bible": "film_pipeline.mcp.tools.bibles",
-    "generate_environment_bible": "film_pipeline.mcp.tools.bibles",
-    "generate_plan": "film_pipeline.mcp.tools.planning",
-    "generate_reference_images": "film_pipeline.mcp.tools.reference_generation",
-    "generate_shot_bible": "film_pipeline.mcp.tools.bibles",
-    "generate_style_bible": "film_pipeline.mcp.tools.bibles",
-    "get_active_project": "film_pipeline.mcp.tools.projects",
-    "get_audit_log": "film_pipeline.mcp.tools.audit",
-    "get_blockers": "film_pipeline.mcp.tools.state",
-    "get_checkpoint": "film_pipeline.mcp.tools.checkpoints",
-    "get_current_phase": "film_pipeline.mcp.tools.state",
-    "get_film_state": "film_pipeline.mcp.tools.state",
-    "get_generation_status": "film_pipeline.mcp.tools.generation",
-    "get_intake_analysis": "film_pipeline.mcp.tools.intake",
-    "get_invalidation_report": "film_pipeline.mcp.tools.checkpoints",
-    "get_next_actions": "film_pipeline.mcp.tools.state",
-    "get_orchestrator_summary": "film_pipeline.mcp.tools.state",
-    "get_project_summary": "film_pipeline.mcp.tools.projects",
-    "get_runtime_mode": "film_pipeline.mcp.tools.config",
-    "get_validation_report": "film_pipeline.mcp.tools.validation",
-    "inspect_artifact": "film_pipeline.mcp.tools.artifacts",
-    "inspect_coverage_group": "film_pipeline.mcp.tools.assembly",
-    "inspect_profile": "film_pipeline.mcp.tools.config",
-    "inspect_reference": "film_pipeline.mcp.tools.artifacts",
-    "inspect_scene": "film_pipeline.mcp.tools.artifacts",
-    "inspect_shot": "film_pipeline.mcp.tools.artifacts",
-    "kb_explain_context_choice": "film_pipeline.mcp.tools.kb",
-    "kb_get_context_packet": "film_pipeline.mcp.tools.kb",
-    "kb_get_item": "film_pipeline.mcp.tools.kb",
-    "kb_search": "film_pipeline.mcp.tools.kb",
-    "list_active_generations": "film_pipeline.mcp.tools.generation",
-    "list_artifact_versions": "film_pipeline.mcp.tools.checkpoints",
-    "list_artifacts": "film_pipeline.mcp.tools.artifacts",
-    "list_assets": "film_pipeline.mcp.tools.artifacts",
-    "list_checkpoints": "film_pipeline.mcp.tools.checkpoints",
-    "list_coverage_groups": "film_pipeline.mcp.tools.assembly",
-    "list_operator_comments": "film_pipeline.mcp.tools.operator",
-    "list_profiles": "film_pipeline.mcp.tools.config",
-    "list_projects": "film_pipeline.mcp.tools.projects",
-    "list_providers": "film_pipeline.mcp.tools.providers",
-    "list_shots": "film_pipeline.mcp.tools.artifacts",
-    "list_validation_issues": "film_pipeline.mcp.tools.validation",
-    "plan_coverage_group": "film_pipeline.mcp.tools.assembly",
-    "plan_generation_batch": "film_pipeline.mcp.tools.generation",
-    "preview_generation_prompts": "film_pipeline.mcp.tools.generation",
-    "promote_test_to_production": "film_pipeline.mcp.tools.generation",
-    "propose_profile_change": "film_pipeline.mcp.tools.config",
+_TOOLS_DIR = _Path(__file__).resolve().parent
+
+#: Names this facade serves that are not tool handlers. Kept explicit rather than
+#: derived: `register_all_tools` is a registry entry point that callers reach
+#: through this facade, and the derivation above deliberately knows only about
+#: `ToolSpec` declarations.
+_NON_TOOL_EXPORTS: dict[str, str] = {
     "register_all_tools": "film_pipeline.mcp.registry",
-    "request_revision": "film_pipeline.mcp.tools.review",
-    "resolve_provider_block": "film_pipeline.mcp.tools.providers",
-    "resume_generation_polling": "film_pipeline.mcp.tools.generation",
-    "review_phase_artifacts": "film_pipeline.mcp.tools.review",
-    "rollback_artifact": "film_pipeline.mcp.tools.checkpoints",
-    "rollback_to_checkpoint": "film_pipeline.mcp.tools.checkpoints",
-    "run_validation": "film_pipeline.mcp.tools.validation",
-    "set_active_project": "film_pipeline.mcp.tools.projects",
-    "start_generation_batch": "film_pipeline.mcp.tools.generation",
-    "submit_idea": "film_pipeline.mcp.tools.intake",
 }
 
 
+@_lru_cache(maxsize=1)
+def _tool_modules() -> dict[str, str]:
+    """Map each declared tool to the module whose `ToolSpec` declares it.
+
+    Parsed rather than imported: importing every tool module here would defeat the
+    laziness this facade exists to provide, and would run at package-init time,
+    which is the cycle this file is careful to avoid.
+    """
+    mapping: dict[str, str] = {}
+    import film_pipeline
+
+    package_root = _Path(film_pipeline.__file__).resolve().parent
+    for path in sorted(_TOOLS_DIR.rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:  # pragma: no cover - a syntax error fails elsewhere first
+            continue
+        relative = path.relative_to(package_root).with_suffix("")
+        parts = list(relative.parts)
+        if parts[-1] == "__init__":
+            parts.pop()
+        module = "film_pipeline." + ".".join(parts)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if node.func.id != "ToolSpec":
+                continue
+            name = next(
+                (
+                    kw.value.value
+                    for kw in node.keywords
+                    if kw.arg == "name" and isinstance(kw.value, ast.Constant)
+                ),
+                None,
+            )
+            if isinstance(name, str):
+                mapping[name] = module
+    mapping.update(_NON_TOOL_EXPORTS)
+    return mapping
+
+
 def __getattr__(name: str) -> Any:
-    module_name = _TOOL_MODULES.get(name)
+    module_name = _tool_modules().get(name)
     if module_name is None:
         raise AttributeError(name)
     value = getattr(import_module(module_name), name)
@@ -102,7 +90,9 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(_TOOL_MODULES))
+    return sorted(set(globals()) | set(_tool_modules()))
 
+
+_TOOL_MODULES = _tool_modules()
 
 __all__ = sorted((*_TOOL_MODULES, "get_runtime"))

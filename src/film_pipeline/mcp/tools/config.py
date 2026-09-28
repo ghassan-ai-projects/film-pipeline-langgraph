@@ -8,8 +8,11 @@ import paths keep resolving.
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from film_pipeline.config.profile_resolver import load_profile_flex
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ._profile_change import approve_profile_change, propose_profile_change
 from .helpers import _error, _ok
@@ -100,3 +103,46 @@ async def get_runtime_mode(ctx: ToolContext, args: dict[str, object]) -> dict[st
         profile_stack=profile_stack,
         profile_version=int(active.get("profile_version", 0)) if active is not None else 0,
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class ListProfilesArgs(ToolArgs):
+    """Arguments for `list_profiles` (none)."""
+
+
+class InspectProfileArgs(ToolArgs):
+    """Arguments for `inspect_profile`."""
+
+    profile_id: str = Field(description="Profile to inspect, by id or friendly name.")
+
+
+class GetRuntimeModeArgs(ToolArgs):
+    """Arguments for `get_runtime_mode` (none)."""
+
+
+CONFIG_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="list_profiles",
+        group=ToolGroup.CONFIG,
+        description="List the available profiles of every kind.",
+        args=ListProfilesArgs,
+        handler=list_profiles,
+    ),
+    ToolSpec(
+        name="inspect_profile",
+        group=ToolGroup.CONFIG,
+        description="Inspect one profile's resolved values and provenance.",
+        args=InspectProfileArgs,
+        handler=inspect_profile,
+    ),
+    ToolSpec(
+        name="get_runtime_mode",
+        group=ToolGroup.CONFIG,
+        description="Report the server's runtime mode (mock or real) and the project's.",
+        args=GetRuntimeModeArgs,
+        handler=get_runtime_mode,
+    ),
+)

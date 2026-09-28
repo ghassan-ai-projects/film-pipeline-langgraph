@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -78,3 +81,60 @@ async def approve_intake(ctx: ToolContext, args: dict[str, object]) -> dict[str,
         return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
     except ValueError as e:
         return _error(str(e))
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class SubmitIdeaArgs(ToolArgs):
+    """Arguments for `submit_idea`.
+
+    `idea` and `text` are both accepted spellings of the same input.
+    """
+
+    idea: str = Field(default="", description="The film idea to submit.")
+    text: str = Field(default="", description="Alias for `idea`.")
+    target_scene_count: object = Field(
+        default=None, description="Requested number of scenes, if any."
+    )
+    constraints: object = Field(default=None, description="Constraints to apply to the idea.")
+
+
+class GetIntakeAnalysisArgs(ToolArgs):
+    """Arguments for `get_intake_analysis` (none)."""
+
+
+class ApproveIntakeArgs(ToolArgs):
+    """Arguments for `approve_intake` (none)."""
+
+
+INTAKE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="submit_idea",
+        group=ToolGroup.INTAKE,
+        description="Submit a film idea and run the intake analysis on it.",
+        args=SubmitIdeaArgs,
+        handler=submit_idea,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_intake_analysis",
+        group=ToolGroup.INTAKE,
+        description="Read the intake analysis produced for the active project's idea.",
+        args=GetIntakeAnalysisArgs,
+        handler=get_intake_analysis,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_intake",
+        group=ToolGroup.INTAKE,
+        description="Approve the intake analysis and advance the project to constitution.",
+        args=ApproveIntakeArgs,
+        handler=approve_intake,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)
