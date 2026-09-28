@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from film_pipeline.generation.prompt_builder import build_structured_prompt
 from film_pipeline.orchestration.nodes._context import (
     _parse_ref,
 )
 from film_pipeline.orchestration.services import GraphServices
+from film_pipeline.schemas.base import FilmPhase
 
 
 def _load_artifact_data(
@@ -28,7 +30,6 @@ def _load_artifact_data(
     project_id = str(state.get("project_id", ""))
     if not project_id:
         return None
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         return services.artifact_store.load(
@@ -84,7 +85,6 @@ def _load_visual_dev_bible(
     bible_id: str,
 ) -> dict[str, Any] | None:
     """Load the latest visual_dev bible, returning None when absent or malformed."""
-    from film_pipeline.schemas.base import FilmPhase
 
     version = services.artifact_store.latest_version(project_id, "visual_dev", bible_id)
     try:
@@ -102,7 +102,6 @@ def _build_prompt_from_matrix_row(
     row: dict[str, Any],
 ) -> str:
     """Build a structured generation prompt from the shot matrix row."""
-    from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     characters = row.get("characters") or []
     environment = str(row.get("environment", "") or "")

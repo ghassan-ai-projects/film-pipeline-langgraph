@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.constraints import render_constraints
+from film_pipeline.orchestration.context_packets import PHASE_BUILDERS
 from film_pipeline.orchestration.nodes._context import _build_phase_context
 from film_pipeline.schemas.constraints import ProjectConstraints
 
@@ -102,7 +103,6 @@ def _attach_scoped_packet(
     Replaces loading all artifacts into every prompt. ``suppress()`` must wrap
     only ``builder()`` so a failing packet degrades to empty scoped context.
     """
-    from film_pipeline.orchestration.context_packets import PHASE_BUILDERS
 
     builder = PHASE_BUILDERS.get(phase)
     if builder is not None:

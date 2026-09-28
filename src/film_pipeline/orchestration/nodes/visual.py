@@ -11,6 +11,8 @@ from pydantic import BaseModel
 from film_pipeline.governance.validators import (
     load_execution_brief,
     validate_execution_brief,
+    validate_planning_completeness,
+    validate_shot_scene_references,
     validate_shot_structure,
 )
 from film_pipeline.orchestration.nodes._agent import (
@@ -545,10 +547,6 @@ def _validate_planning_gate(new_state: StudioGraphState) -> None:
             FilmPhase("shot_bible"),
             parsed.artifact_id,
             parsed.version,
-        )
-        from film_pipeline.governance.validators import (
-            validate_planning_completeness,
-            validate_shot_scene_references,
         )
 
         plan_issues = validate_planning_completeness(new_state, matrix_data)

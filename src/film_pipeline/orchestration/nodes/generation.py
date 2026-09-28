@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.governance.validators import validate_dispatch_readiness
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _save_artifact,
@@ -27,7 +29,6 @@ def _gate_dispatch_readiness(new_state: StudioGraphState) -> None:
     gen_requests = new_state.get("generation_requests")
     if gen_requests is None:
         return
-    from film_pipeline.governance.validators import validate_dispatch_readiness
 
     dispatch_issues = validate_dispatch_readiness(new_state, gen_requests)
     new_state.setdefault("issues", []).extend(dispatch_issues)
@@ -38,7 +39,6 @@ def _ledger_rows_by_shot(
     project_id: str,
 ) -> dict[str, str]:
     """Map shot_id -> generation_id from the persisted generation ledger."""
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(services.artifact_store)
     return {row.shot_id: row.generation_id for row in mgr.load(project_id).rows}

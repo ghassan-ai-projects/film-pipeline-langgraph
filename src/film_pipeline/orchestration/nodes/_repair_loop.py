@@ -152,7 +152,6 @@ def _classify_findings(
     issues: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, str]]], list[GlobalRepairIssue]]:
     """Split blocking+warning findings into row-keyed issues and global issues."""
-    from film_pipeline.schemas.repair import GlobalRepairIssue
 
     blocking = blocking_issues(issues)
     all_findings = blocking + [i for i in issues if i.get("severity") == "warning"]
@@ -188,7 +187,6 @@ def _build_row_instructions(
     row_issues: dict[str, list[dict[str, str]]],
 ) -> list[RowRepairInstruction]:
     """Materialize per-row repair instructions that preserve unlisted fields."""
-    from film_pipeline.schemas.repair import RowRepairInstruction
 
     failed_rows: list[RowRepairInstruction] = []
     for sid, issue_list in row_issues.items():
@@ -211,7 +209,6 @@ def _build_repair_feedback(
     passed_ids: list[str],
 ) -> RepairFeedback:
     """Assemble the structured RepairFeedback for this repair round."""
-    from film_pipeline.schemas.repair import RepairFeedback
 
     return RepairFeedback(
         repair_id=f"repair:{phase}:r{round_num}",

@@ -12,6 +12,7 @@ from typing import Any
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, is_blocking_issue
 from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES as _STALE_REQUEST_CODES
+from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
 
 def _approval_made_progress(state: Mapping[str, object], previous_phase: str) -> bool:
@@ -66,7 +67,6 @@ def _strip_stale_generation_request_blockers(state: dict[str, Any]) -> None:
     """Remove generated request-missing blockers after requests are restored."""
     if not state.get("generation_requests"):
         return
-    from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
     remove_issues_by_code(state, _STALE_REQUEST_CODES)
 

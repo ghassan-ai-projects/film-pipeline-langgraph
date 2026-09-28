@@ -13,6 +13,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from film_pipeline.governance.consistency import check_phase_consistency
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
@@ -22,6 +23,7 @@ from film_pipeline.orchestration.nodes._agent import (
 from film_pipeline.orchestration.nodes._shared import (
     _phase_gate_updates,
 )
+from film_pipeline.orchestration.orchestrator_state import get_approved_refs
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
 
@@ -63,9 +65,6 @@ def consistency_check_node(state: StudioGraphState) -> dict[str, Any]:
     services = _get_services(state)
     if services is None:
         return {}
-
-    from film_pipeline.governance.consistency import check_phase_consistency
-    from film_pipeline.orchestration.orchestrator_state import get_approved_refs
 
     # `governance` sits below `orchestration` and must not read orchestrator
     # state itself, so the approved-ref registry is supplied from here. Its

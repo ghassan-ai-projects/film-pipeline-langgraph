@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from film_pipeline.agents.prompt_templates import get_registry
 from film_pipeline.agents.registry import get_agent_class
 from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
 from film_pipeline.orchestration.nodes._agent_handoff import (
@@ -31,6 +32,7 @@ from film_pipeline.orchestration.nodes._context import (
     _inject_config_context,
     _model_overrides_for,
 )
+from film_pipeline.orchestration.router import route_agent
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
 
@@ -109,7 +111,6 @@ def _resolve_routing(
     the caller-supplied ``agent_id`` when it is registered (several phases run
     more than one creator), falling back to the phase default otherwise.
     """
-    from film_pipeline.orchestration.router import route_agent
 
     route_result = route_agent(
         state,
@@ -166,8 +167,6 @@ def _generate_model_output(
     contract = cast("AgentRegistration", routing.contract)
 
     if routing.impl is not None:
-        from film_pipeline.agents.prompt_templates import get_registry
-
         prompt_registry = get_registry()
         template = prompt_registry.get_required(agent_id)
 

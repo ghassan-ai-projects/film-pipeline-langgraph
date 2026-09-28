@@ -35,7 +35,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
 | 15f | `post` to 0; the guard's per-line reason rule made explicit | `9a99fcb` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
 | 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `5cc0170` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
-| 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `_pending_` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
+| 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `e829c1d` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
+| 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `_pending_` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1599,3 +1600,51 @@ change.
 `mcp` (108), `orchestration` (36): `_agent_artifacts` 5, `prep` 5,
 `_generation_batch_planning` 4, `_generation_prompts` 3, and eleven modules with 1–2
 each.
+
+## Step 15i — `orchestration` to zero, and a better tool for the job (2026-09-28)
+
+`orchestration` 36 → **0**; total unexplained **144 → 108**. Seven packages are now
+clean: `storage`, `governance`, `cli`, `studio`, `generation`, `post`, `orchestration`.
+Only `mcp` is left.
+
+### The regex hoister was replaced, not patched
+
+Step 15h recorded the third scripted-edit failure with the same root cause: *a regex
+keyed on indentation cannot tell a function body from a `TYPE_CHECKING` block.* Three
+attempts on `_repair_loop.py` failed that way.
+
+This slice wrote a replacement that cannot make that mistake. It walks the AST for
+`ImportFrom` nodes **inside `FunctionDef` bodies** instead of matching leading
+whitespace. A `TYPE_CHECKING` guard is an `if` statement at module level, so its
+children are never candidates and are never touched. It also dedupes multi-name
+imports, drops the blank lines left behind, and re-emits each unique statement once.
+
+Twelve files hoisted in one pass with no misplacement — the failure mode that had cost
+three attempts disappeared with the regex. That is the actual lesson of Steps 15c/15h:
+the *technique* was wrong, and each retry of a bad technique read as bad luck.
+
+### The last `orchestration` import
+
+`resume.py` kept `remove_issues_by_code` lazy. Unlike the others it was not a patch
+point or a cycle; `state_schema` simply does not import `resume`, so it hoisted. It was
+found only after the first pass because `measure.py` counts it under `resume`, not under
+the `nodes/` files that dominated the inventory.
+
+### The sanity threshold moved again, with its history recorded
+
+`len(lazy) > 150` began failing at 143 real imports. It is now 100, and its docstring
+records that it has moved **200 → 150 → 100** as packages were hoisted, with the reason
+each time. The distinction the goal requires is explicit in the code:
+`HOISTABLE_CEILING` measures the work and only falls when imports are actually hoisted
+(**144 → 108** here); the sanity threshold measures that the collector parses anything
+at all, and tracks the tree's shrinking size so it does not become a work target.
+
+### Evidence
+
+- Guard: **144 unexplained → 108**; `orchestration` **36 → 0**.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining for doc 05
+
+`mcp` (108) — the whole remainder, and the largest single package.

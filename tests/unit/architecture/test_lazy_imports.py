@@ -146,9 +146,17 @@ def test_every_lazy_reason_is_a_reason() -> None:
 
 
 def test_the_guard_has_something_to_check() -> None:
-    """Guard the guard: a broken collector would report zero and pass."""
+    """Guard the guard: a broken collector would report zero and pass.
+
+    The threshold *falls* as the migration proceeds, which is the point: it exists to
+    catch a collector that reads nothing, not to assert the migration is unfinished.
+    It has moved 200 → 150 → 100 as `mcp`, `orchestration` and the small packages were
+    hoisted, each time because the real total dropped to meet it. Lowering it is not
+    lowering a finding — `HOISTABLE_CEILING` is the number that measures the work, and
+    that one only ever goes down when imports are actually hoisted.
+    """
     eager, lazy = collect_imports()
-    assert len(lazy) > 150, (
+    assert len(lazy) > 100, (
         f"only {len(lazy)} function-level internal imports found; the collector is "
         "probably not reading the tree, which would make the ceiling vacuous."
     )

@@ -11,8 +11,14 @@ from film_pipeline.orchestration.nodes._context import (
     _infer_artifact_type,
     _parse_ref,
 )
+from film_pipeline.orchestration.orchestrator_state import (
+    ensure_orchestrator_state,
+    set_candidate_ref,
+)
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 from film_pipeline.schemas.base import ArtifactType as _ArtifactType
 
 if TYPE_CHECKING:
@@ -49,10 +55,6 @@ def _publish_candidate_ref(state: StudioGraphState, artifact_id: str, ref: str) 
     boundary is what makes the two contracts meet without a ``cast``; the one
     key this function actually changes is then written back by its literal name.
     """
-    from film_pipeline.orchestration.orchestrator_state import (
-        ensure_orchestrator_state,
-        set_candidate_ref,
-    )
 
     mutable_state: dict[str, Any] = dict(state)
     ensure_orchestrator_state(mutable_state)
@@ -73,9 +75,6 @@ def _build_artifact_metadata(
     never overwrite the original version.
     """
     from datetime import UTC, datetime
-
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     project_id = str(state.get("project_id", ""))
     version = services.artifact_store.next_version(project_id, provenance.phase, artifact_id)

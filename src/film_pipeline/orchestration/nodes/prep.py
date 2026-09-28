@@ -9,6 +9,11 @@ from typing import Any
 
 from film_pipeline.constraints import extract_constraints
 from film_pipeline.filmspec import blocking_issues
+from film_pipeline.governance.scope_contract import derive_scope_contract, pacing_from_config
+from film_pipeline.governance.validators import (
+    validate_scene_count,
+    validate_script_scene_preservation,
+)
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
@@ -27,6 +32,7 @@ from film_pipeline.orchestration.nodes._shared import (
 )
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.constraints import ProjectConstraints
 
 _logger = logging.getLogger(__name__)
@@ -167,7 +173,6 @@ def _attach_scope_contract(
     the classified film_type, and the profile's pacing. Stores concrete scene/
     shot targets in state so prep prompts and gates can enforce them.
     """
-    from film_pipeline.governance.scope_contract import derive_scope_contract, pacing_from_config
 
     runtime = int(
         updates.get("target_runtime_seconds", state.get("target_runtime_seconds", 0)) or 0
@@ -282,7 +287,6 @@ def development_node(state: StudioGraphState) -> dict[str, Any]:
             new_refs.append(ref)
 
         # ── Gate S: scene count must meet the Scope Contract floor ────────
-        from film_pipeline.governance.validators import validate_scene_count
 
         scene_count = len(getattr(scene_list, "scenes", []) or [])
         node_issues += validate_scene_count(new_state, scene_count)
@@ -340,9 +344,6 @@ def script_node(state: StudioGraphState) -> dict[str, Any]:
             new_refs.append(ref)
 
         # ── Gate S: script must preserve development scenes and meet floor ─
-        from film_pipeline.governance.validators import (
-            validate_script_scene_preservation,
-        )
 
         script_scene_count = len(getattr(script, "scenes", []) or [])
         dev_scene_count = _development_scene_count(new_state)
@@ -403,8 +404,6 @@ def _development_scene_count(state: Mapping[str, object]) -> int:
     if services is None or not ref:
         return 0
     try:
-        from film_pipeline.schemas.base import FilmPhase
-
         parsed = _parse_ref(ref)
         data = services.artifact_store.load(
             str(state.get("project_id", "")),

@@ -34,6 +34,7 @@ from __future__ import annotations
 import logging
 
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.validation.consensus import ConsensusBuilder
 
 _logger = logging.getLogger(__name__)
 
@@ -51,8 +52,6 @@ def build_consensus_if_needed(state: StudioGraphState, phase: str) -> None:
     reports = state.get("_validation_reports", [])
     if len(reports) < 2:
         return
-
-    from film_pipeline.validation.consensus import ConsensusBuilder
 
     artifact_refs: list[str] = state.get("artifact_refs", [])
 

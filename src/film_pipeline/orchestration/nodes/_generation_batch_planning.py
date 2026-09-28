@@ -5,12 +5,15 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.orchestration.nodes._generation_prompts import (
     _load_matrix_rows,
     _resolve_prompt_for_request,
 )
 from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase, GenerationMode
 
 if TYPE_CHECKING:
     from film_pipeline.generation.ledger import GenerationLedgerManager
@@ -19,7 +22,6 @@ if TYPE_CHECKING:
 
 def _parse_generation_mode(mode_str: str) -> GenerationMode:
     """Parse a generation mode string, falling back to TEST when unknown."""
-    from film_pipeline.schemas.base import GenerationMode
 
     mode = GenerationMode.TEST
     with contextlib.suppress(ValueError):
@@ -84,8 +86,6 @@ def _persist_planned_ledger(
     has already persisted the planned rows, so mint the ref from the stored
     envelope's revision instead of saving again.
     """
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     mgr.load(project_id)  # ensures the ledger exists and rows are persisted
     envelope = mgr.store.load_mutable_envelope(
@@ -105,8 +105,6 @@ def _plan_generation_ledger(new_state: StudioGraphState, services: GraphServices
     gen_requests = new_state.get("generation_requests")
     if not gen_requests or services is None:
         return
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     project_id = str(new_state.get("project_id", ""))
     mgr = GenerationLedgerManager(services.artifact_store)
