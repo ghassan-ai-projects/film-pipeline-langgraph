@@ -33,6 +33,7 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
 | 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
 | 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
+| 15f | `post` to 0; the guard's per-line reason rule made explicit | `_pending_` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1450,3 +1451,50 @@ context and a thin handler test"; that half is not done and is not claimed.
 - `ruff check` / `ruff format --check`: clean
 - `enola check`: **exit 0**, cycle count **1** (only the known `orchestration` root-collapse artifact)
 - 28 commits on `improve-modular` since `2450616`
+
+## Step 15f — `post` to zero, and a guard rule made explicit (2026-09-28)
+
+`post` 5 → 0; total unexplained **202 → 197**. Six packages are now fully hoisted or
+explained: `storage`, `governance`, `cli`, `studio`, `generation`, `post`.
+
+### The one substantive finding: the reason must be on the import's own line
+
+`post/subtitle_agent.py` has three imports kept together on purpose — the first
+imports the schema's `SubtitleCue`, which this module shadows with its own dataclass,
+and the other two were left beside it. I first annotated the block once, above the
+group. The guard rejected the second and third, and the reason is worth stating
+because it is a design decision rather than a bug:
+
+**`_has_reason` scans the contiguous comment block directly above each import, so a
+comment placed above import A does not cover imports B and C below it.** That is
+deliberate — it stops a reason being inherited from an unrelated comment higher up the
+function — but it means a shared reason must be repeated or carried inline.
+
+The fix was to put the marker on each import's own line:
+
+```python
+from film_pipeline.schemas import SubtitleArtifact, SubtitleCue  # lazy: shadows
+from film_pipeline.schemas.artifact import (  # lazy: stays with the above
+    ArtifactMetadata,
+    ArtifactRef,
+)
+```
+
+Multi-line `from x import (...)` forms are handled because the marker sits on the
+opening line and the guard reads `lineno`, not the statement's last line.
+
+This is the first case in the migration where the guard's rule had to be *worked with*
+rather than satisfied by moving an import, and it is the right trade: the alternative —
+letting one comment excuse an arbitrary run of imports — would make the reasons
+decorative.
+
+### Evidence
+
+- Guard: **202 unexplained → 197**; `post` **5 → 0**.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (89) — 197 of 197. Both are now the whole remainder and
+need per-module commits.
