@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
-from .helpers import _active_project_id, _ok
+from .helpers import _ok
 
 
 def _routing_summary(routing_decisions: list[dict[str, Any]]) -> str:
@@ -21,18 +21,17 @@ def _routing_summary(routing_decisions: list[dict[str, Any]]) -> str:
     return "\n".join(summary_lines)
 
 
-async def get_audit_log(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def get_audit_log(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     project_id = str(args.get("project_id", "") or "")
     limit_raw = args.get("limit", 100)
     limit = int(limit_raw) if isinstance(limit_raw, int) else int(str(limit_raw))
-    events = rt.get_audit_log(project_id if project_id else None, limit=limit)
+    events = ctx.runtime.get_audit_log(project_id if project_id else None, limit=limit)
     return _ok(events=events, total=len(events))
 
 
-async def explain_last_decision(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    events = rt.audit_events
+async def explain_last_decision(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    events = ctx.runtime.audit_events
     if not events:
         return _ok(message="No decisions recorded yet.")
     last = events[-1]
@@ -45,10 +44,16 @@ async def explain_last_decision(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    state = rt.get_project(project_id) if project_id is not None else rt.get_active()
+async def explain_agent_routing(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    # The context's project is what dispatch resolved; this tool also reads the
+    # runtime's *active* project, because routing history is session-scoped and
+    # the tool declares `requires_active_project=False`.
+    state = (
+        ctx.runtime.get_project(ctx.project_id)
+        if ctx.project_id is not None
+        else ctx.runtime.get_active()
+    )
 
     if state is None:
         return _ok(decisions=[], message="No active project. Routing data is session-scoped.")
@@ -68,7 +73,8 @@ async def explain_agent_routing(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def explain_kb_context(args: dict[str, object]) -> dict[str, object]:
+async def explain_kb_context(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = ctx, args
     return _ok(
         message="KB context: the orchestrator selects KB slices by phase and agent. "
         "Canonical rules take priority over playbooks and case studies.",

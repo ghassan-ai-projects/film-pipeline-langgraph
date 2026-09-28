@@ -172,22 +172,33 @@ def invoke_tool(
     tool_name: str,
     **args: Any,
 ) -> dict[str, Any]:
-    """Synchronously invoke an MCP tool by name against the runtime.
+    """Synchronously invoke an MCP tool through dispatch, against ``rt``.
 
-    Sets the runtime singleton so MCP tools resolve to the test runtime.
+    This used to do `import_module("film_pipeline.mcp.tools")` + `getattr` +
+    `await handler(args)` — the same direct-call path the CLI had, which skips
+    the confirmation gate and the active-project precondition
+    (`docs/modularity-improvements/01`). The scenarios are the suite's strongest
+    end-to-end evidence, and they were evidence about the path that skips the
+    checks.
+
+    It now calls `MCPServer.call`, so scenarios exercise the same three dispatch
+    steps the product does, and — since doc 01's slice 2 — the `ToolContext`
+    the handler actually receives in production.
+
+    The response is unwrapped back into the handler's `{"ok": ...}` shape so
+    every existing scenario assertion keeps working. `call` already answers a
+    failed request with `{"ok": False, "error": <code>}`, so a scenario that
+    asserted an error still sees one.
     """
-    import importlib
-
-    # Set the runtime singleton for MCP tools
     import film_pipeline.studio.runtime as rt_mod
 
     rt_mod._RUNTIME = rt
 
+    from film_pipeline.cli.driver import _response_to_dict
+    from film_pipeline.mcp.server import MCPServer
+
     async def _invoke() -> dict[str, Any]:
-        mod = importlib.import_module("film_pipeline.mcp.tools")
-        handler = getattr(mod, tool_name, None)
-        if handler is None:
-            raise ValueError(f"Unknown MCP tool: {tool_name}")
-        return await handler(dict(args))  # type: ignore[no-any-return]
+        response = await MCPServer().call(tool_name, dict(args))
+        return _response_to_dict(response)
 
     return asyncio.run(_invoke())

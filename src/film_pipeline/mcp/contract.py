@@ -21,6 +21,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from film_pipeline.mcp.tools.context import ToolContext
+
 
 class ToolGroup(StrEnum):
     """High-level grouping for tools."""
@@ -58,8 +60,22 @@ class ToolContract:
     idempotency_key_field: str | None = None
 
 
+#: A tool handler. Two shapes are legal while doc 01's migration is in flight:
+#:
+#: - ``(ctx, args)`` — the target. Dispatch builds a
+#:   `~film_pipeline.mcp.envelope.ToolContext`, so the handler never resolves the
+#:   runtime or the active project for itself.
+#: - ``(args)`` — the legacy shape, which dispatch still hands an ``"_envelope"``
+#:   key inside ``args``.
+#:
+#: `MCPServer._accepts_context` picks the shape from the first parameter's name,
+#: so a handler is migrated by changing its signature — there is no registry flag
+#: to keep in step. When the last legacy handler moves, the second member and the
+#: ``"_envelope"`` key are deleted together.
 ToolHandler = (
-    Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
+    Callable[[ToolContext, dict[str, Any]], Awaitable[dict[str, Any]]]
+    | Callable[[ToolContext, dict[str, Any]], dict[str, Any]]
+    | Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
     | Callable[[dict[str, Any]], dict[str, Any]]
 )
 

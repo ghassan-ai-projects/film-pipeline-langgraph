@@ -17,7 +17,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 6 | One QC implementation: the parallel subgraph | `a0b016e` | identity test passes; SCCs back to 1 | 0 |
 | 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `fb14d31` | both fail, by design | n/a |
 | 8 | CLI through `MCPServer.call`; public runtime installer | `30575ec` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
-| 9 | Delete the orphaned operator surface | `_pending_` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
+| 9 | Delete the orphaned operator surface | `f717013` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
+| 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `_pending_` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -390,3 +391,93 @@ green *without adding tests* — 2334 passed, **91.55%** coverage (was 91.86% wi
 ~1,400 lines of operator tests). The small drop is the evidence that a little of
 the deleted code was load-bearing and is now covered by its owners' own tests;
 the gate itself never moved. `enola check` exits 0.
+
+## Step 10a — the `ToolContext` mechanism, the `audit` group, and slice 3 (2026-09-28)
+
+Doc 01 splits into three slices and says to do one tool group per commit. This is
+the **mechanism** plus the first group, because the mechanism is what every later
+group depends on. The remaining 24 modules follow the same pattern.
+
+### The mechanism
+
+`ToolContext` (`mcp/tools/context.py`) carries `runtime`, `project_id`, and
+`envelope`. Dispatch builds it in `MCPServer._build_context`, once per call,
+instead of each handler resolving the process singleton for itself.
+
+Handlers now come in two shapes, and `MCPServer._accepts_context` picks between
+them **from the first parameter's name** — so a module is migrated by changing its
+signature, with no registry flag to keep in step:
+
+- `handler(ctx, args)` — the target shape.
+- `handler(args)` — legacy, still handed `"_envelope"` inside `args`.
+
+`ToolHandler` admits both; when the last legacy handler moves, the second member
+and the `"_envelope"` key are deleted together. `measure.py` still reports 61
+`get_runtime()` calls at this point **by design** — only one group has moved.
+
+### Group 1: `audit`
+
+Four handlers migrated. Their tests now use a shared `call_tool` fixture that
+builds the real `ToolContext` from a runtime the test owns, replacing direct
+`handler(args)` calls. Doc 01's slice 2 predicts this deletes the 73
+`get_runtime` monkeypatches as groups move; the fixture also handles the legacy
+shape so a half-migrated tree stays testable.
+
+### Slice 3 came forward, because the E2E path forced it
+
+Routing the E2E `invoke_tool` fixture through `MCPServer.call` (doc 01's
+"what this does not establish" predicted this) immediately failed five scenarios
+with `NO_ACTIVE_PROJECT`. The cause is finding 01's second half: **"active project"
+had two owners** — `MCPServer.active_project_id` and
+`StudioRuntime.active_project_id` — reconciled after the fact by
+`_auto_register_from_runtime`, whose own comment conceded the gap.
+
+`MCPServer.active_project_id` is now **deleted**, and the server reads the
+runtime's active project through `_active_project_from_runtime()`. The runtime
+owns project state, so it owns "active". Two tests asserted the second copy's
+behaviour and were rewritten to assert the stronger property that resolution never
+has a side effect on the active project.
+
+**`invoke_tool` now goes through dispatch**, so the E2E scenarios exercise the
+confirmation gate and the active-project precondition for the first time. That is
+the single biggest evidence improvement in this slice: the suite's strongest
+end-to-end test was previously evidence about the path that skips the checks.
+
+### A cycle this slice created, and the three placements it took to remove it
+
+`ToolContext` was written inside `envelope.py`, then in its own `mcp/context.py`,
+then in `contract.py`. Each closed an `mcp -> tools -> mcp` cycle Enola reports
+(cycle count went 1 → 2). The mechanism, measured rather than guessed:
+
+- `mcp/contract.py` declares `ToolHandler` as a **runtime** type alias mentioning
+  `ToolContext`, so it must import the name at runtime — `TYPE_CHECKING` raises
+  `NameError` when the alias is evaluated.
+- `mcp/__init__` imported `contract` eagerly, and the tool modules do
+  `import film_pipeline.mcp.tools as tools_pkg`, which executes `mcp/__init__`.
+- Enola collapses every module directly under `mcp/` into the `mcp` node, so an
+  import from `contract` (root) to a module the tools also reach *is* the cycle.
+
+Fixes, both kept because both are improvements:
+
+1. **`mcp/__init__`'s re-exports are now lazy** (PEP 562 `__getattr__`, the pattern
+   the facade already used for `MCPServer`). Nothing in `src/` imports the facade —
+   only tests do — so this costs nothing and removed a real
+   `mcp.__init__ -> mcp.server` edge too.
+2. **`ToolContext` lives in `mcp/tools/context.py`**, under the subpackage Enola
+   treats as its own node, so `contract -> tools.context` is no longer a root
+   self-edge.
+
+`ToolContext.project_state()` was also dropped: `helpers.require_project_state`
+already owns "the project's state, or a raise", and a second method for one rule is
+the duplication this program keeps removing.
+
+### Evidence
+
+- Step 7's and Step 8's tests still pass; the full E2E and smoke suites pass
+  through dispatch.
+- `make ci-check`: **2334 passed, 91.56% coverage**, product gate PASS.
+- `mypy src tests` clean.
+- `enola check` exit 0, cycle count **back to 1** (only the known `orchestration`
+  root-collapse artifact).
+- Recorded surface growth, re-measured not asserted: `mcp` 14→15 declared names and
+  37→38 public modules, `mcp.tools` 31→32 modules.

@@ -584,18 +584,36 @@ def test_response_with_error_to_dict() -> None:
     assert err["message"] == "no"
 
 
-def test_active_project_set_after_resolution() -> None:
-    server = _build_server_with_projects()
-    # already set by register_project (first registration becomes active)
-    assert server.active_project_id == "film_2026_0001"
-    # resolving a mutation confirms the active project is retained
-    asyncio.run(
-        server.call(
-            "approve_phase",
-            {"project_ref": "memory-in-snow", "phase": "script", "confirmed": True},
-        )
-    )
-    assert server.active_project_id == "film_2026_0002"
+def test_read_tool_does_not_change_the_active_project(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A read via an explicit `project_ref` leaves the active project alone.
+
+    Replaces `test_active_project_set_after_resolution`, which asserted that a
+    *mutating* call moved `MCPServer.active_project_id`. That field is deleted
+    (doc 01 slice 3): `StudioRuntime` owns project state, so it owns "active",
+    and the server reads it rather than keeping a reconciled second copy. What is
+    worth asserting now is that resolution never has a side effect on it.
+    """
+    from film_pipeline.studio.runtime import get_runtime, reset_runtime
+
+    reset_runtime("mock")
+    rt = get_runtime()
+    _pin_tools_runtime(monkeypatch)
+    rt.create_project(project_id="active-a", title="Active A", slug="active-a")
+    rt.create_project(project_id="active-b", title="Active B", slug="active-b")
+    rt.set_active("active-a")
+
+    server = MCPServer()
+    server.register_project(ProjectRecord("active-a", "active-a", "Active A"))
+    server.register_project(ProjectRecord("active-b", "active-b", "Active B"))
+
+    resp = asyncio.run(server.call("get_film_state", {"project_ref": "active-b"}))
+    assert resp.success is True
+
+    active = rt.get_active()
+    assert active is not None
+    assert active["project_id"] == "active-a", "resolution moved the active project"
 
 
 def test_read_tool_honors_project_ref_without_changing_active(
@@ -613,7 +631,6 @@ def test_read_tool_honors_project_ref_without_changing_active(
     server = MCPServer()
     server.register_project(ProjectRecord("project-a", "project-a", "Project A"))
     server.register_project(ProjectRecord("project-b", "project-b", "Project B"))
-    assert server.active_project_id == "project-a"
 
     resp = asyncio.run(server.call("get_film_state", {"project_ref": "project-b"}))
     assert resp.success is True
@@ -621,11 +638,10 @@ def test_read_tool_honors_project_ref_without_changing_active(
     assert data.get("ok") is True
     state = cast(dict[str, object], data["state"])
     assert state["project_id"] == "project-b"
-    # Neither the runtime nor the server active project changed.
+    # The active project did not change.
     active = rt.get_active()
     assert active is not None
     assert active["project_id"] == "project-a"
-    assert server.active_project_id == "project-a"
 
 
 def test_list_artifacts_honors_project_ref(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -650,7 +666,6 @@ def test_list_artifacts_honors_project_ref(monkeypatch: pytest.MonkeyPatch) -> N
     active = rt.get_active()
     assert active is not None
     assert active["project_id"] == "la-a"
-    assert server.active_project_id == "la-a"
 
 
 def test_read_tool_returns_unknown_project_for_bad_ref() -> None:
@@ -828,15 +843,15 @@ def test_wired_get_invalidation_report() -> None:
 
 
 def test_wired_get_audit_log() -> None:
+    """Called through dispatch, so the `ToolContext` path is what runs."""
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.create_project(project_id="test-audit", title="Audit Test", slug="audit-test")
 
-    from film_pipeline.mcp.tools import get_audit_log
-
-    result = asyncio.run(get_audit_log({"project_id": "test-audit"}))
-    assert result["ok"] is True
+    resp = asyncio.run(MCPServer().call("get_audit_log", {"project_id": "test-audit"}))
+    assert resp.success is True
+    result = cast(dict[str, object], resp.data)
     assert isinstance(result["events"], list)
 
 
@@ -846,10 +861,9 @@ def test_wired_explain_last_decision() -> None:
     rt = gr()
     rt.create_project(project_id="test-eld", title="ELD Test", slug="eld-test")
 
-    from film_pipeline.mcp.tools import explain_last_decision
-
-    result = asyncio.run(explain_last_decision({}))
-    assert result["ok"] is True
+    resp = asyncio.run(MCPServer().call("explain_last_decision", {}))
+    assert resp.success is True
+    result = cast(dict[str, object], resp.data)
     assert "event_id" in result
     assert result["action"] == "create_project"
 
@@ -902,17 +916,13 @@ def test_wired_get_next_actions() -> None:
 
 
 def test_wired_explain_agent_routing() -> None:
-    from film_pipeline.mcp.tools import explain_agent_routing
-
-    result = asyncio.run(explain_agent_routing({}))
-    assert result["ok"] is True
+    resp = asyncio.run(MCPServer().call("explain_agent_routing", {}))
+    assert resp.success is True
 
 
 def test_wired_explain_kb_context() -> None:
-    from film_pipeline.mcp.tools import explain_kb_context
-
-    result = asyncio.run(explain_kb_context({}))
-    assert result["ok"] is True
+    resp = asyncio.run(MCPServer().call("explain_kb_context", {}))
+    assert resp.success is True
 
 
 def test_wired_kb_explain_context_choice() -> None:

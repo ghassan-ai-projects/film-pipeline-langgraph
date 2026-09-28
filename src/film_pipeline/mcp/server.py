@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, cast
 
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT
 from film_pipeline.mcp._stdio_transport import (
@@ -29,6 +29,7 @@ from film_pipeline.mcp.contract import (
 )
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.projects import (
     AmbiguousProjectError,
@@ -43,7 +44,6 @@ class MCPServer:
 
     tools: ToolRegistry = field(default_factory=make_registry)
     projects: ProjectRegistry = field(default_factory=ProjectRegistry)
-    active_project_id: str | None = None
 
     async def call(
         self,
@@ -80,7 +80,7 @@ class MCPServer:
         reg = self._registration_for(tool_name, envelope)
         if isinstance(reg, MCPResponse):
             return reg
-        resolved = self._resolve_project_ref(reg, envelope)
+        resolved = self._resolve_project_ref(envelope)
         if isinstance(resolved, MCPResponse):
             return resolved
         return reg, resolved
@@ -105,17 +105,19 @@ class MCPServer:
 
     def _resolve_project_ref(
         self,
-        reg: ToolRegistration,
         envelope: RequestEnvelope,
     ) -> MCPResponse | RequestEnvelope:
         """Resolve the request's project, explicit ref first, then the session's."""
         if not envelope.project_ref:
-            # No explicit ref: fall back to the session's active project. The
-            # field was previously write-only — set on a mutating call and
-            # never read — so the dispatch precondition had nothing to consult
-            # and every handler re-derived the active project for itself.
-            if self.active_project_id:
-                return _resolved_envelope(envelope, self.active_project_id)
+            # No explicit ref: fall back to the active project. It is read from
+            # the runtime, which owns project state, rather than from a second
+            # copy here — doc 01's slice 3. The server kept its own
+            # `active_project_id` and reconciled the two after the fact with
+            # `_auto_register_from_runtime`, whose own comment conceded that
+            # "the server's ProjectRegistry is a separate in-memory structure".
+            active = self._active_project_from_runtime()
+            if active:
+                return _resolved_envelope(envelope, active)
             return envelope
         try:
             project = self.projects.resolve_or_raise(envelope.project_ref)
@@ -126,11 +128,8 @@ class MCPServer:
             # the server's registry, auto-register it. This fixes the gap
             # where create_film_project registers with the runtime but the
             # server's ProjectRegistry is a separate in-memory structure.
-            return self._unknown_project_fallback(reg, envelope, exc)
-        envelope = _resolved_envelope(envelope, project.project_id)
-        if reg.contract.mutates_state:
-            self.active_project_id = project.project_id
-        return envelope
+            return self._unknown_project_fallback(envelope, exc)
+        return _resolved_envelope(envelope, project.project_id)
 
     def _ambiguous_response(
         self,
@@ -152,7 +151,6 @@ class MCPServer:
 
     def _unknown_project_fallback(
         self,
-        reg: ToolRegistration,
         envelope: RequestEnvelope,
         exc: KeyError,
     ) -> MCPResponse | RequestEnvelope:
@@ -164,8 +162,6 @@ class MCPServer:
                 request_id=envelope.request_id,
                 error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
             )
-        if reg.contract.mutates_state:
-            self.active_project_id = pid
         return _resolved_envelope(envelope, pid)
 
     def _auto_register_from_runtime(self, project_ref: str | None) -> str | None:
@@ -247,13 +243,33 @@ class MCPServer:
         arguments: dict[str, object],
         envelope: RequestEnvelope,
     ) -> MCPResponse:
-        """Invoke the handler (sync or async) and shape result or failure into a response."""
+        """Invoke the handler and shape result or failure into a response.
+
+        Handlers come in two shapes while doc 01's migration is in flight:
+
+        - `handler(ctx, args)` — the target. Dispatch builds the `ToolContext`, so
+          the handler never resolves the runtime or the project itself.
+        - `handler(args)` — the legacy shape, still receiving `"_envelope"` inside
+          the argument dict. Deleted group by group; when the last one moves, this
+          branch and the `"_envelope"` key both go.
+        """
+
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
+        # The union in `ToolHandler` admits both shapes, so mypy cannot narrow it
+        # from a runtime signature check. `_accepts_context` just proved which
+        # call this is; the cast states that.
+        any_handler = cast("Any", handler)
+        is_async = inspect.iscoroutinefunction(handler)
         try:
-            if inspect.iscoroutinefunction(handler):
-                data: Any = await handler(new_args)
+            if _accepts_context(handler):
+                context = self._build_context(envelope)
+                data: Any = (
+                    await any_handler(context, dict(arguments))
+                    if is_async
+                    else any_handler(context, dict(arguments))
+                )
             else:
-                data = handler(new_args)
+                data = await any_handler(new_args) if is_async else any_handler(new_args)
             return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
@@ -277,13 +293,56 @@ class MCPServer:
                 error=MCPError(code=MCPErrorCode.INTERNAL_ERROR, message=str(exc)),
             )
 
+    def _build_context(self, envelope: RequestEnvelope) -> ToolContext:
+        """Build the per-request context dispatch hands a context-style handler.
+
+        The runtime is resolved once here rather than 61 times across the tool
+        modules, and the resolved project is read from the envelope instead of
+        being smuggled through the argument dict.
+        """
+        from film_pipeline.studio.runtime import get_runtime
+
+        return ToolContext(
+            runtime=get_runtime(),
+            project_id=envelope.resolved_project_id,
+            envelope=envelope,
+        )
+
     def catalog(self) -> list[dict[str, object]]:
         return self.tools.catalog()
 
     def register_project(self, record: ProjectRecord) -> None:
         self.projects.register(record)
-        if self.active_project_id is None:
-            self.active_project_id = record.project_id
+
+    def _active_project_from_runtime(self) -> str | None:
+        """The runtime's active project id, or ``None`` when there is none.
+
+        `StudioRuntime` owns project state, so it owns "active". Reading it here
+        keeps one owner: a mutating call through the runtime and a
+        `set_active_project` tool now move the same value, where they used to
+        move two.
+        """
+        from film_pipeline.studio.runtime import get_runtime
+
+        active = get_runtime().get_active()
+        if active is None:
+            return None
+        return str(active.get("project_id", "")) or None
+
+
+def _accepts_context(handler: ToolHandler) -> bool:
+    """True when ``handler`` is declared as ``(ctx, args)`` rather than ``(args)``.
+
+    Read from the signature rather than a registry flag: the handler's own
+    declaration is the single source of truth for how it wants to be called, and
+    a flag would be a second place to forget. A handler whose first parameter is
+    named ``ctx`` is context-style; the name is the declaration.
+    """
+    try:
+        parameters = list(inspect.signature(handler).parameters)
+    except (TypeError, ValueError):  # pragma: no cover - builtins and C callables
+        return False
+    return bool(parameters) and parameters[0] == "ctx"
 
 
 def main() -> int:

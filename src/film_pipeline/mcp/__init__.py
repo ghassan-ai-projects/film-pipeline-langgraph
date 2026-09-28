@@ -6,15 +6,24 @@ boundary.
 
 from __future__ import annotations
 
-from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolHandler, ToolRegistry
-from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
-from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
-from film_pipeline.projects import (
-    AmbiguousProjectError,
-    ProjectRecord,
-    ProjectRegistry,
-    ResolutionResult,
-)
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from film_pipeline.mcp.contract import (
+        ToolContract,
+        ToolGroup,
+        ToolHandler,
+        ToolRegistry,
+    )
+    from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
+    from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
+    from film_pipeline.mcp.tools.context import ToolContext
+    from film_pipeline.projects import (
+        AmbiguousProjectError,
+        ProjectRecord,
+        ProjectRegistry,
+        ResolutionResult,
+    )
 
 __all__ = [
     "AmbiguousProjectError",
@@ -26,6 +35,7 @@ __all__ = [
     "ProjectRegistry",
     "RequestEnvelope",
     "ResolutionResult",
+    "ToolContext",
     "ToolContract",
     "ToolGroup",
     "ToolHandler",
@@ -34,9 +44,43 @@ __all__ = [
 ]
 
 
-def __getattr__(name: str) -> object:
-    if name == "MCPServer":
-        from film_pipeline.mcp.server import MCPServer
+#: Names this facade resolves on first access, and the module each lives in.
+#:
+#: These are **lazy on purpose** (PEP 562), not eager re-exports. `mcp` is the
+#: package root of a tree whose tool modules legitimately do
+#: `import film_pipeline.mcp.tools as tools_pkg`, and any eager import here is
+#: therefore reachable from the tool modules — so `mcp -> tools -> mcp` closes as
+#: a cycle the moment a tool module needs a contract type. Enola reports it, and
+#: the top-level `test_package_acyclicity` guard cannot see it because it compares
+#: top-level packages.
+#:
+#: Nothing in `src/` imports this facade (checked: only tests do), so making the
+#: re-exports lazy costs nothing and removes the cycle. `from film_pipeline.mcp
+#: import ToolContract` still works — `__getattr__` resolves it.
+_LAZY_ATTRS: dict[str, str] = {
+    "AmbiguousProjectError": "film_pipeline.projects",
+    "MCPError": "film_pipeline.mcp.errors",
+    "MCPErrorCode": "film_pipeline.mcp.errors",
+    "MCPResponse": "film_pipeline.mcp.errors",
+    "MCPServer": "film_pipeline.mcp.server",
+    "ProjectRecord": "film_pipeline.projects",
+    "ProjectRegistry": "film_pipeline.projects",
+    "RequestEnvelope": "film_pipeline.mcp.envelope",
+    "ResolutionResult": "film_pipeline.projects",
+    "ToolContract": "film_pipeline.mcp.contract",
+    "ToolContext": "film_pipeline.mcp.tools.context",
+    "ToolGroup": "film_pipeline.mcp.contract",
+    "ToolHandler": "film_pipeline.mcp.contract",
+    "ToolRegistry": "film_pipeline.mcp.contract",
+    "new_envelope": "film_pipeline.mcp.envelope",
+}
 
-        return MCPServer
-    raise AttributeError(name)
+
+def __getattr__(name: str) -> object:
+    """Resolve a facade name on first access rather than at import time."""
+    module_path = _LAZY_ATTRS.get(name)
+    if module_path is None:
+        raise AttributeError(name)
+    import importlib
+
+    return getattr(importlib.import_module(module_path), name)

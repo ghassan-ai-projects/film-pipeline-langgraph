@@ -33,8 +33,15 @@ def _make_operator_server(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> tuple[StudioRuntime, MCPServer]:
-    """Build an isolated runtime and a registry-backed server for one action."""
-    import film_pipeline.mcp.tools as tools_pkg
+    """Build an isolated runtime and a registry-backed server for one action.
+
+    The runtime is *installed* as the process runtime (the owner's public
+    `install_runtime`) rather than patched onto the tools package. Dispatch reads
+    the active project from the runtime itself — doc 01 slice 3 removed
+    `MCPServer.active_project_id` as the second copy — so a test that only patched
+    the tools accessor would leave dispatch looking at the wrong runtime.
+    """
+    from film_pipeline.studio.runtime import install_runtime
 
     project_id = "operator-contract"
     runtime = StudioRuntime(runtime_root=tmp_path / "runtime")
@@ -43,7 +50,7 @@ def _make_operator_server(
     active = runtime.get_active()
     assert active is not None
     active["current_phase"] = "intake"
-    monkeypatch.setattr(tools_pkg, "get_runtime", lambda: runtime)
+    install_runtime(runtime, mode="mock")
 
     server = MCPServer()
     server.register_project(
