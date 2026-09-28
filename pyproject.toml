@@ -55,6 +55,20 @@ dev = [
   "ruff>=0.12",
 ]
 
+[tool.uv]
+# Keep the uv cache inside the repository instead of `~/.cache/uv`.
+#
+# Why: agent sandboxes (and some CI runners) deny writes outside the workspace, and
+# a denied cache turns into `error: Failed to initialize cache at
+# /Users/<user>/.cache/uv ... Operation not permitted`. That surfaces as a failed
+# `uv build` — which only runs in pre-push, so the symptom is "pushing is broken"
+# rather than "the cache is misplaced".
+#
+# Setting it here rather than exporting `UV_CACHE_DIR` fixes every invocation at
+# once, including the pre-commit hooks, which run `uv` in their own environment and
+# never see a shell export. `.uv-cache/` is already in .gitignore.
+cache-dir = ".uv-cache"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/film_pipeline"]
 # `devharness` holds test doubles and scenario scripts. Nothing in production
