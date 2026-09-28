@@ -31,7 +31,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
 | 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
 | 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
-| 15d | `studio` hoisted to 0 | `_pending_` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
+| 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
+| 15e | `generation` hoisted to 0 | `_pending_` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1295,3 +1296,43 @@ package.
 `mcp` (108), `orchestration` (89), `post` (5), `generation` (5). `mcp` and
 `orchestration` are 95% of what is left; both need per-module commits at the batch
 size Step 15c's bisect recommended.
+
+## Step 15e — `generation` to zero (2026-09-28)
+
+`generation` 25 → 0; total unexplained **207 → 202**. Five packages are now fully
+hoisted or explained: `storage`, `governance`, `cli`, `studio`, `generation`.
+
+### The grep-first procedure, which this slice should have used from the start
+
+Step 15d concluded that a hoist is safe unless a test patches the dotted name. This
+slice applied it — `grep` for `patch.*<name>` and `setattr.*<name>` across `tests/`
+before touching anything — and no test broke. The five patch points that remain lazy
+in `generation.reference` were identified that way rather than by bisect.
+
+### A tooling failure worth recording
+
+Three separate edits were lost or misapplied in this slice, all from scripted
+string replacement rather than from the change itself:
+
+- An insert landed *inside* a function body instead of at module level, twice.
+- `git checkout HEAD -- <file>` reverted a hoist that had already succeeded, because
+  the file was committed in a previous step and the checkout looked like a no-op fix.
+
+The recovery was the same each time and is the durable lesson: after every scripted
+edit, run `grep -n "^from film_pipeline"` on the file and `mypy` on the package, and
+confirm `git status` shows the file as modified. A hoist that is not visible in
+`git status` did not happen. Two of the three were caught by exactly that check
+rather than by a later gate.
+
+### Evidence
+
+- Guard: **207 unexplained → 202**; `generation` **25 → 0**.
+- `make ci-check`: **2347 passed, 91.87% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (89), `post` (5). `post`'s five are one annotated import
+block. `mcp` and `orchestration` are 97% of what is left, and both need per-module
+commits — Step 15c's bisect and Step 15e's lost-edit failures both argue for smaller
+batches, and these two packages are where the remaining risk is.

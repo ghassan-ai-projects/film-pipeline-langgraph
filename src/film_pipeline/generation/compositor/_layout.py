@@ -7,6 +7,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from film_pipeline.schemas.reference import CompositeSheetManifest, TileEntry
 from film_pipeline.storage.project_storage import ProjectStorage
 
 # ── Layout constants ─────────────────────────────────────────────────────
@@ -203,8 +204,6 @@ def _write_sheet_manifest(
     tiles: dict[str, tuple[int, int, int, int]],
 ) -> None:
     """Write a .sheet.json manifest alongside the composite PNG."""
-
-    from film_pipeline.schemas.reference import CompositeSheetManifest, TileEntry
 
     tile_entries: list[TileEntry] = []
     placeholders: list[str] = []

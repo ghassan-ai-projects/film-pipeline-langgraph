@@ -6,6 +6,9 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from film_pipeline.generation.sheet_reviewer import review_composite_sheet
+from film_pipeline.schemas.base import FilmPhase
+
 if TYPE_CHECKING:
     from film_pipeline.storage.store import ArtifactStore
 
@@ -27,7 +30,6 @@ def _load_environment_palette(
     project_id: str,
 ) -> list[str] | None:
     """Load the visual-dev EnvironmentBible palette (None when unavailable)."""
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         version = max(
@@ -247,7 +249,6 @@ def validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> No
     try:
         # lazy: `review_composite_sheet` is patched at its source module; see above.
         from film_pipeline.agents.model_routing import ModelRouter
-        from film_pipeline.generation.sheet_reviewer import review_composite_sheet
 
         router = ModelRouter()
         review_composite_sheet(
