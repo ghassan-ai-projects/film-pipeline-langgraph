@@ -39,7 +39,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `51bba6a` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
 | 15j | **`mcp` to 0 — Step 15 complete** | `b020c22` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
 | 6.8 | AGENTS.md package table completed | `14fd555` | table rows **17 → 20**; now exactly matches the tree | 0 |
-| 6.11 | Enum import spellings — **no sweep**, recorded | `_pending_` | 11 re-exported names, **0 divergent**; decision documented | 0 |
+| 6.11 | Enum import spellings — **no sweep**, recorded | `5afbf85` | 11 re-exported names, **0 divergent**; decision documented | 0 |
+| 6.7 | Text-only row builders out of `filmspec` into `generation` | `_pending_` | `filmspec` declared names **22 → 20**; `generation` 21 → 22 modules | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1820,3 +1821,54 @@ enforcing it would require the sweep this slice just declined.
 - Spellings: **164** via `schemas.base`, **36** via `filmspec`.
 - Identity: **11 re-exported names, 0 divergent** — re-measured, not assumed.
 - No code changed; gates unchanged and green.
+
+## Doc 06 slice 6.7 — the text-only builders leave `filmspec` (2026-09-28)
+
+Doc 06 named two things in `filmspec` that are not vocabulary: the
+`NO_ACTIVE_PROJECT` message and the text-only generation-request builders. It also
+gave the condition: *"These moved into `filmspec` to be shared by two callers; after
+doc 03 there is one. Move them then, not before."*
+
+### Re-measuring the condition rather than assuming it
+
+Doc 03 slice 1 landed in Step 9, so the condition should hold. Both halves were
+measured rather than trusted:
+
+| Name | Caller packages now | Verdict |
+|---|---|---|
+| `NO_ACTIVE_PROJECT` | `mcp` only | one caller |
+| `text_only_generation_requests` | `mcp` only | one caller |
+| `is_text_only_policy` | `mcp` only | one caller |
+| `blocking_issues` | 7 packages | genuinely shared |
+| `next_phase` | 3 packages | genuinely shared |
+
+`operations._generation_ops` is gone (deleted in Step 9), so the "two callers" premise
+is indeed spent. But the finding's remedy applies to only *part* of what it names, and
+the measurement is what shows which part:
+
+- **`NO_ACTIVE_PROJECT` stays.** It is a *string constant*, and `filmspec` is described
+  as owning "phases, enums, transitions, generation-request codes" — a message is
+  closer to vocabulary than behaviour, and moving it would put an `mcp`-facing error
+  text in a vocabulary package either way. Doc 06 calls it "an `mcp` concern"; the
+  measurement agrees it is `mcp`-only, but one caller is not by itself a reason to move
+  a constant whose value `filmspec` already documents.
+- **The builders moved.** They *construct rows* — id scheme, field set, and a
+  `"all"` fallback rule — which is behaviour, not vocabulary. Now in
+  [`generation/text_only.py`](../../src/film_pipeline/generation/text_only.py).
+- **`TEXT_ONLY_POLICY` and `is_text_only_policy` stay.** The policy string is
+  vocabulary; the predicate is the one-line rule that reads it.
+
+### A stale justification found on the way
+
+`TEXT_ONLY_POLICY`'s comment explained that the predicate "lived as two byte-identical
+copies — one in `operations._generation_ops`…", and a second docstring said "Both the
+operator service and the MCP tool path build these rows". The first is accurate
+history; the second was a **live claim about a deleted module**. It is now updated to
+name the deletion and where the builders went, which is the difference between a
+comment recording why something exists and one asserting who calls it today.
+
+### Evidence
+
+- `filmspec` declared surface: **22 → 20**; `generation` **21 → 22** modules.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES, text_only_generation_requests
+from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
 from film_pipeline.filmspec import (
     is_text_only_policy as is_text_only_policy,
 )
 from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.text_only import text_only_generation_requests
 from film_pipeline.orchestration.state_schema import remove_issues_by_code
 from film_pipeline.storage.manifest import (
     AssetEntry,

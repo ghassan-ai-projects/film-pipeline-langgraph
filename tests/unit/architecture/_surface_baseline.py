@@ -55,8 +55,8 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "config": Surface(15, 6),
     "constraints": Surface(4, 1),
     "devharness": Surface(4, 5),
-    "filmspec": Surface(22, 0),
-    "generation": Surface(18, 21),
+    "filmspec": Surface(20, 0),
+    "generation": Surface(18, 22),
     # Split out of `mcp.tools.reference_generation` by doc 03 slice 2: the
     # use case moved to its owner, the MCP handler stayed behind.
     "generation.reference": Surface(24, 6),

@@ -11,8 +11,8 @@ recogniser and a producer that move together.
 
 from __future__ import annotations
 
-from film_pipeline.filmspec import (
-    STALE_GENERATION_REQUEST_CODES,
+from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
+from film_pipeline.generation.text_only import (
     text_only_generation_request,
     text_only_generation_requests,
 )
