@@ -16,6 +16,7 @@ from film_pipeline.generation.reference.entries import (
 from film_pipeline.generation.reference.retry_loop import (
     _RetryOutcome,
 )
+from film_pipeline.schemas.reference import ReferenceFrame
 
 
 def stamp_retry_stats(raw: dict[str, object], outcome: _RetryOutcome) -> None:
@@ -125,10 +126,11 @@ def _write_frame_sidecar_safely(
     target_path: Path, raw: dict[str, object], asset_posix: str, ctx: _EntryContext
 ) -> None:
     """Write the frame metadata sidecar alongside the PNG; non-blocking."""
-    try:
-        from film_pipeline.generation.frame_sidecar import write_frame_sidecar
-        from film_pipeline.schemas.reference import ReferenceFrame
+    # lazy: patched at `generation.frame_sidecar.write_frame_sidecar`; a module-level
+    # binding resolves before the patch and bypasses it.
+    from film_pipeline.generation.frame_sidecar import write_frame_sidecar
 
+    try:
         frame = ReferenceFrame(
             frame_path=asset_posix,
             reference_id=ctx.reference_id,

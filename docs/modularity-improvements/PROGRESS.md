@@ -29,7 +29,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `0ca9313` | 7 pure helpers out of `mcp`; new registration guard | 0 |
 | 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` imports: **23 → 14** | 0 |
 | 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
-| 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `_pending_` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
+| 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
+| 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `_pending_` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1187,3 +1188,64 @@ a reason separated from the import by code is not accepted, and a multi-line blo
 
 `mcp` (108), `orchestration` (89), `generation` (25), `studio` (15), `post` (5).
 `mcp` and `orchestration` are the bulk and will need per-module work.
+
+## Step 15c — `generation.reference`, and the patchability constraint (2026-09-28)
+
+`generation` 25 → 5; total unexplained **242 → 222**.
+
+### The finding: a hoist can make a call target unpatchable
+
+This is the third instance of the same constraint, and after three it is a rule rather
+than an incident. **Moving a call target to module scope binds it before any test can
+patch it at its source.** A test that patches
+`generation.frame_reviewer.should_review_frame` intercepts the call only while the
+caller looks the name up at call time. Hoist the import and the caller holds a direct
+reference, so the mock is bypassed:
+
+```text
+AssertionError: Expected 'should_review_frame' to have been called once. Called 0 times.
+```
+
+Five imports in `generation.reference` are load-bearing for this reason and now carry
+`# lazy:` reasons naming the patch target:
+
+| Import | Patched at |
+|---|---|
+| `should_review_frame`, `review_frame` | `generation.frame_reviewer.*` |
+| `run_heuristic_checks` | `generation.frame_heuristics.*` |
+| `write_frame_sidecar` | `generation.frame_sidecar.*` |
+| `build_character_identity_sheet` and four siblings | `generation.compositor.build_*` |
+| `review_composite_sheet` | `generation.sheet_reviewer.*` |
+
+Doc 05 predicted that hoisting "does not establish that hoisting changes no
+behaviour". It is worth recording *which* behaviour: not import-order side effects in
+this tree, but the loss of a seam the test suite depends on. Where that seam is
+deliberate — a test that exists to prove the call happens — the lazy import is correct
+and the reason belongs in the code, which is what the guard now requires.
+
+### Bisecting six files to find one
+
+Six files were hoisted together and the reference-generation suite went red. Reverting
+them one at a time identified `retry_loop.py` immediately, and the same method found
+`outcomes.py`'s sidecar import after that. The lesson is about batch size, not about
+the technique: six files in one pass meant six reverts to localise a failure that one
+file at a time would have named directly. Later hoists in this step should be
+smaller.
+
+One placement error also surfaced: the sidecar import was first inserted into
+`_register_generated_entry` instead of `_write_frame_sidecar_safely`, where the call
+actually is. `mypy`'s `Name "write_frame_sidecar" is not defined` found it — a
+name-defined error is what a mis-placed import looks like, and it is why running mypy
+after every hoist rather than at the end of the batch matters.
+
+### Evidence
+
+- Guard: **242 unexplained → 222**; `generation` **25 → 5** (all five annotated).
+- `make ci-check`: **2347 passed, 91.85% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (89), `studio` (15), `post` (5), `generation` (5). `mcp`
+and `orchestration` are 89% of what is left and will need per-module commits rather
+than package-level batches.

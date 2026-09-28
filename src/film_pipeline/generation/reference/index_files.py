@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from film_pipeline.generation.reference.context import (
     latest_artifact_version,
     reference_services,
 )
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.reference import ReferenceIndex, ReferenceIndexEntry
 from film_pipeline.storage.project_storage import ProjectStorage
-
-if TYPE_CHECKING:
-    from film_pipeline.schemas.reference import ReferenceIndexEntry
 
 _logger = logging.getLogger(__name__)
 
@@ -77,9 +77,6 @@ def save_reference_index_artifact(
 ) -> str | None:
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
-
     project_id = str(state.get("project_id", ""))
     store = reference_services(rt).artifact_store
     version = (
@@ -96,7 +93,6 @@ def save_reference_index_artifact(
         created_by="mcp.generate_reference_images",
         created_at=datetime.now(UTC),
     )
-    from film_pipeline.schemas.reference import ReferenceIndex
 
     entries = reference_entries_from_grouped(artifact)
     reference_index = ReferenceIndex(project_id=project_id, entries=entries)
@@ -108,7 +104,6 @@ def reference_entries_from_grouped(
     artifact: dict[str, object],
 ) -> list[ReferenceIndexEntry]:
     """Build typed ``ReferenceIndexEntry`` objects from grouped raw entries."""
-    from film_pipeline.schemas.reference import ReferenceIndexEntry
 
     raw_entries = cast(list[Any], artifact.get("entries", []))
     entries: list[ReferenceIndexEntry] = []
