@@ -5,11 +5,14 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
+
 from film_pipeline.filmspec import is_text_only_policy
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
 )
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -164,3 +167,47 @@ def _sync_generation_requests_from_ledger(
             }
         )
     active["generation_requests"] = requests
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class PlanGenerationBatchArgs(ToolArgs):
+    """Arguments for `plan_generation_batch`.
+
+    `shot_ids` may be a list or the string `"from-bible"`; the handler accepts both
+    because `generate_shot_bible` is the usual way to establish the shot list.
+    """
+
+    shot_ids: object = Field(default=None, description="Shot ids to plan, or 'from-bible'.")
+    mode: str = Field(
+        default="test", description="'test' or 'production'; an unknown value falls back to test."
+    )
+    provider: str = Field(default="", description="Provider override; empty uses the default.")
+    model: str = Field(default="", description="Model override; empty uses the default.")
+    prompt_ref: str = Field(default="", description="Prompt template reference to use.")
+
+
+class PreviewGenerationPromptsArgs(ToolArgs):
+    """Arguments for `preview_generation_prompts` (none)."""
+
+
+GENERATION_PLANNING_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="plan_generation_batch",
+        group=ToolGroup.GENERATION,
+        description="Plan generation requests for a set of shots without submitting them.",
+        args=PlanGenerationBatchArgs,
+        handler=plan_generation_batch,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="preview_generation_prompts",
+        group=ToolGroup.GENERATION,
+        description="Render the prompts a generation batch would send, without calling a provider.",
+        args=PreviewGenerationPromptsArgs,
+        handler=preview_generation_prompts,
+        active_project=True,
+    ),
+)

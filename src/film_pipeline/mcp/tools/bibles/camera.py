@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -67,3 +68,22 @@ async def generate_camera_bible(ctx: ToolContext, args: dict[str, object]) -> di
         return _error("CameraBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"CameraBible generation failed: {exc}")
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateCameraBibleArgs(ToolArgs):
+    """Arguments for `generate_camera_bible` (none)."""
+
+
+GENERATE_CAMERA_BIBLE = ToolSpec(
+    name="generate_camera_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate a CameraLanguageBible from the FilmConstitution.",
+    args=GenerateCameraBibleArgs,
+    handler=generate_camera_bible,
+    mutates=True,
+    active_project=True,
+)

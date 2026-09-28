@@ -22,13 +22,7 @@ from film_pipeline.mcp.tools.assembly import (
     plan_coverage_group,
 )
 from film_pipeline.mcp.tools.audit import AUDIT_TOOLS
-from film_pipeline.mcp.tools.bibles import (
-    generate_camera_bible,
-    generate_character_bible,
-    generate_environment_bible,
-    generate_shot_bible,
-    generate_style_bible,
-)
+from film_pipeline.mcp.tools.bibles import BIBLE_TOOLS
 from film_pipeline.mcp.tools.checkpoints import CHECKPOINT_TOOLS
 from film_pipeline.mcp.tools.config import (
     approve_profile_change,
@@ -38,14 +32,10 @@ from film_pipeline.mcp.tools.config import (
     propose_profile_change,
 )
 from film_pipeline.mcp.tools.generation import (
-    cancel_generation_request,
-    get_generation_status,
-    list_active_generations,
-    plan_generation_batch,
-    preview_generation_prompts,
-    promote_test_to_production,
-    resume_generation_polling,
-    start_generation_batch,
+    GENERATION_DISPATCH_TOOLS,
+    GENERATION_PLANNING_TOOLS,
+    GENERATION_PROMOTE_TOOLS,
+    GENERATION_STATUS_TOOLS,
 )
 from film_pipeline.mcp.tools.intake import approve_intake, get_intake_analysis, submit_idea
 from film_pipeline.mcp.tools.kb import (
@@ -240,60 +230,14 @@ def register_all_tools(registry: ToolRegistry) -> None:
     )
 
     # generation
-    _register(
-        registry,
-        "plan_generation_batch",
-        ToolGroup.GENERATION,
-        plan_generation_batch,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "preview_generation_prompts",
-        ToolGroup.GENERATION,
-        preview_generation_prompts,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "generate_character_bible",
-        ToolGroup.GENERATION,
-        generate_character_bible,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "generate_environment_bible",
-        ToolGroup.GENERATION,
-        generate_environment_bible,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "generate_camera_bible",
-        ToolGroup.GENERATION,
-        generate_camera_bible,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "generate_style_bible",
-        ToolGroup.GENERATION,
-        generate_style_bible,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "generate_shot_bible",
-        ToolGroup.GENERATION,
-        generate_shot_bible,
-        mutates=True,
-        active_project=True,
-    )
+    for spec in GENERATION_PLANNING_TOOLS:
+        registry.register_spec(spec)
+    for spec in GENERATION_DISPATCH_TOOLS:
+        registry.register_spec(spec)
+    for spec in GENERATION_STATUS_TOOLS:
+        registry.register_spec(spec)
+    for spec in BIBLE_TOOLS:
+        registry.register_spec(spec)
     _register(
         registry,
         "generate_plan",
@@ -318,54 +262,8 @@ def register_all_tools(registry: ToolRegistry) -> None:
         generate_reference_images,
         mutates=True,
     )
-    _register(
-        registry,
-        "start_generation_batch",
-        ToolGroup.GENERATION,
-        start_generation_batch,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "get_generation_status",
-        ToolGroup.GENERATION,
-        get_generation_status,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "resume_generation_polling",
-        ToolGroup.GENERATION,
-        resume_generation_polling,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "list_active_generations",
-        ToolGroup.GENERATION,
-        list_active_generations,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "cancel_generation_request",
-        ToolGroup.GENERATION,
-        cancel_generation_request,
-        mutates=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "promote_test_to_production",
-        ToolGroup.GENERATION,
-        promote_test_to_production,
-        mutates=True,
-        confirm=True,
-        active_project=True,
-    )
-
+    for spec in GENERATION_PROMOTE_TOOLS:
+        registry.register_spec(spec)
     # kb
     _register(registry, "kb_search", ToolGroup.KB, kb_search)
     _register(registry, "kb_get_item", ToolGroup.KB, kb_get_item)

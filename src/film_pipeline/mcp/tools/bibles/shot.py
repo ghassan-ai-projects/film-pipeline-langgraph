@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 from film_pipeline.schemas.continuity import (
     ContinuityLedger,
     ContinuityLedgerEntry,
@@ -218,3 +219,25 @@ async def generate_shot_bible(ctx: ToolContext, args: dict[str, object]) -> dict
         return _error("ShotBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"Shot bible generation failed: {exc}")
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateShotBibleArgs(ToolArgs):
+    """Arguments for `generate_shot_bible` (none)."""
+
+
+GENERATE_SHOT_BIBLE = ToolSpec(
+    name="generate_shot_bible",
+    group=ToolGroup.GENERATION,
+    description=(
+        "Generate the MasterFilmMatrix and ContinuityLedger from the Script, "
+        "constitution and visual development."
+    ),
+    args=GenerateShotBibleArgs,
+    handler=generate_shot_bible,
+    mutates=True,
+    active_project=True,
+)

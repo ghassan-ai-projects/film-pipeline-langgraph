@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -78,3 +79,22 @@ async def generate_style_bible(ctx: ToolContext, args: dict[str, object]) -> dic
         return _error("StyleBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateStyleBibleArgs(ToolArgs):
+    """Arguments for `generate_style_bible` (none)."""
+
+
+GENERATE_STYLE_BIBLE = ToolSpec(
+    name="generate_style_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate a StyleBible from the FilmConstitution and EnvironmentBible.",
+    args=GenerateStyleBibleArgs,
+    handler=generate_style_bible,
+    mutates=True,
+    active_project=True,
+)

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _ok,
@@ -36,3 +39,29 @@ async def promote_test_to_production(
         generation_ids=promoted_ids,
         message=f"{count} generation(s) promoted to PRODUCTION mode.",
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class PromoteTestToProductionArgs(ToolArgs):
+    """Arguments for `promote_test_to_production`."""
+
+    shot_ids: object = Field(
+        default=None, description="Shot ids to promote; empty promotes every completed test row."
+    )
+
+
+GENERATION_PROMOTE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="promote_test_to_production",
+        group=ToolGroup.GENERATION,
+        description="Promote completed TEST-mode generations to PRODUCTION.",
+        args=PromoteTestToProductionArgs,
+        handler=promote_test_to_production,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)

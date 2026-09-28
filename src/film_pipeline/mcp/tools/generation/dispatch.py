@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from pydantic import Field
+
 from film_pipeline.filmspec import is_text_only_policy
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -311,3 +314,54 @@ async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -
         cancelled=cancelled,
         provider=bool(row.provider_job_id),
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class StartGenerationBatchArgs(ToolArgs):
+    """Arguments for `start_generation_batch` (none)."""
+
+
+class ResumeGenerationPollingArgs(ToolArgs):
+    """Arguments for `resume_generation_polling`."""
+
+    generation_id: str = Field(description="Generation request to resume polling.")
+
+
+class CancelGenerationRequestArgs(ToolArgs):
+    """Arguments for `cancel_generation_request`."""
+
+    generation_id: str = Field(description="Generation request to cancel.")
+
+
+GENERATION_DISPATCH_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="start_generation_batch",
+        group=ToolGroup.GENERATION,
+        description="Submit the prepared generation rows to their providers.",
+        args=StartGenerationBatchArgs,
+        handler=start_generation_batch,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="resume_generation_polling",
+        group=ToolGroup.GENERATION,
+        description="Resume polling a generation request whose provider job is still running.",
+        args=ResumeGenerationPollingArgs,
+        handler=resume_generation_polling,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="cancel_generation_request",
+        group=ToolGroup.GENERATION,
+        description="Cancel a generation request and stop polling its provider job.",
+        args=CancelGenerationRequestArgs,
+        handler=cancel_generation_request,
+        mutates=True,
+        active_project=True,
+    ),
+)

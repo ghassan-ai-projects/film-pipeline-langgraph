@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -107,3 +110,28 @@ def _constitution_text(constitution: Any) -> str:
     if isinstance(constitution, dict):
         return "\n".join(f"{k}: {v}" for k, v in constitution.items())
     return str(constitution)
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateCharacterBibleArgs(ToolArgs):
+    """Arguments for `generate_character_bible`."""
+
+    character_id: str = Field(description="Stable id for the character.")
+    character_name: str = Field(default="", description="Display name; empty reuses the id.")
+
+
+GENERATE_CHARACTER_BIBLE = ToolSpec(
+    name="generate_character_bible",
+    group=ToolGroup.GENERATION,
+    description=(
+        "Generate a CharacterBible: a locked identity block, voice, wardrobe, "
+        "emotional arc and relationships."
+    ),
+    args=GenerateCharacterBibleArgs,
+    handler=generate_character_bible,
+    mutates=True,
+    active_project=True,
+)

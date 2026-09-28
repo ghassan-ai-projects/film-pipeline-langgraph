@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from film_pipeline.mcp.tools.context import ToolContext
 
@@ -123,6 +123,15 @@ class ToolArgs(BaseModel):
     """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    confirmed: bool = Field(
+        default=False,
+        description=(
+            "Required to be true for tools that ask for confirmation. Declared here "
+            "because it is a protocol field, not a tool argument: dispatch reads it "
+            "before the handler runs and never passes it on."
+        ),
+    )
 
 
 @dataclass(frozen=True)

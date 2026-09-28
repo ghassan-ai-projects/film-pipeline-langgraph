@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -71,3 +74,37 @@ async def list_active_generations(ctx: ToolContext, args: dict[str, object]) -> 
             for r in active_rows
         ],
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class GetGenerationStatusArgs(ToolArgs):
+    """Arguments for `get_generation_status`."""
+
+    generation_id: str = Field(description="Generation request to report on.")
+
+
+class ListActiveGenerationsArgs(ToolArgs):
+    """Arguments for `list_active_generations` (none)."""
+
+
+GENERATION_STATUS_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_generation_status",
+        group=ToolGroup.GENERATION,
+        description="Report one generation request's status, polls and provider job.",
+        args=GetGenerationStatusArgs,
+        handler=get_generation_status,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_active_generations",
+        group=ToolGroup.GENERATION,
+        description="List the generation requests that are still running or waiting on a human.",
+        args=ListActiveGenerationsArgs,
+        handler=list_active_generations,
+        active_project=True,
+    ),
+)

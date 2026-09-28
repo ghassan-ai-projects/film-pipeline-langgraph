@@ -21,7 +21,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `2ae1db7` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
 | 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `e34c3e0` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
 | 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `8f182f1` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
-| 11b | `checkpoints` (8) + `projects` (6) declared | `_pending_` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
+| 11b | `checkpoints` (8) + `projects` (6) declared | `ec1c323` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
+| 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `_pending_` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -674,3 +675,73 @@ thing it grades cannot catch a restatement.
 - Flag diff against HEAD: **NONE**, after fixing the one above.
 - `make ci-check`: **2340 passed, 91.66% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+## Step 11c — `generation` and `bibles` declared, and the guard that grades the rest (2026-09-28)
+
+14 more tools: the four `generation` modules (9 tools) and the five `bibles`
+documented as `generation`-group tools. Catalog: **31 tools with a real input
+schema** (from 18), generic descriptions **44** (from 57).
+
+### `extra="forbid"` found a real argument immediately
+
+The smoke suite failed with:
+
+```text
+1 validation error for PlanGenerationBatchArgs
+mode   Extra inputs are not permitted
+```
+
+`plan_generation_batch` reads `args.get("mode", "test")` and my model omitted
+`mode`. The AST sweep that produced the models had missed it because the call is
+`args.get("mode", "test")` in a *module-level helper* (`_resolve_generation_mode`),
+not in the handler body. That is the experiment doc 04 predicted working as
+intended: the failing call named the gap instead of the gap shipping as a silently
+ignored argument.
+
+### So the sweep became a guard, not a one-off
+
+`tests/unit/mcp/test_tool_args_coverage.py` walks every `ToolSpec`, follows the
+handler **and every module-level helper it calls**, and asserts the args model
+declares every key any of them reads. Run across all 31 specs it reported exactly
+one offender — the `mode` above — then zero.
+
+Adversarially verified: deleting `mode` from the model fails the guard with
+`{'plan_generation_batch': ['mode']}`.
+
+### Two more real defects, both caught only by the smoke suite
+
+1. **`confirmed` is a protocol field, not a tool argument.** `MCPServer._check_confirmation`
+   reads `arguments["confirmed"]` for every `confirm=True` tool and never passes it
+   to the handler. With `extra="forbid"` this meant every confirming tool rejected
+   the field the gate requires. Fixed by declaring `confirmed` once on `ToolArgs`,
+   with the reasoning in its docstring, plus
+   `test_the_protocol_confirmed_field_is_really_declared`.
+2. **An edit that silently did not apply.** The first attempt to add that field
+   matched a docstring string that had already changed, so the field was never
+   defined — and *every gate stayed green*: mypy, ruff, the catalog ratchet and the
+   args-coverage sweep were all satisfied, because the field was absent rather than
+   wrong and no unit test called a confirming tool. Only
+   `promote_test_to_production` in the smoke suite failed. The regression guard
+   above exists specifically because of this.
+
+### A deletion I caused, and the check that caught it
+
+Replacing the `# generation` block in `registry.py` removed **8 registrations that
+lived in that range but were not `generation` tools** as such — the five bibles,
+`generate_plan`, `generate_reference_images` and `run_validation`. They were
+restored as specs with their original groups and flags.
+
+Caught by the same flag-parity diff from Step 11b, extended to compare the full
+catalog: it reported those 8 tools as `None` (absent) rather than merely different.
+Registration **order** was also verified identical to HEAD, because a
+`# Registered in its historical slot` comment in the original recorded that the
+order was deliberate.
+
+### Evidence
+
+- `measure.py`: `input_schema` **18 → 31**; generic descriptions **57 → 44**.
+- Flag diff against HEAD: **NONE**; registration order: **IDENTICAL**.
+- Args-coverage sweep: **31 specs, 0 with undeclared keys**.
+- `make ci-check`: **2342 passed, 91.68% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+- Recorded surface growth: `mcp.tools.bibles` 6 → 12, `mcp.tools.generation` 11 → 15.

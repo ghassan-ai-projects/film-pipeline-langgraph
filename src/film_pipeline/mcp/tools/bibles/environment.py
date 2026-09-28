@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _error,
@@ -104,3 +107,25 @@ async def generate_environment_bible(
         return _error("EnvironmentBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"EnvironmentBible generation failed: {exc}")
+
+
+# ── Tool declaration ─────────────────────────────────────────────────────────
+# Declared next to the handler it describes (doc 04 slice 1).
+
+
+class GenerateEnvironmentBibleArgs(ToolArgs):
+    """Arguments for `generate_environment_bible`."""
+
+    environment_id: str = Field(default="", description="Stable id for the environment.")
+    environment_name: str = Field(default="", description="Display name; empty reuses the id.")
+
+
+GENERATE_ENVIRONMENT_BIBLE = ToolSpec(
+    name="generate_environment_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate an EnvironmentBible from the Script and FilmConstitution.",
+    args=GenerateEnvironmentBibleArgs,
+    handler=generate_environment_bible,
+    mutates=True,
+    active_project=True,
+)
