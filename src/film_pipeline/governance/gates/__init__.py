@@ -13,16 +13,16 @@ path. No new router tier needed.
 
 from __future__ import annotations
 
-from film_pipeline.governance.validators.brief import (
+from film_pipeline.governance.gates.brief import (
     load_execution_brief,
     validate_execution_brief,
 )
-from film_pipeline.governance.validators.planning_gates import (
+from film_pipeline.governance.gates.planning_gates import (
     validate_dispatch_readiness,
     validate_planning_completeness,
     validate_shot_scene_references,
 )
-from film_pipeline.governance.validators.prep_gates import (
+from film_pipeline.governance.gates.prep_gates import (
     validate_scene_count,
     validate_script_scene_preservation,
     validate_shot_structure,

@@ -6,8 +6,7 @@ from film_pipeline.schemas.base import ValidationModality, ValidationScope
 from film_pipeline.schemas.registries.validator_registry import (
     ValidatorRegistryEntry,
 )
-from film_pipeline.validation.registry import ValidatorRegistry
-from film_pipeline.validation.validators import MVP_VALIDATORS
+from film_pipeline.validation.registry import MVP_VALIDATORS, ValidatorRegistry
 
 
 class TestValidatorRegistry:

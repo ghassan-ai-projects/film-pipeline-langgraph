@@ -40,7 +40,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15j | **`mcp` to 0 — Step 15 complete** | `b020c22` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
 | 6.8 | AGENTS.md package table completed | `14fd555` | table rows **17 → 20**; now exactly matches the tree | 0 |
 | 6.11 | Enum import spellings — **no sweep**, recorded | `5afbf85` | 11 re-exported names, **0 divergent**; decision documented | 0 |
-| 6.7 | Text-only row builders out of `filmspec` into `generation` | `_pending_` | `filmspec` declared names **22 → 20**; `generation` 21 → 22 modules | 0 |
+| 6.7 | Text-only row builders out of `filmspec` into `generation` | `dd220d1` | `filmspec` declared names **22 → 20**; `generation` 21 → 22 modules | 0 |
+| 6.6 | `governance/validators` → `governance/gates`; `MVP_VALIDATORS` folded in | `_pending_` | one-file package deleted; surface **8,3 identical** after rename | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1872,3 +1873,49 @@ comment recording why something exists and one asserting who calls it today.
 - `filmspec` declared surface: **22 → 20**; `generation` **21 → 22** modules.
 - `make ci-check`: **2347 passed**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+## Doc 06 slice 6.6 — three things called "validators" (2026-09-28)
+
+Doc 06 listed three different things sharing the name `validators` and prescribed two
+changes. Both are done:
+
+| Change | Result |
+|---|---|
+| `governance/validators/` → `governance/gates/` | renamed, 15 references repointed |
+| `MVP_VALIDATORS` → `validation/registry.py` | moved; `validation/validators/` package **deleted** |
+
+### The rename matched the code's own vocabulary
+
+Doc 06's argument was that these "are called gates everywhere else, including their own
+docstring". Verified before acting — the module's first line already read
+*"Orchestrator structural validators — Gates S, A, B, and C"*, and its body documents
+`Gate S`, `Gate A`, `Gate B`, `Gate C`. The docstring was describing gates under a
+package named for something else. That is the finding, and the rename is the whole fix.
+
+The surface measurement confirms it was a pure move: `governance.gates` is
+**8 declared names, 3 modules** — byte-identical to the row it replaced. A rename that
+changed either number would have meant something else came along with it.
+
+### The one-file package
+
+`validation/validators/` contained exactly one thing: `MVP_VALIDATORS`, a 15-entry list
+of `ValidatorRegistryEntry` objects. Its only consumers were `validation/__init__`,
+`studio/smoke.py`, and two test modules — and the registry it feeds is
+`validation/registry.py`, in the same package. The list now sits in the module that
+uses it, and a reader no longer has to check whether `validation/validators` and
+`governance/gates` are the same thing.
+
+The surface row `validation.validators: Surface(1, 0)` is deleted, since the package is
+gone rather than shrunk. `validation`'s own declared surface is unchanged at 7 names,
+because `__init__` re-exported `MVP_VALIDATORS` before and still does.
+
+### Evidence
+
+- Rename: 15 references repointed; `governance.gates` surface **identical** at (8, 3).
+- Fold: one-file package deleted; `validation` declared surface unchanged at 7.
+- `make ci-check`: **2346 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining in the program
+
+Doc 06 slice 6.3 (where text transports live) and doc 03 slice 2's optional test split.

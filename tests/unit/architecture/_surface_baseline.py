@@ -63,7 +63,7 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "mcp.tools.reference_generation": Surface(2, 1),
     "generation.compositor": Surface(6, 3),
     "governance": Surface(12, 11),
-    "governance.validators": Surface(8, 3),
+    "governance.gates": Surface(8, 3),  # renamed from governance.validators, doc 06 slice 6.6
     "kb": Surface(4, 6),
     "mcp": Surface(15, 33),
     "mcp.tools": Surface(77, 27),
@@ -83,7 +83,6 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "studio": Surface(None, 9),
     "validation": Surface(7, 11),
     "validation.impl": Surface(7, 7),
-    "validation.validators": Surface(1, 0),
 }
 
 #: Package roots that deliberately declare no `__all__`, with the reason.
@@ -135,7 +134,7 @@ ARTIFACT_NAMES: frozenset[str] = frozenset(
         # consumer imports them through that root.
         "dataclass",
         "field",
-        # `validation.validators` uses these to build `MVP_VALIDATORS`, its one
+        # `validation/registry.py` uses these to build `MVP_VALIDATORS`, which
         # exported name. Consumers import them from `schemas`, not from here.
         "ValidationModality",
         "ValidationScope",

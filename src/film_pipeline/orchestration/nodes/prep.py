@@ -9,11 +9,11 @@ from typing import Any
 
 from film_pipeline.constraints import extract_constraints
 from film_pipeline.filmspec import blocking_issues
-from film_pipeline.governance.scope_contract import derive_scope_contract, pacing_from_config
-from film_pipeline.governance.validators import (
+from film_pipeline.governance.gates import (
     validate_scene_count,
     validate_script_scene_preservation,
 )
+from film_pipeline.governance.scope_contract import derive_scope_contract, pacing_from_config
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,

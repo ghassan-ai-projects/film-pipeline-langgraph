@@ -28,8 +28,7 @@ from film_pipeline.schemas.registries.provider_registry import (
 )
 from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.studio.runtime import StudioRuntime
-from film_pipeline.validation.registry import ValidatorRegistry
-from film_pipeline.validation.validators import MVP_VALIDATORS
+from film_pipeline.validation.registry import MVP_VALIDATORS, ValidatorRegistry
 
 
 @pytest.fixture

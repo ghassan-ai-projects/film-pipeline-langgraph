@@ -27,7 +27,7 @@ class TestStaleGenerationRequestCodes:
 
     def test_recognises_codes_the_planning_gate_raises(self) -> None:
         """Every code the gate emits must be removable by the shared helper."""
-        from film_pipeline.governance.validators.planning_gates import (
+        from film_pipeline.governance.gates.planning_gates import (
             validate_dispatch_readiness,
         )
         from film_pipeline.orchestration.state_schema import remove_issues_by_code
@@ -39,7 +39,7 @@ class TestStaleGenerationRequestCodes:
         assert state["issues"] == []
 
     def test_empty_request_list_is_also_removable(self) -> None:
-        from film_pipeline.governance.validators.planning_gates import (
+        from film_pipeline.governance.gates.planning_gates import (
             validate_dispatch_readiness,
         )
         from film_pipeline.orchestration.state_schema import remove_issues_by_code

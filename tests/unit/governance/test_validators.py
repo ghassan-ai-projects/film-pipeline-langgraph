@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from film_pipeline.governance.validators import (
+from film_pipeline.governance.gates import (
     validate_dispatch_readiness,
     validate_execution_brief,
     validate_planning_completeness,

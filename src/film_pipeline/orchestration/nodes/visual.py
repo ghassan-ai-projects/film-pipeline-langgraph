@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from film_pipeline.governance.validators import (
+from film_pipeline.governance.gates import (
     load_execution_brief,
     validate_execution_brief,
     validate_planning_completeness,

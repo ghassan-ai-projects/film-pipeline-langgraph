@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents.model_routing import ModelRouter
-from film_pipeline.governance.validators import (
+from film_pipeline.governance.gates import (
     validate_scene_count,
     validate_script_scene_preservation,
 )

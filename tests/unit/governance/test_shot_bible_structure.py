@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from film_pipeline.governance.validators import validate_shot_structure
+from film_pipeline.governance.gates import validate_shot_structure
 from film_pipeline.orchestration.nodes import shot_bible_node
 from film_pipeline.orchestration.nodes.visual import _reconcile_shot_matrix_to_brief
 from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices

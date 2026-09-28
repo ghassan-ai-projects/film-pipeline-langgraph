@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from film_pipeline.governance.validators._shared import (
+from film_pipeline.governance.gates._shared import (
     _blocking,
     _blocking_with_id,
     _extract_rows,

@@ -6,7 +6,7 @@ from copy import deepcopy
 from typing import Any
 
 from film_pipeline.generation.ledger import GenerationLedgerManager
-from film_pipeline.governance.validators import validate_dispatch_readiness
+from film_pipeline.governance.gates import validate_dispatch_readiness
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _save_artifact,

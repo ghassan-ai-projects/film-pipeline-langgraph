@@ -11,7 +11,7 @@ from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.config.loader import ProfileLoader
 from film_pipeline.kb.manifest import KBManifest
 from film_pipeline.studio.graph_factory import build_graph
-from film_pipeline.validation.validators import MVP_VALIDATORS
+from film_pipeline.validation.registry import MVP_VALIDATORS
 
 
 def check_graph_compiles() -> tuple[bool, str]:

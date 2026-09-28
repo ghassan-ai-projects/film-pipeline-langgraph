@@ -5,11 +5,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from film_pipeline.governance.orchestrator_reads import get_execution_brief
-from film_pipeline.governance.scope_contract import avg_shot_duration_for
-from film_pipeline.governance.validators._shared import (
+from film_pipeline.governance.gates._shared import (
     _blocking,
 )
+from film_pipeline.governance.orchestrator_reads import get_execution_brief
+from film_pipeline.governance.scope_contract import avg_shot_duration_for
 from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.execution_brief import ExecutionBrief
