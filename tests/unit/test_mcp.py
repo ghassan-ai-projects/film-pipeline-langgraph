@@ -313,7 +313,8 @@ def test_server_accepts_confirmed_mutation(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 def test_server_handles_handler_exception() -> None:
-    from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
+    from film_pipeline.mcp.contract import ToolRegistry
+    from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup
 
     server = MCPServer(tools=ToolRegistry())
 
@@ -409,8 +410,9 @@ def test_server_jsonrpc_rejects_invalid_requests_and_tool_call_params() -> None:
 
 
 def test_server_jsonrpc_tools_list_and_call_success_error_flags() -> None:
-    from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
+    from film_pipeline.mcp.contract import ToolRegistry
     from film_pipeline.mcp.server import handle_jsonrpc
+    from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup
 
     registry = ToolRegistry()
     registry.register(
@@ -532,7 +534,8 @@ def test_server_stdio_initialize_and_tools_list() -> None:
 
 
 def test_server_handles_mcp_error() -> None:
-    from film_pipeline.mcp.contract import ToolContract, ToolGroup, ToolRegistry
+    from film_pipeline.mcp.contract import ToolRegistry
+    from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup
 
     server = MCPServer(tools=ToolRegistry())
 
@@ -1299,7 +1302,7 @@ def test_wired_inspect_profile_accepts_friendly_provider_name() -> None:
 
 
 def test_tool_registry_has_config_group() -> None:
-    from film_pipeline.mcp.contract import ToolGroup
+    from film_pipeline.mcp.tools.spec import ToolGroup
 
     assert ToolGroup.CONFIG.value == "config"
 

@@ -19,7 +19,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 8 | CLI through `MCPServer.call`; public runtime installer | `30575ec` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
 | 9 | Delete the orphaned operator surface | `f717013` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
 | 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `2ae1db7` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
-| 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `_pending_` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
+| 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `e34c3e0` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
+| 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `_pending_` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -554,3 +555,89 @@ exactly as dispatch would.
 - `enola check` exit 0, **cycle count still 1** (only the known `orchestration`
   root-collapse artifact).
 - No `git stash`-style experiments left behind: the tree is the committed state.
+
+## Step 11a — the tool declaration becomes real (2026-09-28)
+
+Doc 04's mechanism plus the first group, same shape as Step 10a: the mechanism is
+what every later group depends on.
+
+### What was measured before
+
+```text
+tools: 75
+with input_schema: 0
+with output_schema: 0
+with generic 'MCP tool: <name>' description: 75
+args.get( in mcp: 86
+```
+
+The stdio transport forwards `input_schema` as `inputSchema`, so every MCP client
+saw 75 tools that accept `{}` and are described only by their names — while
+handlers compensated with 86 `args.get(...)` calls and ad-hoc coercion. AGENTS.md
+states the rule that breaks: *"Pydantic v2 for all schemas (never raw dicts across
+boundaries)"*, and this is the boundary the blueprint calls the product surface.
+
+### The mechanism
+
+- `ToolArgs` — a Pydantic base with `extra="forbid"`. Deliberate, and the same
+  experiment that produced the schemas round's 96-failure work list: an unknown
+  argument becomes a typed error instead of a silent no-op, so the first failing
+  run enumerates every caller sending something no handler reads.
+- `ToolSpec` — pairs `name`, `group`, `description`, `args` model, handler and the
+  four flags. `spec.contract()` publishes `args.model_json_schema()` as the real
+  `input_schema`, so the contract is *delivered*, not just declared.
+- `ToolRegistry.register_spec` is the target register path; `ToolRegistration`
+  carries the spec so dispatch can validate.
+- **Dispatch validates arguments through the spec** and answers a typed
+  `VALIDATION_ERROR`, so a malformed call is a refusal rather than a `KeyError`
+  deep inside a handler. Tools registered the older way have no spec and pass
+  through unchanged — the same both-shapes-during-migration pattern as Step 10.
+
+### Group 1: `audit`
+
+Four tools declared next to their handlers. The tool list was previously declared
+in three places (registry calls, the `_TOOL_MODULES` lazy facade, the `.pyi` stub);
+a spec is one edit.
+
+### The guard doc 04 requires
+
+`tests/unit/mcp/test_tool_contract_catalog.py` ratchets:
+
+- the count of tools publishing an `input_schema` may only **rise** (a fall means a
+  tool lost its spec, and it names the count rather than passing);
+- a tool with a schema must not still carry the generic `"MCP tool: <name>"` text —
+  the two travel together in a `ToolSpec`, so publishing one and not the other
+  means the spec was bypassed;
+- every published schema must set `additionalProperties: false`;
+- a guard-the-guard asserting the catalog is not empty, so the sweep cannot be
+  vacuous.
+
+Verified adversarially: raising `TOOLS_WITH_DECLARED_ARGS` above the real count
+fails with the tool-count message.
+
+### The cycle this slice re-opened, and the restructure that closed it
+
+Declaring specs made tool modules import `contract`, which is at the `mcp` package
+root that `mcp/__init__` imports — so `mcp -> tools -> mcp` came back (Enola cycle
+count 1 → 2). Four placements were tried; the first three each moved the edge
+rather than removing it. The one that worked:
+
+**The declaration vocabulary moved to `mcp/tools/spec.py`** — `ToolArgs`,
+`ToolSpec`, `ToolContract`, `ToolGroup`, `ToolHandler` — beside the tools that use
+them. `contract.py` keeps only the registry and imports none of them at runtime
+(`TYPE_CHECKING` for the annotations, which are strings via
+`from __future__ import annotations`). `mcp/__init__` resolves all of them lazily.
+
+That is the honest shape: the *registry* is infrastructure and lives at the root;
+the *declaration* is what a tool owns and lives with the tools. Verified:
+`measure.py` is unaffected, every import order of `contract`, `registry`, `spec`,
+`context` and `tools.audit` succeeds in a fresh interpreter, and the Enola cycle
+count is **back to 1**.
+
+### Evidence
+
+- `measure.py`: `input_schema` **0 → 4**; generic descriptions **75 → 71**.
+- `make ci-check`: **2339 passed, 91.64% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean.
+- `enola check` exit 0, cycle count 1.
+- Recorded surface growth, re-measured: `mcp` 38 → 39 modules, `mcp.tools` 32 → 33.

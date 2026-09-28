@@ -9,15 +9,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from film_pipeline.mcp.contract import (
-        ToolContract,
-        ToolGroup,
-        ToolHandler,
-        ToolRegistry,
-    )
+    from film_pipeline.mcp.contract import ToolRegistry
     from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
     from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
     from film_pipeline.mcp.tools.context import ToolContext
+    from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup, ToolHandler
     from film_pipeline.projects import (
         AmbiguousProjectError,
         ProjectRecord,
@@ -67,10 +63,10 @@ _LAZY_ATTRS: dict[str, str] = {
     "ProjectRegistry": "film_pipeline.projects",
     "RequestEnvelope": "film_pipeline.mcp.envelope",
     "ResolutionResult": "film_pipeline.projects",
-    "ToolContract": "film_pipeline.mcp.contract",
+    "ToolContract": "film_pipeline.mcp.tools.spec",
     "ToolContext": "film_pipeline.mcp.tools.context",
-    "ToolGroup": "film_pipeline.mcp.contract",
-    "ToolHandler": "film_pipeline.mcp.contract",
+    "ToolGroup": "film_pipeline.mcp.tools.spec",
+    "ToolHandler": "film_pipeline.mcp.tools.spec",
     "ToolRegistry": "film_pipeline.mcp.contract",
     "new_envelope": "film_pipeline.mcp.envelope",
 }

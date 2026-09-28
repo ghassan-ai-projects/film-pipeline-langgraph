@@ -2,12 +2,7 @@
 
 from __future__ import annotations
 
-from film_pipeline.mcp.contract import (
-    ToolContract,
-    ToolGroup,
-    ToolHandler,
-    ToolRegistry,
-)
+from film_pipeline.mcp.contract import ToolRegistry
 from film_pipeline.mcp.tools.artifacts import (
     inspect_artifact,
     inspect_reference,
@@ -26,12 +21,7 @@ from film_pipeline.mcp.tools.assembly import (
     list_coverage_groups,
     plan_coverage_group,
 )
-from film_pipeline.mcp.tools.audit import (
-    explain_agent_routing,
-    explain_kb_context,
-    explain_last_decision,
-    get_audit_log,
-)
+from film_pipeline.mcp.tools.audit import AUDIT_TOOLS
 from film_pipeline.mcp.tools.bibles import (
     generate_camera_bible,
     generate_character_bible,
@@ -90,6 +80,7 @@ from film_pipeline.mcp.tools.providers import (
 )
 from film_pipeline.mcp.tools.reference_generation import generate_reference_images
 from film_pipeline.mcp.tools.review import approve_phase, request_revision, review_phase_artifacts
+from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup, ToolHandler
 from film_pipeline.mcp.tools.state import (
     get_blockers,
     get_current_phase,
@@ -469,10 +460,8 @@ def register_all_tools(registry: ToolRegistry) -> None:
     )
 
     # audit
-    _register(registry, "get_audit_log", ToolGroup.AUDIT, get_audit_log)
-    _register(registry, "explain_last_decision", ToolGroup.AUDIT, explain_last_decision)
-    _register(registry, "explain_agent_routing", ToolGroup.AUDIT, explain_agent_routing)
-    _register(registry, "explain_kb_context", ToolGroup.AUDIT, explain_kb_context)
+    for spec in AUDIT_TOOLS:
+        registry.register_spec(spec)
 
     # provider
     _register(registry, "check_provider_health", ToolGroup.PROVIDER, check_provider_health)

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import _ok
 
@@ -79,3 +82,59 @@ async def explain_kb_context(ctx: ToolContext, args: dict[str, object]) -> dict[
         message="KB context: the orchestrator selects KB slices by phase and agent. "
         "Canonical rules take priority over playbooks and case studies.",
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe, so adding a tool is one edit
+# rather than three (registry, lazy facade, `.pyi` stub). See doc 04 slice 1.
+
+
+class GetAuditLogArgs(ToolArgs):
+    """Arguments for `get_audit_log`."""
+
+    project_id: str = Field(default="", description="Project id; empty uses the active project.")
+    limit: int = Field(default=100, description="Maximum events to return.")
+
+
+class ExplainLastDecisionArgs(ToolArgs):
+    """Arguments for `explain_last_decision` (none)."""
+
+
+class ExplainAgentRoutingArgs(ToolArgs):
+    """Arguments for `explain_agent_routing` (none)."""
+
+
+class ExplainKbContextArgs(ToolArgs):
+    """Arguments for `explain_kb_context` (none)."""
+
+
+AUDIT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_audit_log",
+        group=ToolGroup.AUDIT,
+        description="Read the audit log: who did what, when, with details.",
+        args=GetAuditLogArgs,
+        handler=get_audit_log,
+    ),
+    ToolSpec(
+        name="explain_last_decision",
+        group=ToolGroup.AUDIT,
+        description="Explain the most recent recorded decision and its details.",
+        args=ExplainLastDecisionArgs,
+        handler=explain_last_decision,
+    ),
+    ToolSpec(
+        name="explain_agent_routing",
+        group=ToolGroup.AUDIT,
+        description="Explain the session's agent routing decisions and why each was taken.",
+        args=ExplainAgentRoutingArgs,
+        handler=explain_agent_routing,
+    ),
+    ToolSpec(
+        name="explain_kb_context",
+        group=ToolGroup.AUDIT,
+        description="Explain how the orchestrator selects knowledge-base context per phase.",
+        args=ExplainKbContextArgs,
+        handler=explain_kb_context,
+    ),
+)

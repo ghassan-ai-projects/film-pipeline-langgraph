@@ -7,6 +7,8 @@ import os
 from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
+from pydantic import ValidationError
+
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT
 from film_pipeline.mcp._stdio_transport import (
     _read_message as _read_message,
@@ -22,7 +24,6 @@ from film_pipeline.mcp._stdio_transport import (
     handle_jsonrpc as handle_jsonrpc,
 )
 from film_pipeline.mcp.contract import (
-    ToolHandler,
     ToolRegistration,
     ToolRegistry,
     make_registry,
@@ -30,6 +31,7 @@ from film_pipeline.mcp.contract import (
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolHandler
 from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.projects import (
     AmbiguousProjectError,
@@ -69,7 +71,7 @@ class MCPServer:
         missing_project = self._check_active_project(reg, resolved_envelope)
         if missing_project is not None:
             return missing_project
-        return await self._dispatch_handler(reg.handler, arguments, resolved_envelope)
+        return await self._dispatch_handler(reg, arguments, resolved_envelope)
 
     def _resolve_tool_and_project(
         self,
@@ -239,7 +241,7 @@ class MCPServer:
 
     async def _dispatch_handler(
         self,
-        handler: ToolHandler,
+        reg: ToolRegistration,
         arguments: dict[str, object],
         envelope: RequestEnvelope,
     ) -> MCPResponse:
@@ -254,6 +256,26 @@ class MCPServer:
           branch and the `"_envelope"` key both go.
         """
 
+        handler = reg.handler
+        # A tool declared with a `ToolSpec` validates its arguments first, so a
+        # malformed call is a typed `VALIDATION_ERROR` rather than a `KeyError`
+        # deep inside a handler (doc 04 slice 1). Tools registered the older way
+        # have no spec and pass through unchanged.
+        try:
+            reg.validate(dict(arguments))
+        except ValidationError as exc:
+            return MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.VALIDATION_ERROR,
+                    message=(
+                        f"Invalid arguments for '{reg.contract.name}': "
+                        f"{exc.error_count()} error(s)."
+                    ),
+                    details={"tool": reg.contract.name, "errors": str(exc)},
+                ),
+            )
         new_args: dict[str, object] = {**arguments, "_envelope": envelope}
         # The union in `ToolHandler` admits both shapes, so mypy cannot narrow it
         # from a runtime signature check. `_accepts_context` just proved which
