@@ -38,7 +38,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `e829c1d` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
 | 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `51bba6a` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
 | 15j | **`mcp` to 0 — Step 15 complete** | `b020c22` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
-| 6.8 | AGENTS.md package table completed | `_pending_` | table rows **17 → 20**; now exactly matches the tree | 0 |
+| 6.8 | AGENTS.md package table completed | `14fd555` | table rows **17 → 20**; now exactly matches the tree | 0 |
+| 6.11 | Enum import spellings — **no sweep**, recorded | `_pending_` | 11 re-exported names, **0 divergent**; decision documented | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1768,3 +1769,54 @@ slice did not make.
   extra: []**.
 - Documentation only; `make ci-check`, `mypy src tests` and `enola check` unchanged and
   green.
+
+## Doc 06 slice 6.11 — enum import spellings: no sweep (2026-09-28)
+
+Doc 06 called this "low priority" and prescribed the outcome itself: *"Both spellings
+resolve to the same object, so they cannot diverge — duplication of convenience under
+`00` §1.3. **Do not sweep.**"*
+
+The instruction was to re-measure before accepting a written claim, so both halves were:
+
+**The counts moved, as expected on a branch this size.** Doc 06 measured 274 imports
+through `schemas.base` and 15 through the owner. Now: **164 and 36**. The ratio shifted
+— 18% owner-spelling, up from 5% — because Step 15 hoisted many imports into
+module-level form and the two spellings were not chosen consistently by whoever wrote
+them. That is drift, not divergence.
+
+**The identity claim is the one that matters, and it holds exactly.** Comparing the
+objects rather than the spellings:
+
+```text
+re-exported names: 11
+identical objects: 11  |  divergent: []
+```
+
+All 11 names `schemas.base` re-exports from `filmspec` are the *same objects*, so the
+two spellings cannot produce different behaviour. This is the `00` §1.3 test for
+duplication of convenience rather than distributed ownership: a partial edit changes
+nothing, so there is no bug a boundary would prevent.
+
+### Decision: no sweep, and no guard
+
+Three options, and why the third:
+
+1. **Sweep to one spelling.** Doc 06's own text says not to, and the measurement
+   supports it: 200 call sites changed for zero behavioural difference is churn that
+   would obscure the next real diff.
+2. **Add a guard.** A guard here would freeze a *style* choice the codebase has not
+   actually made — the 164/36 split shows the two are used for different contexts
+   (`schemas.base` in schema code, `filmspec` where the vocabulary itself is the
+   subject). A guard would force a decision nobody has needed to make.
+3. **Record the measurement and stop.** Done.
+
+Doc 06's closing suggestion — "pick `schemas.base` as the documented spelling for
+schema code and stop re-exporting from anywhere else" — is a *convention* for future
+code, not a migration. It is recorded here as guidance rather than enforced, because
+enforcing it would require the sweep this slice just declined.
+
+### Evidence
+
+- Spellings: **164** via `schemas.base`, **36** via `filmspec`.
+- Identity: **11 re-exported names, 0 divergent** — re-measured, not assumed.
+- No code changed; gates unchanged and green.
