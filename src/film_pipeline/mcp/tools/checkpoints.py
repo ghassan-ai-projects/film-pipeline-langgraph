@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
+from film_pipeline.operations import (
+    get_checkpoint as get_checkpoint_use_case,
+)
+from film_pipeline.operations import (
+    rollback_artifact as rollback_artifact_use_case,
+)
+from film_pipeline.operations import (
+    rollback_to_checkpoint as rollback_to_checkpoint_use_case,
+)
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 from .helpers import (
     _active_project_id,
     _error,
     _ok,
-    operator_service,
     require_project_state,
 )
 
@@ -120,8 +128,9 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
     confirmed = bool(args.get("confirmed"))
     active = require_project_state(args)
     project_id = str(active["project_id"])
-    service = operator_service(rt)
-    checkpoint = service.get_checkpoint(checkpoint_id) if checkpoint_id and not confirmed else None
+    checkpoint = (
+        get_checkpoint_use_case(rt, checkpoint_id) if checkpoint_id and not confirmed else None
+    )
 
     if not confirmed:
         return _error(
@@ -129,7 +138,8 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
             invalidation_preview=_unconfirmed_preview(checkpoint, checkpoint_id, artifact_id),
         )
     try:
-        result = service.rollback_artifact(
+        result = rollback_artifact_use_case(
+            rt,
             project_id=project_id,
             artifact_id=artifact_id,
             checkpoint_id=checkpoint_id,
@@ -148,8 +158,7 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
 async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
     rt = tools_pkg.get_runtime()
     checkpoint_id = str(args.get("checkpoint_id", ""))
-    service = operator_service(rt)
-    cp = service.get_checkpoint(checkpoint_id)
+    cp = get_checkpoint_use_case(rt, checkpoint_id)
     if cp is None:
         return _error(f"Checkpoint not found: {checkpoint_id}")
 
@@ -165,7 +174,7 @@ async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
     try:
         active = rt.get_active()
         project_id = str(active["project_id"]) if active is not None else cp.project_id
-        result = service.rollback_to_checkpoint(cp, project_id)
+        result = rollback_to_checkpoint_use_case(rt, cp, project_id)
     except Exception as e:
         return _error(str(e))
     return _ok(

@@ -69,11 +69,26 @@ async def _plan_and_approve(shot_ids: list[str]) -> dict[str, object]:
     await plan_generation_batch(
         {"shot_ids": shot_ids, "provider": "mock-video-provider", "model": "mock-fast"}
     )
-    from film_pipeline.mcp.tools import get_runtime
-    from film_pipeline.studio._operator_runtime import operator_service
-
-    operator_service(get_runtime()).approve_generation_spend()
+    _approve_spend_for_active_project()
     return {"ok": True}
+
+
+def _approve_spend_for_active_project() -> None:
+    """Move the active project's PREPARED ledger rows to SUBMITTED.
+
+    Replaces `operator_service(rt).approve_generation_spend()`, which went with
+    the operator surface (`docs/modularity-improvements/03-one-use-case-layer.md`).
+    `GenerationExecutor.approve_spend` is the owner's path and is what the
+    gen-planning node already calls.
+    """
+    from film_pipeline.generation.executor import GenerationExecutor
+    from film_pipeline.mcp.tools import get_runtime
+
+    rt = get_runtime()
+    services = rt.services
+    assert services is not None
+    project_id = str((rt.get_active() or {})["project_id"])
+    GenerationExecutor(services.artifact_store, rt.provider_adapters).approve_spend(project_id)
 
 
 def test_start_generation_batch_no_submitted_rows(rt: StudioRuntime) -> None:
@@ -91,10 +106,7 @@ def test_start_generation_batch_unknown_provider(rt: StudioRuntime) -> None:
     asyncio.run(
         plan_generation_batch({"shot_ids": ["S001"], "provider": "no-such-provider", "model": "m"})
     )
-    from film_pipeline.mcp.tools import get_runtime
-    from film_pipeline.studio._operator_runtime import operator_service
-
-    operator_service(get_runtime()).approve_generation_spend()
+    _approve_spend_for_active_project()
 
     result = asyncio.run(start_generation_batch({}))
     assert result["ok"] is True
@@ -596,13 +608,10 @@ class TestTextOnlyGenerationPolicy:
         active["current_phase"] = "generation"
         asyncio.run(plan_generation_batch({}))
 
-        # Approve via the operator use case: the MCP cost tool was removed, but
-        # the text-only no-op it performed is real behaviour and is still asserted.
-        from film_pipeline.mcp.tools import get_runtime
-        from film_pipeline.studio._operator_runtime import operator_service
-
-        workspace = operator_service(get_runtime()).approve_generation_spend()
-        assert workspace is not None
+        # Approve through the owner's path: the MCP cost tool and the operator
+        # method it delegated to are both gone, but the text-only no-op the
+        # transition performs is real behaviour and is still asserted.
+        _approve_spend_for_active_project()
 
         result = asyncio.run(start_generation_batch({}))
         assert result["ok"] is True

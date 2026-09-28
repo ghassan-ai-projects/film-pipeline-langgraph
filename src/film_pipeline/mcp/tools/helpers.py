@@ -11,9 +11,12 @@ import contextlib
 from typing import Any
 
 import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.config.profile_resolver import load_profile_flex, provider_specs
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT as NO_ACTIVE_PROJECT
 from film_pipeline.operations.errors import ProjectNotFoundError
+from film_pipeline.providers.credentials import (
+    missing_provider_credentials,
+)
 from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.studio.runtime import StudioRuntime
 
@@ -119,22 +122,47 @@ def _register_active_artifact_ref(
     rt.persist_project_state(project_id)
 
 
-def operator_service(rt: Any) -> Any:
-    """Return the operator service bound to ``rt``.
+def missing_profile_credentials(
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> list[Any]:
+    """Return the provider credentials a resolved profile requires but lacks.
 
-    The single place this package obtains an ``OperatorService``. Four tool
-    modules previously imported ``studio._operator_runtime.operator_service``
-    directly — a private module in a package the dependency law forbids ``mcp``
-    from importing at all. Routing them through one accessor means the wiring
-    is named once, and if the composition root's shape changes only this
-    function moves.
+    Composed here from two importable owners rather than routed through the
+    composition root: `config.profile_resolver.provider_specs` says which
+    providers the profile selects, and `providers.credentials` says which of
+    their keys are unset. Neither needs the concrete provider classes, so `mcp`
+    can do this itself — and doing it here keeps `mcp`'s one remaining private
+    reach-in (`studio._operator_runtime`, for the adapter factory) at one site.
 
-    The concrete factory still lives in the composition root, which is the
-    correct owner of that wiring; this is the ``mcp``-side seam for reaching it.
+    This used to be a method on the deleted `OperatorService`.
     """
-    from film_pipeline.studio._operator_runtime import operator_service as _build
+    provider_ids = [
+        str(spec["provider_id"]) for spec in provider_specs(profile_stack, resolved_config)
+    ]
+    return missing_provider_credentials(provider_ids)
 
-    return _build(rt)
+
+def register_profile_providers(
+    rt: Any,
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> None:
+    """Register the provider adapters a profile stack selects.
+
+    The single place this package reaches the composition root's provider wiring.
+    Four tool modules previously obtained a whole ``OperatorService`` here to call
+    one method on it; `OperatorService` is gone
+    (`docs/modularity-improvements/03-one-use-case-layer.md`), so this names the
+    one use case instead.
+
+    The concrete factory still lives in the composition root, which owns that
+    wiring — it calls `build_provider_adapter`, which needs the concrete provider
+    classes. This is the ``mcp``-side seam for reaching it.
+    """
+    from film_pipeline.studio._operator_runtime import register_profile_providers as _register
+
+    _register(rt, profile_stack, resolved_config)
 
 
 def _coerce_runtime_arg(args: dict[str, object]) -> int:

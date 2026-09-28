@@ -97,12 +97,17 @@ class TestGenerationMCPTools:
                 }
             )
         )
+        # The operator method went with the operator surface; GenerationExecutor
+        # owns the PREPARED -> SUBMITTED transition.
+        from film_pipeline.generation.executor import GenerationExecutor
         from film_pipeline.mcp.tools import get_runtime
-        from film_pipeline.studio._operator_runtime import operator_service
 
-        workspace = operator_service(get_runtime()).approve_generation_spend()
-
-        assert workspace.submitted == 1, f"expected one submitted row, got {workspace}"
+        runtime = get_runtime()
+        services = runtime.services
+        assert services is not None
+        executor = GenerationExecutor(services.artifact_store, runtime.provider_adapters)
+        project_id = str((runtime.get_active() or {})["project_id"])
+        assert executor.approve_spend(project_id).processed == 1, "expected one submitted row"
 
     def test_get_status(self, rt: StudioRuntime) -> None:
         plan_result = asyncio.run(

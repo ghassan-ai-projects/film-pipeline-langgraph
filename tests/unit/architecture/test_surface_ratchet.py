@@ -129,23 +129,37 @@ def test_no_package_leaks_an_undeclared_symbol_off_its_root() -> None:
 
 
 def test_module_count_has_not_grown() -> None:
-    """Adding a module to a package widens what consumers can import from it."""
+    """Adding a module to a package widens what consumers can import from it.
+
+    Only *growth* fails. A shrink is not a widening, and the earlier `!=` form
+    reported one as if it were — deleting a module (as
+    `docs/modularity-improvements/03` did to four of them) failed this guard with
+    "count grew". A count that moves down is the ratchet working, so it is
+    re-measured into the baseline deliberately, not treated as a regression.
+    """
     actual = {package: len(public_module_names(package)) for package in packages()}
     grown = {
         package: (SURFACE_BASELINE[package].modules, count)
         for package, count in actual.items()
-        if package in SURFACE_BASELINE and count != SURFACE_BASELINE[package].modules
+        if package in SURFACE_BASELINE and count > SURFACE_BASELINE[package].modules
+    }
+    shrank = {
+        package: (SURFACE_BASELINE[package].modules, count)
+        for package, count in actual.items()
+        if package in SURFACE_BASELINE and count < SURFACE_BASELINE[package].modules
     }
     assert not grown, (
         f"public module count grew (baseline -> actual): {grown}. If the new module "
         "is meant to be importable by other packages, raise the baseline in "
         "_surface_baseline.py; if not, prefix it with an underscore."
     )
+    _assert_shrunk_rows_are_recorded(shrank, what="public modules")
 
 
 def test_exported_name_count_has_not_grown() -> None:
     """Adding an exported name is a public-API change, so it must be deliberate."""
     grown: dict[str, tuple[int, int]] = {}
+    shrank: dict[str, tuple[int, int]] = {}
     for package in packages():
         declared = declared_surface(package)
         if declared is None:
@@ -157,13 +171,16 @@ def test_exported_name_count_has_not_grown() -> None:
             # `test_declared_reasons_are_still_needed`, which owns it; comparing
             # counts here would be a type error and a duplicate report.
             continue
-        if len(declared) != baseline.names:
+        if len(declared) > baseline.names:
             grown[package] = (baseline.names, len(declared))
+        elif len(declared) < baseline.names:
+            shrank[package] = (baseline.names, len(declared))
     assert not grown, (
         f"declared surface grew (baseline -> actual): {grown}. A widening of __all__ "
         "is a public-interface change: raise the baseline deliberately, in the same "
         "commit that adds the name."
     )
+    _assert_shrunk_rows_are_recorded(shrank, what="declared names")
 
 
 def test_undeclared_public_module_count_has_not_grown() -> None:
@@ -174,12 +191,32 @@ def test_undeclared_public_module_count_has_not_grown() -> None:
         if baseline is None:
             continue
         actual = len(public_module_names(package))
-        if actual != baseline.modules:
+        if actual > baseline.modules:
             grown[package] = (baseline.modules, actual)
     assert not grown, (
         f"a bare package root grew new public modules (baseline -> actual): {grown}. "
         f"It has no __all__, so its public modules are its interface by default. "
         f"Prefix new modules with an underscore, or record the growth."
+    )
+
+
+def _assert_shrunk_rows_are_recorded(shrank: dict[str, tuple[int, int]], *, what: str) -> None:
+    """A shrink must be recorded in the baseline, not left as silent drift.
+
+    Growth is the ratchet's job; shrinkage is not a regression, so it does not
+    fail. But leaving the baseline above the real number would let that much
+    growth back in unnoticed — the same defect `test_recorded_reach_ins_are_not_stale`
+    guards against for reach-ins. So this fails until the row is lowered, and the
+    message names the exact edit.
+
+    This is what makes the count guards a *ratchet* rather than a "has not changed"
+    check: every move, in either direction, is a deliberate edit to the baseline.
+    """
+    assert not shrank, (
+        f"{what} shrank (baseline -> actual): {shrank}. That is the ratchet working, "
+        "not a regression — but the baseline must be lowered to match, or the "
+        "slack lets that much growth return silently. Edit SURFACE_BASELINE in "
+        "tests/unit/architecture/_surface_baseline.py."
     )
 
 

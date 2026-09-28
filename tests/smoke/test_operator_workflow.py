@@ -176,13 +176,15 @@ class TestOperatorWorkflow:
         assert r["ok"] is True
         assert r.get("count", 0) >= 1
 
-        # Step 8: Approve spend. The MCP tool was removed with the cost feature;
-        # the PREPARED -> SUBMITTED transition it performed is the operator use
-        # case, which survives.
-        from film_pipeline.studio._operator_runtime import operator_service
+        # Step 8: Approve spend. The MCP tool was removed with the cost feature and
+        # the operator method with the operator surface; the PREPARED -> SUBMITTED
+        # transition lives on GenerationExecutor, which owns it.
+        from film_pipeline.generation.executor import GenerationExecutor
 
-        workspace = operator_service(rt).approve_generation_spend()
-        assert workspace.submitted >= 1, f"approval did not submit rows: {workspace}"
+        services = rt.services
+        assert services is not None
+        executor = GenerationExecutor(services.artifact_store, rt.provider_adapters)
+        assert executor.approve_spend("smoke-4").processed >= 1, "approval did not submit rows"
 
         # Step 8: Start generation batch
         r = invoke_tool(rt, "start_generation_batch")

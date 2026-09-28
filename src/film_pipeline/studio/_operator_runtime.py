@@ -1,43 +1,28 @@
-"""Bind the concrete studio runtime to the operator surface's port.
+"""Composition-root helpers for the surviving operator use cases.
 
-`operations` declares what it needs as `RuntimePort` and `RuntimeProvider`
-protocols; this module supplies the concrete implementations from the
-composition root. That direction is the allowed one: `studio`/`app` may import
-`operations`, never the reverse.
+This module used to bind the concrete runtime to an `OperatorService` — supplying
+`StudioRuntimeProvider` and a `ProviderComposition` so the service could resolve
+the process singleton lazily and rebuild it on a mode switch. `OperatorService` is
+gone (`docs/modularity-improvements/03-one-use-case-layer.md`), and with it those
+two protocols, so what remains is the one use case that genuinely needs the
+composition root: registering the provider adapters a profile stack selects.
 
-The accessor adapter exists because the operator service resolves the process
-singleton lazily (`get_runtime`) and rebuilds it on a mode switch
-(`reset_runtime`). That is composition-root policy, so it lives here rather than
-inside the service.
+That use case *is* composition policy — it calls `build_provider_adapter`, which
+needs the concrete provider classes — so it stays here rather than moving to
+`config` beside the credential lookup, which is pure.
+
+This is also `mcp`'s last cross-package private reach-in
+(`mcp -> studio._operator_runtime`), recorded in `test_boundary_law` as
+irreducible — it builds concrete provider adapters, which only the composition
+root can do. It stays irreducible for a smaller reason now: one function, not a
+wired service.
 """
 
 from __future__ import annotations
 
 from film_pipeline.config.profile_resolver import provider_specs
-from film_pipeline.operations.operator import OperatorService
 from film_pipeline.operations.ports import RuntimePort
-from film_pipeline.providers.credentials import (
-    MissingProviderCredential,
-    missing_provider_credentials,
-)
-from film_pipeline.studio.runtime import StudioRuntime, get_runtime, reset_runtime
-
-
-class StudioRuntimeProvider:
-    """Resolve and switch the process-wide studio runtime.
-
-    Satisfies :class:`~film_pipeline.operations.ports.RuntimeProvider` so the
-    operator service can be handed this object instead of importing
-    `film_pipeline.studio.runtime` itself.
-    """
-
-    def current(self) -> RuntimePort:
-        """Return the runtime currently in effect."""
-        return get_runtime()
-
-    def switch(self, mode: str) -> RuntimePort:
-        """Rebuild the runtime in ``mode`` and return it."""
-        return reset_runtime(mode)
+from film_pipeline.studio.runtime import StudioRuntime
 
 
 def register_profile_providers(
@@ -45,7 +30,11 @@ def register_profile_providers(
     profile_stack: dict[str, str],
     resolved_config: dict[str, object],
 ) -> None:
-    """Replace runtime providers with the adapters selected by a profile stack."""
+    """Replace runtime providers with the adapters selected by a profile stack.
+
+    `mcp/tools/projects.py` and `mcp/tools/_profile_change.py` call this directly;
+    it used to be reached through `OperatorService.register_profile_providers`.
+    """
     specs = provider_specs(profile_stack, resolved_config)
     if not specs:
         return
@@ -71,61 +60,4 @@ def register_profile_providers(
         runtime.set_provider_health(provider_id, "healthy")
 
 
-def missing_profile_credentials(
-    profile_stack: dict[str, str],
-    resolved_config: dict[str, object],
-) -> list[MissingProviderCredential]:
-    """Return missing credentials for providers required by the resolved profile."""
-    provider_ids = [
-        str(spec["provider_id"]) for spec in provider_specs(profile_stack, resolved_config)
-    ]
-    return missing_provider_credentials(provider_ids)
-
-
-class _ProfileProviderComposition:
-    """The concrete :class:`ProviderComposition` bound to this package."""
-
-    def register_profile_providers(
-        self,
-        runtime: RuntimePort,
-        profile_stack: dict[str, str],
-        resolved_config: dict[str, object],
-    ) -> None:
-        register_profile_providers(runtime, profile_stack, resolved_config)
-
-    def missing_profile_credentials(
-        self,
-        profile_stack: dict[str, str],
-        resolved_config: dict[str, object],
-    ) -> list[MissingProviderCredential]:
-        return missing_profile_credentials(profile_stack, resolved_config)
-
-
-def profile_provider_composition() -> _ProfileProviderComposition:
-    """Return the composition-root provider collaborator for the operator."""
-    return _ProfileProviderComposition()
-
-
-__all__ = [
-    "StudioRuntime",
-    "StudioRuntimeProvider",
-    "get_runtime",
-    "missing_profile_credentials",
-    "profile_provider_composition",
-    "register_profile_providers",
-    "reset_runtime",
-]
-
-
-def operator_service(runtime: RuntimePort | None = None) -> OperatorService:
-    """Build an operator service wired to this composition root's collaborators.
-
-    The service requires a runtime provider and a provider composition; both are
-    composition-root policy, so `studio` supplies them and `operations` never
-    imports back into this package.
-    """
-    return OperatorService(
-        runtime=runtime,
-        provider=StudioRuntimeProvider(),
-        composition=profile_provider_composition(),
-    )
+__all__ = ["StudioRuntime", "register_profile_providers"]

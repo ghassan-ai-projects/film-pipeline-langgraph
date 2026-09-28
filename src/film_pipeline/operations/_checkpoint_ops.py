@@ -1,15 +1,21 @@
-"""Checkpoint rollback use cases shared by operator surfaces."""
+"""Checkpoint rollback use cases.
+
+These are plain functions over a `RuntimePort`, not methods on a service object.
+They were methods on `OperatorService`, which existed to serve a TUI that has
+since been removed; the only remaining callers are MCP handlers, so they take the
+runtime directly (doc 03 slice 1).
+"""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from pydantic import BaseModel
 
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.checkpoints.rollback import RollbackManager
+from film_pipeline.operations.ports import RuntimePort
 from film_pipeline.schemas import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.artifact import ArtifactMetadata
 from film_pipeline.schemas.checkpoint import (
@@ -22,32 +28,29 @@ from film_pipeline.storage.store import ArtifactStore
 from .errors import BackendOperationError
 from .models import ArtifactRollbackResult, CheckpointRollbackResult
 
-if TYPE_CHECKING:
-    from .operator import OperatorService
-
 
 def get_checkpoint(
-    service: OperatorService,
+    runtime: RuntimePort,
     checkpoint_id: str,
 ) -> CheckpointMetadata | None:
     """Find checkpoint metadata by globally unique identifier."""
-    return service.runtime.get_checkpoint(checkpoint_id)
+    return runtime.get_checkpoint(checkpoint_id)
 
 
 def rollback_to_checkpoint(
-    service: OperatorService,
+    runtime: RuntimePort,
     checkpoint: CheckpointMetadata,
     project_id: str,
 ) -> CheckpointRollbackResult:
     """Restore a project's checkpoint and persist rollback bookkeeping."""
-    manager = service.runtime.checkpoint_managers.get(project_id)
+    manager = runtime.checkpoint_managers.get(project_id)
     if manager is None:
         raise BackendOperationError("No checkpoint manager for project.")
 
     rollback_manager = RollbackManager(checkpoint_manager=manager, git=manager.git)
     rollback_manager.rollback_to_checkpoint(checkpoint.checkpoint_id, performed_by="operator")
     invalidation_ref, rollback_ref = _save_rollback_artifacts(
-        _artifact_store(service),
+        _artifact_store(runtime),
         project_id,
         checkpoint.checkpoint_id,
         list(checkpoint.artifact_versions.keys()),
@@ -63,28 +66,28 @@ def rollback_to_checkpoint(
 
 
 def rollback_artifact(
-    service: OperatorService,
+    runtime: RuntimePort,
     project_id: str,
     artifact_id: str,
     checkpoint_id: str = "",
 ) -> ArtifactRollbackResult:
     """Restore an artifact from a specific checkpoint or its latest matching one."""
     if checkpoint_id:
-        checkpoint = get_checkpoint(service, checkpoint_id)
+        checkpoint = get_checkpoint(runtime, checkpoint_id)
         if checkpoint is None:
             raise BackendOperationError(f"Checkpoint '{checkpoint_id}' not found.")
         if not checkpoint.git_commit:
             raise BackendOperationError(f"Checkpoint '{checkpoint_id}' has no git commit ref.")
         return _restore_artifact_at_commit(
-            service, project_id, artifact_id, checkpoint, checkpoint_id
+            runtime, project_id, artifact_id, checkpoint, checkpoint_id
         )
 
-    checkpoints = service.runtime.list_checkpoints(project_id)
+    checkpoints = runtime.list_checkpoints(project_id)
     for checkpoint in sorted(checkpoints, key=lambda item: item.created_at, reverse=True):
         if checkpoint.git_commit and artifact_id in checkpoint.artifact_versions:
             try:
                 return _restore_artifact_at_commit(
-                    service,
+                    runtime,
                     project_id,
                     artifact_id,
                     checkpoint,
@@ -96,20 +99,20 @@ def rollback_artifact(
 
 
 def _restore_artifact_at_commit(
-    service: OperatorService,
+    runtime: RuntimePort,
     project_id: str,
     artifact_id: str,
     checkpoint: CheckpointMetadata,
     rollback_target: str,
 ) -> ArtifactRollbackResult:
     """Restore one artifact and persist invalidation and rollback records."""
-    manager = service.runtime.checkpoint_managers.get(project_id)
+    manager = runtime.checkpoint_managers.get(project_id)
     if manager is None:
         raise BackendOperationError("No checkpoint manager for project.")
     rollback_manager = RollbackManager(checkpoint_manager=manager, git=manager.git)
     rollback_manager.rollback_artifact(artifact_id, checkpoint.git_commit, performed_by="operator")
     invalidation_ref, rollback_ref = _save_rollback_artifacts(
-        _artifact_store(service),
+        _artifact_store(runtime),
         project_id,
         rollback_target,
         list(checkpoint.artifact_versions.keys()) or [artifact_id],
@@ -124,8 +127,8 @@ def _restore_artifact_at_commit(
     )
 
 
-def _artifact_store(service: OperatorService) -> ArtifactStore:
-    services = service.runtime.services
+def _artifact_store(runtime: RuntimePort) -> ArtifactStore:
+    services = runtime.services
     if services is None:
         raise BackendOperationError("Runtime services are not initialized.")
     return services.artifact_store

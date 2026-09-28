@@ -10,7 +10,6 @@ from film_pipeline.config.profile_resolver import (
     resolve_project_config,
     resolved_config_state_keys,
 )
-from film_pipeline.operations.operator import OperatorService
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -19,7 +18,8 @@ from .helpers import (
     _error,
     _ok,
     _services,
-    operator_service,
+    missing_profile_credentials,
+    register_profile_providers,
     require_project_state,
 )
 
@@ -72,7 +72,6 @@ def _validate_resolved_profile(
     profile_stack: Any,
     resolved_config: dict[str, Any],
     runtime_mode: str,
-    service: OperatorService,
 ) -> dict[str, object] | None:
     """Reject blocking conflicts and missing real-mode provider credentials."""
     conflicts = _extract_conflicts(resolved_config)
@@ -84,7 +83,7 @@ def _validate_resolved_profile(
                 conflicts=conflicts,
             )
     if runtime_mode == "real":
-        missing_credentials = service.missing_profile_credentials(
+        missing_credentials = missing_profile_credentials(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         if missing_credentials:
@@ -175,10 +174,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        service = operator_service(rt)
-        profile_error = _validate_resolved_profile(
-            profile_stack, resolved_config, runtime_mode, service
-        )
+        profile_error = _validate_resolved_profile(profile_stack, resolved_config, runtime_mode)
         if profile_error is not None:
             return profile_error
 
@@ -195,8 +191,8 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
             runtime_mode=runtime_mode,
             server_mode=server_mode,
         )
-        service.register_profile_providers(
-            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        register_profile_providers(
+            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         _audit_project_creation(rt, project_id, runtime_mode, server_mode)
         state = _run_intake_for_idea(rt, state, args, project_id)

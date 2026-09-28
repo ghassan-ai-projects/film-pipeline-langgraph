@@ -31,7 +31,7 @@ from .helpers import (
     _error,
     _ok,
     _services,
-    operator_service,
+    register_profile_providers,
     require_project_id,
     require_project_state,
 )
@@ -125,7 +125,7 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    operator_service(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
+    register_profile_providers(rt, new_stack, _resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack

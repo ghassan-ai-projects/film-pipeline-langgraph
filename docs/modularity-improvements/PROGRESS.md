@@ -16,7 +16,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 5 | Derive the manual merge from `StudioGraphState` | `2cc1bdb` | 8 of 9 cases flip to pass | 0 |
 | 6 | One QC implementation: the parallel subgraph | `a0b016e` | identity test passes; SCCs back to 1 | 0 |
 | 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `fb14d31` | both fail, by design | n/a |
-| 8 | CLI through `MCPServer.call`; public runtime installer | `_pending_` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
+| 8 | CLI through `MCPServer.call`; public runtime installer | `30575ec` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
+| 9 | Delete the orphaned operator surface | `_pending_` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -329,3 +330,63 @@ Evidence: Step 7's two failing tests pass; `make ci-check` 2392 passed, 91.86%
 coverage, product gate PASS; `mypy src tests` clean; the full e2e suite passes,
 including the `invoke_tool` fixture that itself drives the direct path (unchanged
 here — doc 01 step 10's `ToolContext` is what removes it). `enola check` exits 0.
+
+## Step 9 — the orphaned operator surface is gone (2026-09-28)
+
+**The decision doc 03 says to ask about was asked.** The user chose deletion; the
+question and the measured options are in this session's record. Doc 03's own
+caveat stands: if an HTTP or web operator surface is later built, it should be
+written against MCP (the product boundary), not against a resurrected in-process
+service — which is exactly the divergence `audit-findings.md` #8 recorded.
+
+**Measured before deleting** (this is what made the slice safe):
+
+| Surface | Consumers outside `operations/` in `src` |
+|---|---:|
+| `DashboardSummary`, `ReviewWorkspace`, `ValidationWorkspace`, `GenerationWorkspace`, `AuditEvent`, `ProjectListItem`, `MutationResult`, … | **0** each |
+| `OperatorService` public methods | **6 of 31** |
+
+The six survivors, each moved to the package that owns its concern:
+
+| Use case | New home |
+|---|---|
+| `get_checkpoint`, `rollback_artifact`, `rollback_to_checkpoint` | `operations/_checkpoint_ops.py` (already there; now plain functions over a `RuntimePort`) |
+| `register_profile_providers` | `studio/_operator_runtime.py` (composition policy — needs the concrete adapter factory) |
+| `missing_profile_credentials` | `mcp/tools/helpers.py` |
+| `preview_generation_prompts` | `generation/prompt_preview.py` (new) |
+
+Deleted: `operator.py`, `_browse_ops.py`, `_generation_ops.py`,
+`project_discovery.py`, the 7 view models and 4 more unused models, the
+`RuntimeProvider` and `ProviderComposition` protocols, `OperatorService`, and
+`tests/unit/operations/test_operator_service.py` (698 lines) plus
+`tests/integration/test_operator_path_divergence.py` (660 lines) — tests that
+existed because there were two operator paths.
+
+**Three things the deletion taught, each caught by a guard rather than by review:**
+
+1. **`config` may not import `providers`.** Putting `missing_profile_credentials`
+   beside `config.profile_resolver` (doc 03's suggestion) violated
+   `test_profile_resolver_does_not_import_app_or_provider_modules` — `config` is
+   the *neutral* resolver. It moved to `mcp/tools/helpers.py`, which composes
+   `provider_specs` + `providers.credentials` directly and keeps `mcp`'s single
+   composition-root reach-in at **one** site (adding it to
+   `studio._operator_runtime` would have made that reach-in count 1 → 2, which
+   `test_known_private_reach_ins_have_not_grown` reported).
+2. **`RuntimePort`'s docstring was false.** It claimed "every member below is
+   called by at least one operator use case"; after the deletion that held for 7
+   of ~30. The protocol is now the measured surface, which is what doc 03 asked
+   for (`ArtifactStorePort`/`ServicesPort` remain aliases, not protocols).
+3. **A surface guard reported shrinkage as growth.** `test_surface_ratchet`'s
+   three count guards compared with `!=`, so deleting four modules failed with
+   *"public module count grew"*. Fixed to compare direction, with a new
+   `_assert_shrunk_rows_are_recorded` requiring the baseline to be lowered —
+   otherwise slack would let that much growth return silently, the same defect
+   `test_recorded_reach_ins_are_not_stale` guards for reach-ins. Verified
+   adversarially: raising a baseline row above reality now fails with the exact
+   edit named.
+
+**Falsifiable check from doc 03, satisfied:** `make ci-check` and the 90% gate stay
+green *without adding tests* — 2334 passed, **91.55%** coverage (was 91.86% with
+~1,400 lines of operator tests). The small drop is the evidence that a little of
+the deleted code was load-bearing and is now covered by its owners' own tests;
+the gate itself never moved. `enola check` exits 0.

@@ -111,15 +111,20 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
     Available as soon as the shot matrix exists so the operator can read and
     validate prompts during gen_planning review — before any spend.
     """
+    from film_pipeline.generation.prompt_preview import (
+        GenerationNotConfiguredError,
+    )
+    from film_pipeline.generation.prompt_preview import (
+        preview_generation_prompts as build_previews,
+    )
+
     rt = tools_pkg.get_runtime()
     project_id = require_project_id(args)
-    from film_pipeline.operations.errors import ServiceError
-
-    from ..helpers import operator_service
 
     try:
-        previews = operator_service(rt).preview_generation_prompts(project_id)
-    except ServiceError as exc:
+        state = rt.get_project(project_id) or {}
+        previews = build_previews(rt, state)
+    except GenerationNotConfiguredError as exc:
         return _error(str(exc))
     return _ok(previews=previews)
 

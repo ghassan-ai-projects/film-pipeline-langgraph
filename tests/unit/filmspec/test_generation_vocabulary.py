@@ -88,31 +88,35 @@ class TestTextOnlyRequestBuilder:
         assert len(requests) == 1
         assert requests[0]["shot_id"] == "all"
 
-    def test_both_generation_paths_share_the_vocabulary(self) -> None:
-        """The operator path and the MCP path must produce identical rows."""
+    def test_the_text_only_path_uses_the_shared_vocabulary(self) -> None:
+        """The surviving text-only path applies the shared code set.
+
+        This replaced `test_both_generation_paths_share_the_vocabulary`, which
+        compared the MCP path against `operations._generation_ops
+        ._strip_stale_request_issues`. That second implementation is deleted
+        (`docs/modularity-improvements/03-one-use-case-layer.md`), so the
+        comparison has nothing to compare — the property worth asserting now is
+        that the one remaining path goes through the shared owner.
+        """
         from film_pipeline.mcp.tools.generation._text_only import (
             _apply_text_only_state,
-        )
-        from film_pipeline.operations._generation_ops import (
-            _strip_stale_request_issues as operator_strip,
         )
 
         rows = [{"shot_id": "S001"}]
         expected = text_only_generation_requests("p1", rows, "veo", "veo-3")
 
-        operator_state = {"issues": [{"code": "no_generation_requests"}]}
-        operator_strip(operator_state)
-        assert operator_state["issues"] == []
-
-        mcp_state: dict[str, object] = {"issues": [{"code": "no_generation_requests"}]}
-        _apply_text_only_state(mcp_state, expected)
-        assert mcp_state["generation_requests"] == expected
-        assert mcp_state["issues"] == []
+        state: dict[str, object] = {"issues": [{"code": "no_generation_requests"}]}
+        _apply_text_only_state(state, expected)
+        assert state["generation_requests"] == expected
+        assert state["issues"] == []
 
     def test_module_exposes_one_code_set(self) -> None:
-        """No consumer module may re-declare the codes for itself."""
-        import film_pipeline.operations._generation_ops as generation_ops
+        """No consumer module may re-declare the codes for itself.
+
+        The `operations._generation_ops` half of this check is gone with that
+        module; `studio._resume` is the remaining consumer that could plausibly
+        re-declare them.
+        """
         import film_pipeline.studio._resume as resume
 
         assert resume.__dict__["_STALE_REQUEST_CODES"] is STALE_GENERATION_REQUEST_CODES
-        assert "_STALE_REQUEST_CODES" not in vars(generation_ops)
