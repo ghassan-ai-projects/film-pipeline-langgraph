@@ -12,7 +12,9 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 1 | Delete the `nodes.approval` re-export shim | `f83e496` | module-level SCCs 2 → 1 (`measure.py`) | 0 |
 | 2 | Delete dead functions, `generation/gemini_client.py`, cost residue | `fc80b18` | each deleted name greps to 0 in `src`/`tests`/`scripts` | 0 |
 | 3 | One `ORCH_NS`; one vendor-endpoint module | `2bd8eff` | duplicated literals all → 1 (`measure.py`) | 0 |
-| 4 | **Test first:** `_PHASE_NODES` identity + reducer parity | `_pending_` | both tests **fail** (9 cases), by design | n/a |
+| 4 | **Test first:** `_PHASE_NODES` identity + reducer parity | `4112a9e` | 9 cases fail, by design | n/a |
+| 5 | Derive the manual merge from `StudioGraphState` | `2cc1bdb` | 8 of 9 cases flip to pass | 0 |
+| 6 | One QC implementation: the parallel subgraph | `a0b016e` | identity test passes; SCCs back to 1 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
