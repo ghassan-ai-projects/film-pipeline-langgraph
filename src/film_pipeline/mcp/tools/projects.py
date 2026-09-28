@@ -232,9 +232,6 @@ async def find_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
 
 async def set_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     rt = ctx.runtime
-    # `or` rather than a `.get` default: the model now materializes
-    # `project_ref` as an explicit `None`, which a two-argument `get` would
-    # stringify into the project id "None".
     project_id = str(args.get("project_ref") or args.get("project_id") or "")
     if not project_id:
         return _error("project_ref is required")
@@ -297,10 +294,6 @@ async def get_project_summary(ctx: ToolContext, args: dict[str, object]) -> dict
         has_blockers=bool(get_blockers_for_state(state)),
         generation_policy=str(state.get("generation_policy", "generate")),
     )
-
-
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
 
 
 class CreateFilmProjectArgs(ToolArgs):

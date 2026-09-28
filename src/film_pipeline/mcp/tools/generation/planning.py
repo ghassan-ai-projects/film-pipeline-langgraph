@@ -166,10 +166,6 @@ def _sync_generation_requests_from_ledger(
     active["generation_requests"] = requests
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class PlanGenerationBatchArgs(ToolArgs):
     """Arguments for `plan_generation_batch`.
 

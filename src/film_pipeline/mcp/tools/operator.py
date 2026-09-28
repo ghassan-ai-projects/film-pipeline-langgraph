@@ -67,10 +67,6 @@ async def list_operator_comments(ctx: ToolContext, args: dict[str, object]) -> d
         return _error(str(e))
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class AddOperatorCommentArgs(ToolArgs):
     """Arguments for `add_operator_comment`."""
 

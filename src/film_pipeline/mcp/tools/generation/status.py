@@ -75,10 +75,6 @@ async def list_active_generations(ctx: ToolContext, args: dict[str, object]) -> 
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class GetGenerationStatusArgs(ToolArgs):
     """Arguments for `get_generation_status`."""
 

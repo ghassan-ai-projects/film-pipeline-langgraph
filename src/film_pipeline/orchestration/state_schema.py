@@ -344,9 +344,6 @@ def apply_node_update(
     for key, reducer in reducers.items():
         if key not in update:
             continue
-        # A channel present in the update always merges through its reducer,
-        # even when the incoming value is empty or falsy — an explicit clear is
-        # a merge, not an omission.
         existing = state.get(key)
         merged[key] = reducer([] if existing is None else existing, update[key])
     return merged

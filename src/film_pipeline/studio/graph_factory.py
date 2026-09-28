@@ -89,8 +89,6 @@ def _register_nodes(builder: StateGraph) -> None:
     builder.add_node("shot_bible_node", shot_bible_node)
     builder.add_node("gen_planning_node", gen_planning_node)
     builder.add_node("generation_node", generation_node)
-    # Phase 7: the parallel subgraph, and the *one* compiled instance of it
-    # (`qc_phase_node` memoises; `_PHASE_NODES` uses the same object).
     builder.add_node("qc_node", qc_phase_node())
     builder.add_node("post_node", post_node)
     builder.add_node("delivery_node", delivery_node)

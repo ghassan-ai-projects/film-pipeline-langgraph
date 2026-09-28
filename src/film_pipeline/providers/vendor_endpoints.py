@@ -18,12 +18,8 @@ Only base URLs live here. Per-endpoint paths (``/chat/completions``,
 
 from __future__ import annotations
 
-#: Google Gemini ``generateContent`` surface, used for both image generation
-#: (Imagen 4) and image *review*. Callers append ``/<model>:<method>``.
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
-#: OpenRouter, the OpenAI-compatible gateway used for Seedance video generation
-#: and the text models routed through ``chat_completions``.
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
 
 __all__ = ["GEMINI_API_BASE", "OPENROUTER_API_BASE"]

@@ -49,14 +49,7 @@ class ValidatorRegistry:
         return validator_id in self.entries
 
 
-# ── The MVP validator set ────────────────────────────────────────────────────
-# Moved here from `validation/validators/__init__.py` (doc 06 slice 6.6), a package
-# whose only content was this list. The registry it feeds is this module, so the data
-# and its consumer now sit together, and `validation` no longer has two things a
-# reader might expect to be the same thing as `governance/gates`.
-
 MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
-    # --- Text validators (artifact scope) ---
     ValidatorRegistryEntry(
         validator_id="logline-validator",
         scope=ValidationScope.ARTIFACT,
@@ -127,7 +120,6 @@ MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
         blocking_conditions=["low_resolution", "moderation_risk", "wrong_subject"],
         warning_conditions=["poor_lighting", "non_matching_style"],
     ),
-    # --- Camera + design validators ---
     ValidatorRegistryEntry(
         validator_id="shot-design-validator",
         scope=ValidationScope.ARTIFACT,
@@ -148,7 +140,6 @@ MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
         blocking_conditions=["malformed_rctco", "missing_refs", "prompt_too_long"],
         warning_conditions=["ambiguous_constraints", "missing_examples"],
     ),
-    # --- Video validators (clip scope) ---
     ValidatorRegistryEntry(
         validator_id="clip-quality-validator",
         scope=ValidationScope.CLIP,
@@ -169,7 +160,6 @@ MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
         blocking_conditions=["wrong_character", "wrong_environment", "missing_action"],
         warning_conditions=["partial_adherence", "extra_elements"],
     ),
-    # --- Continuity + flow validators ---
     ValidatorRegistryEntry(
         validator_id="scene-continuity-validator",
         scope=ValidationScope.SCENE,
@@ -200,7 +190,6 @@ MVP_VALIDATORS: list[ValidatorRegistryEntry] = [
         blocking_conditions=["emotional_arc_broken", "major_continuity_gap"],
         warning_conditions=["pacing_drift", "minor_continuity_note"],
     ),
-    # --- Assembly validator ---
     ValidatorRegistryEntry(
         validator_id="assembly-validator",
         scope=ValidationScope.DELIVERY,

@@ -60,7 +60,6 @@ from film_pipeline.storage.runtime_gateway import project_storage_for
 _logger = logging.getLogger(__name__)
 
 
-#: Builds a compiled graph for a runtime root.
 GraphBuilder = Callable[..., Any]
 
 
@@ -74,7 +73,6 @@ class GraphHost(Protocol):
     be substituted in a test without the composition root.
     """
 
-    #: The service bundle a graph run needs (artifact store, agent registry, ...).
     services: GraphServices | None
 
     graph: Any
@@ -117,15 +115,6 @@ class GraphHost(Protocol):
         ...
 
 
-#: Builds the compiled graph for a runtime root. Registered by the composition
-#: root so this module never names it.
-#:
-#: The alternative was a function-level `from film_pipeline.studio.graph_factory
-#: import build_graph` here. That is what this module did before it moved, but the
-#: move makes the edge a *cycle* — `studio.graph_factory` imports `orchestration`
-#: to wire the nodes — and `test_package_acyclicity` reads `ast`, so a lazy import
-#: is still an edge. Injecting the builder inverts the dependency: `studio` knows
-#: about `orchestration`, and this module knows only that a builder exists.
 _GRAPH_BUILDER: GraphBuilder | None = None
 
 
@@ -609,16 +598,11 @@ def advance_to_next_phase(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any
 
 
 def run_phase_node(rt: GraphHost, state: dict[str, Any], phase: str) -> dict[str, Any]:
-
     node = resolved_phase_node(phase)
     # Inject graph services so nodes can invoke agents and persist artifacts
     state = dict(state)
     state[SERVICES_KEY] = rt.services
     node_result = _call_phase_node(node, state)
-    # Direct node calls bypass channel accumulation, so replay the graph's own
-    # merge rule from the state schema's `Annotated` declarations. This used to
-    # be a hand-written reducer table here, which disagreed with the schema on
-    # four channels and could not see a channel added later.
     merged = apply_node_update(state, node_result)
     # Strip runtime-only keys that must not leak into persisted state
     merged.pop(SERVICES_KEY, None)

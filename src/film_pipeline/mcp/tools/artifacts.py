@@ -180,10 +180,6 @@ async def list_assets(ctx: ToolContext, args: dict[str, object]) -> dict[str, ob
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class ListArtifactsArgs(ToolArgs):
     """Arguments for `list_artifacts`."""
 

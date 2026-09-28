@@ -194,15 +194,6 @@ def provider_specs(
     return []
 
 
-# ── Profile-change resolution and diffing ────────────────────────────────────
-# Moved out of the MCP handler (doc 03 slice 4). These are pure functions over a
-# profile stack and a resolved configuration: no runtime, no artifact store, no
-# MCP context. They lived in `mcp/tools/_profile_change.py` because that is where
-# they were first needed, which made a *resolution* concern reachable only through
-# the tool layer — the handler kept argument parsing and persistence, and these
-# kept doing the config work beside it.
-
-#: The profile-stack slots a change request may name.
 PROFILE_STACK_KEYS: tuple[str, ...] = (
     "film_type_profile",
     "quality_profile",

@@ -96,10 +96,6 @@ def _collect_full_body_frames(char_frames: dict[str, dict[str, Path]]) -> dict[s
 
 def _build_identity_sheets(project_root: Path, char_frames: dict[str, dict[str, Path]]) -> None:
     """Build one identity sheet per character (Phase 7 + validation Phase 8)."""
-    # lazy: tests patch these at their source module (`generation.compositor.build_*`).
-    # A module-level binding
-    # resolves at import time, before the patch, so the mocks are bypassed —
-    # measured: hoisting this block failed four tests with 'Called 0 times'.
     from film_pipeline.generation.compositor import build_character_identity_sheet
 
     for subject_id, frames in char_frames.items():
@@ -118,10 +114,6 @@ def _build_environment_boards(
     env_palettes: dict[str, list[str]],
 ) -> None:
     """Build one environment board per environment (Phase 7 + validation Phase 8)."""
-    # lazy: tests patch these at their source module (`generation.compositor.build_*`).
-    # A module-level binding
-    # resolves at import time, before the patch, so the mocks are bypassed —
-    # measured: hoisting this block failed four tests with 'Called 0 times'.
     from film_pipeline.generation.compositor import build_environment_board
 
     for subject_id, frames in env_frames.items():
@@ -174,10 +166,6 @@ def build_optional_sheets(
 
 def _build_expression_sheets(project_root: Path, char_frames: dict[str, dict[str, Path]]) -> None:
     """Build one expression sheet per character (non-blocking)."""
-    # lazy: tests patch these at their source module (`generation.compositor.build_*`).
-    # A module-level binding
-    # resolves at import time, before the patch, so the mocks are bypassed —
-    # measured: hoisting this block failed four tests with 'Called 0 times'.
     from film_pipeline.generation.compositor import build_expression_sheet
 
     for subject_id, frames in char_frames.items():
@@ -196,10 +184,6 @@ def _build_scale_sheet(
     char_frames: dict[str, dict[str, Path]],
 ) -> None:
     """Build the combined scale sheet from characters' full-body frames."""
-    # lazy: tests patch these at their source module (`generation.compositor.build_*`).
-    # A module-level binding
-    # resolves at import time, before the patch, so the mocks are bypassed —
-    # measured: hoisting this block failed four tests with 'Called 0 times'.
     from film_pipeline.generation.compositor import build_scale_sheet
 
     full_body_frames = _collect_full_body_frames(char_frames)
@@ -223,10 +207,6 @@ def _build_style_board(
     env_palettes: dict[str, list[str]],
 ) -> None:
     """Build the style board from the first environment palette (non-blocking)."""
-    # lazy: tests patch these at their source module (`generation.compositor.build_*`).
-    # A module-level binding
-    # resolves at import time, before the patch, so the mocks are bypassed —
-    # measured: hoisting this block failed four tests with 'Called 0 times'.
     from film_pipeline.generation.compositor import build_style_board
 
     try:
@@ -246,15 +226,7 @@ def _build_style_board(
 def validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
     """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""
     try:
-        # lazy: keeps the model-routing stack off the reference-generation import
-        # path; `film_pipeline.agents.model_routing` is absent from `sys.modules`
-        # after importing this module.
         from film_pipeline.agents.model_routing import ModelRouter
-
-        # lazy: `review_composite_sheet` is patched at its source module
-        # (`generation.sheet_reviewer`), so it has to resolve at call time — a
-        # module-level binding would be bypassed and the test that injects a
-        # review failure would stop exercising the failure path.
         from film_pipeline.generation.sheet_reviewer import review_composite_sheet
 
         router = ModelRouter()

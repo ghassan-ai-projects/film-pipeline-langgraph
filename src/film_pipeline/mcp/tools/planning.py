@@ -201,10 +201,6 @@ async def generate_plan(ctx: ToolContext, args: dict[str, object]) -> dict[str, 
         return _error(f"Plan generation failed: {exc}")
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GeneratePlanArgs(ToolArgs):
     """Arguments for `generate_plan` (none)."""
 

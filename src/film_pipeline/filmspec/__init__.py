@@ -231,13 +231,6 @@ STALE_GENERATION_REQUEST_CODES: frozenset[str] = frozenset(
 #: paths. The predicate lived as two byte-identical copies — one in
 #: `operations._generation_ops`, one in `mcp.tools.generation._text_only` — with the
 #: literal in three places, so the vocabulary is owned here.
-#:
-#: `operations._generation_ops` was deleted with the orphaned operator surface (doc
-#: 03 slice 1), leaving `mcp` as the only reader. The *string* and this predicate
-#: stay: the value is vocabulary and the predicate is the one-line rule that reads
-#: it. The row *builders* that used to sit below moved to
-#: `generation/text_only.py` (doc 06 slice 6.7) — they construct rows, which is not
-#: vocabulary.
 TEXT_ONLY_POLICY = "text_only"
 
 
@@ -248,12 +241,6 @@ def is_text_only_policy(state: object) -> bool:
     return str(state.get("generation_policy", "")).strip().lower() == TEXT_ONLY_POLICY
 
 
-#: The one message for "this request has no project to act on". Both the MCP
-#: dispatcher and the tool layer need it, and a constant in either package would
-#: import the other. It was previously written inline at 48 call sites in three
-#: wordings, with five different emptiness tests — `if not active` and
-#: `if active is None` disagree on an empty dict — so one condition produced
-#: different answers.
 NO_ACTIVE_PROJECT = "No active project."
 
 

@@ -44,8 +44,6 @@ def _checkpoint_summary(cp: CheckpointMetadata) -> dict[str, object]:
 
 async def list_checkpoints(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     rt = ctx.runtime
-    # An explicit `project_id` wins; otherwise the context's resolved project is
-    # the active-project fallback that used to be re-derived here.
     project_id = str(args.get("project_id", "") or "") or (ctx.project_id or "")
     cps = rt.list_checkpoints(project_id if project_id else None)
     return _ok(checkpoints=[_checkpoint_summary(c) for c in cps])
@@ -205,10 +203,6 @@ async def get_invalidation_report(ctx: ToolContext, args: dict[str, object]) -> 
         will_invalidate=report.will_invalidate,
         requires_regeneration=report.requires_regeneration,
     )
-
-
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
 
 
 class ListCheckpointsArgs(ToolArgs):

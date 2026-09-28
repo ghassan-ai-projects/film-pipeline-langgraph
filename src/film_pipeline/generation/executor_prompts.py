@@ -81,8 +81,6 @@ def _entry_prompt_for_shot(package: object, shot_id: str) -> str:
 def _structured_prompt(store: ArtifactStore, project_id: str, shot_row: dict[str, Any]) -> str:
     """Structured prompt assembled from the shot matrix row and bibles."""
 
-    # lazy: tests patch `generation.prompt_builder.build_structured_prompt` at its
-    # source module, so the name has to resolve at call time.
     from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     return build_structured_prompt(

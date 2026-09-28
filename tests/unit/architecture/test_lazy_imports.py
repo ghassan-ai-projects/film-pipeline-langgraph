@@ -1,56 +1,48 @@
-"""Every function-level ``film_pipeline`` import must justify itself.
+"""Function-level ``film_pipeline`` imports are counted and may not grow.
 
-## The finding
+## Why this exists
 
 `docs/modularity-improvements/05-import-hygiene.md` measured the tree and found that
 **96% of function-level imports protect no cycle**: of 287 function-level internal
-imports, 275 could be moved to module level without creating one. The imports were
-there because someone put them there, and nothing could tell the difference between
-one that was load-bearing and one that was habit.
+imports, 275 could be moved to module level without creating one. They were there
+because someone put them there, and nothing could tell a load-bearing import from a
+habit.
 
-That matters because a lazy import *hides an edge from the dependency graph* — the
-package census, the acyclicity check and Enola all read the module level, so an
+It matters because a function-level import *hides an edge from the dependency graph*.
+The package census, the acyclicity check and Enola all read the module level, so an
 import that could be eager but is not makes the graph a quieter, less true picture
 than the code actually is.
 
 ## What this guard enforces
 
-A function-level `film_pipeline` import is allowed in exactly two cases:
+Two counts, computed by `measure.py`'s own algorithm — imported here rather than
+reimplemented, because a guard that disagrees with the measurement it grades is worse
+than no guard — and ratcheted so they may only fall:
 
-1. **It is cycle-required** — the target can already reach the source through eager
-   edges, so hoisting would close a cycle. Computed with `measure.py`'s own
-   algorithm, imported here rather than reimplemented: a guard that disagrees with
-   the measurement it grades is worse than no guard.
-2. **It carries a `# lazy:` comment on the same line or the line above** — an
-   explicit, reviewable reason. `# lazy: defers langgraph` and
-   `# lazy: cycle via orchestration` are both acceptable; a bare suppression is not,
-   because the whole point is that the reason is written down.
+- `LAZY_EDGE_CEILING` — every function-level internal import.
+- `HOISTABLE_EDGE_CEILING` — those that are **not** cycle-required, i.e. the ones that
+  hide an edge with no structural reason to.
 
-## The ratchet
+The 11 cycle-required edges are the floor: hoisting one closes a cycle, which
+`ImportError` proves.
 
-`HOISTABLE_CEILING` is the number of function-level imports that are *neither*
-cycle-required *nor* annotated. It may only fall.
+## Why there is no per-import comment any more
 
-**It is now 0, and the migration is complete.** It began at 275 of 287 function-level
-imports and fell across Steps 15a-15j: `storage`, `governance`, `cli`, `studio`,
-`generation`, `post`, `orchestration`, `mcp`. The function-level imports that remain
-are each cycle-required or carry a written `# lazy:` reason — most for a patch point
-(a test patching a name at its source module), several for a real cycle, and one
-because hoisting would shadow a same-named class.
+This guard used to require every function-level import to carry a `# lazy: <reason>`
+comment, and the migration was recorded through those comments. The reasons were
+mostly the same two sentences repeated at 29 call sites ("tests patch X at its source
+module"), and a comment is a claim that rots: the hoist in `5cc0170` left two of them
+asserting a circular import that no longer existed, and two earlier rounds of this
+program lost time to written claims that the tree no longer supported.
 
-It was deliberately a count of the *unexplained* imports rather than all of them: a
-guard that failed on all 275 could not have been committed until the migration
-finished, so it would not have existed during the migration — which is when it was
-needed.
-
-At 0 the guard's meaning changes slightly and is worth stating: it no longer ratchets
-progress, it **forbids regression**. Any new function-level import that is neither
-cycle-required nor explained now fails immediately.
+The reasons now live once, in `AGENTS.md` under *"Function-level imports are
+deliberate"*, and the guard counts instead of annotating. This is **stricter** than
+what it replaced: the annotation regime allowed a new function-level import as long as
+it carried a comment, whereas these ceilings do not move without an edit here.
 """
 
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -65,152 +57,80 @@ from measure import (  # type: ignore[import-not-found]
     reaches,
 )
 
-#: Function-level internal imports that are neither cycle-required nor carry a
-#: `# lazy:` reason. Lowered package by package as doc 05's hoist lands.
-HOISTABLE_CEILING = 0
+#: Function-level internal imports (edges), across 36 statements. Down from 287 at the
+#: branch base `2450616`: the doc 05 hoist took `storage`, `governance`, `cli`,
+#: `studio`, `generation`, `post`, `orchestration` and `mcp` to module level.
+LAZY_EDGE_CEILING = 42
 
-#: A reason, not a suppression: `# lazy: <why>` on the import's line or the one above.
-_LAZY_REASON = re.compile(r"#\s*lazy:\s*\S+")
-
-
-def _has_reason(path: Path, lineno: int) -> bool:
-    """True when the import at `lineno` carries a `# lazy:` reason nearby.
-
-    The reason may sit on the import's own line, or in the contiguous comment block
-    directly above it. The block is scanned rather than a fixed number of lines
-    because a real reason needs a sentence or two — `subtitle_agent.py` explains a
-    shadowing hazard in three lines, and a two-line window would have rejected it
-    for being *too well* explained.
-
-    Scanning stops at the first line that is not a comment, so a reason cannot be
-    inherited from an unrelated comment further up the function. A blank line ends
-    the block too: it is not a comment, so it stops the scan.
-    """
-    lines = path.read_text().split("\n")
-    index = lineno - 1
-    if 0 <= index < len(lines) and _LAZY_REASON.search(lines[index]):
-        return True
-    index -= 1
-    while index >= 0:
-        stripped = lines[index].strip()
-        if stripped.startswith("#"):
-            if _LAZY_REASON.search(lines[index]):
-                return True
-            index -= 1
-            continue
-        break
-    return False
+#: Of those, the ones that are *not* cycle-required: 11 of the 42 are, so 31 remain.
+#: These are deliberate — a test patching a name at its source module, an import that
+#: would shadow a same-named class, or a module whose import has a side effect. See
+#: `AGENTS.md`. Lower this by hoisting, never by editing the number to match a
+#: regression.
+HOISTABLE_EDGE_CEILING = 31
 
 
-def _module_paths() -> dict[str, Path]:
-    root = Path(__file__).resolve().parents[3] / "src" / "film_pipeline"
-    return {
-        "film_pipeline."
-        + ".".join(p.relative_to(root).with_suffix("").parts).replace(".__init__", ""): p
-        for p in root.rglob("*.py")
-        if "__pycache__" not in p.parts
-    }
-
-
-def _unexplained_lazy_imports() -> list[tuple[str, str, int]]:
-    """Function-level internal imports with neither a cycle nor a stated reason."""
+def _partition() -> tuple[
+    dict[str, set[str]], list[tuple[str, str, int]], list[tuple[str, str, int]]
+]:
+    """Return (eager graph, cycle-required, not-cycle-required) function-level imports."""
     eager, lazy = collect_imports()
-    paths = _module_paths()
-    out: list[tuple[str, str, int]] = []
-    for source, target, lineno in lazy:
-        if reaches(eager, target, source):
-            continue  # cycle-required: hoisting it would close a cycle
-        path = paths.get(source)
-        if path is not None and _has_reason(path, lineno):
-            continue  # an explicit reason on the import
-        out.append((source, target, lineno))
-    return out
+    required = [(s, t, n) for s, t, n in lazy if reaches(eager, t, s)]
+    hoistable = [(s, t, n) for s, t, n in lazy if (s, t, n) not in required]
+    return eager, required, hoistable
+
+
+def test_the_lazy_import_count_has_not_grown() -> None:
+    """Every function-level internal import, ratcheted."""
+    _, required, hoistable = _partition()
+    total = len(required) + len(hoistable)
+    assert total <= LAZY_EDGE_CEILING, (
+        f"{total} function-level internal imports, up from the recorded ceiling of "
+        f"{LAZY_EDGE_CEILING}. Hoist the import to module level, or — if it genuinely "
+        f"cannot be hoisted — lower the ceiling deliberately and say why in the commit "
+        f"message. {len(hoistable)} of them are not cycle-required. By package: "
+        + _by_package(hoistable)
+    )
 
 
 def test_the_hoistable_count_has_not_grown() -> None:
-    """The number of unexplained lazy imports may only fall."""
-    unexplained = _unexplained_lazy_imports()
-    assert len(unexplained) <= HOISTABLE_CEILING, (
-        f"{len(unexplained)} function-level imports are neither cycle-required nor "
-        f"carry a '# lazy: <reason>' comment, up from the recorded ceiling of "
-        f"{HOISTABLE_CEILING}. Hoist the import, or state why it is lazy. By package: "
-        + _by_package(unexplained)
-    )
+    """The imports that hide an edge with no structural reason, ratcheted.
 
-
-def test_every_lazy_reason_is_a_reason() -> None:
-    """A `# lazy:` must say *what* it defers, not just that it is lazy.
-
-    Cheap to satisfy badly — `# lazy: needed` would pass a naive check and tells the
-    next reader nothing. Requiring three characters after the colon is a low bar on
-    purpose; the guard's job is to force the sentence to exist, not to grade it.
+    This is the number that measures the work. It may fall and never rise; a value
+    below the ceiling is progress, and the ceiling should be lowered to meet it.
     """
-    offenders: list[str] = []
-    for path in _module_paths().values():
-        for lineno, line in enumerate(path.read_text().split("\n"), start=1):
-            match = re.search(r"#\s*lazy:?\s*(.*)$", line)
-            if match and len(match.group(1).strip()) < 3:
-                offenders.append(f"{path.name}:{lineno}")
-    assert not offenders, (
-        f"these carry a bare '# lazy' with no stated reason: {offenders}. Say what it "
-        "defers — '# lazy: defers langgraph' or '# lazy: cycle via storage'."
+    _, _, hoistable = _partition()
+    assert len(hoistable) <= HOISTABLE_EDGE_CEILING, (
+        f"{len(hoistable)} function-level imports are not cycle-required, up from the "
+        f"recorded ceiling of {HOISTABLE_EDGE_CEILING}. By package: " + _by_package(hoistable)
     )
 
 
-def test_every_lazy_reason_annotates_an_import() -> None:
-    """A `# lazy:` must sit on, or directly above, the import it justifies.
+def test_the_cycle_required_floor_is_real() -> None:
+    """Guard the guard: cycle-requiredness must be computed, not assumed.
 
-    This is the guard's own blind spot, found by adversarial review of the guard
-    rather than of the code. `_has_reason` only ever *looks upward from an import*:
-    it answers "does this import have a reason", never "does this reason belong to
-    an import". So a `# lazy:` left behind when an import was hoisted is invisible —
-    and the hoisting commit `5cc0170` left two of them, in
-    `orchestration/subgraphs/qc.py` and `orchestration/nodes/qc.py`, each asserting
-    a circular import that no longer existed. A false reason is worse than no
-    reason: it is a written claim that the next reader will trust, and
-    `AGENTS.md` records two rounds lost to exactly that.
-
-    The rule is the mirror of `_has_reason`: on the comment's own line, or after
-    the contiguous comment block below it, must come an ``import``/``from`` line.
+    If `reaches` returned False always, `HOISTABLE_EDGE_CEILING` would swallow all 42
+    edges and the ratchet would stop measuring anything. The floor is 11 edges, each
+    of which raises `ImportError` when hoisted.
     """
-    offenders: list[str] = []
-    for source, path in sorted(_module_paths().items()):
-        lines = path.read_text().split("\n")
-        for lineno, line in enumerate(lines):
-            if not _LAZY_REASON.search(line):
-                continue
-            if re.match(r"\s*(?:from|import)\s", line.split("#", 1)[0]):
-                continue  # on the import's own line
-            index = lineno + 1
-            while index < len(lines) and lines[index].strip().startswith("#"):
-                index += 1
-            if index < len(lines) and re.match(r"\s*(?:from|import)\s", lines[index]):
-                continue  # in the comment block directly above an import
-            offenders.append(f"{source}:{lineno + 1}")
-    assert not offenders, (
-        f"these `# lazy:` reasons annotate no import: {offenders}. A reason left "
-        "behind by a hoist is a false claim about the tree — delete it, or move it "
-        "to the import it justifies."
+    _, required, hoistable = _partition()
+    assert len(required) >= 10, (
+        f"only {len(required)} function-level imports look cycle-required; the "
+        "reachability walk is probably not reading the graph."
     )
+    assert not set(required) & set(hoistable), "the partition overlaps"
 
 
 def test_the_guard_has_something_to_check() -> None:
     """Guard the guard: a broken collector would report zero and pass.
 
-    The threshold *fell* as the migration proceeded — 200 → 150 → 100 → 30 — each time
-    because the real total dropped to meet it. That is the point: it catches a
-    collector that reads nothing, not a migration that finished. The migration is now
-    finished: every remaining function-level import is cycle-required or carries a
-    `# lazy:` reason, and `HOISTABLE_CEILING` is **0**.
-
-    Lowering this is not lowering a finding. `HOISTABLE_CEILING` is the number that
-    measures the work and it reached 0 by imports actually being hoisted or explained;
-    this threshold would still be 200 if the tree had not genuinely shrunk.
+    The ceilings above are only meaningful if `collect_imports` actually reads the
+    tree — a collector that returned nothing would make both trivially satisfiable.
     """
     eager, lazy = collect_imports()
     assert len(lazy) > 30, (
         f"only {len(lazy)} function-level internal imports found; the collector is "
-        "probably not reading the tree, which would make the ceiling vacuous."
+        "probably not reading the tree, which would make the ceilings vacuous."
     )
     assert len(eager) > 100, f"only {len(eager)} modules in the eager graph"
 

@@ -78,17 +78,12 @@ class SubtitleAgent:
         """
         from datetime import UTC, datetime
 
-        # lazy: `SubtitleCue` in the line below is the schema's, but this module
-        # defines its own same-named dataclass. Hoisting shadows it and the cue
-        # conversion silently changes type — measured: mypy rejects the hoisted form.
-        # Kept with their sibling below; each carries the marker because the guard
-        # reads the import's own line, not a comment block shared by three.
-        from film_pipeline.schemas import SubtitleArtifact, SubtitleCue  # lazy: shadows
-        from film_pipeline.schemas.artifact import (  # lazy: stays with the above
+        from film_pipeline.schemas import SubtitleArtifact, SubtitleCue
+        from film_pipeline.schemas.artifact import (
             ArtifactMetadata,
             ArtifactRef,
         )
-        from film_pipeline.schemas.base import (  # lazy: stays with the above
+        from film_pipeline.schemas.base import (
             ArtifactStatus,
             ArtifactType,
             FilmPhase,

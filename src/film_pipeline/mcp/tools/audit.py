@@ -25,8 +25,6 @@ def _routing_summary(routing_decisions: list[dict[str, Any]]) -> str:
 
 
 async def get_audit_log(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
-    # An explicit `project_id` wins; otherwise the context's resolved project is
-    # the active-project fallback `GetAuditLogArgs.project_id` documents.
     project_id = str(args.get("project_id", "") or "") or (ctx.project_id or "")
     limit_raw = args.get("limit", 100)
     limit = int(limit_raw) if isinstance(limit_raw, int) else int(str(limit_raw))
@@ -51,9 +49,6 @@ async def explain_last_decision(ctx: ToolContext, args: dict[str, object]) -> di
 
 async def explain_agent_routing(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     _ = args
-    # The context's project is what dispatch resolved; this tool also reads the
-    # runtime's *active* project, because routing history is session-scoped and
-    # the tool declares `requires_active_project=False`.
     state = (
         ctx.runtime.get_project(ctx.project_id)
         if ctx.project_id is not None
@@ -84,11 +79,6 @@ async def explain_kb_context(ctx: ToolContext, args: dict[str, object]) -> dict[
         message="KB context: the orchestrator selects KB slices by phase and agent. "
         "Canonical rules take priority over playbooks and case studies.",
     )
-
-
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe, so adding a tool is one edit
-# rather than three (registry, lazy facade, `.pyi` stub). See doc 04 slice 1.
 
 
 class GetAuditLogArgs(ToolArgs):

@@ -302,9 +302,6 @@ async def get_validation_report(ctx: ToolContext, args: dict[str, object]) -> di
     """
     rt = ctx.runtime
     state = ctx.project_state()
-    # Taken from the resolved state, not `ctx.project_id`: the same guarantee
-    # (`requires_active_project` held) is already expressed by `project_state()`
-    # having returned, and re-reading the optional field would need a second check.
     project_id = str(state["project_id"])
 
     # Stored QC reports work even without a current phase because they are
@@ -358,11 +355,6 @@ async def list_validation_issues(ctx: ToolContext, args: dict[str, object]) -> d
     return _ok(phase=phase_str, issues=[], message="No validation issues found.")
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1). None take
-# arguments: they validate the active project's current phase.
-
-
 class RunValidationArgs(ToolArgs):
     """Arguments for `run_validation` (none)."""
 
@@ -375,12 +367,6 @@ class ListValidationIssuesArgs(ToolArgs):
     """Arguments for `list_validation_issues` (none)."""
 
 
-#: The validation tools registered in the `# validation` section.
-#:
-#: `run_validation` is deliberately absent: it is registered in the `# generation`
-#: block at its historical slot, and the original registry recorded that the order
-#: was deliberate. Its spec lives below as `RUN_VALIDATION` so both paths share one
-#: declaration.
 VALIDATION_TOOLS: tuple[ToolSpec, ...] = (
     ToolSpec(
         name="get_validation_report",
@@ -401,7 +387,6 @@ VALIDATION_TOOLS: tuple[ToolSpec, ...] = (
 )
 
 
-#: Registered from the `# generation` block at its historical slot.
 RUN_VALIDATION = ToolSpec(
     name="run_validation",
     group=ToolGroup.VALIDATION,

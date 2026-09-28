@@ -30,10 +30,6 @@ from film_pipeline.studio.runtime import get_runtime as get_runtime
 
 _TOOLS_DIR = _Path(__file__).resolve().parent
 
-#: Names this facade serves that are not tool handlers. Kept explicit rather than
-#: derived: `register_all_tools` is a registry entry point that callers reach
-#: through this facade, and the derivation above deliberately knows only about
-#: `ToolSpec` declarations.
 _NON_TOOL_EXPORTS: dict[str, str] = {
     "register_all_tools": "film_pipeline.mcp.registry",
 }
@@ -48,11 +44,6 @@ def _tool_modules() -> dict[str, str]:
     which is the cycle this file is careful to avoid.
     """
     mapping: dict[str, str] = {}
-    # The package root is two levels up (`.../film_pipeline/mcp/tools` ->
-    # `.../film_pipeline`), so no import is needed to locate it. An earlier version
-    # imported `film_pipeline` here to read `__file__`, justified by a claim that a
-    # module-level import would run "while that package is still initialising" —
-    # impossible, since this module's body only runs once that package exists.
     package_root = _TOOLS_DIR.parent.parent
     for path in sorted(_TOOLS_DIR.rglob("*.py")):
         try:

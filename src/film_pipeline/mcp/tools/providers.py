@@ -56,10 +56,6 @@ async def list_providers(ctx: ToolContext, args: dict[str, object]) -> dict[str,
     return _ok(providers=result, total=len(result))
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class CheckProviderHealthArgs(ToolArgs):
     """Arguments for `check_provider_health`."""
 

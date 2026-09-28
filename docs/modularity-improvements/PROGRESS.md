@@ -1117,6 +1117,12 @@ first, then uses it.
 
 ### `tests/unit/architecture/test_lazy_imports.py`
 
+> **Superseded.** The design below — a required `# lazy: <reason>` comment per import —
+> was retired once the hoist landed; see *"Comments removed from `src/`"* at the end of
+> this file. The guard still ratchets the same population, but it counts
+> (`LAZY_EDGE_CEILING`, `HOISTABLE_EDGE_CEILING`) instead of annotating. Kept as the
+> record of how the migration was tracked.
+
 A function-level `film_pipeline` import is allowed only if:
 
 1. **It is cycle-required** — the target can already reach the source through eager
@@ -2148,3 +2154,41 @@ anything was changed; several did not survive that and are recorded as such.
 - `enola check --baseline=docs/modular-architecture/enola-out
   docs/modular-architecture/enola-config.yaml`: exit **0**, cycle count **1**.
 - `uv run pytest -m e2e --no-cov`: PASS.
+
+## Comments removed from `src/` (2026-09-28, after the review round)
+
+Every `#` comment this branch added under `src/` was deleted: **357 sites across 58
+files, −412 net lines**. Docstrings are untouched — they are the documentation; `#`
+comments are not.
+
+The final layer of the programme (`# lazy: <reason>` on 29 function-level imports) was
+a written claim at a call site, and the review round immediately above found it had
+already rotted: a hoist left two of them asserting a circular import that no longer
+existed, and a third named a cycle that was not one. The reasons are now stated once, in
+`AGENTS.md` § *"Function-level imports are deliberate — do not annotate them"*, and the
+guard counts instead of annotating:
+
+| | before | after |
+|---|---|---|
+| `test_lazy_imports.py` enforces | every non-cycle-required function-level import carries a `# lazy:` reason (`HOISTABLE_CEILING = 0`) | `LAZY_EDGE_CEILING = 42` and `HOISTABLE_EDGE_CEILING = 31`, both may only fall |
+| the reason lives | at the call site, 29 copies | `AGENTS.md`, once |
+| a new function-level import | allowed, if it carried a comment | **fails** unless a ceiling is deliberately raised |
+
+The measured graph is unchanged by the deletion — comments are not edges: 42
+function-level internal imports across 36 statements, 11 cycle-required, 31 not.
+
+Method, because a bulk delete needs one: comments were identified with `tokenize` (never
+a regex on `#`, which would eat `#` inside strings) and kept only when the comment's
+text was present in the **same file at base `2450616`** — with 17 branch renames mapped
+to their old paths, so a moved file does not read as a new one. Two `# pragma: no cover`
+directives were retained. `ruff check` then reported three `I001` import-order breaks
+left by the deletions; `ruff check --fix` and `ruff format` reformatted 29 files, and
+`ast.parse` over all 299 `src` files confirms none broke.
+
+Guard hardened by injection, per `AGENTS.md`: a new function-level import in `cli/run.py`
+failed **both** ceilings with the right count and package breakdown (`43 … up from 42`,
+`32 … up from 31`), and was reverted.
+
+**Falsifiable check:** `uv run python docs/modularity-improvements/measure.py` prints
+`total=42 statements=36 cycle-required=11 not-cycle-required=31`; the four tests in
+`test_lazy_imports.py` pass; `git grep -c '# lazy:' -- src` is empty.

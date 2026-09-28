@@ -51,7 +51,7 @@ Why this order:
 | No handler imports outside `mcp/server.py` + `mcp/registry.py` in `src` | a new direct-call path | `tests/unit/architecture/test_boundary_law.py` |
 | No writes to another package's `_`-attributes | `rt_mod._RUNTIME = …` from outside `studio` | same file (it counts private *imports* today, not private *writes*) |
 | Every tool has `input_schema` + real description (ratcheted) | the contract regressing to names only | `tests/unit/test_mcp.py` or a new catalog test |
-| Lazy import must be cycle-required or carry `# lazy:` | coupling hidden in function bodies | `tests/unit/architecture/test_lazy_imports.py` |
+| Lazy-import totals are ratcheted, not annotated | coupling hidden in function bodies | `tests/unit/architecture/test_lazy_imports.py` |
 | `make enola` runs without a pipe | reading `tail`'s exit code as the gate's | `Makefile` |
 
 Audit each guard as AGENTS.md requires: *what change would make this pass while being

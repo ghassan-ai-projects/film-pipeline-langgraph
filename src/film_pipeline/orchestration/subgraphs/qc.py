@@ -305,10 +305,6 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     ``documentation/qc-single-implementation.md``.
     """
 
-    # `build_consensus_if_needed` is shared with the sequential runner in
-    # `nodes.qc`, so it lives at the `orchestration` root; the matrix-patch
-    # emitter is QC's own output and is defined here.
-
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
 
@@ -328,16 +324,6 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     if issues:
         update["issues"] = issues
 
-    # The two side-effect steps run on a working copy and their produced refs
-    # are carried into `update` explicitly: writing them onto `state` here would
-    # be a mutation of the graph's input, which the reducer channels would then
-    # not see.
-    #
-    # The copy is a plain mapping on purpose. `emit_matrix_patch_from_findings`
-    # and `build_consensus_if_needed` are typed against `StudioGraphState`, but
-    # this dict holds registry-driven channel keys, so a TypedDict literal would
-    # reject the splat (`[typeddict-item]`) for the same reason `update` is a
-    # `dict[str, object]`. The functions only index it.
     working: dict[str, Any] = {**state, **update}
     emit_matrix_patch_from_findings(cast("StudioGraphState", working))
     build_consensus_if_needed(cast("StudioGraphState", working), "qc")

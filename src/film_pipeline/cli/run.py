@@ -220,8 +220,6 @@ def main(argv: list[str] | None = None) -> int:
 
     # The headless runner persists state under the explicit request root, so
     # retain INFO+ logs there as well as the WARNING-capped stderr stream.
-    # lazy: tests patch `logging_setup.configure_logging` at its source, so a
-    # module-level binding would be resolved before the patch and bypassed.
     from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(

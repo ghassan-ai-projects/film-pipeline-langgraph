@@ -109,10 +109,6 @@ async def generate_environment_bible(
         return _error(f"EnvironmentBible generation failed: {exc}")
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateEnvironmentBibleArgs(ToolArgs):
     """Arguments for `generate_environment_bible`."""
 

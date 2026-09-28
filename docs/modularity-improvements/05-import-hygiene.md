@@ -106,19 +106,30 @@ reason; it is not worth a sweep on its own.
    (`test_surface_ratchet.py`) will show whether any public name changes.
 4. **Hoist function-level imports package by package**, starting with `post` (20, small
    package), then `governance`, `studio`, `orchestration`, `mcp`. Keep a lazy import only
-   with a one-line reason on it (`# lazy: defers langgraph` or `# lazy: cycle via X`).
+   when it is cycle-required, a test patch point, or a shadowing/side-effect hazard —
+   the categories are in `AGENTS.md`, not in the source.
 5. **Add the guard** below so the count cannot silently grow back.
 
-**Falsifiable check for each hoist commit:** `measure.py`'s hoistable count for that
-package goes to 0, mypy strict and the acyclicity test stay green, and
+**Falsifiable check for each hoist commit:** `measure.py`'s not-cycle-required count for
+that package goes to 0, mypy strict and the acyclicity test stay green, and
 `python -X importtime -c "import film_pipeline.mcp.server"` does not grow by more
 than a few ms (if it jumps by ~300 ms, a hoist pulled in LangGraph — revert that one).
 
 ## Guard to leave behind
 
-`tests/unit/architecture/test_lazy_imports.py`: every function-level `film_pipeline`
-import must either be cycle-required (computed exactly as `measure.py` does) or carry a
-`# lazy:` comment on the same line. Ratchet per package during migration.
+`tests/unit/architecture/test_lazy_imports.py` ratchets two counts, both computed with
+`measure.py`'s own reachability walk: `LAZY_EDGE_CEILING` (all function-level internal
+imports) and `HOISTABLE_EDGE_CEILING` (those that are *not* cycle-required). Both may
+only fall.
+
+**Superseded during the migration:** the first version of this guard required each
+function-level import to carry a `# lazy: <reason>` comment, and the migration was
+tracked through those comments (`annotated` / `unexplained` in `measure.py`). That
+regime was retired once the hoist landed. The reasons were ~29 repetitions of the same
+two sentences, and a comment is a claim that rots — a later hoist left two of them
+asserting a cycle that no longer existed. The reasons now live once in `AGENTS.md`, and
+the guard counts instead of annotating; it is *stricter* than its predecessor, which
+allowed a new function-level import as long as it carried a comment.
 
 ## What this does not establish
 

@@ -77,10 +77,6 @@ class HeadlessDriver:
                 mock_responses=default_mock_responses(),
             )
         rt = StudioRuntime(server_mode=mode, runtime_root=runtime_root, services=services)
-        # Installed through the owner's public API rather than by writing
-        # `rt_mod._RUNTIME` / `_RUNTIME_MODE_OVERRIDE` from here: those are
-        # another package's private globals, and `cli` has no business
-        # reassigning them.
         install_runtime(rt, mode=mode)
         return rt
 

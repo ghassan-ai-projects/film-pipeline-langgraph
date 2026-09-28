@@ -29,8 +29,6 @@ def _load_kb_manifest() -> KBManifest | None:
     manifest exists on disk yet.
     """
 
-    # lazy: tests patch `kb.paths.kb_manifest_path` at its source module; a
-    # module-level binding resolves before the patch and bypasses it.
     from film_pipeline.kb.paths import kb_manifest_path
 
     manifest_path = kb_manifest_path()
@@ -123,10 +121,6 @@ async def kb_explain_context_choice(ctx: ToolContext, args: dict[str, object]) -
         "Canonical rules (authority=CANONICAL) take priority over playbooks and case studies. "
         "Use kb_get_context_packet to see the current packet.",
     )
-
-
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
 
 
 class KbSearchArgs(ToolArgs):

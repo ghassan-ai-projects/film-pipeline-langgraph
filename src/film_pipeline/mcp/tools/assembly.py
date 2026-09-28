@@ -75,10 +75,6 @@ async def export_delivery_package(ctx: ToolContext, args: dict[str, object]) -> 
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class PlanCoverageGroupArgs(ToolArgs):
     """Arguments for `plan_coverage_group` (none)."""
 

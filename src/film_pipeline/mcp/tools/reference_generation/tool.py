@@ -215,10 +215,6 @@ async def generate_reference_images(ctx: ToolContext, args: dict[str, object]) -
     )
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateReferenceImagesArgs(ToolArgs):
     """Arguments for `generate_reference_images`."""
 

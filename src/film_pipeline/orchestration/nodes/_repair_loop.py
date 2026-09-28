@@ -67,8 +67,6 @@ class _LazyQcPhaseNode:
 
     def resolve(self) -> Any:
         if self._node is None:
-            # lazy: importing subgraphs.qc at module level is the partially
-            # initialized module this `_LazyQcPhaseNode` exists to avoid.
             from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
 
             self._node = qc_phase_node()
@@ -90,16 +88,6 @@ def resolved_phase_node(phase: str) -> Any:
 
 
 # ── Phase node registry (for repair routing) ────────────────────────────
-#
-# Every phase maps to the *same object* `build_graph` registers for
-# `<phase>_node`, so a phase cannot run one implementation on its first pass and
-# another on repair. `tests/unit/orchestration/test_graph_manual_path_parity.py`
-# asserts that identity for all eleven phases.
-#
-# `qc_phase_node()` is memoised in `subgraphs.qc`, so this row and
-# `studio.graph_factory`'s `add_node("qc_node", ...)` hold the *same* compiled
-# object rather than two equal compilations. It is resolved through
-# `_qc_phase_node()` for the cycle reason stated there.
 
 _PHASE_NODES: dict[str, Any] = {
     "intake": intake_node,
@@ -110,11 +98,6 @@ _PHASE_NODES: dict[str, Any] = {
     "shot_bible": shot_bible_node,
     "gen_planning": gen_planning_node,
     "generation": generation_node,
-    # QC's repair pass must run the same object the graph wires for its first
-    # pass: the parallel subgraph. `nodes.qc.qc_node` was a second, sequential
-    # implementation that did different work (and skipped the matrix patch and
-    # consensus steps the subgraph lacked). See
-    # `documentation/qc-single-implementation.md` for the decision.
     "qc": _QC_PHASE_NODE,
     "post": post_node,
     "delivery": delivery_node,

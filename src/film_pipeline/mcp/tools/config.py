@@ -105,10 +105,6 @@ async def get_runtime_mode(ctx: ToolContext, args: dict[str, object]) -> dict[st
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class ListProfilesArgs(ToolArgs):
     """Arguments for `list_profiles` (none)."""
 

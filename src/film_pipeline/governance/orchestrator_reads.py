@@ -22,7 +22,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-#: Orchestrator namespace prefix. Single definition; `orchestration` imports it.
 ORCH_NS = "_orchestrator"
 
 

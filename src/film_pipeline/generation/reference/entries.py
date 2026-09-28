@@ -88,9 +88,6 @@ def reference_prompt(
     Falls back to the entry's ``prompt_text`` when no structured sources exist.
     """
 
-    # lazy: tests patch `generation.prompt_builder.build_structured_prompt` at its
-    # source module, so the name has to resolve at call time; a module-level
-    # binding would be resolved before the patch and the mock would never be used.
     from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     return build_structured_prompt(

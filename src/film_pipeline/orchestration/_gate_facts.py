@@ -9,12 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-# Imported by module path, **not** off the `orchestration` package root. The root
-# form (`from film_pipeline.orchestration import orchestrator_state`) executes
-# `orchestration/__init__`, and that pulls `nodes` -> `subgraphs` with it, which
-# closed an `orchestration -> nodes -> subgraphs -> orchestration` cycle once the
-# QC subgraph became the QC phase node. This adapter needs the sibling module, so
-# it names it directly and the package root stays off the path.
 from film_pipeline.orchestration.orchestrator_state import (
     ensure_orchestrator_state,
     get_approved_refs,

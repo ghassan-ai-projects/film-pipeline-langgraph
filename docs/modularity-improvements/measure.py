@@ -54,31 +54,6 @@ def _nearest_module(name: str) -> str | None:
     return name if name in MODULES else None
 
 
-#: Same rule as `test_lazy_imports._has_reason`: `# lazy: <why>` on the import's
-#: line or in the contiguous comment block directly above it.
-_LAZY_REASON = re.compile(r"#\s*lazy:\s*\S+")
-
-
-def _has_lazy_reason(source: str, lineno: int) -> bool:
-    """True when the lazy import at `source:lineno` carries a written reason."""
-    path = MODULES.get(source)
-    if path is None:
-        return False
-    lines = path.read_text().split("\n")
-    index = lineno - 1
-    if 0 <= index < len(lines) and _LAZY_REASON.search(lines[index]):
-        return True
-    index -= 1
-    while index >= 0:
-        stripped = lines[index].strip()
-        if not stripped.startswith("#"):
-            break
-        if _LAZY_REASON.search(lines[index]):
-            return True
-        index -= 1
-    return False
-
-
 def _parents(mod: str) -> list[str]:
     parts = mod.split(".")
     return [".".join(parts[:i]) for i in range(2, len(parts)) if ".".join(parts[:i]) in MODULES]
@@ -202,24 +177,15 @@ def main() -> None:
 
     print("\n== Function-level (lazy) internal imports")
     required = [(s, t, n) for s, t, n in lazy if reaches(eager, t, s)]
-    # A lazy import can also be justified by a written reason. Report it the way
-    # `tests/unit/architecture/test_lazy_imports.py` grades it, so the two numbers
-    # cannot be read as disagreeing: a bare `lazy - required` count includes the
-    # annotated patch points and reads as "hoistable" when it is not.
-    annotated = [
-        (s, t, n) for s, t, n in lazy if (s, t, n) not in required and _has_lazy_reason(s, n)
-    ]
-    unexplained = [
-        (s, t, n) for s, t, n in lazy if (s, t, n) not in required and (s, t, n) not in annotated
-    ]
+    hoistable = [(s, t, n) for s, t, n in lazy if (s, t, n) not in required]
     print(
-        f"  total={len(lazy)} cycle-required={len(required)} "
-        f"annotated={len(annotated)} unexplained={len(unexplained)}"
+        f"  total={len(lazy)} statements={len({(s, n) for s, _, n in lazy})} "
+        f"cycle-required={len(required)} not-cycle-required={len(hoistable)}"
     )
-    by_pkg = collections.Counter(package_of(s) for s, t, n in annotated)
-    print("  annotated by package:", dict(by_pkg.most_common()))
-    for s, t, n in unexplained:
-        print(f"  unexplained: {s}:{n} -> {t}")
+    by_pkg = collections.Counter(package_of(s) for s, t, n in hoistable)
+    print("  not-cycle-required by package:", dict(by_pkg.most_common()))
+    for s, t, n in hoistable:
+        print(f"  not-cycle-required: {s}:{n} -> {t}")
     for s, t, n in required:
         print(f"  required: {s}:{n} -> {t}")
 

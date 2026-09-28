@@ -70,10 +70,6 @@ async def generate_camera_bible(ctx: ToolContext, args: dict[str, object]) -> di
         return _error(f"CameraBible generation failed: {exc}")
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateCameraBibleArgs(ToolArgs):
     """Arguments for `generate_camera_bible` (none)."""
 

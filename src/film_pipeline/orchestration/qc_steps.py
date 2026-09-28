@@ -58,11 +58,6 @@ def build_consensus_if_needed(state: StudioGraphState, phase: str) -> None:
     try:
         consensus = ConsensusBuilder().build(reports, artifact_refs)
     except Exception:
-        # A consensus report is a nice-to-have, so a synthesis failure must not
-        # fail the QC phase — but it must not be invisible either. This call site
-        # previously returned silently, which is how a real type mismatch between
-        # `_validation_reports` (dicts) and `ConsensusBuilder.build` (models) went
-        # unnoticed for as long as it did.
         _logger.warning(
             "consensus synthesis failed for phase %s; continuing without it",
             phase,
@@ -70,9 +65,6 @@ def build_consensus_if_needed(state: StudioGraphState, phase: str) -> None:
         )
         return
 
-    # lazy: `nodes._agent_artifacts` is reached through `nodes/__init__`, whose
-    # eager facade imports `nodes.qc`; a module-level import here closes the
-    # `nodes.qc -> qc_steps -> nodes` cycle `measure.py` reports.
     from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
 
     ref = _save_artifact(state, consensus, "consensus_report", phase)

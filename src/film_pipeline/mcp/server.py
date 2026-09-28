@@ -67,10 +67,6 @@ class MCPServer:
         if isinstance(resolved, MCPResponse):
             return resolved
         reg, resolved_envelope = resolved
-        # Validate before either gate. `_check_confirmation` reads the *typed*
-        # `confirmed`, so a truthy string like `"no"` can no longer clear the
-        # gate on a destructive tool; a malformed call is refused as a typed
-        # error before any gate consults it.
         parsed, invalid = self._validate_arguments(reg, arguments, resolved_envelope)
         if invalid is not None:
             return invalid
@@ -81,14 +77,6 @@ class MCPServer:
         missing_project = self._check_active_project(reg, resolved_envelope)
         if missing_project is not None:
             return missing_project
-        # The *raw* arguments reach the handler, not `parsed.model_dump()`.
-        # Validation is a gate, not a rewrite: `model_dump()` fills in every
-        # default, so a handler that distinguishes an absent optional key from a
-        # present-but-empty one changes meaning when it does. `inspect_artifact`
-        # is the live example — it takes the "latest version" branch only when
-        # `version` is `None`, and its declared default is `""`, so dispatching
-        # the dump sent `""` and the handler raised `int("")`; two smoke tests
-        # caught it. The model owns the *contract*; the handler owns coercion.
         return await self._dispatch_handler(reg, dict(arguments), resolved_envelope)
 
     def _resolve_tool_and_project(
@@ -129,12 +117,6 @@ class MCPServer:
     ) -> MCPResponse | RequestEnvelope:
         """Resolve the request's project, explicit ref first, then the session's."""
         if not envelope.project_ref:
-            # No explicit ref: fall back to the active project. It is read from
-            # the runtime, which owns project state, rather than from a second
-            # copy here — doc 01's slice 3. The server kept its own
-            # `active_project_id` and reconciled the two after the fact with
-            # `_auto_register_from_runtime`, whose own comment conceded that
-            # "the server's ProjectRegistry is a separate in-memory structure".
             active = self._active_project_from_runtime()
             if active:
                 return _resolved_envelope(envelope, active)
@@ -313,9 +295,6 @@ class MCPServer:
         """
 
         handler = reg.handler
-        # The union in `ToolHandler` admits both shapes, so mypy cannot narrow it
-        # from a runtime signature check. `_accepts_context` just proved which
-        # call this is; the cast states that.
         any_handler = cast("Any", handler)
         is_async = inspect.iscoroutinefunction(handler)
         try:
@@ -421,17 +400,7 @@ def main() -> int:
     # falls back to a throwaway tempdir. `configure_logging` tolerates `None` and
     # adds the file handler only when it has a root.
 
-    # lazy: tests patch `studio.bootstrap.validate_environment` at its source
-    # module; a module-level binding resolves before the patch and bypasses it
-    # (verified: with a module-level binding `main()` calls the patched-through
-    # function, so `test_mcp_main_configures_logging_before_stdio_server` and its
-    # sibling were relying on a patch that had no effect). Bootstrap validation
-    # also probes the filesystem — it touches and unlinks `artifacts/.write_test`
-    # — so resolving it here keeps that probe out of the test run too.
     from film_pipeline.studio.bootstrap import validate_environment
-
-    # lazy: tests patch `studio.logging_setup.configure_logging` at its source; a
-    # module-level binding resolves before the patch and bypasses it.
     from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(runtime_root_from_config())

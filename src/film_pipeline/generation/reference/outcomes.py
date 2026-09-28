@@ -126,8 +126,6 @@ def _write_frame_sidecar_safely(
     target_path: Path, raw: dict[str, object], asset_posix: str, ctx: _EntryContext
 ) -> None:
     """Write the frame metadata sidecar alongside the PNG; non-blocking."""
-    # lazy: patched at `generation.frame_sidecar.write_frame_sidecar`; a module-level
-    # binding resolves before the patch and bypasses it.
     from film_pipeline.generation.frame_sidecar import write_frame_sidecar
 
     try:

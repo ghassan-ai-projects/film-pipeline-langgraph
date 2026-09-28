@@ -83,10 +83,6 @@ async def approve_intake(ctx: ToolContext, args: dict[str, object]) -> dict[str,
         return _error(str(e))
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class SubmitIdeaArgs(ToolArgs):
     """Arguments for `submit_idea`.
 

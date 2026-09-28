@@ -90,11 +90,6 @@ async def get_blockers(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1). None of these
-# take arguments: they all report on the project the context resolved.
-
-
 class NoArgs(ToolArgs):
     """Arguments for the state read tools (none)."""
 

@@ -305,10 +305,6 @@ async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class StartGenerationBatchArgs(ToolArgs):
     """Arguments for `start_generation_batch` (none)."""
 

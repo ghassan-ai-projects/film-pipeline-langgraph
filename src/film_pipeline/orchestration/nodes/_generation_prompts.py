@@ -102,8 +102,6 @@ def _build_prompt_from_matrix_row(
 ) -> str:
     """Build a structured generation prompt from the shot matrix row."""
 
-    # lazy: tests patch `generation.prompt_builder.build_structured_prompt` at its
-    # source module, so the name has to resolve at call time.
     from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     characters = row.get("characters") or []

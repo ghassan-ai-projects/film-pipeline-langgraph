@@ -366,7 +366,6 @@ def _save_resolved_config_artifact(
 
 
 def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -> str:
-
     engine = InvalidationEngine()
     report = engine.report(
         rollback_target=f"profile-change:{proposal_id}",
@@ -381,10 +380,6 @@ def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -
         status=ArtifactStatus.CANDIDATE,
         created_by="approve_profile_change",
     )
-
-
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
 
 
 class ProposeProfileChangeArgs(ToolArgs):

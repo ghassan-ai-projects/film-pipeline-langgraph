@@ -50,9 +50,6 @@ def _install_graph_builder() -> None:
     """
 
     def _build_graph(*args: Any, **kwargs: Any) -> Any:
-        # lazy: `graph_factory`'s module body compiles the graph and, with
-        # persistence enabled, opens the checkpointer database, so importing it at
-        # module level would run both as a side effect of importing `studio.runtime`.
         from film_pipeline.studio.graph_factory import build_graph
 
         return build_graph(*args, **kwargs)
@@ -258,8 +255,6 @@ class StudioRuntime:
         if not self.active_project_id:
             return None
         return self.projects.get(self.active_project_id)
-
-    # --- Graph execution (see orchestration.execution) ---
 
     def ensure_graph(self) -> Any:
         """Lazy-load and cache the graph instance."""
@@ -519,7 +514,6 @@ def _build_services_for_mode(
 ) -> GraphServices:
     if server_mode == "real":
         return GraphServices.for_real_runtime(artifacts_root=artifacts_root)
-    # lazy: only the mock branch needs it, and it pulls the mock response tables.
     from film_pipeline.studio.mock_responses import default_mock_responses
 
     return GraphServices.for_mock_runtime(

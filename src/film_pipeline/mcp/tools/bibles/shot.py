@@ -217,10 +217,6 @@ async def generate_shot_bible(ctx: ToolContext, args: dict[str, object]) -> dict
         return _error(f"Shot bible generation failed: {exc}")
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateShotBibleArgs(ToolArgs):
     """Arguments for `generate_shot_bible` (none)."""
 

@@ -271,13 +271,6 @@ def _run_delivery_validators(
         _validate_artifact(DeliveryCompletenessValidator, artifact, issues, state, services)
 
 
-# Phases whose validators `_run_validators` runs directly, in-process.
-#
-# `qc` is deliberately **absent**: QC runs the parallel subgraph
-# (`orchestration/subgraphs/qc.build_qc_subgraph`), which owns its own
-# six-validator fan-out. A phase with two validator runners is exactly the
-# divergence `documentation/qc-single-implementation.md` closes; the runners
-# below keep serving the phases that still call `_run_validators` directly.
 _VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
     ({"script"}, _run_script_validators),
     ({"visual_dev"}, _run_reference_validators),

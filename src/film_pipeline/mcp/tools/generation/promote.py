@@ -41,10 +41,6 @@ async def promote_test_to_production(
     )
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class PromoteTestToProductionArgs(ToolArgs):
     """Arguments for `promote_test_to_production`."""
 

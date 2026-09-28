@@ -17,11 +17,6 @@ from film_pipeline.providers.credentials import (
 )
 from film_pipeline.schemas.artifact import ArtifactRef
 from film_pipeline.schemas.base import FilmPhase
-
-# The one reach-in to a `studio` private module, recorded in
-# `test_boundary_law.KNOWN_PRIVATE_REACH_INS`. It is a module-level import because
-# nothing about it needs to be lazy: `_provider_factory` imports only `providers`
-# and `schemas`, so no cycle forms (an earlier comment claimed one did).
 from film_pipeline.studio._operator_runtime import register_profile_providers as _register
 
 
@@ -232,7 +227,6 @@ def _load_latest_reference_index(
     project_id: str,
     state: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-
     store = _services(rt).artifact_store
     version = 0
     if state is not None:

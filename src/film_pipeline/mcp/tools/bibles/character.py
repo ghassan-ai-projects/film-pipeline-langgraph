@@ -112,10 +112,6 @@ def _constitution_text(constitution: Any) -> str:
     return str(constitution)
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateCharacterBibleArgs(ToolArgs):
     """Arguments for `generate_character_bible`."""
 

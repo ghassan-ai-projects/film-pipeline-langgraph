@@ -81,10 +81,6 @@ async def generate_style_bible(ctx: ToolContext, args: dict[str, object]) -> dic
         return _error(f"StyleBible generation failed: {exc}")
 
 
-# ── Tool declaration ─────────────────────────────────────────────────────────
-# Declared next to the handler it describes (doc 04 slice 1).
-
-
 class GenerateStyleBibleArgs(ToolArgs):
     """Arguments for `generate_style_bible` (none)."""
 

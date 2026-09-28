@@ -39,11 +39,6 @@ def register_profile_providers(
     if not specs:
         return
 
-    # lazy: no cycle here — `_provider_factory` imports only `providers` and
-    # `schemas`, never this module. It stays function-level because tests patch
-    # `studio._provider_factory.build_provider_adapter` on the module object; a
-    # module-level `from ... import build_provider_adapter` here would bind the
-    # real function before the patch and silently bypass it.
     from film_pipeline.studio._provider_factory import build_provider_adapter
 
     runtime.clear_providers()

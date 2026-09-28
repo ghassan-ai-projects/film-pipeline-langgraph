@@ -69,30 +69,6 @@ class ToolContract:
     idempotency_key_field: str | None = None
 
 
-#: The callable a registration holds.
-#:
-#: Structural, and defined here rather than imported from `mcp/tools/spec.py`:
-#: `contract` is imported by every tool module *and* by `mcp/__init__`, so an
-#: import from it into `mcp/tools/` closes `mcp -> tools -> mcp`, which Enola
-#: reports. Tool modules use the public alias in `tools/spec.py`, which is the
-#: same union.
-
-
-#: A tool handler. Two shapes are legal while doc 01's migration is in flight:
-#:
-#: - ``(ctx, args)`` — the target. Dispatch builds a `ToolContext`, so the handler
-#:   never resolves the runtime or the active project for itself.
-#: - ``(args)`` — the legacy shape, still in the union until the last seven
-#:   handlers move. Dispatch passes it the same validated argument dict.
-#:
-#: `MCPServer._accepts_context` picks the shape from the first parameter's name,
-#: so a handler is migrated by changing its signature — there is no registry flag
-#: to keep in step. When the last legacy handler moves, the second member is
-#: deleted.
-#:
-#: This lives here, beside `ToolContext`, rather than in `contract.py`: a tool
-#: module now declares its own `ToolSpec` and therefore imports `contract`, so
-#: `contract` importing a `mcp/tools/` module would close `mcp -> tools -> mcp`.
 ToolHandler = (
     Callable[[ToolContext, dict[str, Any]], Awaitable[dict[str, Any]]]
     | Callable[[ToolContext, dict[str, Any]], dict[str, Any]]
@@ -121,20 +97,6 @@ class ToolArgs(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    # Both of these belong to the protocol rather than to any one tool, so they
-    # are declared once here instead of on 75 models. Declaring them keeps
-    # `extra="forbid"` honest: without them every tool would reject the two
-    # fields the protocol itself sends.
-    #
-    # - `confirmed` gates tools whose contract sets `requires_confirmation`.
-    #   `MCPServer.call` validates the arguments *first* and then reads the typed
-    #   value (`MCPServer._check_confirmation`), so `"no"` cannot clear the gate.
-    # - `project_ref` names the project for this one call, leaving the active
-    #   project unchanged. `MCPServer.call` also lifts it into the request
-    #   envelope (`new_envelope(project_ref=...)`) *before* validation, from the
-    #   raw arguments. It stays on the model because a handler may read it —
-    #   `set_active_project` does — and because the envelope path tolerates a
-    #   missing or null ref that the model would otherwise reject.
     confirmed: bool | None = Field(
         default=None,
         description=(

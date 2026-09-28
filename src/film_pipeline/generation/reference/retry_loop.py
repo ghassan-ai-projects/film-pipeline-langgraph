@@ -107,9 +107,6 @@ def _collect_frame_review(
     state: _LoopState,
 ) -> Any | None:
     """Run selective Gemini review for the frame; None when skipped/unavailable."""
-    # lazy: tests patch `generation.frame_reviewer.*` at source; a module-level
-    # binding resolves before the patch and bypasses it (measured: hoisting this
-    # failed `test_optional_sheets_called`).
     from film_pipeline.generation.frame_reviewer import review_frame, should_review_frame
 
     if not should_review_frame(raw):
@@ -135,7 +132,6 @@ def _grade_generated_frame(
     attempt: int,
 ) -> _AttemptVerdict:
     """Run heuristics and Gemini review for a freshly generated frame."""
-    # lazy: patched at `generation.frame_heuristics.run_heuristic_checks`; see above.
     from film_pipeline.generation.frame_heuristics import run_heuristic_checks
 
     heuristic_result = run_heuristic_checks(

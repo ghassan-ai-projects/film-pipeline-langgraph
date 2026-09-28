@@ -177,10 +177,6 @@ async def request_revision(ctx: ToolContext, args: dict[str, object]) -> dict[st
         return _error(str(e))
 
 
-# ── Tool declarations ────────────────────────────────────────────────────────
-# Declared next to the handlers they describe (doc 04 slice 1).
-
-
 class ReviewPhaseArtifactsArgs(ToolArgs):
     """Arguments for `review_phase_artifacts`."""
 
