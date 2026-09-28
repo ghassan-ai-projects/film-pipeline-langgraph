@@ -212,3 +212,57 @@ test_phase_nodes_match_graph                              FAILED   <- Step 6
 
 The only remaining failure is `qc`, which is Step 6's slice, not this one. Full
 `make ci-check`: 2381 passed, 1 failed (that test). `mypy src tests` clean.
+
+## Step 6 — one QC implementation (2026-09-28)
+
+Decision recorded in [`documentation/qc-single-implementation.md`](../../documentation/qc-single-implementation.md)
+**before** any code changed, as 02 requires.
+
+**Canonical: the parallel subgraph.** `_PHASE_NODES["qc"]` is now the same object
+`build_graph` wires for `qc_node`. The sequential `nodes.qc.qc_node` was a second
+implementation that did different work, so a film's first QC pass and its repair
+QC pass ran different code.
+
+What the decision did with the sequential node's three extra capabilities:
+
+| Capability | Disposition |
+|---|---|
+| Matrix patch from per-row findings | **Kept** — `subgraphs.qc.emit_matrix_patch_from_findings`, wired into `reduce_qc_reports` (a no-op today; a test asserts the wiring) |
+| Consensus report | **Kept, defect fixed** — the subgraph now builds the *deterministic* `ConsensusBuilder` consensus over the reports the workers returned, replacing the agent-based free-text synthesis that could disagree with them |
+| Registry-driven validator dispatch | **Dropped for `qc`** — the subgraph's six workers are QC's validator set; `"qc"` removed from `nodes.qc._VALIDATOR_RUNNERS` |
+
+Evidence — the Step 4 test flipped:
+
+```text
+test_phase_nodes_match_graph   FAILED  ->  PASSED   (was the only failure left by Step 5)
+```
+
+`test_qc_validator_dispatch.py`'s `qc` case moved from "covers upstream but not
+delivery" to "runs no sequential runner", which is the new law.
+
+**Three defects surfaced during implementation, two of them invisible to the suite:**
+
+1. **`operator.add` on a missing channel** — `apply_node_update` passed `None` as
+   the left-hand value, and `operator.add(None, [...])` raises. LangGraph always
+   supplies an accumulator; the manual path does not, because a node reached
+   through it can be the channel's *first* writer. Now treated as an empty
+   accumulator. Caught by `tests/integration/test_validation_runtime.py`.
+2. **A real `ImportError`** — building `_PHASE_NODES` at import time compiled the
+   subgraph, so importing `subgraphs.qc` first raised `cannot import name
+   'qc_phase_node' from partially initialized module`. The whole suite was green;
+   only a direct import (and Enola) showed it. Fixed with a deferred
+   `_LazyQcPhaseNode` row and a `resolved_phase_node(phase)` accessor.
+3. **A two-module package cycle** — `measure.py` SCC count went 1 → 2 during the
+   work. Final shape: `orchestration/qc_steps.py` (root, leaf-only) owns the
+   shared consensus builder, `subgraphs.qc` owns the matrix-patch emitter, and every
+   cross-module import among them is function-level with a `# lazy:` reason.
+
+Final measured state: `measure.py` module-level SCCs **1** (only
+`mcp.contract <-> mcp.registry`), `test_package_acyclicity` passes, and every
+import order of the four modules involved succeeds in a fresh interpreter. Enola
+still reports an `orchestration -> nodes -> subgraphs` cycle because it collapses
+all root-level modules into the `orchestration` node; the reasoning and the three
+measurements above are recorded in the decision doc as evidence it is a modelling
+artifact. `enola check` exits 0.
+
+Full `make ci-check`: 2387 passed, 91.82% coverage, product gate PASS.

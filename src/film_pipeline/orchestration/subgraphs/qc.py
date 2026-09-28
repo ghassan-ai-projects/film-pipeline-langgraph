@@ -3,11 +3,17 @@
 Phase 7: parallel validator execution via LangGraph Send API.
 The parent graph invokes this subgraph; internally validators fan out,
 run concurrently, and reduce into a consensus report.
+
+This module is the QC *phase node* as well as the subgraph builder: QC has one
+implementation, and ``qc_phase_node()`` is the memoised compiled form of it that
+both ``studio.graph_factory`` and ``nodes._repair_loop._PHASE_NODES["qc"]`` use.
+See ``documentation/qc-single-implementation.md``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from functools import lru_cache
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -246,6 +252,51 @@ def _findings_to_issues(raw_reports: list[dict[str, Any]]) -> list[dict[str, obj
     return issues
 
 
+def emit_matrix_patch_from_findings(state: StudioGraphState) -> None:
+    """Persist a matrix patch from the per-row findings validators collected.
+
+    ``nodes.qc._track_matrix_row_updates`` records per-row findings on
+    ``_pending_row_updates``; this turns them into one ``MatrixPatch`` artifact
+    and points ``qc_patch_ref`` at it. It lives in the subgraph because the
+    subgraph is the QC phase node, and QC's matrix patch is QC's output.
+
+    A no-op today: no fan-out worker populates ``_pending_row_updates``. It is
+    wired anyway so the capability the sequential node had is accounted for
+    rather than silently absent, and a test asserts the wiring.
+    """
+    # lazy: `nodes._agent_artifacts` is reached through `nodes/__init__`, which
+    # binds `_PHASE_NODES` and therefore compiles this module; a module-level
+    # import here is a real circular import (ImportError), not just an Enola
+    # artifact.
+    from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
+
+    pending_updates: list[Any] = state.pop("_pending_row_updates", [])
+    shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
+    if not (pending_updates and shot_matrix_ref):
+        return
+
+    from film_pipeline.schemas.matrix_patch import MatrixPatch
+
+    patch = MatrixPatch(
+        patch_id=f"qc_{state.get('project_id', '')}",
+        matrix_ref=shot_matrix_ref,
+        phase="qc",
+        reason="QC validators produced per-row findings — updating status and validation refs.",
+        updates=pending_updates,
+        created_by_agent="clip-validator",
+    )
+    patch_ref = _save_artifact(
+        state,
+        patch,
+        "matrix_patch_qc",
+        "qc",
+        artifact_type="consensus_report",
+    )
+    if patch_ref:
+        state["qc_patch_ref"] = patch_ref
+        state.setdefault("artifact_refs", []).append(patch_ref)
+
+
 def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     """Collect parallel validator reports and finish the QC phase step.
 
@@ -253,8 +304,19 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     marks ``current_phase`` and the human gate flags (the fan-out workers
     only produce reports) and translates validator findings into issues so
     the approval gate sees them.
+
+    It also performs the two steps the sequential ``nodes.qc.qc_node`` used to
+    own and this subgraph lacked — emitting the matrix patch for per-row
+    findings, and building the consensus report. Both are delegated to
+    ``nodes.qc``, which already owns them; see
+    ``documentation/qc-single-implementation.md``.
     """
     from film_pipeline.orchestration.orchestrator_state import require_human_approval
+
+    # `build_consensus_if_needed` is shared with the sequential runner in
+    # `nodes.qc`, so it lives at the `orchestration` root; the matrix-patch
+    # emitter is QC's own output and is defined here.
+    from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
 
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
@@ -274,6 +336,23 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     issues = _findings_to_issues(raw)
     if issues:
         update["issues"] = issues
+
+    # The two side-effect steps run on a working copy and their produced refs
+    # are carried into `update` explicitly: writing them onto `state` here would
+    # be a mutation of the graph's input, which the reducer channels would then
+    # not see.
+    #
+    # The copy is a plain mapping on purpose. `emit_matrix_patch_from_findings`
+    # and `build_consensus_if_needed` are typed against `StudioGraphState`, but
+    # this dict holds registry-driven channel keys, so a TypedDict literal would
+    # reject the splat (`[typeddict-item]`) for the same reason `update` is a
+    # `dict[str, object]`. The functions only index it.
+    working: dict[str, Any] = {**state, **update}
+    emit_matrix_patch_from_findings(cast("StudioGraphState", working))
+    build_consensus_if_needed(cast("StudioGraphState", working), "qc")
+    for key in ("qc_patch_ref", "consensus_report_ref", "artifact_refs"):
+        if key in working and working.get(key) != state.get(key):
+            update[key] = working[key]
     return update
 
 
@@ -281,7 +360,13 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
 
 
 def build_qc_subgraph() -> CompiledStateGraph:
-    """Build the QC subgraph with parallel validator fan-out via Send."""
+    """Build the QC subgraph with parallel validator fan-out via Send.
+
+    Callers that need the QC *phase node* — `studio.graph_factory` and
+    `nodes._repair_loop._PHASE_NODES` — use
+    `qc_phase_node()`, which memoises this so both
+    hold the same object rather than two equal compilations.
+    """
     builder = StateGraph(StudioGraphState)
 
     builder.add_node("fan_start", _passthrough)
@@ -309,3 +394,17 @@ def build_qc_subgraph() -> CompiledStateGraph:
 
 def _passthrough(_state: StudioGraphState) -> dict[str, object]:
     return {}
+
+
+@lru_cache(maxsize=1)
+def qc_phase_node() -> CompiledStateGraph:
+    """The QC phase node, compiled once and shared by every caller.
+
+    Memoised for identity, not for speed: ``qc_phase_node() is qc_phase_node()``
+    is what makes ``_PHASE_NODES["qc"]`` and the graph's ``qc_node`` provably the
+    same node rather than two compilations of the same declaration.
+
+    ``nodes._repair_loop`` and ``studio.graph_factory`` both call this; they are
+    the only two places a phase node is looked up by phase name.
+    """
+    return build_qc_subgraph()

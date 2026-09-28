@@ -331,6 +331,12 @@ def apply_node_update(
 
     ``update`` may be a partial update or a full state dict; both occur in the
     resume paths. Only keys the update actually carries are merged.
+
+    A missing left-hand value is treated as an empty accumulator rather than
+    passed through as ``None``. LangGraph always supplies one for a declared
+    reducer channel, but the direct callers of this function do not: a node
+    reached through the manual path can be the *first* writer of a channel, and
+    ``operator.add`` raises ``TypeError`` on ``None`` rather than starting a list.
     """
     reducers = channel_reducers()
     merged = dict(state)
@@ -341,5 +347,6 @@ def apply_node_update(
         # A channel present in the update always merges through its reducer,
         # even when the incoming value is empty or falsy — an explicit clear is
         # a merge, not an omission.
-        merged[key] = reducer(state.get(key), update[key])
+        existing = state.get(key)
+        merged[key] = reducer([] if existing is None else existing, update[key])
     return merged

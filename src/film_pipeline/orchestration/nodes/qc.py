@@ -7,12 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from film_pipeline.orchestration.nodes._agent import (
-    _propagate_side_effects,
-    _run_agent,
-    _save_artifact,
-    produced_artifact,
-)
+from film_pipeline.orchestration.nodes._agent import _propagate_side_effects
 from film_pipeline.orchestration.nodes._context import (
     _get_template_registry,
 )
@@ -40,8 +35,6 @@ def qc_node(state: StudioGraphState) -> dict[str, Any]:
     new_state.update(gate_updates)
 
     _run_validators(new_state)
-    _emit_matrix_patch_from_findings(new_state)
-    _synthesize_consensus_report(new_state)
 
     # The update carries registry-driven channel keys written by
     # `_propagate_side_effects`, so it cannot be a TypedDict (a computed key is
@@ -50,53 +43,6 @@ def qc_node(state: StudioGraphState) -> dict[str, Any]:
     updates = _collect_updates(gate_updates, new_state, state, _QC_REF_KEYS)
     _propagate_side_effects(new_state, updates, state)
     return updates
-
-
-def _emit_matrix_patch_from_findings(state: StudioGraphState) -> None:
-    """Persist a matrix patch from the per-row findings validators collected."""
-    pending_updates: list[Any] = state.pop("_pending_row_updates", [])
-    shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
-    if pending_updates and shot_matrix_ref:
-        from film_pipeline.schemas.matrix_patch import MatrixPatch
-
-        patch = MatrixPatch(
-            patch_id=f"qc_{state.get('project_id', '')}",
-            matrix_ref=shot_matrix_ref,
-            phase="qc",
-            reason="QC validators produced per-row findings — updating status and validation refs.",
-            updates=pending_updates,
-            created_by_agent="clip-validator",
-        )
-        patch_ref = _save_artifact(
-            state,
-            patch,
-            "matrix_patch_qc",
-            "qc",
-            artifact_type="consensus_report",
-        )
-        if patch_ref:
-            state["qc_patch_ref"] = patch_ref
-            state.setdefault("artifact_refs", []).append(patch_ref)
-
-
-def _synthesize_consensus_report(state: StudioGraphState) -> None:
-    """Synthesize validator reports into a unified QC consensus artifact."""
-    result = _run_agent(
-        state,
-        agent_id="clip-validator",
-        phase="qc",
-        task=(
-            "Synthesize all validator reports into a unified QC consensus: "
-            "identify agreement areas, resolve conflicts, produce weighted "
-            "pass/fail/block recommendation with actionable feedback."
-        ),
-    )
-    report = produced_artifact(state, "clip-validator", result)
-    if report is not None:
-        ref = _save_artifact(state, report, "consensus_report", "qc")
-        if ref:
-            state["consensus_report_ref"] = ref
-            state.setdefault("artifact_refs", []).append(ref)
 
 
 def _run_validators(state: StudioGraphState) -> None:
@@ -122,7 +68,10 @@ def _run_validators(state: StudioGraphState) -> None:
     _execute_phase_validators(state, artifacts, issues, services)
     state["issues"] = issues
 
-    _build_consensus_if_needed(state, phase)
+    # lazy: `orchestration.qc_steps` imports back into `nodes._agent_artifacts`
+    from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
+
+    build_consensus_if_needed(state, phase)
 
 
 def _collect_artifacts(state: StudioGraphState, services: Any) -> dict[str, Any]:
@@ -147,38 +96,6 @@ def _collect_artifacts(state: StudioGraphState, services: Any) -> dict[str, Any]
         except (FileNotFoundError, ValueError):
             continue
     return artifact_data
-
-
-def _build_consensus_if_needed(state: StudioGraphState, phase: str) -> None:
-    """Build a consensus report when multiple validators produced reports."""
-    reports = state.get("_validation_reports", [])
-    if len(reports) < 2:
-        return
-
-    from film_pipeline.validation.consensus import ConsensusBuilder
-
-    artifact_refs: list[str] = state.get("artifact_refs", [])
-
-    try:
-        consensus = ConsensusBuilder().build(reports, artifact_refs)
-    except Exception:
-        # A consensus report is a nice-to-have, so a synthesis failure must not
-        # fail the QC phase — but it must not be invisible either. This call site
-        # previously returned silently, which is how a real type mismatch between
-        # `_validation_reports` (dicts) and `ConsensusBuilder.build` (models) went
-        # unnoticed for as long as it did.
-        _logger.warning(
-            "consensus synthesis failed for phase %s; continuing without it",
-            phase,
-            exc_info=True,
-        )
-        return
-
-    # Save consensus report as an artifact
-    ref = _save_artifact(state, consensus, "consensus_report", phase)
-    if ref:
-        state["consensus_report_ref"] = ref
-        state.setdefault("artifact_refs", []).append(ref)
 
 
 def _pick_artifact(
@@ -356,12 +273,19 @@ def _run_delivery_validators(
         _validate_artifact(DeliveryCompletenessValidator, artifact, issues, state, services)
 
 
+# Phases whose validators `_run_validators` runs directly, in-process.
+#
+# `qc` is deliberately **absent**: QC runs the parallel subgraph
+# (`orchestration/subgraphs/qc.build_qc_subgraph`), which owns its own
+# six-validator fan-out. A phase with two validator runners is exactly the
+# divergence `documentation/qc-single-implementation.md` closes; the runners
+# below keep serving the phases that still call `_run_validators` directly.
 _VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
-    ({"script", "qc"}, _run_script_validators),
-    ({"visual_dev", "qc"}, _run_reference_validators),
-    ({"gen_planning", "qc"}, _run_prompt_validators),
-    ({"shot_bible", "qc"}, _run_continuity_validators),
-    ({"post", "assembly", "qc"}, _run_assembly_validators),
+    ({"script"}, _run_script_validators),
+    ({"visual_dev"}, _run_reference_validators),
+    ({"gen_planning"}, _run_prompt_validators),
+    ({"shot_bible"}, _run_continuity_validators),
+    ({"post", "assembly"}, _run_assembly_validators),
     ({"delivery"}, _run_delivery_validators),
 )
 

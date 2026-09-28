@@ -19,7 +19,6 @@ from film_pipeline.orchestration.nodes.prep import (
     intake_node,
     script_node,
 )
-from film_pipeline.orchestration.nodes.qc import qc_node
 from film_pipeline.orchestration.nodes.visual import (
     gen_planning_node,
     shot_bible_node,
@@ -36,7 +35,64 @@ if TYPE_CHECKING:
     )
 
 
+class _LazyQcPhaseNode:
+    """Stand-in for the QC phase node inside ``_PHASE_NODES``.
+
+    ``_PHASE_NODES`` is built at module import, and resolving the QC row there
+    means importing ``subgraphs.qc`` while ``nodes`` is still initialising —
+    which is a genuine ``ImportError: partially initialized module`` the moment
+    anything imports ``subgraphs.qc`` first, and an
+    ``orchestration <-> nodes <-> subgraphs`` cycle either way.
+
+    This defers the import to first use and forwards every call, so the row is
+    still *the graph's own node*:
+
+    - ``_PHASE_NODES["qc"] is _PHASE_NODES["qc"]`` (identity, what the parity
+      guard checks),
+    - calling it runs the same compiled subgraph `build_graph` wires,
+    - ``isinstance(x, CompiledStateGraph)`` is False, so
+      ``studio._graph_exec._call_phase_node`` needs its own resolution — see
+      :func:`resolved_phase_node`, which both callers use.
+    """
+
+    _node: Any = None
+
+    def __call__(self, state: dict[str, Any]) -> Any:
+        return self.resolve()(state)
+
+    def resolve(self) -> Any:
+        if self._node is None:
+            from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
+
+            self._node = qc_phase_node()
+        return self._node
+
+
+_QC_PHASE_NODE = _LazyQcPhaseNode()
+
+
+def resolved_phase_node(phase: str) -> Any:
+    """Return the phase's node, resolving a deferred one to its real object.
+
+    ``_PHASE_NODES`` holds ``_LazyQcPhaseNode`` for ``qc``; every consumer that
+    needs the underlying callable — or needs to know whether it is a compiled
+    subgraph — goes through here rather than reaching into the table.
+    """
+    node = _PHASE_NODES[phase]
+    return node.resolve() if isinstance(node, _LazyQcPhaseNode) else node
+
+
 # ── Phase node registry (for repair routing) ────────────────────────────
+#
+# Every phase maps to the *same object* `build_graph` registers for
+# `<phase>_node`, so a phase cannot run one implementation on its first pass and
+# another on repair. `tests/unit/orchestration/test_graph_manual_path_parity.py`
+# asserts that identity for all eleven phases.
+#
+# `qc_phase_node()` is memoised in `subgraphs.qc`, so this row and
+# `studio.graph_factory`'s `add_node("qc_node", ...)` hold the *same* compiled
+# object rather than two equal compilations. It is resolved through
+# `_qc_phase_node()` for the cycle reason stated there.
 
 _PHASE_NODES: dict[str, Any] = {
     "intake": intake_node,
@@ -47,7 +103,12 @@ _PHASE_NODES: dict[str, Any] = {
     "shot_bible": shot_bible_node,
     "gen_planning": gen_planning_node,
     "generation": generation_node,
-    "qc": qc_node,
+    # QC's repair pass must run the same object the graph wires for its first
+    # pass: the parallel subgraph. `nodes.qc.qc_node` was a second, sequential
+    # implementation that did different work (and skipped the matrix patch and
+    # consensus steps the subgraph lacked). See
+    # `documentation/qc-single-implementation.md` for the decision.
+    "qc": _QC_PHASE_NODE,
     "post": post_node,
     "delivery": delivery_node,
 }

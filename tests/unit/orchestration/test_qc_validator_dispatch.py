@@ -3,6 +3,13 @@
 A typo in ``_VALIDATOR_RUNNERS`` membership (e.g. adding the delivery runner
 to the ``qc`` phase's set) would ship green because every runner still runs
 successfully wherever it fires. These tests make membership observable.
+
+**`qc` runs nothing here, on purpose, and that is the point.** QC has one
+implementation — the parallel subgraph's six-worker fan-out
+(``orchestration/subgraphs/qc.build_qc_subgraph``), which ``_PHASE_NODES["qc"]``
+and ``build_graph`` now share. This sequential table used to serve ``qc`` too,
+which made QC the one phase with two validator runners. See
+``documentation/qc-single-implementation.md``.
 """
 
 from __future__ import annotations
@@ -84,8 +91,8 @@ def test_dispatch_table_registers_each_runner_exactly_once() -> None:
         pytest.param("assembly", {"assembly"}),
         pytest.param(
             "qc",
-            {"script", "reference", "prompt", "continuity", "assembly"},
-            id="qc-covers-upstream-but-not-delivery",
+            set(),
+            id="qc-runs-no-sequential-runner-the-subgraph-owns-qc",
         ),
         pytest.param("delivery", {"delivery"}, id="delivery-runs-only-delivery"),
     ],

@@ -65,6 +65,13 @@ KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
     # `06` section 4 forbids. The `mcp`-side accessor already collapsed four
     # importers into this one; that crossing is the minimum.
     ("mcp", "studio._operator_runtime"): 1,
+    # `_repair_loop` owns `_PHASE_NODES` and `resolved_phase_node`; studio is
+    # the composition root that drives the graph, so it is the legitimate
+    # caller. Same reach-in as the old `orchestration._PHASE_NODES` symbol row,
+    # one level up. Publishing the table from `orchestration.nodes` (which the
+    # symbol row used) is the alternative; it is not free, because the
+    # package root is the facade that the surface ratchet grades.
+    ("studio", "orchestration._repair_loop"): 1,
 }
 
 # Private *symbols* imported across a package boundary. A narrower concern than a
@@ -73,7 +80,7 @@ KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
 # separately rather than folded into the row above, because conflating the two
 # would let a genuine module-level reach-in hide inside a symbol count.
 #
-# All five were invisible until the detector was widened to read imported names
+# All of these were invisible until the detector was widened to read imported names
 # and not just module paths — see the docstring on `_measure_private_reach_ins`.
 KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
     # `agents` re-exports these two from `providers.http_transport` under the
@@ -82,10 +89,15 @@ KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
     ("agents", "providers._accepts_timeout_kw"): 1,
     ("agents", "providers._open_with_timeout"): 1,
     # `studio` reaches orchestration internals: the services context variable it
-    # sets and resets around graph runs, the phase-node table, and the validator
-    # runner. These are the composition root driving the graph, which is its job,
-    # but it does so through private names rather than a declared seam.
-    ("studio", "orchestration._PHASE_NODES"): 1,
+    # sets and resets around graph runs, and the validator runner. These are the
+    # composition root driving the graph, which is its job, but it does so
+    # through private names rather than a declared seam.
+    #
+    # The phase-node table was a third row here. `_graph_exec.run_phase_node`
+    # now calls `resolved_phase_node(phase)` instead of indexing `_PHASE_NODES`
+    # itself, which moved the reach-in from that private *symbol* to the private
+    # *module* defining the accessor — recorded in KNOWN_PRIVATE_REACH_INS
+    # rather than duplicated here.
     ("studio", "orchestration._SERVICES_CTX"): 1,
     ("studio", "orchestration._run_validators"): 1,
 }

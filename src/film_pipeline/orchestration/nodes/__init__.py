@@ -26,6 +26,9 @@ from film_pipeline.orchestration.nodes._context import (
 )
 from film_pipeline.orchestration.nodes._repair_loop import _PHASE_NODES as _PHASE_NODES
 from film_pipeline.orchestration.nodes._repair_loop import repair_phase_node
+from film_pipeline.orchestration.nodes._repair_loop import (
+    resolved_phase_node as resolved_phase_node,
+)
 from film_pipeline.orchestration.nodes._shared import (
     _apply_external_state,
     _coerce_user_runtime,
@@ -103,6 +106,7 @@ __all__ = [
     "qc_node",
     "repair_phase_node",
     "request_revision_node",
+    "resolved_phase_node",
     "script_node",
     "shot_bible_node",
     "visual_dev_node",

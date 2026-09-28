@@ -35,7 +35,7 @@ from film_pipeline.orchestration.nodes import (
 )
 from film_pipeline.orchestration.phase_sequence import PHASE_NODES
 from film_pipeline.orchestration.state_schema import StudioGraphState
-from film_pipeline.orchestration.subgraphs.qc import build_qc_subgraph
+from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
 from film_pipeline.storage.storage import default_checkpoints_root
 
 
@@ -89,7 +89,9 @@ def _register_nodes(builder: StateGraph) -> None:
     builder.add_node("shot_bible_node", shot_bible_node)
     builder.add_node("gen_planning_node", gen_planning_node)
     builder.add_node("generation_node", generation_node)
-    builder.add_node("qc_node", build_qc_subgraph())  # Phase 7: parallel subgraph
+    # Phase 7: the parallel subgraph, and the *one* compiled instance of it
+    # (`qc_phase_node` memoises; `_PHASE_NODES` uses the same object).
+    builder.add_node("qc_node", qc_phase_node())
     builder.add_node("post_node", post_node)
     builder.add_node("delivery_node", delivery_node)
 

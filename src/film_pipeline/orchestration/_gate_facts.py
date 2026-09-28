@@ -9,29 +9,42 @@ from __future__ import annotations
 
 from typing import Any
 
-from film_pipeline.orchestration import orchestrator_state as ostate
+# Imported by module path, **not** off the `orchestration` package root. The root
+# form (`from film_pipeline.orchestration import orchestrator_state`) executes
+# `orchestration/__init__`, and that pulls `nodes` -> `subgraphs` with it, which
+# closed an `orchestration -> nodes -> subgraphs -> orchestration` cycle once the
+# QC subgraph became the QC phase node. This adapter needs the sibling module, so
+# it names it directly and the package root stays off the path.
+from film_pipeline.orchestration.orchestrator_state import (
+    ensure_orchestrator_state,
+    get_approved_refs,
+    get_blocked_providers,
+    get_latest_failure_decision,
+    has_blocking_failure,
+    has_pending_revision,
+)
 
 
 class OrchestratorGateFacts:
     """The concrete :class:`~film_pipeline.governance.gate_facts.GateFacts`."""
 
     def ensure_state(self, state: dict[str, Any]) -> None:
-        ostate.ensure_orchestrator_state(state)
+        ensure_orchestrator_state(state)
 
     def has_blocking_failure(self, state: dict[str, Any]) -> bool:
-        return ostate.has_blocking_failure(state)
+        return has_blocking_failure(state)
 
     def latest_failure_decision(self, state: dict[str, Any]) -> dict[str, Any] | None:
-        return ostate.get_latest_failure_decision(state)
+        return get_latest_failure_decision(state)
 
     def blocked_providers(self, state: dict[str, Any]) -> list[str]:
-        return ostate.get_blocked_providers(state)
+        return get_blocked_providers(state)
 
     def has_pending_revision(self, state: dict[str, Any]) -> bool:
-        return ostate.has_pending_revision(state)
+        return has_pending_revision(state)
 
     def approved_refs(self, state: dict[str, Any]) -> dict[str, str]:
-        return ostate.get_approved_refs(state)
+        return get_approved_refs(state)
 
 
 GATE_FACTS = OrchestratorGateFacts()

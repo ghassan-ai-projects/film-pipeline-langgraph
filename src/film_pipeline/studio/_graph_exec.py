@@ -11,6 +11,8 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, cast
 
+from langgraph.graph.state import CompiledStateGraph
+
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
 from film_pipeline.orchestration.services import _SERVICES_CTX
 from film_pipeline.orchestration.state_schema import StudioGraphState
@@ -504,15 +506,15 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
 
 
 def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict[str, Any]:
-    from film_pipeline.orchestration.nodes import _PHASE_NODES
+    from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
     from film_pipeline.orchestration.services import SERVICES_KEY
     from film_pipeline.orchestration.state_schema import apply_node_update
 
-    node = _PHASE_NODES[phase]
+    node = resolved_phase_node(phase)
     # Inject graph services so nodes can invoke agents and persist artifacts
     state = dict(state)
     state[SERVICES_KEY] = rt.services
-    node_result = node(state)
+    node_result = _call_phase_node(node, state)
     # Direct node calls bypass channel accumulation, so replay the graph's own
     # merge rule from the state schema's `Annotated` declarations. This used to
     # be a hand-written reducer table here, which disagreed with the schema on
@@ -521,3 +523,20 @@ def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict
     # Strip runtime-only keys that must not leak into persisted state
     merged.pop(SERVICES_KEY, None)
     return merged
+
+
+def _call_phase_node(node: Any, state: dict[str, Any]) -> dict[str, Any]:
+    """Invoke one phase node, whether it is a plain function or a subgraph.
+
+    Nine phases are plain node functions, which are called directly. `qc` is a
+    compiled LangGraph subgraph (the parallel validator fan-out), which is
+    invoked rather than called — and it needs the config to carry a
+    ``thread_id`` for its checkpointer, so it is given a synthetic one. Without
+    this branch the QC phase raises ``'CompiledStateGraph' object is not
+    callable`` the moment the manual path reaches it.
+    """
+    if isinstance(node, CompiledStateGraph):
+        result = node.invoke(state, {"configurable": {"thread_id": "manual-phase-node"}})
+        return dict(result)
+    result = node(state)
+    return dict(result)

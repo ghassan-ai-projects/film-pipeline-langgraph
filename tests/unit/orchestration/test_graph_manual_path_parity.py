@@ -67,21 +67,29 @@ def test_phase_nodes_match_graph() -> None:
     A phase with two implementations is a phase whose first pass and repair pass
     run different code. Ten of eleven phases already agree; this pins all eleven so
     the eleventh cannot drift back.
+
+    Compared through `resolved_phase_node`, not the raw table: the `qc` row holds
+    a deferred stand-in (`_LazyQcPhaseNode`) so that building `_PHASE_NODES` at
+    import time does not compile the subgraph — which was a circular import, not
+    a style choice. `resolved_phase_node` is the accessor every consumer uses, so
+    it is the accessor this identity must hold for.
     """
+    from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
+
     divergent = {
-        phase: (node, _graph_node_callable(phase))
-        for phase, node in _PHASE_NODES.items()
-        if _graph_node_callable(phase) is not node
+        phase: (resolved_phase_node(phase), _graph_node_callable(phase))
+        for phase in _PHASE_NODES
+        if _graph_node_callable(phase) is not resolved_phase_node(phase)
     }
     shape = {
-        phase: (getattr(node, "__name__", node), type(wired).__name__)
+        phase: (getattr(node, "__name__", type(node).__name__), type(wired).__name__)
         for phase, (node, wired) in divergent.items()
     }
     assert not divergent, (
-        "these phases have two implementations: `_PHASE_NODES[phase]` is not the "
-        "callable `build_graph` registers for `<phase>_node`. Measured "
-        f"{shape}. Point `_PHASE_NODES` at the graph's own object, or the phase is "
-        "running one code path on its first pass and another on repair."
+        "these phases have two implementations: the node `resolved_phase_node` "
+        "returns is not the callable `build_graph` registers for `<phase>_node`. "
+        f"Measured {shape}. Point the table at the graph's own object, or the "
+        "phase is running one code path on its first pass and another on repair."
     )
 
 
@@ -179,3 +187,84 @@ def test_update_channels_are_not_hard_coded() -> None:
             f"'{channel}' was one of the four channels the manual reducer table "
             f"disagreed on; it must merge through {getattr(reducer, '__name__', reducer)!r}."
         )
+
+
+# --- B2: the capabilities the decision moved ---------------------------------
+
+
+def test_qc_phase_node_is_memoised() -> None:
+    """QC must be one *compiled object*, not two equal compilations.
+
+    Identity is the whole point of the guard above; two calls to a builder that
+    each compile would satisfy "same class, same wiring" while still being two
+    nodes. `qc_phase_node` memoises, so `is` is meaningful.
+    """
+    from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
+
+    assert qc_phase_node() is qc_phase_node()
+
+
+def test_reduce_qc_reports_owns_the_phase_transition() -> None:
+    """The subgraph's reduce node is the one writer of the QC phase transition.
+
+    `nodes.qc.qc_node` also set these. Now that `_PHASE_NODES["qc"]` is the
+    subgraph, the reduce node must carry them — otherwise making the subgraph
+    canonical would have silently dropped the phase transition.
+    """
+    from film_pipeline.orchestration.subgraphs.qc import reduce_qc_reports
+
+    update = reduce_qc_reports({"project_id": "p", "_qc_raw_reports": []})
+    assert update["current_phase"] == "qc"
+    assert update["human_approval_phase"] == "qc"
+    assert "human_approval_required" in update
+
+
+def test_qc_validators_are_not_run_by_the_sequential_runner() -> None:
+    """`_VALIDATOR_RUNNERS` must not also serve `qc`.
+
+    A phase with two validator runners is the divergence
+    `documentation/qc-single-implementation.md` closes: QC's validator set is the
+    subgraph's six workers.
+    """
+    from film_pipeline.orchestration.nodes import qc as seq_qc
+
+    serving_qc = [runner.__name__ for phases, runner in seq_qc._VALIDATOR_RUNNERS if "qc" in phases]
+    assert not serving_qc, (
+        f"{serving_qc} still claim to serve the qc phase. QC's validators are the "
+        "subgraph's fan-out; remove 'qc' from these runner sets."
+    )
+
+
+def test_reduce_qc_reports_emits_the_matrix_patch() -> None:
+    """The matrix-patch step the sequential node had is wired into the subgraph.
+
+    Asserted by execution, not by reading the docstring: a `MatrixPatch` is
+    produced when the state carries pending per-row updates, and
+    `reduce_qc_reports` must be the node that carries it out. It is a no-op in
+    production today because no worker populates `_pending_row_updates`; this
+    pins the wiring so the capability cannot go missing silently if one starts to.
+    """
+    from film_pipeline.orchestration.subgraphs import qc as sub_qc
+
+    assert callable(sub_qc.emit_matrix_patch_from_findings), (
+        "the matrix-patch emitter the sequential node owned is gone; if it moved, "
+        "update this test, and if it was deleted, record why in "
+        "documentation/qc-single-implementation.md"
+    )
+    # `reduce_qc_reports` imports it at call time, so patching the owner is what
+    # a behavioural assertion has to intercept.
+
+    calls: list[str] = []
+    original = sub_qc.emit_matrix_patch_from_findings
+
+    def _record(state: object) -> None:
+        calls.append("emitted")
+
+    sub_qc.emit_matrix_patch_from_findings = _record
+    try:
+        sub_qc.reduce_qc_reports({"project_id": "p", "_qc_raw_reports": []})
+    finally:
+        sub_qc.emit_matrix_patch_from_findings = original
+    assert calls == ["emitted"], (
+        "reduce_qc_reports no longer emits the matrix patch from per-row findings"
+    )
