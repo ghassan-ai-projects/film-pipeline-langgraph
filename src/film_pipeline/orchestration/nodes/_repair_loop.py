@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _save_artifact
+from film_pipeline.orchestration.nodes.approval import request_revision_node
 from film_pipeline.orchestration.nodes.generation import generation_node
 from film_pipeline.orchestration.nodes.prep import (
     constitution_node,
@@ -25,14 +26,18 @@ from film_pipeline.orchestration.nodes.visual import (
     visual_dev_node,
 )
 from film_pipeline.orchestration.nodes.wrapup import delivery_node, post_node
-from film_pipeline.orchestration.state_schema import StudioGraphState
-
-if TYPE_CHECKING:
-    from film_pipeline.schemas.repair import (
-        GlobalRepairIssue,
-        RepairFeedback,
-        RowRepairInstruction,
-    )
+from film_pipeline.orchestration.orchestrator_state import (
+    get_convergence,
+    increment_convergence_round,
+    is_stalled,
+    mark_stalled,
+)
+from film_pipeline.orchestration.state_schema import StudioGraphState, merge_issues
+from film_pipeline.schemas.repair import (
+    GlobalRepairIssue,
+    RepairFeedback,
+    RowRepairInstruction,
+)
 
 
 class _LazyQcPhaseNode:
@@ -62,6 +67,8 @@ class _LazyQcPhaseNode:
 
     def resolve(self) -> Any:
         if self._node is None:
+            # lazy: importing subgraphs.qc at module level is the partially
+            # initialized module this `_LazyQcPhaseNode` exists to avoid.
             from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
 
             self._node = qc_phase_node()
@@ -122,12 +129,6 @@ def _start_round(
     ``increment_convergence_round`` must run exactly once per repair round,
     before the stall check, so ``phase_fn`` and the returned update agree.
     """
-    from film_pipeline.orchestration.orchestrator_state import (
-        get_convergence,
-        increment_convergence_round,
-        is_stalled,
-        mark_stalled,
-    )
 
     # Track repair attempts (on the shared state so phase_fn sees the round,
     # and returned explicitly so the update survives the node boundary).
@@ -261,9 +262,6 @@ def repair_phase_node(state: StudioGraphState) -> dict[str, Any]:
     # produced before entering the normal bounded repair loop.
     revision_update: StudioGraphState = {}
     if state.get("_resume_to_repair"):
-        from film_pipeline.orchestration.nodes.approval import request_revision_node
-        from film_pipeline.orchestration.state_schema import merge_issues
-
         revision_update = request_revision_node(state)
         existing_issues = list(state.get("issues", []) or [])
         # `deepcopy` (not `dict(state)`) keeps the declared type: a plain dict

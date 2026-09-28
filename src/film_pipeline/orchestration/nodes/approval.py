@@ -9,9 +9,18 @@ from typing import Any
 from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _run_agent
 from film_pipeline.orchestration.nodes._shared import _apply_external_state
-from film_pipeline.orchestration.orchestrator_state import require_human_approval
+from film_pipeline.orchestration.orchestrator_state import (
+    add_revision_request,
+    ensure_orchestrator_state,
+    get_all_revisions,
+    get_approved_refs,
+    get_candidate_refs,
+    is_stalled,
+    require_human_approval,
+    set_approved_ref,
+)
 from film_pipeline.orchestration.services import _get_services
-from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.orchestration.state_schema import StudioGraphState, merge_issues
 
 
 def _run_orchestrator_agent(state: StudioGraphState) -> dict[str, Any] | None:
@@ -50,7 +59,6 @@ def _count_blocking_issues(state: Mapping[str, object]) -> int:
 
 def _orchestrator_working_state(state: Mapping[str, object]) -> dict[str, Any]:
     """Deep-copied ``_orchestrator__*`` slice of state with defaults ensured."""
-    from film_pipeline.orchestration.orchestrator_state import ensure_orchestrator_state
 
     working = {
         key: deepcopy(value) for key, value in state.items() if key.startswith("_orchestrator__")
@@ -153,7 +161,6 @@ def _merge_external_fixes(
     """
     if not state_updates.get("issues"):
         return state
-    from film_pipeline.orchestration.state_schema import merge_issues
 
     merged: StudioGraphState = deepcopy(state)
     merged["issues"] = merge_issues(
@@ -203,8 +210,6 @@ def await_approval_node(state: StudioGraphState) -> StudioGraphState:
     if state.get("approved"):
         return {}
 
-    from film_pipeline.orchestration.orchestrator_state import is_stalled
-
     phase = str(state.get("current_phase", ""))
     stalled = is_stalled(state, phase)
     require_human = require_human_approval(state)
@@ -244,11 +249,6 @@ def approve_phase_node(state: StudioGraphState) -> StudioGraphState:
         return {"approved": False, "_approval_blocked_by_issues": True}
 
     # Promote all candidate refs to approved
-    from film_pipeline.orchestration.orchestrator_state import (
-        get_approved_refs,
-        get_candidate_refs,
-        set_approved_ref,
-    )
 
     working = _orchestrator_working_state(state)
     for family, ref in get_candidate_refs(dict(state)).items():
@@ -266,10 +266,6 @@ def request_revision_node(state: StudioGraphState) -> StudioGraphState:
     """Route the current phase to revision. Returns a partial state update."""
     revision_note = str(state.get("_revision_note", ""))
     # Record durable revision request via orchestrator state helpers
-    from film_pipeline.orchestration.orchestrator_state import (
-        add_revision_request,
-        get_all_revisions,
-    )
 
     working = _orchestrator_working_state(state)
     artifact_refs = list(state.get("artifact_refs", []) or [])

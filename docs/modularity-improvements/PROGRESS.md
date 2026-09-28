@@ -34,7 +34,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
 | 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
 | 15f | `post` to 0; the guard's per-line reason rule made explicit | `9a99fcb` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
-| 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `_pending_` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
+| 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `5cc0170` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
+| 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `_pending_` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1547,3 +1548,54 @@ measurement.
 `mcp` (108), `orchestration` (56): `_repair_loop` 9, `approval` 8, `execution` 7,
 `_agent_artifacts` 5, `prep` 5, `_generation_batch_planning` 4, and ten modules with
 1–3 each.
+
+## Step 15h — `_repair_loop`, `approval`, `execution` (2026-09-28)
+
+`orchestration` 56 → 36; total unexplained **164 → 144**.
+
+19 imports across three modules, all hoisted; the grep-first pass found no patch
+targets at all in this batch. One import stayed lazy for a **cycle** reason rather
+than a patch reason, and it is worth naming because it is the module that documents
+this exact hazard:
+
+```python
+# _repair_loop.py, inside _LazyQcPhaseNode.resolve
+# lazy: importing subgraphs.qc at module level is the partially
+# initialized module this `_LazyQcPhaseNode` exists to avoid.
+from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
+```
+
+Step 6 built `_LazyQcPhaseNode` precisely because `_PHASE_NODES` is constructed at
+module import, and resolving the QC row there imported `subgraphs.qc` while `nodes`
+was still initialising — a real `ImportError: partially initialized module`. That
+import therefore *cannot* hoist, and the reason now sits on it.
+
+### A scripted-edit flaw that recurred, and the fix
+
+My bulk hoist script mishandled a **two-space-indented** `if TYPE_CHECKING:` block: it
+treated the guarded imports as function-level ones, stripped them, and re-emitted them
+at column zero. `mypy` reported `Expected an indented block`, and the diff showed the
+`TYPE_CHECKING` body emptied — the guard would have been left with no contents.
+
+`_repair_loop.py` was reverted and redone by hand. This is the third scripted-edit
+failure in Step 15 and the same root cause each time: **a regex that keys on
+indentation cannot tell a function body from a `TYPE_CHECKING` block.** The durable
+rule, now applied for the remaining files: hoist by naming the exact import statements,
+not by matching leading whitespace.
+
+For this module the right end state was better than a lift-and-shift anyway — the
+`TYPE_CHECKING` block already proved those three names were import-safe, so promoting
+them to real module-level imports and deleting the now-redundant guard is the honest
+change.
+
+### Evidence
+
+- Guard: **164 unexplained → 144**; `orchestration` **56 → 36**.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (36): `_agent_artifacts` 5, `prep` 5,
+`_generation_batch_planning` 4, `_generation_prompts` 3, and eleven modules with 1–2
+each.

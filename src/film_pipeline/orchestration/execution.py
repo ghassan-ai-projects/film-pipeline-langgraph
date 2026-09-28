@@ -36,6 +36,9 @@ from typing import Any, Protocol, cast
 from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
+from film_pipeline.orchestration.nodes import _run_validators
+from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
+from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
 from film_pipeline.orchestration.resume import (
     _approval_made_progress,
     _build_resume_payload,
@@ -43,8 +46,12 @@ from film_pipeline.orchestration.resume import (
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
-from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices
-from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.orchestration.services import _SERVICES_CTX, SERVICES_KEY, GraphServices
+from film_pipeline.orchestration.state_schema import (
+    StudioGraphState,
+    apply_node_update,
+    undeclared_state_keys,
+)
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
 from film_pipeline.storage.project_storage import graph_state_location
@@ -197,8 +204,6 @@ def auto_checkpoint(rt: GraphHost, state: dict[str, Any]) -> None:
         _logger.warning("Auto-checkpoint could not persist graph state for %s: %s", project_id, exc)
     graph_state_ref = graph_state_location()
 
-    from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
-
     candidate_refs = get_candidate_refs(state)
     artifact_versions = dict(candidate_refs)
 
@@ -237,7 +242,6 @@ def save_graph_state(rt: GraphHost, state: dict[str, Any], project_id: str) -> N
     # A key the state schema does not declare means a writer added state
     # without a contract. Warn rather than raise: crash recovery must not fail
     # on state content, but the drift must be visible.
-    from film_pipeline.orchestration.state_schema import undeclared_state_keys
 
     undeclared = undeclared_state_keys(safe)
     if undeclared:
@@ -424,7 +428,6 @@ def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, An
     ``validator_id``) while non-validator blockers are preserved, then the
     refreshed issues and validation reports are merged back and persisted.
     """
-    from film_pipeline.orchestration.nodes import _run_validators
 
     active = rt.get_project(project_id) if project_id else rt.get_active()
     if active is None:
@@ -446,7 +449,6 @@ def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, An
     # The `_orchestrator__` key grammar has one author, so the candidate refs are
     # read through the accessor rather than by rebuilding the key here (the
     # orchestrator-surface guard enforces exactly that).
-    from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
 
     seeded_candidates = get_candidate_refs(active)
     # Project-state values are `object` here, so each collection is narrowed by
@@ -607,9 +609,6 @@ def advance_to_next_phase(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any
 
 
 def run_phase_node(rt: GraphHost, state: dict[str, Any], phase: str) -> dict[str, Any]:
-    from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
-    from film_pipeline.orchestration.services import SERVICES_KEY
-    from film_pipeline.orchestration.state_schema import apply_node_update
 
     node = resolved_phase_node(phase)
     # Inject graph services so nodes can invoke agents and persist artifacts
