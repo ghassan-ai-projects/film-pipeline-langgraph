@@ -63,13 +63,30 @@ _LAZY_REASON = re.compile(r"#\s*lazy:\s*\S+")
 
 
 def _has_reason(path: Path, lineno: int) -> bool:
-    """True when the import at `lineno` carries a `# lazy:` reason nearby."""
+    """True when the import at `lineno` carries a `# lazy:` reason nearby.
+
+    The reason may sit on the import's own line, or in the contiguous comment block
+    directly above it. The block is scanned rather than a fixed number of lines
+    because a real reason needs a sentence or two — `subtitle_agent.py` explains a
+    shadowing hazard in three lines, and a two-line window would have rejected it
+    for being *too well* explained.
+
+    Scanning stops at the first non-comment, non-blank line, so a reason cannot be
+    inherited from an unrelated comment further up the function.
+    """
     lines = path.read_text().split("\n")
-    # The comment may sit on the import itself or on the line above it — the latter
-    # is needed for a multi-line `from x import (\n ... \n)`.
-    for candidate in (lineno - 1, lineno - 2):
-        if 0 <= candidate < len(lines) and _LAZY_REASON.search(lines[candidate]):
-            return True
+    index = lineno - 1
+    if 0 <= index < len(lines) and _LAZY_REASON.search(lines[index]):
+        return True
+    index -= 1
+    while index >= 0:
+        stripped = lines[index].strip()
+        if stripped.startswith("#"):
+            if _LAZY_REASON.search(lines[index]):
+                return True
+            index -= 1
+            continue
+        break
     return False
 
 

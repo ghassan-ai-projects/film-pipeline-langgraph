@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.delivery import DeliveryPackage as DeliveryPackageModel
+from film_pipeline.validation.impl.delivery_completeness import DeliveryCompletenessValidator
+
 # What makes a delivery package complete, stated once:
 # (inclusion-flag attribute on DeliveryPackage, missing-item label).
 _COMPLETION_REQUIREMENTS: tuple[tuple[str, str], ...] = (
@@ -128,10 +133,6 @@ class DeliveryPackagingAgent:
         """
         from datetime import UTC, datetime
 
-        from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
-        from film_pipeline.schemas.delivery import DeliveryPackage as DeliveryPackageModel
-
         artifact_id = "delivery_package"
         model = DeliveryPackageModel(
             package_id=package.package_id,
@@ -171,9 +172,6 @@ class DeliveryPackagingAgent:
         Returns a dict with validation results.
         """
         _ = artifact_store
-        from film_pipeline.validation.impl.delivery_completeness import (
-            DeliveryCompletenessValidator,
-        )
 
         artifact_dict = _completeness_check_artifact(package)
 

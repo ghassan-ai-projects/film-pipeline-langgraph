@@ -78,6 +78,9 @@ class SubtitleAgent:
         """
         from datetime import UTC, datetime
 
+        # lazy: `SubtitleCue` here is the schema's, but this module defines its own
+        # same-named dataclass. Hoisting shadows it and the cue conversion below
+        # silently changes type — measured: mypy rejects the hoisted form.
         from film_pipeline.schemas import SubtitleArtifact, SubtitleCue
         from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
         from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase

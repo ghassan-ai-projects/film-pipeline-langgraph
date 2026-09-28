@@ -28,7 +28,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **8 → 2** | 0 |
 | 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `0ca9313` | 7 pure helpers out of `mcp`; new registration guard | 0 |
 | 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` imports: **23 → 14** | 0 |
-| 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `_pending_` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
+| 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
+| 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `_pending_` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1130,3 +1131,59 @@ import.
 `mcp` (108), `orchestration` (91), `generation` (25), `post` (20), `studio` (15),
 `cli` (7). These are larger and several will need genuine `# lazy:` reasons rather
 than hoists — the guard is what will force those reasons to be written down.
+
+## Step 15b — `post` and `cli`, and the two hoists that had to be refused (2026-09-28)
+
+`post` 20 → 5, `cli` 7 → 1, total unexplained **266 → 242**.
+
+### Two hoists that were wrong, and how each was caught
+
+Doc 05 says hoisting is not behaviour-preserving in general — "module import order can
+matter where a module has [side effects]". Both cases here were real, and neither was
+the side-effect kind:
+
+**1. `post/subtitle_agent.py` — hoisting shadowed a name.**
+The function imported `schemas.SubtitleCue`, but the module defines its *own*
+`SubtitleCue` dataclass, which is what the cue conversion actually builds. Hoisting
+put the schema's class in module scope and silently changed the type. Caught by
+`ruff` (`F811 Redefinition of unused SubtitleCue`) and then by `mypy`
+(`List[SubtitleCue]` vs `List[schemas.subtitle.SubtitleCue]`). Reverted, and the
+import now carries a three-line `# lazy:` reason explaining the hazard.
+
+Worth noting: the original lazy import was **already wrong** — it imported
+`SubtitleCue` and never used it, while building the local class instead. The lazy
+import was hiding an unused import and a latent type mismatch. The hoist did not
+create the problem; it revealed it.
+
+**2. `cli/run.py` — hoisting broke a patch point.**
+`configure_logging` was imported inside `main`, so tests patching
+`film_pipeline.studio.logging_setup.configure_logging` still intercepted the call. A
+module-level binding is resolved at import time, *before* the patch, so the mock was
+never called: `Expected 'mock' to be called once. Called 0 times.` Reverted with a
+`# lazy:` reason naming the patch point.
+
+This one is a genuine constraint on the hoist, not a test that needs updating: moving
+a call target to module scope makes it unpatchable at its source, and that is a
+property of the code, not of the test.
+
+### The guard learned to read a written reason
+
+The first `# lazy:` reason in `subtitle_agent.py` spans three comment lines. The
+guard's fixed two-line lookback rejected it — a guard that fails a reason for being
+*too well explained* is the wrong shape. It now walks the contiguous comment block
+directly above the import and stops at the first non-comment line, verified both ways:
+a reason separated from the import by code is not accepted, and a multi-line block is.
+
+### Evidence
+
+- Guard: **266 unexplained → 242**; `post` **20 → 5**, `cli` **7 → 1**.
+- `make ci-check`: **2347 passed, 91.85% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+- `post`'s remaining 5 are one annotated import block (3 entries) and two others; the
+  count is 5 rather than 0 because the annotated lines are still lazy, which is the
+  intent.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (89), `generation` (25), `studio` (15), `post` (5).
+`mcp` and `orchestration` are the bulk and will need per-module work.
