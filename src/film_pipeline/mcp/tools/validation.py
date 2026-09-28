@@ -7,6 +7,19 @@ from typing import TYPE_CHECKING, Any, TypeGuard
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.validation.impl.assembly import AssemblyValidator
+from film_pipeline.validation.impl.delivery_completeness import (
+    DeliveryCompletenessValidator,
+)
+from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+from film_pipeline.validation.impl.reference_usability import (
+    ReferenceUsabilityValidator,
+)
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 from .helpers import (
     _error,
@@ -27,7 +40,6 @@ if TYPE_CHECKING:
 
 def _parse_phase(phase_str: str) -> FilmPhase | None:
     """Parse a phase string into a FilmPhase, or None when unknown."""
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         return FilmPhase(phase_str)
@@ -58,47 +70,36 @@ class _PhaseSpec:
 
 def _script_validators() -> tuple[type[Any], ...]:
     """Import script-phase validators lazily, preserving run order."""
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
     return (ScriptStructureValidator, DialogueVoiceValidator)
 
 
 def _reference_validators() -> tuple[type[Any], ...]:
     """Import visual-development validators lazily."""
-    from film_pipeline.validation.impl.reference_usability import (
-        ReferenceUsabilityValidator,
-    )
 
     return (ReferenceUsabilityValidator,)
 
 
 def _gen_planning_validators() -> tuple[type[Any], ...]:
     """Import gen-planning validators lazily."""
-    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     return (PromptReadinessValidator,)
 
 
 def _shot_bible_validators() -> tuple[type[Any], ...]:
     """Import shot-bible validators lazily."""
-    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     return (SceneContinuityValidator,)
 
 
 def _assembly_validators() -> tuple[type[Any], ...]:
     """Import post/assembly validators lazily."""
-    from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     return (AssemblyValidator,)
 
 
 def _delivery_validators() -> tuple[type[Any], ...]:
     """Import delivery-phase validators lazily."""
-    from film_pipeline.validation.impl.delivery_completeness import (
-        DeliveryCompletenessValidator,
-    )
 
     return (DeliveryCompletenessValidator,)
 
@@ -168,9 +169,6 @@ def _save_report(
 ) -> str:
     """Persist a ValidationReport as a candidate artifact and return its ref."""
     from datetime import UTC, datetime
-
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType
 
     meta = ArtifactMetadata(
         artifact_id="validation_report",

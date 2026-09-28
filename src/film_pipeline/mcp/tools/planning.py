@@ -7,6 +7,11 @@ from typing import Any, cast
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.providers import supported_provider_ids
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
+from film_pipeline.schemas.matrix import MasterFilmMatrix
 
 from .helpers import (
     _error,
@@ -31,9 +36,6 @@ def _save_gen_planning_candidate(
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
-
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
     )
@@ -55,9 +57,6 @@ def _save_gen_planning_candidate(
 def _load_master_matrix(store: Any, project_id: str) -> Any:
     """Load and validate the latest MasterFilmMatrix artifact, if it exists."""
     try:
-        from film_pipeline.schemas.base import FilmPhase
-        from film_pipeline.schemas.matrix import MasterFilmMatrix
-
         version = max(1, store.latest_version(project_id, "shot_bible", "master_film_matrix"))
         raw = store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", version)
         if isinstance(raw, MasterFilmMatrix):
@@ -81,7 +80,6 @@ def _known_provider(runtime: Any, provider_id: str) -> bool:
         return False
     if provider_id in runtime.list_providers():
         return True
-    from film_pipeline.providers import supported_provider_ids
 
     return provider_id in supported_provider_ids(runtime.server_mode)
 
@@ -126,7 +124,6 @@ def _build_generation_plan(
     The provider guard checks the runtime's own provider set — see
     ``_known_provider`` — rather than the resolved config's requested route.
     """
-    from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
 
     provider_id, model_id = _fallback_video_route(runtime, state)
     if not _known_provider(runtime, provider_id):
@@ -155,7 +152,6 @@ def _build_generation_plan(
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
     """Save the generation plan artifact and link it into the project state."""
-    from film_pipeline.schemas.base import ArtifactType
 
     store = _services(rt).artifact_store
     ref = _save_gen_planning_candidate(

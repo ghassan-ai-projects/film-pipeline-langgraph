@@ -36,7 +36,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15f | `post` to 0; the guard's per-line reason rule made explicit | `9a99fcb` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
 | 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `5cc0170` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
 | 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `e829c1d` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
-| 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `_pending_` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
+| 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `51bba6a` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
+| 15j | **`mcp` to 0 — Step 15 complete** | `_pending_` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1648,3 +1649,69 @@ at all, and tracks the tree's shrinking size so it does not become a work target
 ### Remaining for doc 05
 
 `mcp` (108) — the whole remainder, and the largest single package.
+
+## Step 15j — `mcp` to zero, and Step 15 complete (2026-09-28)
+
+```text
+unexplained lazy imports:  277  ->  0
+```
+
+**Doc 05's falsifiable check is met, tree-wide.** `HOISTABLE_CEILING` is now **0**.
+
+### What remains, and why
+
+39 function-level imports survive, every one either cycle-required or carrying a
+written `# lazy:` reason. The reasons fall into three groups:
+
+| Reason | Count | Example |
+|---|---:|---|
+| A test patches the name at its source | 9 | `kb_manifest_path`, `configure_logging`, `get_runtime`, `write_frame_sidecar` |
+| Hoisting would close a cycle | most of the rest | `qc_phase_node` in `_LazyQcPhaseNode`, `graph_factory` in `runtime` |
+| Hoisting would shadow a same-named class | 1 | `schemas.SubtitleCue` in `post/subtitle_agent.py` |
+
+The **patch-point** group is the one this step discovered rather than inherited. It is
+9 imports across `mcp` and `studio`, and every one was found by a *failing test*, not by
+reading code — including two (`kb_manifest_path` for `kb_search`/`kb_get_item`, and
+`configure_logging` for `mcp.main`) that the grep-first pass itself missed and only the
+suite caught. That is worth recording plainly: **the grep is a good filter and not a
+proof.** It found the obvious `patch("module.name")` forms; it missed patches whose
+string is built differently or whose target is reached through a second module.
+
+### The scale of what Step 15 actually moved
+
+| Package | Start | End |
+|---|---:|---:|
+| `mcp` | 108 | **0** |
+| `orchestration` | 89 | **0** |
+| `generation` | 25 | **0** |
+| `post` | 20 | **0** |
+| `studio` | 15 | **0** |
+| `governance` | 7 | **0** |
+| `cli` | 7 | **0** |
+| `storage` | 3 | **0** |
+| **total unexplained** | **277** | **0** |
+
+### The durable lessons
+
+1. **Grep for the patch target before hoisting.** If a test patches the dotted name,
+   the lazy import is load-bearing. It is a filter, not a proof — the suite is the proof.
+2. **Batch by module, not by package.** Step 15c hoisted six files at once and needed
+   six reverts to localise one failure.
+3. **Never hoist with a regex keyed on indentation.** It cannot distinguish a function
+   body from a `TYPE_CHECKING` block; that cost three attempts on one file. The
+   AST-based hoister replaced it and hoisted twelve files in one pass.
+4. **Confirm the edit landed.** `grep` the file and check `git status` after every
+   scripted edit — several were silently lost, including one reverted by my own
+   `git checkout` on an already-committed hoist.
+
+### Evidence
+
+- Guard: **277 unexplained → 0**; `HOISTABLE_CEILING` = **0**.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining in the program
+
+The five docs-only slices from doc 06 (6.3, 6.6, 6.7, 6.8, 6.11) and doc 03 slice 2's
+test split. Step 16 is done
+([`08-studioruntime-remeasured.md`](08-studioruntime-remeasured.md)).

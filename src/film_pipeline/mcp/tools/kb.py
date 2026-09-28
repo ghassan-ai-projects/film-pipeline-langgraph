@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field
 
+from film_pipeline.kb.manifest import KBManifest
+from film_pipeline.kb.packets import KBContextPacketBuilder
+from film_pipeline.kb.retrieval import KBRetrieval
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
@@ -25,7 +28,9 @@ def _load_kb_manifest() -> KBManifest | None:
     ``film_pipeline.kb.paths.kb_manifest_path``. Returns ``None`` when no
     manifest exists on disk yet.
     """
-    from film_pipeline.kb.manifest import KBManifest
+
+    # lazy: tests patch `kb.paths.kb_manifest_path` at its source module; a
+    # module-level binding resolves before the patch and bypasses it.
     from film_pipeline.kb.paths import kb_manifest_path
 
     manifest_path = kb_manifest_path()
@@ -38,8 +43,6 @@ async def kb_search(ctx: ToolContext, args: dict[str, object]) -> dict[str, obje
     query = str(args.get("query", ""))
     phase = str(args.get("phase", ""))
     try:
-        from film_pipeline.kb.retrieval import KBRetrieval
-
         manifest = _load_kb_manifest()
         if manifest is None:
             return _ok(
@@ -93,7 +96,6 @@ async def kb_get_item(ctx: ToolContext, args: dict[str, object]) -> dict[str, ob
 async def kb_get_context_packet(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     _ = args
     state = ctx.project_state()
-    from film_pipeline.kb.packets import KBContextPacketBuilder
 
     try:
         manifest = _load_kb_manifest()

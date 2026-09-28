@@ -4,10 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES, text_only_generation_requests
 from film_pipeline.filmspec import (
     is_text_only_policy as is_text_only_policy,
 )
-from film_pipeline.filmspec import text_only_generation_requests
+from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.orchestration.state_schema import remove_issues_by_code
+from film_pipeline.storage.manifest import (
+    AssetEntry,
+    AssetManifest,
+    read_manifest,
+    write_manifest,
+)
 
 from ..helpers import _ok, _services
 
@@ -26,20 +34,12 @@ def _apply_text_only_state(active: dict[str, Any], requests: list[dict[str, obje
     """Record requests, flag completion, and drop stale blocking issues."""
     active["generation_requests"] = requests
     active["_text_only_generation_completed"] = True
-    from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES
-    from film_pipeline.orchestration.state_schema import remove_issues_by_code
 
     remove_issues_by_code(active, STALE_GENERATION_REQUEST_CODES)
 
 
 def _ensure_text_only_manifest_entry(store: Any, project_id: str) -> None:
     """Add the text-only-delivery entry to the asset manifest once."""
-    from film_pipeline.storage.manifest import (
-        AssetEntry,
-        AssetManifest,
-        read_manifest,
-        write_manifest,
-    )
 
     manifest = read_manifest(project_id, root=store.root)
     entries = list(manifest.entries) if manifest else []
@@ -60,7 +60,6 @@ def _complete_text_only_generation(
     rt: Any, active: dict[str, Any], project_id: str
 ) -> dict[str, object]:
     """Satisfy generation gates without producing clips or frames via MCP tools."""
-    from film_pipeline.generation.executor import GenerationExecutor
 
     if active.get("_text_only_generation_completed"):
         return _ok(text_only=True, completed=1, rows=[])

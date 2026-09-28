@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 
 from ..helpers import (
     _error,
@@ -21,7 +23,6 @@ async def get_generation_status(ctx: ToolContext, args: dict[str, object]) -> di
         return _error("generation_id is required.")
     rt = ctx.runtime
     project_id = str(ctx.project_state()["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -42,8 +43,6 @@ async def list_active_generations(ctx: ToolContext, args: dict[str, object]) -> 
     """List active (non-terminal) generation rows."""
     rt = ctx.runtime
     project_id = str(ctx.project_state()["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
-    from film_pipeline.schemas.base import FilmPhase
 
     # Guard against the read creating an artifact: the ledger manager's load()
     # persists a new empty ledger when none exists, so without this a status

@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.router import (
+    compute_actions,
+    get_blockers_for_state,
+    public_blocked_actions,
+)
 
 from .helpers import (
     _ok,
@@ -31,9 +37,6 @@ async def get_film_state(ctx: ToolContext, args: dict[str, object]) -> dict[str,
 async def get_orchestrator_summary(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     _ = args
     state = ctx.project_state()
-
-    from film_pipeline.orchestration import orchestrator_state as ostate
-    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)
@@ -63,7 +66,6 @@ async def get_orchestrator_summary(ctx: ToolContext, args: dict[str, object]) ->
 async def get_next_actions(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     _ = args
     state = ctx.project_state()
-    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     actions = compute_actions(dict(state))
     return _ok(
@@ -83,7 +85,6 @@ async def get_blockers(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
     """
     _ = args
     state = ctx.project_state()
-    from film_pipeline.orchestration.router import get_blockers_for_state
 
     blockers = get_blockers_for_state(state)
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)

@@ -12,6 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from film_pipeline.filmspec import NO_ACTIVE_PROJECT
+from film_pipeline.operations.errors import ProjectNotFoundError
+
 
 @dataclass(frozen=True)
 class ToolContext:
@@ -49,8 +52,6 @@ class ToolContext:
         sites): dispatch checks `requires_active_project` before the handler runs,
         so reaching here without one is a contract bug rather than a user error.
         """
-        from film_pipeline.filmspec import NO_ACTIVE_PROJECT
-        from film_pipeline.operations.errors import ProjectNotFoundError
 
         if self.project_id is None:
             raise ProjectNotFoundError(NO_ACTIVE_PROJECT)

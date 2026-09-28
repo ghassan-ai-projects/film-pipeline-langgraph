@@ -29,12 +29,23 @@ A function-level `film_pipeline` import is allowed in exactly two cases:
 ## The ratchet
 
 `HOISTABLE_CEILING` is the number of function-level imports that are *neither*
-cycle-required *nor* annotated. It may only fall. When a package's hoist lands, lower
-it in the same commit.
+cycle-required *nor* annotated. It may only fall.
 
-This is deliberately a count of the *unexplained* imports rather than all of them:
-the 275 hoistable ones are work in progress, and a guard that failed on all of them
-could not be committed until the migration finished.
+**It is now 0, and the migration is complete.** It began at 277 of 287 function-level
+imports and fell across Steps 15a-15j: `storage`, `governance`, `cli`, `studio`,
+`generation`, `post`, `orchestration`, `mcp`. The 39 function-level imports that remain
+are each cycle-required or carry a written `# lazy:` reason — nine of them for a patch
+point, several for a real cycle, and one because hoisting would shadow a same-named
+class.
+
+It was deliberately a count of the *unexplained* imports rather than all of them: a
+guard that failed on all 277 could not have been committed until the migration
+finished, so it would not have existed during the migration — which is when it was
+needed.
+
+At 0 the guard's meaning changes slightly and is worth stating: it no longer ratchets
+progress, it **forbids regression**. Any new function-level import that is neither
+cycle-required nor explained now fails immediately.
 """
 
 from __future__ import annotations
@@ -56,7 +67,7 @@ from measure import (  # type: ignore[import-not-found]
 
 #: Function-level internal imports that are neither cycle-required nor carry a
 #: `# lazy:` reason. Lowered package by package as doc 05's hoist lands.
-HOISTABLE_CEILING = 266
+HOISTABLE_CEILING = 0
 
 #: A reason, not a suppression: `# lazy: <why>` on the import's line or the one above.
 _LAZY_REASON = re.compile(r"#\s*lazy:\s*\S+")
@@ -148,15 +159,18 @@ def test_every_lazy_reason_is_a_reason() -> None:
 def test_the_guard_has_something_to_check() -> None:
     """Guard the guard: a broken collector would report zero and pass.
 
-    The threshold *falls* as the migration proceeds, which is the point: it exists to
-    catch a collector that reads nothing, not to assert the migration is unfinished.
-    It has moved 200 → 150 → 100 as `mcp`, `orchestration` and the small packages were
-    hoisted, each time because the real total dropped to meet it. Lowering it is not
-    lowering a finding — `HOISTABLE_CEILING` is the number that measures the work, and
-    that one only ever goes down when imports are actually hoisted.
+    The threshold *fell* as the migration proceeded — 200 → 150 → 100 → 30 — each time
+    because the real total dropped to meet it. That is the point: it catches a
+    collector that reads nothing, not a migration that finished. The migration is now
+    finished: 39 function-level imports remain, every one cycle-required or carrying a
+    `# lazy:` reason, and `HOISTABLE_CEILING` is **0**.
+
+    Lowering this is not lowering a finding. `HOISTABLE_CEILING` is the number that
+    measures the work and it reached 0 by imports actually being hoisted or explained;
+    this threshold would still be 200 if the tree had not genuinely shrunk.
     """
     eager, lazy = collect_imports()
-    assert len(lazy) > 100, (
+    assert len(lazy) > 30, (
         f"only {len(lazy)} function-level internal imports found; the collector is "
         "probably not reading the tree, which would make the ceiling vacuous."
     )

@@ -48,6 +48,8 @@ def _tool_modules() -> dict[str, str]:
     which is the cycle this file is careful to avoid.
     """
     mapping: dict[str, str] = {}
+    # lazy: exists to locate the package root at first use; at module level it would
+    # import `film_pipeline` while that package is still initialising.
     import film_pipeline
 
     package_root = _Path(film_pipeline.__file__).resolve().parent

@@ -13,6 +13,8 @@ from film_pipeline.config.profile_resolver import (
 )
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.orchestration.router import get_blockers_for_state
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -250,7 +252,6 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     """Summarize every stored artifact of a project across all film phases."""
     # Imported here to match the lazy-import pattern used by tools.helpers,
     # which keeps tool-module import time independent of schema enum loading.
-    from film_pipeline.schemas.base import FilmPhase
 
     summaries: list[dict[str, object]] = []
     for phase in FilmPhase:
@@ -276,7 +277,6 @@ async def get_project_summary(ctx: ToolContext, args: dict[str, object]) -> dict
     rt = ctx.runtime
     state = ctx.project_state()
     project_id = str(state["project_id"])
-    from film_pipeline.orchestration.router import get_blockers_for_state
 
     artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])

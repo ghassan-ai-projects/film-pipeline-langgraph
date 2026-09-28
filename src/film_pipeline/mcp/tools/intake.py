@@ -8,6 +8,7 @@ from pydantic import Field
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -54,7 +55,6 @@ async def get_intake_analysis(ctx: ToolContext, args: dict[str, object]) -> dict
     rt = ctx.runtime
     state = ctx.project_state()
     project_id = str(state["project_id"])
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         data = _services(rt).artifact_store.load(

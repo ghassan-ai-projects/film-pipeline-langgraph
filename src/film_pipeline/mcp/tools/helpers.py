@@ -16,6 +16,7 @@ from film_pipeline.providers.credentials import (
     missing_provider_credentials,
 )
 from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -103,6 +104,8 @@ def register_profile_providers(
     wiring — it calls `build_provider_adapter`, which needs the concrete provider
     classes. This is the ``mcp``-side seam for reaching it.
     """
+    # lazy: recorded in KNOWN_PRIVATE_REACH_INS — the composition root supplies the
+    # concrete provider classes; a top-level import would close mcp <-> studio.
     from film_pipeline.studio._operator_runtime import register_profile_providers as _register
 
     _register(rt, profile_stack, resolved_config)
@@ -227,7 +230,6 @@ def _load_latest_reference_index(
     project_id: str,
     state: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = 0

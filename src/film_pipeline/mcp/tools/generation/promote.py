@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
@@ -24,7 +25,6 @@ async def promote_test_to_production(
     rt = ctx.runtime
     active = ctx.project_state()
     project_id = str(active["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 

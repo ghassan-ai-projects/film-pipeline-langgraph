@@ -38,6 +38,9 @@ from film_pipeline.projects import (
     ProjectRecord,
     ProjectRegistry,
 )
+from film_pipeline.studio._persistence import runtime_root_from_config
+from film_pipeline.studio.bootstrap import validate_environment
+from film_pipeline.studio.runtime import get_runtime
 
 
 @dataclass
@@ -170,7 +173,6 @@ class MCPServer:
         """Register a runtime-known project missing here; None when unknown everywhere."""
         if not project_ref:
             return None
-        from film_pipeline.studio.runtime import get_runtime
 
         rt = get_runtime()
         rt_project = rt.get_project(project_ref)
@@ -322,7 +324,6 @@ class MCPServer:
         modules, and the resolved project is read from the envelope instead of
         being smuggled through the argument dict.
         """
-        from film_pipeline.studio.runtime import get_runtime
 
         return ToolContext(
             runtime=get_runtime(),
@@ -344,7 +345,6 @@ class MCPServer:
         `set_active_project` tool now move the same value, where they used to
         move two.
         """
-        from film_pipeline.studio.runtime import get_runtime
 
         active = get_runtime().get_active()
         if active is None:
@@ -374,7 +374,6 @@ def main() -> int:
     server from starting — individual tool calls will fail with actionable
     errors if their required resources are missing.
     """
-    from film_pipeline.studio.bootstrap import validate_environment
 
     if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
@@ -385,7 +384,9 @@ def main() -> int:
     # neither `FILM_PIPELINE_RUNTIME_ROOT` nor persistence enabled the runtime
     # falls back to a throwaway tempdir. `configure_logging` tolerates `None` and
     # adds the file handler only when it has a root.
-    from film_pipeline.studio._persistence import runtime_root_from_config
+
+    # lazy: tests patch `studio.logging_setup.configure_logging` at its source; a
+    # module-level binding resolves before the patch and bypasses it.
     from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(runtime_root_from_config())

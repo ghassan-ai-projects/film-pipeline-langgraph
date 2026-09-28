@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.config.profile_resolver import (
     config_diff,
     load_profile_stack,
@@ -365,7 +366,6 @@ def _save_resolved_config_artifact(
 
 
 def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -> str:
-    from film_pipeline.checkpoints.invalidation import InvalidationEngine
 
     engine = InvalidationEngine()
     report = engine.report(

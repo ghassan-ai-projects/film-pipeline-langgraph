@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
+from film_pipeline.config.loader import ProfileLoader
 from film_pipeline.config.profile_resolver import load_profile_flex
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
@@ -28,7 +29,6 @@ __all__ = [
 
 async def list_profiles(args: dict[str, object]) -> dict[str, object]:
     """List available config profiles from the profiles/ directory."""
-    from film_pipeline.config.loader import ProfileLoader
 
     try:
         loader = ProfileLoader()

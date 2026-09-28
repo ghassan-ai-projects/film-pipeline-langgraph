@@ -8,6 +8,7 @@ from pydantic import Field
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.storage.manifest import read_manifest
 
 from .helpers import (
@@ -23,7 +24,6 @@ async def list_artifacts(ctx: ToolContext, args: dict[str, object]) -> dict[str,
     rt = ctx.runtime
     project_id = str(ctx.project_state()["project_id"])
     phase_str = args.get("phase")
-    from film_pipeline.schemas.base import FilmPhase
 
     fp = None
     if phase_str:
@@ -56,7 +56,6 @@ async def inspect_artifact(ctx: ToolContext, args: dict[str, object]) -> dict[st
         return _error("artifact_id is required.")
     phase_str = str(args.get("phase", state.get("current_phase", "")))
     version_raw = args.get("version")
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase_str)
@@ -77,7 +76,6 @@ async def inspect_artifact(ctx: ToolContext, args: dict[str, object]) -> dict[st
 
 def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
     """Return the shot matrix rows from the project's shot bible, or None when absent."""
-    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = max(1, store.latest_version(project_id, "shot_bible", "shot_matrix"))
@@ -123,7 +121,6 @@ async def inspect_scene(ctx: ToolContext, args: dict[str, object]) -> dict[str, 
         return _error("scene_id is required.")
     rt = ctx.runtime
     project_id = str(ctx.project_state()["project_id"])
-    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     try:

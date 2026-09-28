@@ -8,11 +8,20 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field
 
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.generation.prompt_preview import (
+    GenerationNotConfiguredError,
+)
+from film_pipeline.generation.prompt_preview import (
+    preview_generation_prompts as build_previews,
+)
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
 )
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import GenerationMode, GenerationStatus
 
 from ..helpers import (
     _error,
@@ -27,7 +36,6 @@ if TYPE_CHECKING:
 
 def _resolve_generation_mode(args: dict[str, object]) -> GenerationMode:
     """Map the optional ``mode`` argument to a GenerationMode (default TEST)."""
-    from film_pipeline.schemas.base import GenerationMode
 
     mode_str = str(args.get("mode", "test"))
     mode = GenerationMode.TEST
@@ -43,8 +51,6 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
     if isinstance(raw_shot_ids, list):
         shot_ids = [str(s) for s in raw_shot_ids if str(s).strip()]
     if not shot_ids:
-        from film_pipeline.generation.executor import GenerationExecutor
-
         executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
         shot_ids = executor.shot_ids(project_id)
     return shot_ids
@@ -63,8 +69,6 @@ async def plan_generation_batch(ctx: ToolContext, args: dict[str, object]) -> di
 
     if is_text_only_policy(active):
         return _complete_text_only_generation(rt, active, project_id)
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
@@ -114,12 +118,6 @@ async def preview_generation_prompts(
     Available as soon as the shot matrix exists so the operator can read and
     validate prompts during gen_planning review — before any spend.
     """
-    from film_pipeline.generation.prompt_preview import (
-        GenerationNotConfiguredError,
-    )
-    from film_pipeline.generation.prompt_preview import (
-        preview_generation_prompts as build_previews,
-    )
 
     rt = ctx.runtime
     project_id = str(ctx.project_state()["project_id"])
@@ -142,7 +140,6 @@ def _sync_generation_requests_from_ledger(
     line-for-line copy of that method minus the CANCELLED filter, so a cancelled
     request leaked into graph state and the generation-phase gate counted it.
     """
-    from film_pipeline.schemas.base import GenerationStatus
 
     requests: list[dict[str, object]] = []
     for row in rows:

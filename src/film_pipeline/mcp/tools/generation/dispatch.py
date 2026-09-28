@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field
 
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
+from film_pipeline.schemas.base import GenerationStatus
 
 from ..helpers import (
     _error,
@@ -37,7 +41,6 @@ def _submit_failure(
     leaving the pre-existing ``poll`` in place told the operator to keep polling
     a row that can never advance.
     """
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -115,7 +118,6 @@ def _mark_row_running(
     provider_job_id: str,
 ) -> dict[str, str]:
     """Persist the provider_job_id on the row and build its success record."""
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -142,10 +144,6 @@ async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> d
     project_id = str(active["project_id"])
     if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
-
-    from film_pipeline.generation.executor import GenerationExecutor
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
@@ -196,8 +194,6 @@ def _poll_row_status(
 
 def _generation_status(provider_status: str) -> GenerationStatus:
     """Map a provider job status to its ledger generation status."""
-    from film_pipeline.providers.base import ProviderJobStatus
-    from film_pipeline.schemas.base import GenerationStatus
 
     try:
         job_status = ProviderJobStatus(provider_status)
@@ -220,9 +216,6 @@ async def resume_generation_polling(ctx: ToolContext, args: dict[str, object]) -
     active = ctx.project_state()
     project_id = str(active["project_id"])
     from datetime import UTC, datetime
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -272,8 +265,6 @@ async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -
     rt = ctx.runtime
     active = ctx.project_state()
     project_id = str(active["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -291,8 +282,6 @@ async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -
     adapter = rt.get_provider(row.provider)
     if adapter is None:
         return _error(f"Provider '{row.provider}' not registered.")
-
-    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     job = ProviderJob(
         job_id=row.provider_job_id,

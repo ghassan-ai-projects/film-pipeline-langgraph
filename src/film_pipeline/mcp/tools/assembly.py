@@ -8,6 +8,8 @@ from pydantic import Field
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.post.assembly_agent import AssemblyAgent
+from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 
 from .helpers import (
     _ok,
@@ -37,7 +39,6 @@ async def approve_coverage_generation(args: dict[str, object]) -> dict[str, obje
 async def assemble_review_cut(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Assemble a review cut using the AssemblyAgent."""
     active = ctx.project_state()
-    from film_pipeline.post.assembly_agent import AssemblyAgent
 
     agent = AssemblyAgent()
     plan = agent.build_plan(
@@ -56,7 +57,6 @@ async def assemble_final_cut(args: dict[str, object]) -> dict[str, object]:
 async def export_delivery_package(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Export a delivery package using the DeliveryPackagingAgent."""
     active = ctx.project_state()
-    from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 
     agent = DeliveryPackagingAgent()
     package = agent.build_package(

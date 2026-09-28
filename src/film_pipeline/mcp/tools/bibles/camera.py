@@ -6,6 +6,7 @@ from typing import Any
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import ArtifactType
 
 from ..helpers import (
     _error,
@@ -28,7 +29,6 @@ def _deliver_camera_bible(
     rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
