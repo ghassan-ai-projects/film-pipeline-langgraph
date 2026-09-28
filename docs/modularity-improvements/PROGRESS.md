@@ -42,7 +42,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 6.11 | Enum import spellings — **no sweep**, recorded | `5afbf85` | 11 re-exported names, **0 divergent**; decision documented | 0 |
 | 6.7 | Text-only row builders out of `filmspec` into `generation` | `dd220d1` | `filmspec` declared names **22 → 20**; `generation` 21 → 22 modules | 0 |
 | 6.6 | `governance/validators` → `governance/gates`; `MVP_VALIDATORS` folded in | `5ec72fe` | one-file package deleted; surface **8,3 identical** after rename | 0 |
-| 6.3 | Text transports moved to `providers/text/` | `_pending_` | `agents <-> providers` edges: **15 → 8**; surface (19,3) identical | 0 |
+| 6.3 | Text transports moved to `providers/text/` | `ddb51c5` | `agents <-> providers` edges: **15 → 8**; surface (19,3) identical | 0 |
+| 03-2 | Test split for reference generation — **assessed and declined** | `_pending_` | 28 tests, **1** artifact-level assertion, **51** response-level | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1977,3 +1978,77 @@ modules)** — identical to the `agents.transports` row it replaced.
 
 All five slices (6.3, 6.6, 6.7, 6.8, 6.11) are done or explicitly recorded as
 no-change. The only optional item left in the programme is doc 03 slice 2's test split.
+
+## Doc 03 slice 2's test split — assessed and declined (2026-09-28)
+
+Doc 03's falsifiable check had two halves. The first — `mcp -> generation` imports —
+was met in Step 14b (**23 → 14**). The second was a *test* split:
+
+> `tests/unit/mcp/tools/test_reference_generation.py` (682 lines) splits into a
+> use-case test that constructs no MCP context and a thin handler test.
+
+It is now 719 lines and 28 tests, and the split is declined. The reasoning is a
+measurement rather than a preference.
+
+### What the file actually contains
+
+| Measure | Value |
+|---|---:|
+| Tests | 28 |
+| Assertions on the MCP **response** (`result[...]`) | **51** |
+| Assertions on **artifacts** (store, files, `exists()`) | **1** |
+| Tests driving the tool through `call_tool` | 28 of 28 |
+
+That is a handler test suite, not a use-case suite wearing a handler's clothes. Every
+test asserts on what the *tool* returns; exactly one looks past it at the filesystem.
+
+### The use-case half already exists
+
+Doc 03's premise was that a use-case test "constructs no MCP context". That test file
+is already in the tree as a sibling:
+
+```text
+tests/unit/mcp/tools/test_reference_generation_helpers.py   201 lines, 16 tests
+```
+
+It imports the use-case package directly — `group_key`, `reference_aspect_ratio`,
+`reference_job_id`, `reference_output_dir`, `write_reference_index_files` and the rest —
+and constructs no `ToolContext`, no runtime and no `call_tool` fixture. The split doc 03
+asked for is **47% present** already; what remains would be a *third* file covering the
+middle: the orchestration inside `generate_reference_images` itself.
+
+### Why not do that third file
+
+The handler body is not thin. Reading it:
+
+```python
+resolved = _resolve_generation_inputs(rt, ctx.project_state(), args)
+grouped_entries = group_and_sort_entries(...)
+batch = GenerationBatch(...)
+generated, skipped, failed = _generate_all_references(batch, grouped_entries)
+ref = _persist_updated_index(rt, resolved.active, resolved.project_id, grouped_entries)
+```
+
+`_generate_all_references` is real orchestration — the retry loop, outcome recording and
+composite assembly that Step 14b moved into `generation.reference`. A test of it that
+"constructs no MCP context" would have to rebuild `GenerationBatch`, the provider, the
+project root and the character bibles by hand — i.e. re-derive `_resolve_generation_inputs`,
+which is the one part that legitimately *is* MCP-facing.
+
+So the third file would either duplicate the existing setup to assert the same
+behaviour the 28 tests already cover, or test a helper that is already unit-tested. It
+would raise the file count and the line count without raising coverage, which is the
+opposite of what `AGENTS.md`'s "no abstractions without a current concrete need" asks
+for.
+
+### Recorded rather than faked
+
+This is the one item in the programme that is deliberately **not done**, and it is
+recorded as such rather than being closed by moving code around. The distinction the
+goal set matters here: performing a mechanical split that adds no test would let the
+checkmark stand for work that did not happen.
+
+### Evidence
+
+- Counts above re-measured on the current file.
+- No code or test changed by this entry; gates unchanged and green.
