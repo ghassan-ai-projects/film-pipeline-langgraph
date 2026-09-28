@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import Field
+
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
     resolved_config_state_keys,
 )
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -291,3 +294,106 @@ async def get_project_summary(ctx: ToolContext, args: dict[str, object]) -> dict
         has_blockers=bool(get_blockers_for_state(state)),
         generation_policy=str(state.get("generation_policy", "generate")),
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class CreateFilmProjectArgs(ToolArgs):
+    """Arguments for `create_film_project`.
+
+    The five profile fields are the stack `canonicalize_profile_stack` reads; a
+    blank one means "use the profile named by base.studio".
+    """
+
+    project_id: str = Field(description="Stable id for the new project.")
+    title: str = Field(default="", description="Human-readable project title.")
+    slug: str = Field(default="", description="URL-safe short name.")
+    idea: str = Field(default="", description="Optional idea text to run intake on.")
+    runtime_mode: str = Field(
+        default="", description="'mock' or 'real'; empty uses the server's mode."
+    )
+    generation_policy: str = Field(
+        default="generate", description="How generation requests are raised."
+    )
+    film_type_profile: str = Field(default="", description="Film-type profile stem.")
+    quality_profile: str = Field(default="", description="Quality profile stem.")
+    provider_profile: str = Field(default="", description="Provider profile stem.")
+    review_profile: str = Field(default="", description="Review profile stem.")
+    auto_approve_profile: str = Field(default="", description="Auto-approve profile stem.")
+
+
+class ListProjectsArgs(ToolArgs):
+    """Arguments for `list_projects` (none)."""
+
+
+class FindProjectArgs(ToolArgs):
+    """Arguments for `find_project`."""
+
+    ref: str = Field(description="Project id or fuzzy reference to resolve.")
+
+
+class SetActiveProjectArgs(ToolArgs):
+    """Arguments for `set_active_project`."""
+
+    project_ref: str = Field(default="", description="Project id to make active.")
+    project_id: str = Field(default="", description="Alias for `project_ref`.")
+
+
+class GetActiveProjectArgs(ToolArgs):
+    """Arguments for `get_active_project` (none)."""
+
+
+class GetProjectSummaryArgs(ToolArgs):
+    """Arguments for `get_project_summary` (none)."""
+
+
+PROJECT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="create_film_project",
+        group=ToolGroup.PROJECT,
+        description="Create a new film project, optionally running intake on an idea.",
+        args=CreateFilmProjectArgs,
+        handler=create_film_project,
+        mutates=True,
+    ),
+    ToolSpec(
+        name="list_projects",
+        group=ToolGroup.PROJECT,
+        description="List the ids of every project the runtime knows about.",
+        args=ListProjectsArgs,
+        handler=list_projects,
+    ),
+    ToolSpec(
+        name="find_project",
+        group=ToolGroup.PROJECT,
+        description="Resolve a fuzzy project reference to a known project, or report ambiguity.",
+        args=FindProjectArgs,
+        handler=find_project,
+    ),
+    ToolSpec(
+        name="set_active_project",
+        group=ToolGroup.PROJECT,
+        description="Make a project active for subsequent tool calls.",
+        args=SetActiveProjectArgs,
+        handler=set_active_project,
+        mutates=True,
+    ),
+    ToolSpec(
+        name="get_active_project",
+        group=ToolGroup.PROJECT,
+        description="Report the active project and the phase it is in.",
+        args=GetActiveProjectArgs,
+        handler=get_active_project,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_project_summary",
+        group=ToolGroup.PROJECT,
+        description="Summarise the active project: phase, artifacts, issues and handoffs.",
+        args=GetProjectSummaryArgs,
+        handler=get_project_summary,
+        active_project=True,
+    ),
+)

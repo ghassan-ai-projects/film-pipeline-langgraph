@@ -29,16 +29,7 @@ from film_pipeline.mcp.tools.bibles import (
     generate_shot_bible,
     generate_style_bible,
 )
-from film_pipeline.mcp.tools.checkpoints import (
-    compare_versions,
-    create_checkpoint,
-    get_checkpoint,
-    get_invalidation_report,
-    list_artifact_versions,
-    list_checkpoints,
-    rollback_artifact,
-    rollback_to_checkpoint,
-)
+from film_pipeline.mcp.tools.checkpoints import CHECKPOINT_TOOLS
 from film_pipeline.mcp.tools.config import (
     approve_profile_change,
     get_runtime_mode,
@@ -65,14 +56,7 @@ from film_pipeline.mcp.tools.kb import (
 )
 from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
 from film_pipeline.mcp.tools.planning import generate_plan
-from film_pipeline.mcp.tools.projects import (
-    create_film_project,
-    find_project,
-    get_active_project,
-    get_project_summary,
-    list_projects,
-    set_active_project,
-)
+from film_pipeline.mcp.tools.projects import PROJECT_TOOLS
 from film_pipeline.mcp.tools.providers import (
     check_provider_health,
     list_providers,
@@ -144,24 +128,8 @@ def _register(
 def register_all_tools(registry: ToolRegistry) -> None:
     """Register every MCP tool contract with its handler on ``registry``."""
     # project
-    _register(registry, "create_film_project", ToolGroup.PROJECT, create_film_project, mutates=True)
-    _register(registry, "list_projects", ToolGroup.PROJECT, list_projects)
-    _register(registry, "find_project", ToolGroup.PROJECT, find_project)
-    _register(registry, "set_active_project", ToolGroup.PROJECT, set_active_project, mutates=True)
-    _register(
-        registry,
-        "get_active_project",
-        ToolGroup.PROJECT,
-        get_active_project,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "get_project_summary",
-        ToolGroup.PROJECT,
-        get_project_summary,
-        active_project=True,
-    )
+    for spec in PROJECT_TOOLS:
+        registry.register_spec(spec)
 
     # intake
     _register(
@@ -411,36 +379,8 @@ def register_all_tools(registry: ToolRegistry) -> None:
     _register(registry, "kb_explain_context_choice", ToolGroup.KB, kb_explain_context_choice)
 
     # checkpoint
-    _register(registry, "list_checkpoints", ToolGroup.CHECKPOINT, list_checkpoints)
-    _register(
-        registry,
-        "create_checkpoint",
-        ToolGroup.CHECKPOINT,
-        create_checkpoint,
-        mutates=True,
-        active_project=True,
-    )
-    _register(registry, "get_checkpoint", ToolGroup.CHECKPOINT, get_checkpoint)
-    _register(registry, "compare_versions", ToolGroup.CHECKPOINT, compare_versions)
-    _register(registry, "list_artifact_versions", ToolGroup.CHECKPOINT, list_artifact_versions)
-    _register(
-        registry,
-        "rollback_artifact",
-        ToolGroup.CHECKPOINT,
-        rollback_artifact,
-        mutates=True,
-        confirm=True,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "rollback_to_checkpoint",
-        ToolGroup.CHECKPOINT,
-        rollback_to_checkpoint,
-        mutates=True,
-        confirm=True,
-    )
-    _register(registry, "get_invalidation_report", ToolGroup.CHECKPOINT, get_invalidation_report)
+    for spec in CHECKPOINT_TOOLS:
+        registry.register_spec(spec)
 
     # operator
     _register(

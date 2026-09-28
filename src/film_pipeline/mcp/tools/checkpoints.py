@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 from film_pipeline.operations import (
     get_checkpoint as get_checkpoint_use_case,
 )
@@ -202,3 +205,132 @@ async def get_invalidation_report(ctx: ToolContext, args: dict[str, object]) -> 
         will_invalidate=report.will_invalidate,
         requires_regeneration=report.requires_regeneration,
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class ListCheckpointsArgs(ToolArgs):
+    """Arguments for `list_checkpoints`."""
+
+    project_id: str = Field(
+        default="", description="Project to list; empty uses the active project."
+    )
+
+
+class CreateCheckpointArgs(ToolArgs):
+    """Arguments for `create_checkpoint`."""
+
+    reason: str = Field(default="manual checkpoint", description="Why the checkpoint was taken.")
+
+
+class GetCheckpointArgs(ToolArgs):
+    """Arguments for `get_checkpoint`."""
+
+    checkpoint_id: str = Field(description="Checkpoint to fetch.")
+
+
+class CompareVersionsArgs(ToolArgs):
+    """Arguments for `compare_versions`."""
+
+    checkpoint_id_a: str = Field(description="Left-hand checkpoint.")
+    checkpoint_id_b: str = Field(description="Right-hand checkpoint.")
+
+
+class ListArtifactVersionsArgs(ToolArgs):
+    """Arguments for `list_artifact_versions` (none)."""
+
+
+class RollbackArtifactArgs(ToolArgs):
+    """Arguments for `rollback_artifact`."""
+
+    artifact_id: str = Field(description="Artifact to restore.")
+    checkpoint_id: str = Field(
+        default="", description="Checkpoint to restore from; empty uses the latest."
+    )
+    confirmed: bool = Field(default=False, description="Must be true to perform the rollback.")
+
+
+class RollbackToCheckpointArgs(ToolArgs):
+    """Arguments for `rollback_to_checkpoint`."""
+
+    checkpoint_id: str = Field(description="Checkpoint to roll the project back to.")
+    confirmed: bool = Field(default=False, description="Must be true to perform the rollback.")
+
+
+class GetInvalidationReportArgs(ToolArgs):
+    """Arguments for `get_invalidation_report`."""
+
+    checkpoint_id: str = Field(description="Checkpoint whose invalidation report to read.")
+
+
+CHECKPOINT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="list_checkpoints",
+        group=ToolGroup.CHECKPOINT,
+        description="List recent checkpoints for a project.",
+        args=ListCheckpointsArgs,
+        handler=list_checkpoints,
+    ),
+    ToolSpec(
+        name="create_checkpoint",
+        group=ToolGroup.CHECKPOINT,
+        description="Take a checkpoint of the active project so it can be rolled back to.",
+        args=CreateCheckpointArgs,
+        handler=create_checkpoint,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_checkpoint",
+        group=ToolGroup.CHECKPOINT,
+        description="Fetch one checkpoint's metadata by id.",
+        args=GetCheckpointArgs,
+        handler=get_checkpoint,
+    ),
+    ToolSpec(
+        name="compare_versions",
+        group=ToolGroup.CHECKPOINT,
+        description="Compare two checkpoints and report what changed between them.",
+        args=CompareVersionsArgs,
+        handler=compare_versions,
+    ),
+    ToolSpec(
+        name="list_artifact_versions",
+        group=ToolGroup.CHECKPOINT,
+        description="List the recorded versions of every artifact across checkpoints.",
+        args=ListArtifactVersionsArgs,
+        handler=list_artifact_versions,
+    ),
+    ToolSpec(
+        name="rollback_artifact",
+        group=ToolGroup.CHECKPOINT,
+        description=(
+            "Roll one artifact back to an earlier checkpoint's version, reporting invalidations."
+        ),
+        args=RollbackArtifactArgs,
+        handler=rollback_artifact,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="rollback_to_checkpoint",
+        group=ToolGroup.CHECKPOINT,
+        description=(
+            "Roll the whole project back to a checkpoint, invalidating downstream artifacts."
+        ),
+        args=RollbackToCheckpointArgs,
+        handler=rollback_to_checkpoint,
+        mutates=True,
+        confirm=True,
+    ),
+    ToolSpec(
+        name="get_invalidation_report",
+        group=ToolGroup.CHECKPOINT,
+        description="Read the invalidation report produced by a checkpoint's rollback.",
+        args=GetInvalidationReportArgs,
+        handler=get_invalidation_report,
+    ),
+)

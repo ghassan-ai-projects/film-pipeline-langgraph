@@ -42,7 +42,7 @@ from film_pipeline.mcp.contract import make_registry
 #: Raised group by group as doc 04's per-tool `ToolSpec` declarations land. It is
 #: a floor, not a target: `test_the_catalog_floor_has_not_fallen` fails if a tool
 #: loses its spec.
-TOOLS_WITH_DECLARED_ARGS = 4
+TOOLS_WITH_DECLARED_ARGS = 18
 
 
 @pytest.fixture(scope="module")
@@ -115,3 +115,42 @@ def test_every_registered_tool_has_a_contract_entry(
     for name, tool in catalog.items():
         assert tool["description"], f"{name} has no description at all"
         assert tool["group"], f"{name} has no group"
+
+
+def test_declared_specs_preserve_the_registered_flags(
+    catalog: dict[str, dict[str, object]],
+) -> None:
+    """A `ToolSpec` must declare the same four flags the registry did.
+
+    Moving a tool from `_register(...)` to a `ToolSpec` re-states its flags, and
+    nothing about a green suite would notice a wrong one: the flag changes *when*
+    dispatch refuses a call, not whether the handler works. This caught a real
+    slip during the migration — `rollback_artifact` gained `creates_checkpoint`,
+    which the registry had never set.
+
+    The expected flags are recorded here rather than derived from the specs, so
+    this compares the declaration against the contract as it was published before
+    the move. If a tool's flags genuinely change, change them here too, on purpose.
+    """
+    expected: dict[str, tuple[bool, bool, bool]] = {
+        "create_film_project": (True, False, False),
+        "set_active_project": (True, False, False),
+        "get_active_project": (False, False, False),
+        "get_project_summary": (False, False, False),
+        "create_checkpoint": (True, False, False),
+        "rollback_artifact": (True, True, False),
+        "rollback_to_checkpoint": (True, True, False),
+        "get_audit_log": (False, False, False),
+    }
+    for name, (mutates, confirm, checkpoint) in expected.items():
+        tool = catalog[name]
+        actual = (
+            bool(tool["mutates_state"]),
+            bool(tool["requires_confirmation"]),
+            bool(tool["creates_checkpoint"]),
+        )
+        assert actual == (mutates, confirm, checkpoint), (
+            f"{name} declares (mutates, confirm, checkpoint) = {actual}, "
+            f"but the contract published {mutates, confirm, checkpoint}. A spec "
+            "re-stated a flag differently from the registry it replaced."
+        )

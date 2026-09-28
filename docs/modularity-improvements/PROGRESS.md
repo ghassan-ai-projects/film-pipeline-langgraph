@@ -20,7 +20,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 9 | Delete the orphaned operator surface | `f717013` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
 | 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `2ae1db7` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
 | 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `e34c3e0` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
-| 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `_pending_` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
+| 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `8f182f1` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
+| 11b | `checkpoints` (8) + `projects` (6) declared | `_pending_` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -641,3 +642,35 @@ count is **back to 1**.
 - `mypy src tests` clean; `ruff` clean.
 - `enola check` exit 0, cycle count 1.
 - Recorded surface growth, re-measured: `mcp` 38 → 39 modules, `mcp.tools` 32 → 33.
+
+## Step 11b — `checkpoints` and `projects` declared (2026-09-28)
+
+The two largest `args.get` groups (11 and 10 calls). 14 tools, taking the catalog
+from 4 tools with a real `input_schema` to 18, and generic descriptions from 71 to
+57. `measure.py` confirms both.
+
+### The flag-parity check, which caught a real slip
+
+Moving a tool from `_register(...)` to a `ToolSpec` **re-states its four flags**,
+and nothing about a green suite notices a wrong one: a flag changes *when* dispatch
+refuses a call, not whether the handler works.
+
+So the migration was verified against the contract as published **before** the move:
+capture every tool's `(group, mutates_state, requires_confirmation,
+creates_checkpoint)` from the registry at the previous commit, then diff after the
+swap. It reported exactly one difference — `rollback_artifact` had gained
+`creates_checkpoint: True`, which the registry had never set. Without the check this
+would have shipped as a silent semantic change: the tool would have started creating
+checkpoints.
+
+That comparison is now a guard,
+`test_declared_specs_preserve_the_registered_flags`, with the pre-move flags recorded
+explicitly. It is deliberately *not* derived from the specs — a guard that reads the
+thing it grades cannot catch a restatement.
+
+### Evidence
+
+- `measure.py`: `input_schema` **4 → 18**; generic descriptions **71 → 57**.
+- Flag diff against HEAD: **NONE**, after fixing the one above.
+- `make ci-check`: **2340 passed, 91.66% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
