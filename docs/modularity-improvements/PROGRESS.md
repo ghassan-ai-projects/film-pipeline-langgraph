@@ -32,7 +32,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
 | 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
 | 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
-| 15e | `generation` hoisted to 0 | `_pending_` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
+| 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
+| 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1336,3 +1337,48 @@ rather than by a later gate.
 block. `mcp` and `orchestration` are 97% of what is left, and both need per-module
 commits — Step 15c's bisect and Step 15e's lost-edit failures both argue for smaller
 batches, and these two packages are where the remaining risk is.
+
+## Step 16 — `StudioRuntime` re-measured, and the split decided against (2026-09-28)
+
+The measurement and the decision are in
+[`08-studioruntime-remeasured.md`](08-studioruntime-remeasured.md). Summary:
+
+| | Before this program | Now |
+|---|---:|---:|
+| Lines | 516 | **393** |
+| Public methods | 27 | **29** |
+| Concerns | 5 | **9** |
+| Pure delegators | not measured | **13 of 29** |
+
+**The method count went the wrong way, and that is the finding.** Doc 02 predicted
+Step 13's graph-execution move would drop it by the delegates; the delegates survived
+as one-line forwarders, so lines fell 24% while the surface *grew* by two. Reporting
+only the line count would have made this look like a clean win.
+
+The measurement also corrected a claim I had been repeating from memory: the concern
+count is **9**, not 5, and **13 of 29 methods are single-`return` delegators** — five
+to `orchestration.execution`, one to `_persistence`, and seven to the runtime's own
+attributes. I stated 11 and then 13 in the same draft, and 6 rather than 5 for the
+`orchestration.execution` figure; both were wrong until the AST pass re-measured them.
+That is the same failure `AGENTS.md` records twice, and it is why the document's every
+number comes from a re-runnable command rather than from the prose above it.
+
+### The decision: do not split it in this program
+
+Three reasons, recorded in full in the document: it is the composition root and
+`03-target-architecture.md` §4.6 gives it that role (a split would move the wiring, not
+remove it); the delegators — not the size — are the actual symptom, and `AGENTS.md`
+already names the repair as moving the concern to its owner *per caller*, which is a
+different and smaller job; and the small concerns (audit, operator comments: 2 methods
+each) would each need a collaborator and a wiring line to remove two forwarders.
+
+The document names what a future split would look like and ranks it — provider
+registry + health (10 methods) first, taking 29 → 19 methods and 9 → 7 concerns — and
+is explicit that **this is not done**.
+
+### Evidence
+
+- `StudioRuntime`: **393 lines, 29 public methods, 9 concerns, 13 delegators**, measured
+  at `485a7cc` from the class's own section comments plus an AST pass.
+- This step changes documentation only; `make ci-check`, `mypy src tests` and
+  `enola check` are unchanged and green at that commit.
