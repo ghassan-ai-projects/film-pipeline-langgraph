@@ -36,6 +36,15 @@ def test_unknown_target_phase(tmp_path: Path) -> None:
 
 
 def test_call_tool_unknown_tool() -> None:
+    """An unknown tool is a typed `UNKNOWN_TOOL` error, not a raised driver error.
+
+    `_call_tool` goes through `MCPServer.call` (see
+    `docs/modularity-improvements/01`), and dispatch already owns "there is no
+    such tool": it answers with `MCPErrorCode.UNKNOWN_TOOL` rather than letting a
+    lookup fail. That is the contract the driver renders as `{"ok": False, ...}`,
+    so an unknown name is a normal failed response — a raise here would mean two
+    owners for one condition.
+    """
     import film_pipeline.studio.runtime as rt_mod
 
     previous_runtime = rt_mod._RUNTIME
@@ -45,8 +54,11 @@ def test_call_tool_unknown_tool() -> None:
         driver = HeadlessDriver(rt, "p1")
         import asyncio
 
-        with pytest.raises(HeadlessDriverError, match="Unknown MCP tool"):
-            asyncio.run(driver._call_tool("not_a_real_tool"))
+        from film_pipeline.mcp.errors import MCPErrorCode
+
+        result = asyncio.run(driver._call_tool("not_a_real_tool"))
+        assert result["ok"] is False
+        assert result["error"] == MCPErrorCode.UNKNOWN_TOOL
     finally:
         rt_mod._RUNTIME = previous_runtime
         rt_mod._RUNTIME_MODE_OVERRIDE = previous_override

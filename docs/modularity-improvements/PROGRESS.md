@@ -15,7 +15,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 4 | **Test first:** `_PHASE_NODES` identity + reducer parity | `4112a9e` | 9 cases fail, by design | n/a |
 | 5 | Derive the manual merge from `StudioGraphState` | `2cc1bdb` | 8 of 9 cases flip to pass | 0 |
 | 6 | One QC implementation: the parallel subgraph | `a0b016e` | identity test passes; SCCs back to 1 | 0 |
-| 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `_pending_` | both fail, by design | n/a |
+| 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `fb14d31` | both fail, by design | n/a |
+| 8 | CLI through `MCPServer.call`; public runtime installer | `_pending_` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -292,3 +293,39 @@ test_driver_enforces_confirmation_on_a_human_gate     FAILED
 Both are the *public* surface (`HeadlessDriver._call_tool`), because that is the
 seam Step 8 replaces. The second is the finding's sharpest form: not a wrong error
 code, an applied gate.
+
+## Step 8 — the CLI goes through dispatch (2026-09-28)
+
+`HeadlessDriver._call_tool` imported the handler callable and awaited it. It now
+builds an `MCPServer` and calls `await server.call(name, args)`, unwrapping the
+`MCPResponse` back into the `{"ok": ...}` dict the driver's callers already read.
+All three dispatch checks therefore run on the headless path: `project_ref`
+resolution, the confirmation gate, and the active-project precondition.
+
+**The runtime installer.** `setup_runtime` installed its runtime by assigning
+`rt_mod._RUNTIME` and `rt_mod._RUNTIME_MODE_OVERRIDE` — a write to another
+package's private globals. `studio.runtime.install_runtime(runtime, mode=...)` is
+the public owner-side form, and it is where the mode pin now lives so
+`get_runtime` cannot discard the installed runtime for disagreeing with the
+environment.
+
+**The guard 01 asked for, built and adversarially tested.** `test_boundary_law.py`
+counted private *imports*; it could not see this shape at all, because the module
+(`studio.runtime`) is public and the attribute is spelled literally. New section 4
+counts assignments to `<module_handle>._<name>` where the handle is another
+package, with `KNOWN_PRIVATE_ATTRIBUTE_WRITES` **empty on purpose**. Two guards
+keep it honest: a self-test asserting the detector still sees
+`alias._private = value`, and an injection run that reintroduced
+`rt_mod._RUNTIME = rt` and confirmed the guard reports
+`[('cli', 'studio._RUNTIME')]` rather than passing silently.
+
+**One existing test changed contract, deliberately.** `test_call_tool_unknown_tool`
+asserted `HeadlessDriverError("Unknown MCP tool")`. Dispatch already owns "there is
+no such tool" and answers `MCPErrorCode.UNKNOWN_TOOL`, so the driver now renders a
+failed response instead of raising. Two owners for one condition is the defect
+class this program keeps finding, so the test moved to the typed error.
+
+Evidence: Step 7's two failing tests pass; `make ci-check` 2392 passed, 91.86%
+coverage, product gate PASS; `mypy src tests` clean; the full e2e suite passes,
+including the `invoke_tool` fixture that itself drives the direct path (unchanged
+here — doc 01 step 10's `ToolContext` is what removes it). `enola check` exits 0.

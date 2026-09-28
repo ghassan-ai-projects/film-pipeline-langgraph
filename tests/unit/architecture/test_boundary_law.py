@@ -27,7 +27,10 @@ records the superseded law as an observation rather than a target:
 2. **The port's mirrored privates stay in the port.** `operations/ports.py`
    deliberately mirrors two `StudioRuntime` private method names so the port can
    describe the surface it adapts; nothing else may call them.
-3. **A recorded census of imports the superseded law would forbid.** Reported,
+3. **No writes to another package's private module attributes.** The same
+   encapsulation break as a private import, from the writing side, and invisible
+   to a guard that reads import statements. Guarded and ratcheted.
+4. **A recorded census of imports the superseded law would forbid.** Reported,
    never failing — so the number stays measurable if that decision is revisited,
    and so nobody mistakes its absence for a clean bill of health.
 """
@@ -101,6 +104,14 @@ KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
     ("studio", "orchestration._SERVICES_CTX"): 1,
     ("studio", "orchestration._run_validators"): 1,
 }
+
+# Assignments to another package's private module attributes, frozen 2026-09-27.
+# **Empty on purpose.** `cli/driver.setup_runtime` installed its runtime by
+# writing `studio.runtime._RUNTIME` and `_RUNTIME_MODE_OVERRIDE`; it now calls the
+# owner's public `install_runtime`. If a new write appears, add a public API to
+# the owner rather than recording it here — this table exists so an unavoidable
+# case is visible, not so ordinary ones can be frozen.
+KNOWN_PRIVATE_ATTRIBUTE_WRITES: dict[tuple[str, str], int] = {}
 
 # The private spellings of the runtime's persist/audit methods. `studio` owns
 # them and uses these internally; every other package must call the public names
@@ -420,3 +431,130 @@ def test_superseded_layer_law_is_recorded_not_enforced() -> None:
 
     census = _superseded_law_census()
     print(f"\n[recorded, not enforced] imports the superseded layer law would forbid: {census}")
+
+
+# --- 4. No writes to another package's private attributes -------------------
+
+
+def _measure_private_attribute_writes() -> dict[tuple[str, str], int]:
+    """Count writes to another package's ``_``-prefixed module attributes.
+
+    The reach-in guards above count private *imports*: reading another package's
+    private name. This counts the write shape, which is the same encapsulation
+    break from the other direction and was invisible to every guard here:
+
+        import film_pipeline.studio.runtime as rt_mod
+        rt_mod._RUNTIME = rt            # another package's private global
+        rt_mod._RUNTIME_MODE_OVERRIDE = mode
+
+    That is what the headless CLI did to install its runtime
+    (`docs/modularity-improvements/01`). No import of a private *name* appears —
+    the module is public and the attribute is spelled literally — so a guard
+    reading import statements cannot see it.
+
+    Scope: assignments and augmented assignments where the target is
+    ``<something>._<name>`` and the module part is a bare name (a module handle),
+    not ``self`` or a local object. `self._x = y` and `obj._x = y` are ordinary
+    encapsulation *within* a class and are not the concern; a module-level
+    ``alias._x = y`` is.
+    """
+    counts: dict[tuple[str, str], int] = {}
+
+    for path in _source_files():
+        parts = path.relative_to(_SRC).parts
+        source = parts[0] if len(parts) > 1 else None
+        if source is None:
+            continue
+
+        tree = ast.parse(path.read_text())
+        # Module handles bound in this file: `import x.y as alias` or `import x.y`.
+        aliases: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if not alias.name.startswith("film_pipeline."):
+                        continue
+                    parts_of = alias.name.split(".")
+                    if len(parts_of) < 2:
+                        continue
+                    handle = alias.asname or parts_of[0]
+                    aliases[handle] = parts_of[1]
+
+        for node in ast.walk(tree):
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+                targets = [node.target]
+            for target in targets:
+                if not isinstance(target, ast.Attribute) or not target.attr.startswith("_"):
+                    continue
+                if not isinstance(target.value, ast.Name):
+                    continue  # `self._x` / `obj._x` — in-class, not cross-package
+                owner = aliases.get(target.value.id)
+                if owner is None or owner == source:
+                    continue
+                key = (source, f"{owner}.{target.attr}")
+                counts[key] = counts.get(key, 0) + 1
+
+    return counts
+
+
+def test_no_writes_to_another_packages_private_globals() -> None:
+    """A package must not assign another package's private module attributes.
+
+    `cli` used to install its runtime by writing `studio.runtime._RUNTIME` and
+    `_RUNTIME_MODE_OVERRIDE`. `studio.runtime.install_runtime` is the public
+    replacement; the row table below is empty because the last writer is gone.
+    """
+    actual = _measure_private_attribute_writes()
+    new = sorted(set(actual) - set(KNOWN_PRIVATE_ATTRIBUTE_WRITES))
+
+    assert not new, (
+        "these modules assign a private attribute on ANOTHER package's module: "
+        f"{new}. Add a public API to the owner (a setter/installer function) and "
+        "call that, or record the row in KNOWN_PRIVATE_ATTRIBUTE_WRITES with a "
+        "reason if it is genuinely irreducible."
+    )
+
+
+def test_recorded_private_attribute_writes_are_not_stale() -> None:
+    actual = _measure_private_attribute_writes()
+    stale = {
+        pair: (recorded, actual.get(pair, 0))
+        for pair, recorded in sorted(KNOWN_PRIVATE_ATTRIBUTE_WRITES.items())
+        if actual.get(pair, 0) < recorded
+    }
+    assert not stale, (
+        f"private attribute writes improved (recorded -> actual): {stale}. Tighten the rows."
+    )
+
+
+def test_the_write_detector_sees_the_shape_it_was_written_for() -> None:
+    """Guard the guard: inject the exact shape the CLI used to have.
+
+    Without this, a detector that silently matched nothing would report a clean
+    tree forever — the failure mode AGENTS.md names for a guard that "reports
+    clean while measuring nothing".
+    """
+    source = "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME = object()\n"
+    tree = ast.parse(source)
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                parts = alias.name.split(".")
+                aliases[alias.asname or parts[0]] = parts[1]
+    hits = [
+        (aliases[target.value.id], target.attr)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Attribute)
+        and target.attr.startswith("_")
+        and isinstance(target.value, ast.Name)
+        and target.value.id in aliases
+    ]
+    assert hits == [("studio", "_RUNTIME")], (
+        f"the write detector no longer sees `alias._private = value`: {hits}"
+    )

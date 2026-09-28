@@ -454,6 +454,35 @@ def get_runtime() -> StudioRuntime:
     return _RUNTIME
 
 
+def install_runtime(runtime: StudioRuntime, *, mode: str | None = None) -> StudioRuntime:
+    """Install an already-built runtime as the process-wide one.
+
+    This is the public form of what a caller used to do by assigning another
+    package's module globals::
+
+        import film_pipeline.studio.runtime as rt_mod
+
+        rt_mod._RUNTIME = rt
+        rt_mod._RUNTIME_MODE_OVERRIDE = mode
+
+    That is a write to a private attribute of a module the caller does not own —
+    the same encapsulation break `test_boundary_law` counts for imports, which it
+    did not previously see because it measured imports, not writes. The headless
+    CLI needs the runtime it built (with its own `runtime_root` and services) to
+    be the one MCP handlers resolve, so it needs *some* installer; this makes it
+    a declared, in-package one.
+
+    ``mode`` pins the configured server mode so ``get_runtime`` does not discard
+    the installed runtime for disagreeing with the environment. Passing the
+    runtime's own ``server_mode`` is the usual call.
+    """
+    global _RUNTIME, _RUNTIME_MODE_OVERRIDE
+    _RUNTIME = runtime
+    if mode is not None:
+        _RUNTIME_MODE_OVERRIDE = _normalize_server_mode(mode)
+    return runtime
+
+
 def _build_services_for_mode(
     server_mode: str, *, artifacts_root: Path | None = None
 ) -> GraphServices:

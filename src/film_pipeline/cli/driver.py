@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from film_pipeline.cli.io import read_idea_file
 from film_pipeline.filmspec import blocking_issues
+from film_pipeline.mcp.errors import MCPResponse
+from film_pipeline.mcp.server import MCPServer
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -60,8 +61,8 @@ class HeadlessDriver:
         runtime_root: Path,
     ) -> StudioRuntime:
         """Create and globally install a runtime for the requested mode."""
-        import film_pipeline.studio.runtime as rt_mod
         from film_pipeline.orchestration.services import GraphServices
+        from film_pipeline.studio.runtime import install_runtime
 
         mode = mode.lower().strip()
         if mode not in {"mock", "real"}:
@@ -78,8 +79,11 @@ class HeadlessDriver:
                 mock_responses=default_mock_responses(),
             )
         rt = StudioRuntime(server_mode=mode, runtime_root=runtime_root, services=services)
-        rt_mod._RUNTIME_MODE_OVERRIDE = mode
-        rt_mod._RUNTIME = rt
+        # Installed through the owner's public API rather than by writing
+        # `rt_mod._RUNTIME` / `_RUNTIME_MODE_OVERRIDE` from here: those are
+        # another package's private globals, and `cli` has no business
+        # reassigning them.
+        install_runtime(rt, mode=mode)
         return rt
 
     async def create_project(
@@ -198,13 +202,64 @@ class HeadlessDriver:
             raise HeadlessDriverError(f"approve_phase failed: {result}")
 
     async def _call_tool(self, tool_name: str, **args: Any) -> dict[str, Any]:
-        """Invoke an async MCP tool by name against the bound runtime."""
-        mod = importlib.import_module("film_pipeline.mcp.tools")
-        handler = getattr(mod, tool_name, None)
-        if handler is None:
-            raise HeadlessDriverError(f"Unknown MCP tool: {tool_name}")
-        result: dict[str, Any] = await handler(dict(args))
-        return result
+        """Invoke an MCP tool by name through the server's dispatch path.
+
+        This used to import the handler callable and await it directly, which
+        skipped all three things `MCPServer.call` does before a handler runs:
+        `project_ref` resolution, the confirmation gate on the nine
+        `confirm=True` tools, and the active-project precondition on the 44
+        `active_project=True` tools. The consequence was reproducible —
+        `approve_phase` without `confirmed` advanced a human gate
+        (`docs/modularity-improvements/01`).
+
+        Dispatch returns an `MCPResponse`; the driver's callers expect the
+        handler's dict, so a success unwraps `data` and a failure is rendered as
+        the same `{"ok": False, "error": <code>}` shape the handlers use. That
+        keeps every existing `result.get("ok")` check working while making the
+        gate checks unavoidable.
+        """
+        server = self._server()
+        response = await server.call(tool_name, dict(args))
+        return _response_to_dict(response)
+
+    def _server(self) -> MCPServer:
+        """The `MCPServer` bound to this driver's runtime, built once.
+
+        Built on the instance rather than module-imported so the driver's
+        runtime is the one handlers resolve: `MCPServer.call` reaches the runtime
+        through `studio.runtime.get_runtime`, and `setup_runtime` installs the
+        driver's runtime there.
+        """
+        existing = getattr(self, "_mcp_server", None)
+        if existing is None:
+            existing = MCPServer()
+            object.__setattr__(self, "_mcp_server", existing)
+        return existing
+
+
+def _response_to_dict(response: MCPResponse) -> dict[str, Any]:
+    """Render an `MCPResponse` as the `{"ok": ...}` dict the driver's callers read.
+
+    Handlers already answer in this shape (`{"ok": True, **extra}` /
+    `{"ok": False, "error": message}`), so unwrapping dispatch's envelope back
+    into it keeps every `result.get("ok")` check in the driver working while the
+    gate checks become unavoidable.
+
+    On failure the error *code* is what a caller branches on, and the message is
+    kept under `message` so a raise site can still print something specific.
+    """
+    if response.success:
+        data = response.data
+        if isinstance(data, dict):
+            return dict(data)
+        return {"ok": True, "data": data}
+    error = response.error
+    return {
+        "ok": False,
+        "error": error.code.value if error is not None else "internal_error",
+        "message": error.message if error is not None else "Unknown MCP failure.",
+        "details": dict(error.details) if error is not None else {},
+    }
 
 
 def _phase_order_index(phase: str) -> int:
