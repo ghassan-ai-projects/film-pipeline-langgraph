@@ -30,6 +30,24 @@ from film_pipeline.studio._persistence import (
 )
 from film_pipeline.studio.safety import ProductionDataError, can_delete_project, move_to_trash
 
+
+def _install_graph_builder() -> None:
+    """Hand `build_graph` to graph execution, once.
+
+    `orchestration.execution` cannot import `studio.graph_factory` (that would close
+    a cycle — this package imports `orchestration` to wire the nodes), so the
+    composition root installs it. This runs at `studio.runtime` import because that
+    module is loaded before any runtime exists, whereas `graph_factory` is imported
+    lazily and a runtime that never built a graph would otherwise fail at its first
+    `ensure_graph` call with nothing registered.
+    """
+    import film_pipeline.studio.graph_factory as _graph_factory
+
+    _graph_exec.register_graph_builder(_graph_factory.build_graph)
+
+
+_install_graph_builder()
+
 _logger = logging.getLogger(__name__)
 
 

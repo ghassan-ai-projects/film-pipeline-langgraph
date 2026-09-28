@@ -192,3 +192,92 @@ def provider_specs(
         if specs:
             return specs
     return []
+
+
+# ── Profile-change resolution and diffing ────────────────────────────────────
+# Moved out of the MCP handler (doc 03 slice 4). These are pure functions over a
+# profile stack and a resolved configuration: no runtime, no artifact store, no
+# MCP context. They lived in `mcp/tools/_profile_change.py` because that is where
+# they were first needed, which made a *resolution* concern reachable only through
+# the tool layer — the handler kept argument parsing and persistence, and these
+# kept doing the config work beside it.
+
+#: The profile-stack slots a change request may name.
+PROFILE_STACK_KEYS: tuple[str, ...] = (
+    "film_type_profile",
+    "quality_profile",
+    "provider_profile",
+    "review_profile",
+    "auto_approve_profile",
+)
+
+
+def requested_profile_changes(args: dict[str, object]) -> dict[str, str]:
+    """Collect the non-empty profile-stack changes requested in tool args."""
+    changes: dict[str, str] = {}
+    for key in PROFILE_STACK_KEYS:
+        value = args.get(key)
+        if value is not None:
+            changes[key] = str(value).strip()
+    return changes
+
+
+def load_profile_stack(state: dict[str, Any]) -> dict[str, str]:
+    stack = state.get("profile_stack", {})
+    if isinstance(stack, dict):
+        return {str(k): str(v) for k, v in stack.items()}
+    return {}
+
+
+def merge_profile_changes(current: dict[str, str], changes: dict[str, str]) -> dict[str, str]:
+    merged = dict(current)
+    for key, value in changes.items():
+        if value:
+            merged[key] = value
+        else:
+            merged.pop(key, None)
+    return merged
+
+
+def config_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    """Return a shallow diff of two configuration dicts."""
+    added = [k for k in new if k not in old]
+    removed = [k for k in old if k not in new]
+    changed: list[str] = []
+    for k in new:
+        if k in old and old[k] != new[k]:
+            changed.append(k)
+    return {"added": added, "removed": removed, "changed": changed}
+
+
+def _profile_resolution_error(exc: Exception) -> str:
+    """Map a profile-resolution failure to its tool error message."""
+    if isinstance(exc, FileNotFoundError):
+        return f"Profile not found: {exc}"
+    return f"Failed to resolve profiles: {exc}"
+
+
+def resolve_config_pair(
+    current_stack: dict[str, str],
+    new_stack: dict[str, str],
+) -> tuple[dict[str, object], dict[str, object]] | str:
+    """Resolve the current and projected stacks, or return the error message."""
+    try:
+        resolved_current = resolve_project_config(current_stack)
+        resolved_new = resolve_project_config(new_stack)
+    except Exception as exc:
+        return _profile_resolution_error(exc)
+    return resolved_current, resolved_new
+
+
+def resolve_config_or_error(stack: dict[str, str]) -> dict[str, object] | str:
+    """Resolve one profile stack, or return the mapped error message."""
+    try:
+        return resolve_project_config(stack)
+    except Exception as exc:
+        return _profile_resolution_error(exc)
+
+
+def resolved_raw(resolved: dict[str, object]) -> dict[str, Any]:
+    """Return the merged raw configuration of a resolved stack."""
+    return cast(dict[str, Any], resolved.get("raw", {}))

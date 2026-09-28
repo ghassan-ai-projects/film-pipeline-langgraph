@@ -25,7 +25,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `cc83fcd` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
 | 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `9446b27` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
 | 11e | **remaining 25 tools + dead `_register` path + derived facade** | `e7cbb95` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
-| 13 | Graph execution moved into `orchestration` | `_pending_` | cross-package private reach-ins: **8 → 2** | 0 |
+| 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **8 → 2** | 0 |
+| 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `_pending_` | 7 pure helpers out of `mcp`; new registration guard | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -948,3 +949,65 @@ shrink the public method count.
 - Recorded surface growth: `orchestration` 15 → 17 public modules (both deliberate).
 - Three boundary-law rows deleted because they reached zero — the guard requires
   tightening rather than allowing a stale row.
+
+## Step 14a — profile-change resolution into `config`, and a Step 13 regression (2026-09-28)
+
+Doc 03 slice 4, plus a defect Step 13 introduced that the unit suite could not see.
+
+### Slice 4: the resolve-and-diff half moved to its owner
+
+Seven pure helpers left `mcp/tools/_profile_change.py` for
+`config/profile_resolver.py`, beside the resolver they call:
+
+`requested_profile_changes`, `load_profile_stack`, `merge_profile_changes`,
+`config_diff`, `resolve_config_pair`, `resolve_config_or_error`, `resolved_raw`
+(plus `PROFILE_STACK_KEYS`).
+
+They were pure functions over a profile stack and a resolved configuration — no
+runtime, no artifact store, no MCP context — that happened to live in the tool layer
+because that is where they were first needed. The handler keeps argument parsing,
+proposal persistence and the invalidation call, which already has an owner in
+`checkpoints.invalidation`.
+
+### A Step 13 regression that `make ci-check` passed
+
+Step 13 made `orchestration.execution` take its graph builder by injection, and
+registered it from `studio/graph_factory.py` at import. **That only fires if
+`graph_factory` is imported.**
+
+The unit suite imports it; the integration suite does not. So a runtime whose graph
+had never been built raised:
+
+```text
+RuntimeError: No graph builder is registered.
+```
+
+`make ci-check` was green through it. I found it only because the profile-change
+commit's integration run failed — and then confirmed the cause by checking whether
+the failure predated my edit, which it did not.
+
+**Fix:** register on a path no caller can avoid — `studio/runtime.py` at import, which
+every runtime construction goes through. `graph_factory` is imported lazily, so
+hanging a required side effect on it was the error; `runtime` is not.
+
+**Guard:** `tests/unit/orchestration/test_graph_builder_registration.py` asserts in a
+*fresh interpreter* that importing `studio.runtime` alone leaves a builder installed.
+It deliberately does not import `graph_factory` first — doing so would re-register
+the builder and pass even with the runtime-side install removed, which is exactly how
+the defect hid. Verified adversarially: deleting the install line fails the guard with
+the message naming what did not happen.
+
+A second test is the guard-the-guard: `ensure_graph` must still raise a message
+naming `register_graph_builder` when nothing is registered, rather than returning
+`None` for every graph run to fail later.
+
+### Evidence
+
+- `make ci-check`: **2343 passed, 91.84% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+- The regression guard fails when the fix is removed (measured, then restored).
+
+### Remaining for doc 03
+
+Slice 2 (reference generation into `generation`, ~1350 lines across 8 modules) is not
+done. `mcp -> generation` is the measurement it moves.

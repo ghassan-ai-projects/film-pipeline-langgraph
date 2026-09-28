@@ -16,7 +16,6 @@ from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.filmspec import PHASE_SEQUENCE
 from film_pipeline.orchestration.edges import after_approval, after_phase
-from film_pipeline.orchestration.execution import register_graph_builder
 from film_pipeline.orchestration.nodes import (
     approve_phase_node,
     await_approval_node,
@@ -175,11 +174,5 @@ def _route_current_phase(state: StudioGraphState) -> str:
     phase = str(state.get("current_phase", ""))
     return PHASE_NODES.get(phase, PHASE_NODES[PHASE_SEQUENCE[0]])
 
-
-# Install the builder where graph execution lives. `orchestration.execution`
-# cannot import this module (that would close a cycle — this file imports
-# `orchestration` to wire the nodes), so the composition root hands it over.
-
-register_graph_builder(build_graph)
 
 graph: CompiledStateGraph = build_graph()

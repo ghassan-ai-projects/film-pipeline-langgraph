@@ -11,14 +11,20 @@ resolving.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 from film_pipeline.config.profile_resolver import (
-    resolve_project_config,
+    config_diff,
+    load_profile_stack,
+    merge_profile_changes,
+    requested_profile_changes,
+    resolve_config_or_error,
+    resolve_config_pair,
     resolved_config_state_keys,
+    resolved_raw,
 )
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
@@ -32,14 +38,6 @@ from .helpers import (
     _ok,
     _services,
     register_profile_providers,
-)
-
-_PROFILE_STACK_KEYS = (
-    "film_type_profile",
-    "quality_profile",
-    "provider_profile",
-    "review_profile",
-    "auto_approve_profile",
 )
 
 
@@ -60,18 +58,18 @@ async def propose_profile_change(ctx: ToolContext, args: dict[str, object]) -> d
         return _error("reason is required.")
     proposed_by = str(args.get("proposed_by", "operator")).strip() or "operator"
 
-    changes = _requested_profile_changes(args)
+    changes = requested_profile_changes(args)
     if not changes:
         return _error("At least one profile change is required.")
 
-    current_stack = _load_profile_stack(state)
-    new_stack = _merge_profile_changes(current_stack, changes)
+    current_stack = load_profile_stack(state)
+    new_stack = merge_profile_changes(current_stack, changes)
 
-    configs = _resolve_config_pair(current_stack, new_stack)
+    configs = resolve_config_pair(current_stack, new_stack)
     if isinstance(configs, str):
         return _error(configs)
     resolved_current, resolved_new = configs
-    diff = _config_diff(_resolved_raw(resolved_current), _resolved_raw(resolved_new))
+    diff = config_diff(resolved_raw(resolved_current), resolved_raw(resolved_new))
 
     proposal = _new_proposal(
         project_id,
@@ -117,13 +115,13 @@ async def approve_profile_change(ctx: ToolContext, args: dict[str, object]) -> d
         return _error(proposal)
 
     new_stack = dict(proposal.proposed_profile_stack)
-    resolved = _resolve_config_or_error(new_stack)
+    resolved = resolve_config_or_error(new_stack)
     if isinstance(resolved, str):
         return _error(resolved)
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    register_profile_providers(rt, new_stack, _resolved_raw(resolved))
+    register_profile_providers(rt, new_stack, resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack
@@ -144,77 +142,6 @@ async def approve_profile_change(ctx: ToolContext, args: dict[str, object]) -> d
         approval_ref=approval_ref,
         message="Profile change approved and applied.",
     )
-
-
-def _requested_profile_changes(args: dict[str, object]) -> dict[str, str]:
-    """Collect the non-empty profile-stack changes requested in tool args."""
-    changes: dict[str, str] = {}
-    for key in _PROFILE_STACK_KEYS:
-        value = args.get(key)
-        if value is not None:
-            changes[key] = str(value).strip()
-    return changes
-
-
-def _load_profile_stack(state: dict[str, Any]) -> dict[str, str]:
-    stack = state.get("profile_stack", {})
-    if isinstance(stack, dict):
-        return {str(k): str(v) for k, v in stack.items()}
-    return {}
-
-
-def _merge_profile_changes(current: dict[str, str], changes: dict[str, str]) -> dict[str, str]:
-    merged = dict(current)
-    for key, value in changes.items():
-        if value:
-            merged[key] = value
-        else:
-            merged.pop(key, None)
-    return merged
-
-
-def _config_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """Return a shallow diff of two configuration dicts."""
-    added = [k for k in new if k not in old]
-    removed = [k for k in old if k not in new]
-    changed: list[str] = []
-    for k in new:
-        if k in old and old[k] != new[k]:
-            changed.append(k)
-    return {"added": added, "removed": removed, "changed": changed}
-
-
-def _profile_resolution_error(exc: Exception) -> str:
-    """Map a profile-resolution failure to its tool error message."""
-    if isinstance(exc, FileNotFoundError):
-        return f"Profile not found: {exc}"
-    return f"Failed to resolve profiles: {exc}"
-
-
-def _resolve_config_pair(
-    current_stack: dict[str, str],
-    new_stack: dict[str, str],
-) -> tuple[dict[str, object], dict[str, object]] | str:
-    """Resolve the current and projected stacks, or return the error message."""
-    try:
-        resolved_current = resolve_project_config(current_stack)
-        resolved_new = resolve_project_config(new_stack)
-    except Exception as exc:
-        return _profile_resolution_error(exc)
-    return resolved_current, resolved_new
-
-
-def _resolve_config_or_error(stack: dict[str, str]) -> dict[str, object] | str:
-    """Resolve one profile stack, or return the mapped error message."""
-    try:
-        return resolve_project_config(stack)
-    except Exception as exc:
-        return _profile_resolution_error(exc)
-
-
-def _resolved_raw(resolved: dict[str, object]) -> dict[str, Any]:
-    """Return the merged raw configuration of a resolved stack."""
-    return cast(dict[str, Any], resolved.get("raw", {}))
 
 
 def _load_pending_proposal(
@@ -276,7 +203,7 @@ def _commit_profile_config(
 ) -> tuple[str, str]:
     """Persist the resolved config artifact and invalidate downstream artifacts."""
     config_ref = _save_resolved_config_artifact(
-        rt, project_id, profile_version, _resolved_raw(resolved), profile_stack
+        rt, project_id, profile_version, resolved_raw(resolved), profile_stack
     )
     inv_ref = _invalidate_for_profile_change(rt, project_id, proposal_id)
     return config_ref, inv_ref
@@ -463,7 +390,7 @@ def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -
 class ProposeProfileChangeArgs(ToolArgs):
     """Arguments for `propose_profile_change`.
 
-    The five profile fields are the stack `_PROFILE_STACK_KEYS` reads; a blank one
+    The five profile fields are the stack `PROFILE_STACK_KEYS` reads; a blank one
     leaves that slot unchanged.
     """
 
