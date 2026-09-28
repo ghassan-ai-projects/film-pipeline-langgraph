@@ -1382,3 +1382,71 @@ is explicit that **this is not done**.
   at `485a7cc` from the class's own section comments plus an AST pass.
 - This step changes documentation only; `make ci-check`, `mypy src tests` and
   `enola check` are unchanged and green at that commit.
+
+---
+
+# Final state at `af50e07` (2026-09-28, goal round 40 of 40)
+
+## The 16-slice sequence, step by step
+
+| Step | Status | Evidence |
+|---:|---|---|
+| 0 | **done** | `enola check` exits 0 on the committed tree |
+| 1 | **done** | module-level SCCs 2 → 1 |
+| 2 | **done** | dead functions, `gemini_client.py`, cost residue deleted |
+| 3 | **done** | one `_ORCH_NS`; `providers/vendor_endpoints.py` is the single definition site |
+| 4 | **done** | step 4 committed red: the two defect-pinning tests failed first |
+| 5 | **done** | `apply_node_update` + `channel_reducers()` derive the merge from the state |
+| 6 | **done** | one QC implementation; `documentation/qc-single-implementation.md` records the decision |
+| 7 | **done** | committed red, as required |
+| 8 | **done** | CLI routes through `MCPServer.call`; no `_RUNTIME` writes outside `studio` |
+| 9 | **done** | coverage ≥ 90% with no new tests |
+| 10 | **done** | `get_runtime()` in `mcp`: **61 → 3** (all three are dispatch itself) |
+| 11 | **done** | `input_schema`: **0 → 75 of 75**; generic descriptions **75 → 0** |
+| 12 | **done** | `MCPServer.active_project_id` deleted |
+| 13 | **done** | cross-package private reach-ins: **8 → 2** (both pre-existing, both recorded) |
+| 14 | **done** | `mcp → generation` imports: **23 → 14**; profile change into `config` |
+| 15 | **partial** | unexplained lazy imports **277 → 202**; `storage`, `governance`, `cli`, `studio`, `generation` at 0 |
+| 16 | **done** | re-measured in `08-studioruntime-remeasured.md`; split decided against, with reasons |
+
+## What is not done
+
+**Step 15 (partial).** 202 function-level imports are still neither cycle-required nor
+annotated:
+
+| Package | Remaining |
+|---|---:|
+| `mcp` | 108 |
+| `orchestration` | 89 |
+| `post` | 5 |
+
+`post`'s five are a single annotated import block already carrying a reason; the
+guard's counts them as lazy, which is the intent, so the actionable remainder is
+**197 across `mcp` and `orchestration`**. The guard
+(`tests/unit/architecture/test_lazy_imports.py`) ratchets, so this cannot silently grow.
+
+The procedure that works, established over Steps 15b–15e: **grep the dotted name across
+`tests/` for a `patch`/`setattr` target before hoisting.** If a test patches it, the
+lazy import is load-bearing and needs a `# lazy:` reason; otherwise hoist. Batch by
+module, not by package — Step 15c hoisted six files at once and needed six reverts to
+localise one failure.
+
+**The five docs-only slices from doc 06** are untouched: **6.3** (where text transports
+live), **6.6** (`governance.validators` → `governance/gates`; fold `MVP_VALIDATORS`
+into `validation/registry.py`), **6.7** (`NO_ACTIVE_PROJECT` and text-only builders out
+of `filmspec`), **6.8** (AGENTS.md package table missing `generation`, `constraints`,
+`cli`), **6.11** (two import spellings for the core enums — recorded as low priority,
+no sweep).
+
+**Doc 03 slice 2's test split.** The production split landed in Step 14b, but
+`tests/unit/mcp/tools/test_reference_generation.py` (719 lines) still drives the use
+case through `call_tool`. Doc 03 also predicted "a use-case test that constructs no MCP
+context and a thin handler test"; that half is not done and is not claimed.
+
+## Gates at `af50e07`
+
+- `make ci-check`: **2347 passed, 8 skipped, 1 xfailed**, 91.87% coverage, product gate PASS
+- `mypy src tests`: clean (514 files)
+- `ruff check` / `ruff format --check`: clean
+- `enola check`: **exit 0**, cycle count **1** (only the known `orchestration` root-collapse artifact)
+- 28 commits on `improve-modular` since `2450616`
