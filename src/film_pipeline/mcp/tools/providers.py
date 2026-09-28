@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import _error, _ok
 
 
-async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def check_provider_health(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     provider_id = str(args.get("provider_id", "")).strip()
     if not provider_id:
         provider_ids = rt.list_providers()
@@ -24,8 +24,8 @@ async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
     return _ok(provider_id=provider_id, status=health["status"], reason=health.get("reason", ""))
 
 
-async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def resolve_provider_block(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     provider_id = str(args.get("provider_id", ""))
     if not provider_id:
         return _error("provider_id is required")
@@ -33,8 +33,8 @@ async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
     return _ok(provider_id=provider_id, status="healthy")
 
 
-async def list_providers(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def list_providers(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     # Include model-provider health rows (for example z.ai) alongside media
     # adapters. Model adapters intentionally do not implement the media
     # provider contract, so they remain health-only entries here.

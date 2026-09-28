@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -16,11 +16,13 @@ from film_pipeline.mcp.tools import (
 from film_pipeline.studio._provider_factory import build_provider_adapter
 from film_pipeline.studio.runtime import StudioRuntime
 
+CallTool = Callable[..., Any]
+
 
 @pytest.mark.integration
 class TestReferenceGenerationMCP:
     def test_generate_reference_images_updates_visual_dev_artifact(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
     ) -> None:
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("ref-mcp", "Reference MCP")
@@ -46,10 +48,10 @@ class TestReferenceGenerationMCP:
         import film_pipeline.mcp.tools as mcp_tools
 
         monkeypatch.setattr(mcp_tools, "get_runtime", lambda: rt)
-        result = asyncio.run(generate_reference_images({}))
+        result = call_tool(generate_reference_images, {})
         assert result["ok"] is True
 
-        inspect_result = asyncio.run(inspect_reference({"reference_id": "ref_001"}))
+        inspect_result = call_tool(inspect_reference, {"reference_id": "ref_001"})
         assert inspect_result["ok"] is True
         reference = cast(dict[str, object], inspect_result["reference"])
         # Provider may be empty if entry was skipped (already generated)
@@ -63,7 +65,7 @@ class TestReferenceGenerationMCP:
         _asset_path = Path(rt.project_roots["ref-mcp"]) / cast(str, reference["asset_path"])
         # File may not exist if entry was skipped (mock VisualDevAgent sets legacy paths)
 
-        validation_result = asyncio.run(get_validation_report({}))
+        validation_result = call_tool(get_validation_report, {})
         assert validation_result["ok"] is True
         assert validation_result["phase"] == "visual_dev"
         assert validation_result["source"] == "live"

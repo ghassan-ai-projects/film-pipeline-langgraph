@@ -8,11 +8,11 @@ import paths keep resolving.
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.mcp.tools.context import ToolContext
 
 from ._profile_change import approve_profile_change, propose_profile_change
-from .helpers import _active_project_id, _error, _ok
+from .helpers import _error, _ok
 
 __all__ = [
     "approve_profile_change",
@@ -73,11 +73,11 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
+async def get_runtime_mode(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return current server mode and the active project's stored runtime mode."""
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    active = rt.get_project(project_id) if project_id is not None else rt.get_active()
+    _ = args
+    rt = ctx.runtime
+    active = rt.get_project(ctx.project_id) if ctx.project_id is not None else rt.get_active()
     project_mode = rt.server_mode
     profile_stack: dict[str, str] = {}
     if active is not None:

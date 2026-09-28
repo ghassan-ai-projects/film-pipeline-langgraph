@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _coerce_runtime_arg,
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 
@@ -28,9 +27,9 @@ def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None
         active["constraints_hints"] = user_constraints
 
 
-async def submit_idea(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+async def submit_idea(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
+    active = ctx.project_state()
     idea = str(args.get("idea", args.get("text", "")))
     if not idea:
         return _error("idea is required")
@@ -47,9 +46,10 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+async def get_intake_analysis(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
     from film_pipeline.schemas.base import FilmPhase
 
@@ -66,9 +66,10 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
         return _error("No intake analysis found. Submit an idea first.")
 
 
-async def approve_intake(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+async def approve_intake(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     current_phase = str(active.get("current_phase", ""))
     if current_phase not in ("intake", ""):
         return _error(f"Current phase is '{current_phase}', not intake.")

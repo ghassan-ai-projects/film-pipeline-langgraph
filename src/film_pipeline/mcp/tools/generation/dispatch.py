@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.mcp.tools.context import ToolContext
 
 from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -129,14 +128,14 @@ def _mark_row_running(
     }
 
 
-async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
+async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Submit all SUBMITTED generation rows to their providers.
 
     Each row is submitted to its provider. The provider_job_id is persisted
     in the ledger row. Partial failures are recorded per-row.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
@@ -209,13 +208,13 @@ def _generation_status(provider_status: str) -> GenerationStatus:
     }.get(job_status, GenerationStatus.RUNNING)
 
 
-async def resume_generation_polling(args: dict[str, object]) -> dict[str, object]:
+async def resume_generation_polling(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Poll the provider for a generation's status and update the ledger."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     from datetime import UTC, datetime
 
@@ -262,13 +261,13 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
     )
 
 
-async def cancel_generation_request(args: dict[str, object]) -> dict[str, object]:
+async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Cancel a generation and update the ledger."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus

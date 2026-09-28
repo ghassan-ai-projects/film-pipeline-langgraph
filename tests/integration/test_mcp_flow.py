@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -12,10 +14,12 @@ from film_pipeline.mcp.tools import (
     get_active_project,
     get_current_phase,
     list_projects,
+    request_revision,
     set_active_project,
     submit_idea,
 )
-from film_pipeline.mcp.tools import request_revision as mcp_request_revision
+
+CallTool = Callable[..., Any]
 
 
 @pytest.mark.integration
@@ -41,48 +45,42 @@ class TestMCPFlow:
         rt.projects.clear()
         rt.active_project_id = ""
 
-    def test_create_and_list_projects(self) -> None:
+    def test_create_and_list_projects(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            result = loop.run_until_complete(
-                create_film_project(
-                    {"project_id": "mini-film-01", "title": "Mini Film", "slug": "mini"}
-                )
+            result = call_tool(
+                create_film_project,
+                {"project_id": "mini-film-01", "title": "Mini Film", "slug": "mini"},
             )
             assert result["ok"] is True
             assert result["project_id"] == "mini-film-01"
 
-            result2 = loop.run_until_complete(list_projects({}))
-            assert "mini-film-01" in result2["projects"]  # type: ignore[operator]
+            result2 = call_tool(list_projects, {})
+            assert "mini-film-01" in result2["projects"]
         finally:
             loop.close()
 
-    def test_set_and_get_active_project(self) -> None:
+    def test_set_and_get_active_project(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "mini-film-02", "title": "Test"})
-            )
-            loop.run_until_complete(set_active_project({"project_ref": "mini-film-02"}))
-            result = loop.run_until_complete(get_active_project({}))
+            call_tool(create_film_project, {"project_id": "mini-film-02", "title": "Test"})
+            call_tool(set_active_project, {"project_ref": "mini-film-02"})
+            result = call_tool(get_active_project, {})
             assert result["project_id"] == "mini-film-02"
         finally:
             loop.close()
 
-    def test_submit_idea_triggers_intake(self) -> None:
+    def test_submit_idea_triggers_intake(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "mini-film-03", "title": "Idea Test"})
-            )
-            loop.run_until_complete(set_active_project({"project_ref": "mini-film-03"}))
-            result = loop.run_until_complete(
-                submit_idea(
-                    {
-                        "idea": "A lonely watchmaker hears the rain stop. "
-                        "He discovers time itself is freezing."
-                    }
-                )
+            call_tool(create_film_project, {"project_id": "mini-film-03", "title": "Idea Test"})
+            call_tool(set_active_project, {"project_ref": "mini-film-03"})
+            result = call_tool(
+                submit_idea,
+                {
+                    "idea": "A lonely watchmaker hears the rain stop. "
+                    "He discovers time itself is freezing."
+                },
             )
             assert result["ok"] is True
             # Intake node sets current_phase to "intake"
@@ -91,103 +89,91 @@ class TestMCPFlow:
         finally:
             loop.close()
 
-    def test_approve_phase_after_submit(self) -> None:
+    def test_approve_phase_after_submit(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "mini-film-04", "title": "Approve Test"})
-            )
-            loop.run_until_complete(set_active_project({"project_ref": "mini-film-04"}))
-            loop.run_until_complete(submit_idea({"idea": "Test idea."}))
+            call_tool(create_film_project, {"project_id": "mini-film-04", "title": "Approve Test"})
+            call_tool(set_active_project, {"project_ref": "mini-film-04"})
+            call_tool(submit_idea, {"idea": "Test idea."})
 
             # Approve the intaken idea
-            result = loop.run_until_complete(approve_phase({"confirmed": True}))
+            result = call_tool(approve_phase, {"confirmed": True})
             assert result["ok"] is True
             assert result["current_phase"] == "constitution"
         finally:
             loop.close()
 
-    def test_request_revision_adds_issue(self) -> None:
+    def test_request_revision_adds_issue(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "mini-film-05", "title": "Revision Test"})
-            )
-            loop.run_until_complete(set_active_project({"project_ref": "mini-film-05"}))
-            loop.run_until_complete(submit_idea({"idea": "Test."}))
+            call_tool(create_film_project, {"project_id": "mini-film-05", "title": "Revision Test"})
+            call_tool(set_active_project, {"project_ref": "mini-film-05"})
+            call_tool(submit_idea, {"idea": "Test."})
 
-            result = loop.run_until_complete(
-                mcp_request_revision({"note": "Needs more character detail", "confirmed": True})
+            result = call_tool(
+                request_revision, {"note": "Needs more character detail", "confirmed": True}
             )
             assert result["ok"] is True
-            assert len(result["issues"]) >= 1  # type: ignore[arg-type]
+            assert len(result["issues"]) >= 1
         finally:
             loop.close()
 
-    def test_get_current_phase(self) -> None:
+    def test_get_current_phase(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "mini-film-06", "title": "Phase Test"})
-            )
-            loop.run_until_complete(set_active_project({"project_ref": "mini-film-06"}))
-            loop.run_until_complete(submit_idea({"idea": "Test."}))
+            call_tool(create_film_project, {"project_id": "mini-film-06", "title": "Phase Test"})
+            call_tool(set_active_project, {"project_ref": "mini-film-06"})
+            call_tool(submit_idea, {"idea": "Test."})
 
-            result = loop.run_until_complete(get_current_phase({}))
+            result = call_tool(get_current_phase, {})
             assert result["current_phase"] == "intake"
         finally:
             loop.close()
 
-    def test_full_intake_approval_flow(self) -> None:
+    def test_full_intake_approval_flow(self, call_tool: CallTool) -> None:
         """Complete flow: create → submit idea → approve → verify."""
         loop = asyncio.new_event_loop()
         try:
             # 1. Create project
-            r = loop.run_until_complete(
-                create_film_project({"project_id": "flow-01", "title": "Full Flow"})
-            )
+            r = call_tool(create_film_project, {"project_id": "flow-01", "title": "Full Flow"})
             assert r["ok"] is True
 
             # 2. Set active
-            r = loop.run_until_complete(set_active_project({"project_ref": "flow-01"}))
+            r = call_tool(set_active_project, {"project_ref": "flow-01"})
             assert r["ok"] is True
 
             # 3. Submit idea
-            r = loop.run_until_complete(
-                submit_idea({"idea": "A time traveler tries to prevent a mistake."})
-            )
+            r = call_tool(submit_idea, {"idea": "A time traveler tries to prevent a mistake."})
             assert r["ok"] is True
             assert r["current_phase"] == "intake"
             assert r["human_approval_required"] is True
 
             # 4. Request revision
-            r = loop.run_until_complete(
-                mcp_request_revision({"note": "More sci-fi tone", "confirmed": True})
-            )
+            r = call_tool(request_revision, {"note": "More sci-fi tone", "confirmed": True})
             assert r["ok"] is True
-            assert len(r["issues"]) >= 1  # type: ignore[arg-type]
+            assert len(r["issues"]) >= 1
 
             # 5. Approve after revision
-            r = loop.run_until_complete(approve_phase({"confirmed": True}))
+            r = call_tool(approve_phase, {"confirmed": True})
             assert r["ok"] is True
             assert r["current_phase"] == "constitution"
 
             # 6. Verify project exists and is active
-            r = loop.run_until_complete(get_active_project({}))
+            r = call_tool(get_active_project, {})
             assert r["project_id"] == "flow-01"
             assert r["current_phase"] == "constitution"
         finally:
             loop.close()
 
-    def test_unknown_project_ref_errors(self) -> None:
+    def test_unknown_project_ref_errors(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            r = loop.run_until_complete(set_active_project({"project_ref": "nonexistent"}))
+            r = call_tool(set_active_project, {"project_ref": "nonexistent"})
             assert r.get("ok") is False
         finally:
             loop.close()
 
-    def test_submit_idea_without_an_active_project_raises(self) -> None:
+    def test_submit_idea_without_an_active_project_raises(self, call_tool: CallTool) -> None:
         """Called directly, the handler asserts the dispatch precondition.
 
         `MCPServer.call` refuses the request with `no_active_project` before the
@@ -198,19 +184,15 @@ class TestMCPFlow:
         from film_pipeline.operations.errors import ProjectNotFoundError
 
         with pytest.raises(ProjectNotFoundError):
-            asyncio.run(submit_idea({"idea": "x"}))
+            call_tool(submit_idea, {"idea": "x"})
 
-    def test_create_duplicate_project(self) -> None:
+    def test_create_duplicate_project(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            r1 = loop.run_until_complete(
-                create_film_project({"project_id": "dup-test", "title": "Original"})
-            )
+            r1 = call_tool(create_film_project, {"project_id": "dup-test", "title": "Original"})
             assert r1["ok"] is True
 
-            r2 = loop.run_until_complete(
-                create_film_project({"project_id": "dup-test", "title": "Duplicate"})
-            )
+            r2 = call_tool(create_film_project, {"project_id": "dup-test", "title": "Duplicate"})
             assert r2.get("ok") is False
         finally:
             loop.close()

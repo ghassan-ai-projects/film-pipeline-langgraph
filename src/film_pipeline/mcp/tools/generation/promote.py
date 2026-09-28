@@ -2,23 +2,24 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from ..helpers import (
     _ok,
     _services,
-    require_project_state,
 )
 
 
-async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:
+async def promote_test_to_production(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Promote completed TEST generation rows to PRODUCTION mode.
 
     Only rows with mode=TEST and status=COMPLETED are eligible.
     Provide ``shot_ids`` to promote specific shots, or omit to promote all eligible.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 

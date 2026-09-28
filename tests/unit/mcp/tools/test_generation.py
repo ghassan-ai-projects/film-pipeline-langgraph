@@ -9,7 +9,7 @@ previously untested in isolation.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any, cast
 from unittest import mock
@@ -34,6 +34,8 @@ from film_pipeline.schemas.base import SchemaBase
 from film_pipeline.storage.store import ArtifactStore
 from film_pipeline.studio._provider_factory import build_provider_adapter
 from film_pipeline.studio.runtime import StudioRuntime
+
+CallTool = Callable[..., Any]
 
 
 @pytest.fixture
@@ -66,11 +68,30 @@ async def _plan_and_approve(shot_ids: list[str]) -> dict[str, object]:
     The PREPARED -> SUBMITTED transition it performed survives as the operator
     use case, which is what this setup helper now calls.
     """
-    await plan_generation_batch(
-        {"shot_ids": shot_ids, "provider": "mock-video-provider", "model": "mock-fast"}
+    await _ctx_call(
+        plan_generation_batch,
+        {"shot_ids": shot_ids, "provider": "mock-video-provider", "model": "mock-fast"},
     )
     _approve_spend_for_active_project()
     return {"ok": True}
+
+
+async def _ctx_call(handler: Any, args: dict[str, Any]) -> Any:
+    """Await a handler with the `ToolContext` dispatch would build.
+
+    The `call_tool` fixture is sync; this setup helper needs to await inside an
+    already-running loop, so it builds the same context inline.
+    """
+    import film_pipeline.mcp.tools as tools_pkg
+    from film_pipeline.mcp.envelope import new_envelope
+    from film_pipeline.mcp.tools.context import ToolContext
+
+    runtime = tools_pkg.get_runtime()
+    active = runtime.get_active()
+    project_id = str(active["project_id"]) if active is not None else None
+    return await handler(
+        ToolContext(runtime=runtime, project_id=project_id, envelope=new_envelope()), args
+    )
 
 
 def _approve_spend_for_active_project() -> None:
@@ -91,24 +112,23 @@ def _approve_spend_for_active_project() -> None:
     GenerationExecutor(services.artifact_store, rt.provider_adapters).approve_spend(project_id)
 
 
-def test_start_generation_batch_no_submitted_rows(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_no_submitted_rows(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["ok"] is True
     assert result["submitted"] == 0
     assert "Approve spend first" in cast(str, result["message"])
 
 
-def test_start_generation_batch_unknown_provider(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_unknown_provider(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    asyncio.run(
-        plan_generation_batch({"shot_ids": ["S001"], "provider": "no-such-provider", "model": "m"})
+    call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "no-such-provider", "model": "m"},
     )
     _approve_spend_for_active_project()
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["ok"] is True
     assert result["failed"] == 1
     assert result["submitted"] == 0
@@ -116,12 +136,11 @@ def test_start_generation_batch_unknown_provider(rt: StudioRuntime) -> None:
     assert "not registered" in failures[0]["error"]
 
 
-def test_start_generation_batch_success(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_success(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["ok"] is True
     assert result["submitted"] == 1
     assert result["failed"] == 0
@@ -129,32 +148,35 @@ def test_start_generation_batch_success(rt: StudioRuntime) -> None:
     assert successes[0]["provider_job_id"]
 
 
-def test_start_generation_batch_skips_already_submitted(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_skips_already_submitted(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
-    first = asyncio.run(start_generation_batch({}))
+    first = call_tool(start_generation_batch, {})
     assert first["submitted"] == 1
 
     # Re-approving has nothing new to submit since rows already moved past
     # SUBMITTED, but calling start again should be a no-op (no SUBMITTED rows).
-    second = asyncio.run(start_generation_batch({}))
+    second = call_tool(start_generation_batch, {})
     assert second["ok"] is True
     assert second["submitted"] == 0
 
 
-def test_promote_test_to_production_no_eligible_rows(rt: StudioRuntime) -> None:
-    import asyncio
+def test_promote_test_to_production_no_eligible_rows(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
     # Rows are SUBMITTED, not yet COMPLETED, so nothing is eligible to promote.
-    result = asyncio.run(promote_test_to_production({"confirmed": True}))
+    result = call_tool(promote_test_to_production, {"confirmed": True})
     assert result["ok"] is True
     assert result["promoted"] == 0
 
 
-def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
-    import asyncio
+def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime, call_tool: CallTool) -> None:
     from datetime import UTC, datetime
 
     from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -180,24 +202,22 @@ def test_plan_generation_batch_from_shot_bible(rt: StudioRuntime) -> None:
     store.save(_ShotBible(shots=[{"shot_id": "S010"}, {"shot_id": "S011"}]), meta)
 
     # Passing a non-list shot_ids forces the tool to read from the shot bible.
-    result = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": "from-bible", "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    result = call_tool(
+        plan_generation_batch,
+        {"shot_ids": "from-bible", "provider": "mock-video-provider", "model": "mock-fast"},
     )
     assert result["ok"] is True
     assert result["planned"] == 2
 
 
-def test_plan_generation_batch_creates_ledger_rows(rt: StudioRuntime) -> None:
-    result = asyncio.run(
-        plan_generation_batch(
-            {
-                "shot_ids": ["S001"],
-                "provider": "seedance-openrouter",
-                "model": "seedance-2.0",
-            }
-        )
+def test_plan_generation_batch_creates_ledger_rows(rt: StudioRuntime, call_tool: CallTool) -> None:
+    result = call_tool(
+        plan_generation_batch,
+        {
+            "shot_ids": ["S001"],
+            "provider": "seedance-openrouter",
+            "model": "seedance-2.0",
+        },
     )
 
     assert result["ok"] is True
@@ -211,63 +231,60 @@ def test_plan_generation_batch_creates_ledger_rows(rt: StudioRuntime) -> None:
     assert rows[0].provider == "seedance-openrouter"
 
 
-def test_plan_generation_batch_invalid_shot_ids_type(rt: StudioRuntime) -> None:
-    import asyncio
+def test_plan_generation_batch_invalid_shot_ids_type(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
-    result = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": "not-a-list", "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    result = call_tool(
+        plan_generation_batch,
+        {"shot_ids": "not-a-list", "provider": "mock-video-provider", "model": "mock-fast"},
     )
     assert result["ok"] is False
     assert "No shot IDs to plan" in cast(str, result["error"])
 
 
-def test_get_generation_status_missing_id() -> None:
-    import asyncio
+def test_get_generation_status_missing_id(call_tool: CallTool) -> None:
 
-    result = asyncio.run(get_generation_status({}))
+    result = call_tool(get_generation_status, {})
     assert result["ok"] is False
     assert "generation_id is required" in cast(str, result["error"])
 
 
-def test_get_generation_status_not_found(rt: StudioRuntime) -> None:
-    import asyncio
+def test_get_generation_status_not_found(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    result = asyncio.run(get_generation_status({"generation_id": "no-such-generation"}))
+    result = call_tool(get_generation_status, {"generation_id": "no-such-generation"})
     assert result["ok"] is False
     assert "not found" in cast(str, result["error"])
 
 
-def test_get_generation_status_success(rt: StudioRuntime) -> None:
-    import asyncio
+def test_get_generation_status_success(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    planned = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    planned = call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     gen_id = cast(list[dict[str, Any]], planned["rows"])[0]["generation_id"]
-    result = asyncio.run(get_generation_status({"generation_id": gen_id}))
+    result = call_tool(get_generation_status, {"generation_id": gen_id})
     assert result["ok"] is True
     assert result["generation_id"] == gen_id
 
 
-def test_list_active_generations_success(rt: StudioRuntime) -> None:
-    import asyncio
+def test_list_active_generations_success(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
-    result = asyncio.run(list_active_generations({}))
+    result = call_tool(list_active_generations, {})
     assert result["ok"] is True
     assert result["count"] == 1
 
 
-def test_start_generation_batch_skips_already_submitted_with_job_id(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_skips_already_submitted_with_job_id(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
     # Manually set provider_job_id on the SUBMITTED row to exercise the skip branch.
@@ -279,7 +296,7 @@ def test_start_generation_batch_skips_already_submitted_with_job_id(rt: StudioRu
     for row in mgr.list_rows("gen-start-test", status=GenerationStatus.SUBMITTED):
         mgr.update_row("gen-start-test", row.generation_id, provider_job_id="existing-job-id")
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["ok"] is True
     assert result["submitted"] == 1
     successes = cast(list[dict[str, Any]], result["successes"])
@@ -287,8 +304,7 @@ def test_start_generation_batch_skips_already_submitted_with_job_id(rt: StudioRu
     assert successes[0]["note"] == "already-submitted"
 
 
-def test_start_generation_batch_submit_exception(rt: StudioRuntime) -> None:
-    import asyncio
+def test_start_generation_batch_submit_exception(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
     adapter = rt.get_provider("mock-video-provider")
@@ -296,7 +312,7 @@ def test_start_generation_batch_submit_exception(rt: StudioRuntime) -> None:
     original_submit = adapter.submit
     adapter.submit = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("provider down"))
     try:
-        result = asyncio.run(start_generation_batch({}))
+        result = call_tool(start_generation_batch, {})
     finally:
         adapter.submit = original_submit
     assert result["ok"] is True
@@ -305,61 +321,57 @@ def test_start_generation_batch_submit_exception(rt: StudioRuntime) -> None:
     assert "provider down" in failures[0]["error"]
 
 
-def test_resume_generation_polling_missing_id() -> None:
-    import asyncio
+def test_resume_generation_polling_missing_id(call_tool: CallTool) -> None:
 
-    result = asyncio.run(resume_generation_polling({}))
+    result = call_tool(resume_generation_polling, {})
     assert result["ok"] is False
     assert "generation_id is required" in cast(str, result["error"])
 
 
-def test_resume_generation_polling_not_found(rt: StudioRuntime) -> None:
-    import asyncio
+def test_resume_generation_polling_not_found(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    result = asyncio.run(resume_generation_polling({"generation_id": "no-such-generation"}))
+    result = call_tool(resume_generation_polling, {"generation_id": "no-such-generation"})
     assert result["ok"] is False
     assert "not found" in cast(str, result["error"])
 
 
-def test_resume_generation_polling_no_provider_job_id(rt: StudioRuntime) -> None:
-    import asyncio
+def test_resume_generation_polling_no_provider_job_id(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
-    planned = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    planned = call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     gen_id = cast(list[dict[str, Any]], planned["rows"])[0]["generation_id"]
-    result = asyncio.run(resume_generation_polling({"generation_id": gen_id}))
+    result = call_tool(resume_generation_polling, {"generation_id": gen_id})
     assert result["ok"] is False
     assert "no provider_job_id" in cast(str, result["error"])
 
 
-def test_resume_generation_polling_unknown_provider(rt: StudioRuntime) -> None:
-    import asyncio
+def test_resume_generation_polling_unknown_provider(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    planned = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    planned = call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     gen_id = cast(list[dict[str, Any]], planned["rows"])[0]["generation_id"]
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
     mgr.update_row("gen-start-test", gen_id, provider_job_id="job-1", provider="missing-provider")
 
-    result = asyncio.run(resume_generation_polling({"generation_id": gen_id}))
+    result = call_tool(resume_generation_polling, {"generation_id": gen_id})
     assert result["ok"] is False
     assert "not registered" in cast(str, result["error"])
 
 
-def test_resume_generation_polling_poll_exception(rt: StudioRuntime) -> None:
-    import asyncio
+def test_resume_generation_polling_poll_exception(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
-    asyncio.run(start_generation_batch({}))
+    call_tool(start_generation_batch, {}, runtime=rt)
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
 
@@ -372,7 +384,9 @@ def test_resume_generation_polling_poll_exception(rt: StudioRuntime) -> None:
     original_poll = adapter.poll
     adapter.poll = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("poll boom"))
     try:
-        result = asyncio.run(resume_generation_polling({"generation_id": row.generation_id}))
+        result = call_tool(
+            resume_generation_polling, {"generation_id": row.generation_id}, runtime=rt
+        )
     finally:
         adapter.poll = original_poll
     assert result["ok"] is False
@@ -380,11 +394,14 @@ def test_resume_generation_polling_poll_exception(rt: StudioRuntime) -> None:
 
 
 @pytest.mark.parametrize("provider_status", ["completed", "failed", "processing"])
-def test_resume_generation_polling_status_mapping(rt: StudioRuntime, provider_status: str) -> None:
-    import asyncio
+def test_resume_generation_polling_status_mapping(
+    rt: StudioRuntime,
+    provider_status: str,
+    call_tool: CallTool,
+) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
-    asyncio.run(start_generation_batch({}))
+    call_tool(start_generation_batch, {}, runtime=rt)
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
     from film_pipeline.schemas.base import GenerationStatus
@@ -409,69 +426,67 @@ def test_resume_generation_polling_status_mapping(rt: StudioRuntime, provider_st
 
     adapter.poll = _fake_poll
     try:
-        result = asyncio.run(resume_generation_polling({"generation_id": row.generation_id}))
+        result = call_tool(
+            resume_generation_polling, {"generation_id": row.generation_id}, runtime=rt
+        )
     finally:
         adapter.poll = original_poll
     assert result["ok"] is True
     assert result["generation_id"] == row.generation_id
 
 
-def test_cancel_generation_request_missing_id() -> None:
-    import asyncio
+def test_cancel_generation_request_missing_id(call_tool: CallTool) -> None:
 
-    result = asyncio.run(cancel_generation_request({}))
+    result = call_tool(cancel_generation_request, {})
     assert result["ok"] is False
     assert "generation_id is required" in cast(str, result["error"])
 
 
-def test_cancel_generation_request_not_found(rt: StudioRuntime) -> None:
-    import asyncio
+def test_cancel_generation_request_not_found(rt: StudioRuntime, call_tool: CallTool) -> None:
 
-    result = asyncio.run(cancel_generation_request({"generation_id": "no-such-generation"}))
+    result = call_tool(cancel_generation_request, {"generation_id": "no-such-generation"})
     assert result["ok"] is False
     assert "not found" in cast(str, result["error"])
 
 
-def test_cancel_generation_request_no_provider_job_id(rt: StudioRuntime) -> None:
-    import asyncio
+def test_cancel_generation_request_no_provider_job_id(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
-    planned = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    planned = call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     gen_id = cast(list[dict[str, Any]], planned["rows"])[0]["generation_id"]
-    result = asyncio.run(cancel_generation_request({"generation_id": gen_id}))
+    result = call_tool(cancel_generation_request, {"generation_id": gen_id})
     assert result["ok"] is True
     assert result["cancelled"] is True
     assert result["provider"] is False
 
 
-def test_cancel_generation_request_unknown_provider(rt: StudioRuntime) -> None:
-    import asyncio
+def test_cancel_generation_request_unknown_provider(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
-    planned = asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    planned = call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     gen_id = cast(list[dict[str, Any]], planned["rows"])[0]["generation_id"]
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
     mgr.update_row("gen-start-test", gen_id, provider_job_id="job-1", provider="missing-provider")
 
-    result = asyncio.run(cancel_generation_request({"generation_id": gen_id}))
+    result = call_tool(cancel_generation_request, {"generation_id": gen_id})
     assert result["ok"] is False
     assert "not registered" in cast(str, result["error"])
 
 
-def test_cancel_generation_request_with_provider(rt: StudioRuntime) -> None:
-    import asyncio
+def test_cancel_generation_request_with_provider(rt: StudioRuntime, call_tool: CallTool) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
-    asyncio.run(start_generation_batch({}))
+    call_tool(start_generation_batch, {}, runtime=rt)
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
 
@@ -479,17 +494,19 @@ def test_cancel_generation_request_with_provider(rt: StudioRuntime) -> None:
     mgr = GenerationLedgerManager(rt.services.artifact_store)
     row = mgr.list_rows("gen-start-test", status=GenerationStatus.RUNNING)[0]
 
-    result = asyncio.run(cancel_generation_request({"generation_id": row.generation_id}))
+    result = call_tool(cancel_generation_request, {"generation_id": row.generation_id})
     assert result["ok"] is True
     assert result["cancelled"] is True
     assert result["provider"] is True
 
 
-def test_cancel_generation_request_provider_returns_false(rt: StudioRuntime) -> None:
-    import asyncio
+def test_cancel_generation_request_provider_returns_false(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
     asyncio.run(_plan_and_approve(["S001"]))
-    asyncio.run(start_generation_batch({}))
+    call_tool(start_generation_batch, {}, runtime=rt)
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
 
@@ -502,7 +519,7 @@ def test_cancel_generation_request_provider_returns_false(rt: StudioRuntime) -> 
     original_cancel = adapter.cancel
     adapter.cancel = lambda *_args, **_kwargs: False
     try:
-        result = asyncio.run(cancel_generation_request({"generation_id": row.generation_id}))
+        result = call_tool(cancel_generation_request, {"generation_id": row.generation_id})
     finally:
         adapter.cancel = original_cancel
     assert result["ok"] is True
@@ -510,16 +527,17 @@ def test_cancel_generation_request_provider_returns_false(rt: StudioRuntime) -> 
     assert result["provider"] is True
 
 
-def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> None:
-    import asyncio
+def test_promote_test_to_production_with_shot_ids_filter(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationMode, GenerationStatus
 
-    asyncio.run(
-        plan_generation_batch(
-            {"shot_ids": ["S001", "S002"], "provider": "mock-video-provider", "model": "mock-fast"}
-        )
+    call_tool(
+        plan_generation_batch,
+        {"shot_ids": ["S001", "S002"], "provider": "mock-video-provider", "model": "mock-fast"},
     )
     assert rt.services is not None
     mgr = GenerationLedgerManager(rt.services.artifact_store)
@@ -531,13 +549,15 @@ def test_promote_test_to_production_with_shot_ids_filter(rt: StudioRuntime) -> N
             mode=GenerationMode.TEST,
         )
 
-    result = asyncio.run(promote_test_to_production({"shot_ids": ["S001"], "confirmed": True}))
+    result = call_tool(promote_test_to_production, {"shot_ids": ["S001"], "confirmed": True})
     assert result["ok"] is True
     assert result["promoted"] == 1
 
 
-def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime) -> None:
-    import asyncio
+def test_preview_generation_prompts_resolves_from_shot_matrix(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
     from datetime import UTC, datetime
 
     from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -577,7 +597,7 @@ def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime)
         ),
     )
 
-    result = asyncio.run(preview_generation_prompts({}))
+    result = call_tool(preview_generation_prompts, {})
     assert result["ok"] is True
     previews = cast(list[dict[str, object]], result["previews"])
     assert len(previews) == 1
@@ -587,12 +607,12 @@ def test_preview_generation_prompts_resolves_from_shot_matrix(rt: StudioRuntime)
 
 
 class TestTextOnlyGenerationPolicy:
-    def test_plan_generation_batch_text_only(self, rt: StudioRuntime) -> None:
+    def test_plan_generation_batch_text_only(self, rt: StudioRuntime, call_tool: CallTool) -> None:
         active = rt.get_active()
         assert active is not None
         active["generation_policy"] = "text_only"
         active["current_phase"] = "generation"
-        result = asyncio.run(plan_generation_batch({}))
+        result = call_tool(plan_generation_batch, {})
         assert result["ok"] is True
         assert result.get("text_only") is True
         assert result.get("completed") == 1
@@ -601,25 +621,30 @@ class TestTextOnlyGenerationPolicy:
         assert len(requests) >= 1
         assert all(str(r.get("status", "")).lower() == "completed" for r in requests)
 
-    def test_approve_and_start_text_only_are_no_ops(self, rt: StudioRuntime) -> None:
+    def test_approve_and_start_text_only_are_no_ops(
+        self,
+        rt: StudioRuntime,
+        call_tool: CallTool,
+    ) -> None:
         active = rt.get_active()
         assert active is not None
         active["generation_policy"] = "text_only"
         active["current_phase"] = "generation"
-        asyncio.run(plan_generation_batch({}))
+        call_tool(plan_generation_batch, {})
 
         # Approve through the owner's path: the MCP cost tool and the operator
         # method it delegated to are both gone, but the text-only no-op the
         # transition performs is real behaviour and is still asserted.
         _approve_spend_for_active_project()
 
-        result = asyncio.run(start_generation_batch({}))
+        result = call_tool(start_generation_batch, {})
         assert result["ok"] is True
         assert result.get("text_only") is True
 
 
 def test_plan_generation_batch_defaults_provider_through_the_runtime(
     rt: StudioRuntime,
+    call_tool: CallTool,
 ) -> None:
     """Omitting provider/model must use the runtime's default pair, not a literal.
 
@@ -629,11 +654,10 @@ def test_plan_generation_batch_defaults_provider_through_the_runtime(
     provider. No existing test covered the default branch — every one passed
     provider and model explicitly — so the divergence was invisible.
     """
-    import asyncio
 
     expected_provider, expected_model = rt.default_video_provider()
 
-    result = asyncio.run(plan_generation_batch({"shot_ids": ["S001"]}))
+    result = call_tool(plan_generation_batch, {"shot_ids": ["S001"]})
     assert result["ok"] is True, result.get("error")
 
     # Assert on the durable ledger row, not the response envelope: the row is
@@ -660,7 +684,10 @@ def test_the_mock_literals_are_gone_from_the_handler() -> None:
     )
 
 
-def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) -> None:
+def test_start_generation_batch_sends_resolved_prompt_text(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
     """The prompt handed to the provider must be resolved, not the raw ref.
 
     `GenerationLedgerRow.prompt_ref` is an artifact *reference* string. The
@@ -673,7 +700,6 @@ def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) ->
     No test covered this: the existing start tests assert only counts and ids,
     never payload content, so the divergence was invisible.
     """
-    import asyncio
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
@@ -710,7 +736,7 @@ def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) ->
         status=GenerationStatus.SUBMITTED.value,
     )
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["ok"] is True, result.get("error")
     assert result["submitted"] == 1, result
 
@@ -722,14 +748,13 @@ def test_start_generation_batch_sends_resolved_prompt_text(rt: StudioRuntime) ->
     assert sent[0].strip(), "the prompt sent to the provider is empty"
 
 
-def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
+def test_failed_submission_waits_for_a_human(rt: StudioRuntime, call_tool: CallTool) -> None:
     """A FAILED row must not tell the operator to keep polling.
 
     The MCP failure path left `next_action` at its previous value (`poll`) while
     `GenerationExecutor._fail_row` sets `wait_human`. A failed row can never
     advance by polling.
     """
-    import asyncio
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
@@ -743,7 +768,7 @@ def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
         status=GenerationStatus.SUBMITTED.value,
     )
 
-    result = asyncio.run(start_generation_batch({}))
+    result = call_tool(start_generation_batch, {})
     assert result["failed"] == 1, result
 
     rows = mgr.list_rows("gen-start-test", status=GenerationStatus.FAILED)
@@ -753,7 +778,10 @@ def test_failed_submission_waits_for_a_human(rt: StudioRuntime) -> None:
     )
 
 
-def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> None:
+def test_list_active_generations_does_not_create_a_ledger(
+    rt: StudioRuntime,
+    call_tool: CallTool,
+) -> None:
     """A status read must not write an artifact.
 
     The ledger manager's `load()` persists a new empty ledger when none exists,
@@ -761,7 +789,6 @@ def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> 
     an artifact write. `GenerationExecutor.has_ledger` exists for this reason;
     the MCP handler did not use it.
     """
-    import asyncio
 
     from film_pipeline.schemas.base import FilmPhase
 
@@ -769,7 +796,7 @@ def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> 
     store = rt.services.artifact_store
     assert not store.mutable_exists("gen-start-test", FilmPhase.GENERATION, "generation_ledger")
 
-    result = asyncio.run(list_active_generations({}))
+    result = call_tool(list_active_generations, {})
     assert result["ok"] is True
     assert result["count"] == 0
 
@@ -780,6 +807,7 @@ def test_list_active_generations_does_not_create_a_ledger(rt: StudioRuntime) -> 
 
 def test_active_generations_excludes_terminal_and_keeps_waiting_rows(
     rt: StudioRuntime,
+    call_tool: CallTool,
 ) -> None:
     """Terminality is the ledger's rule, and blocked rows are still active.
 
@@ -787,7 +815,6 @@ def test_active_generations_excludes_terminal_and_keeps_waiting_rows(
     enum. A row blocked on a provider or budget is waiting on something that can
     still change, so it must still be listed as active.
     """
-    import asyncio
 
     from film_pipeline.generation.ledger import GenerationLedgerManager
     from film_pipeline.schemas.base import GenerationStatus
@@ -803,7 +830,7 @@ def test_active_generations_excludes_terminal_and_keeps_waiting_rows(
         "gen-start-test", by_shot["S002"], status=GenerationStatus.BLOCKED_PROVIDER.value
     )
 
-    result = asyncio.run(list_active_generations({}))
+    result = call_tool(list_active_generations, {})
     assert result["ok"] is True
     listed = {row["shot_id"] for row in cast(list[dict[str, object]], result["rows"])}
     assert "S001" not in listed, "a COMPLETED row is terminal and must not be active"

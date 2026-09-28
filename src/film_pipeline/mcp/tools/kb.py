@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from film_pipeline.mcp.tools.context import ToolContext
+
 from .helpers import (
     _error,
     _ok,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -30,7 +31,7 @@ def _load_kb_manifest() -> KBManifest | None:
     return KBManifest.from_yaml(manifest_path)
 
 
-async def kb_search(args: dict[str, object]) -> dict[str, object]:
+async def kb_search(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     query = str(args.get("query", ""))
     phase = str(args.get("phase", ""))
     try:
@@ -64,7 +65,7 @@ async def kb_search(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
+async def kb_get_item(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     item_id = str(args.get("item_id", ""))
     try:
         manifest = _load_kb_manifest()
@@ -86,8 +87,9 @@ async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def kb_get_context_packet(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     from film_pipeline.kb.packets import KBContextPacketBuilder
 
     try:
@@ -110,7 +112,7 @@ async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_explain_context_choice(args: dict[str, object]) -> dict[str, object]:
+async def kb_explain_context_choice(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     return _ok(
         message="KB context is selected by phase and agent capability. "
         "Canonical rules (authority=CANONICAL) take priority over playbooks and case studies. "

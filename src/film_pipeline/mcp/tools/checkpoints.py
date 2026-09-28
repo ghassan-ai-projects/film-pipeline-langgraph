@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.checkpoints.invalidation import InvalidationEngine
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.operations import (
     get_checkpoint as get_checkpoint_use_case,
 )
@@ -16,10 +16,8 @@ from film_pipeline.operations import (
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 
 from .helpers import (
-    _active_project_id,
     _error,
     _ok,
-    require_project_state,
 )
 
 _RECENT_CHECKPOINT_LIMIT = 20
@@ -41,18 +39,18 @@ def _checkpoint_summary(cp: CheckpointMetadata) -> dict[str, object]:
     }
 
 
-async def list_checkpoints(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = str(args.get("project_id", "") or "")
-    if not project_id and args.get("project_ref"):
-        project_id = _active_project_id(args, rt) or ""
+async def list_checkpoints(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
+    # An explicit `project_id` wins; otherwise the context's resolved project is
+    # the active-project fallback that used to be re-derived here.
+    project_id = str(args.get("project_id", "") or "") or (ctx.project_id or "")
     cps = rt.list_checkpoints(project_id if project_id else None)
     return _ok(checkpoints=[_checkpoint_summary(c) for c in cps])
 
 
-async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+async def create_checkpoint(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
+    active = ctx.project_state()
     reason = str(args.get("reason", "manual checkpoint"))
     try:
         cp = rt.create_checkpoint(
@@ -69,8 +67,8 @@ async def create_checkpoint(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def get_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def get_checkpoint(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     checkpoint_id = str(args.get("checkpoint_id", ""))
     cp = rt.get_checkpoint(checkpoint_id)
     if cp is None:
@@ -78,8 +76,8 @@ async def get_checkpoint(args: dict[str, object]) -> dict[str, object]:
     return _ok(**_checkpoint_summary(cp))
 
 
-async def compare_versions(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def compare_versions(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     cp_a = rt.get_checkpoint(str(args.get("checkpoint_id_a", "")))
     cp_b = rt.get_checkpoint(str(args.get("checkpoint_id_b", "")))
     if cp_a is None or cp_b is None:
@@ -92,8 +90,8 @@ async def compare_versions(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def list_artifact_versions(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def list_artifact_versions(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     cps = rt.list_checkpoints()
     versions: list[dict[str, str]] = []
     for c in _recent_checkpoints(cps):
@@ -119,14 +117,14 @@ def _unconfirmed_preview(
     }
 
 
-async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def rollback_artifact(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
         return _error("artifact_id is required.")
     checkpoint_id = str(args.get("checkpoint_id", ""))
     confirmed = bool(args.get("confirmed"))
-    active = require_project_state(args)
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     checkpoint = (
         get_checkpoint_use_case(rt, checkpoint_id) if checkpoint_id and not confirmed else None
@@ -155,8 +153,8 @@ async def rollback_artifact(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def rollback_to_checkpoint(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     checkpoint_id = str(args.get("checkpoint_id", ""))
     cp = get_checkpoint_use_case(rt, checkpoint_id)
     if cp is None:
@@ -187,8 +185,8 @@ async def rollback_to_checkpoint(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def get_invalidation_report(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def get_invalidation_report(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     checkpoint_id = str(args.get("checkpoint_id", ""))
     cp = rt.get_checkpoint(checkpoint_id)
     if cp is None:

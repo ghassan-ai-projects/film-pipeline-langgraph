@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
     resolved_config_state_keys,
 )
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -20,7 +20,6 @@ from .helpers import (
     _services,
     missing_profile_credentials,
     register_profile_providers,
-    require_project_state,
 )
 
 
@@ -151,13 +150,13 @@ def _run_intake_for_idea(
     return state
 
 
-async def create_film_project(args: dict[str, object]) -> dict[str, object]:
+async def create_film_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Create a new film project — wired to runtime.
 
     Accepts optional profile stack and runtime_mode. In ``real`` mode,
     mock providers and models are rejected.
     """
-    rt = tools_pkg.get_runtime()
+    rt = ctx.runtime
     project_id = str(args.get("project_id", ""))
     if not project_id:
         return _error("project_id is required")
@@ -205,13 +204,13 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def list_projects(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def list_projects(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     return _ok(projects=list(rt.projects.keys()))
 
 
-async def find_project(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def find_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     ref = str(args.get("ref", ""))
     if not ref:
         return _error("ref is required (project_id or slug)")
@@ -226,8 +225,8 @@ async def find_project(args: dict[str, object]) -> dict[str, object]:
     return _error(f"Project '{ref}' not found.")
 
 
-async def set_active_project(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def set_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     project_id = str(args.get("project_ref", args.get("project_id", "")))
     if not project_id:
         return _error("project_ref is required")
@@ -238,8 +237,9 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def get_active_project(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
@@ -268,10 +268,10 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     return summaries
 
 
-async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
+async def get_project_summary(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
     from film_pipeline.orchestration.router import get_blockers_for_state
 

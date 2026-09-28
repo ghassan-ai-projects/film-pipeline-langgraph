@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,6 +19,8 @@ from film_pipeline.mcp.tools import (
     plan_coverage_group,
 )
 from film_pipeline.studio.runtime import StudioRuntime
+
+CallTool = Callable[..., Any]
 
 
 def _stub_check(result: dict[str, object], handler: str) -> None:
@@ -43,14 +47,16 @@ def test_approve_coverage_generation_stub() -> None:
     )
 
 
-def test_assemble_review_cut_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_assemble_review_cut_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("asm-review", "Assembly Review")
     rt.set_active("asm-review")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(
-        assemble_review_cut({"shot_ids": ["S001", "S002"], "clip_paths": ["/clips/S001.mp4"]})
+    result = call_tool(
+        assemble_review_cut, {"shot_ids": ["S001", "S002"], "clip_paths": ["/clips/S001.mp4"]}
     )
     assert result["ok"] is True
     assert "plan_id" in result
@@ -61,24 +67,25 @@ def test_assemble_final_cut_stub() -> None:
     _stub_check(asyncio.run(assemble_final_cut({})), "assemble_final_cut")
 
 
-def test_export_delivery_package_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_export_delivery_package_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("asm-delivery", "Delivery")
     rt.set_active("asm-delivery")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(
-        export_delivery_package(
-            {
-                "video_path": "/out/final.mp4",
-                "subtitle_path": "/out/subs.srt",
-                "audio_stems_dir": "/out/audio",
-                "stills_dir": "/out/stills",
-                "validation_report_path": "/out/val.json",
-                "credits_path": "/out/credits.txt",
-                "confirmed": True,
-            }
-        )
+    result = call_tool(
+        export_delivery_package,
+        {
+            "video_path": "/out/final.mp4",
+            "subtitle_path": "/out/subs.srt",
+            "audio_stems_dir": "/out/audio",
+            "stills_dir": "/out/stills",
+            "validation_report_path": "/out/val.json",
+            "credits_path": "/out/credits.txt",
+            "confirmed": True,
+        },
     )
     assert result["ok"] is True
     assert "package_id" in result

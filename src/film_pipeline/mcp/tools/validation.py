@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeGuard
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _error,
@@ -14,8 +14,6 @@ from .helpers import (
     _ok,
     _report_summary,
     _services,
-    require_project_id,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -267,10 +265,11 @@ def _record_validation_results(
     rt.persist_project_state(project_id)
 
 
-async def run_validation(args: dict[str, object]) -> dict[str, object]:
+async def run_validation(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Run validators for the current phase and persist ValidationReport."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
     store = _services(rt).artifact_store
@@ -296,16 +295,18 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
     return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
 
 
-async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
+async def get_validation_report(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return validation reports for the active project's current phase.
 
     Reads from stored ``_validation_reports`` in project state (populated
     by the QC node). Falls back to live validator runs if no stored reports.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    # Taken from the resolved state, not `ctx.project_id`: the same guarantee
+    # (`requires_active_project` held) is already expressed by `project_state()`
+    # having returned, and re-reading the optional field would need a second check.
+    project_id = str(state["project_id"])
 
     # Stored QC reports work even without a current phase because they are
     # already persisted in state.
@@ -334,12 +335,13 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
+async def list_validation_issues(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List all validation issues for the active project's current phase.
 
     Reads from stored ``issues`` in project state (populated by QC node).
     """
-    state = require_project_state(args)
+    _ = args
+    state = ctx.project_state()
 
     issues = _normalized_stored_issues(state.get("issues"))
 

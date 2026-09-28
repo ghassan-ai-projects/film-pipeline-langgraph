@@ -8,8 +8,11 @@ session guard asserts the run leaves the user's real roots untouched.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import asyncio
+import inspect
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -164,3 +167,67 @@ def _snapshot_tree(root: Path) -> dict[str, int] | None:
         except OSError:
             continue
     return snapshot
+
+
+@pytest.fixture
+def call_tool() -> Iterator[Callable[..., Any]]:
+    """Call a tool handler the way dispatch does, without the global singleton.
+
+    Doc 01's slice 2 replaces "handler fetches its own runtime via
+    ``tools_pkg.get_runtime()``" with "dispatch passes a `ToolContext`". This
+    fixture builds that context from a real `StudioRuntime` the test owns, so a
+    migrated handler is exercised through its real calling convention rather than
+    by patching a package global. The 61 monkeypatch sites this replaces were the
+    symptom: every test had to know *how* the handler looked its runtime up.
+
+    The context is rebuilt per call, so a handler that mutates runtime state is
+    observed on the same runtime the assertions read.
+    """
+
+    def _call(
+        handler: Callable[..., Any],
+        args: dict[str, Any] | None = None,
+        *,
+        project_id: str | None = None,
+        runtime: Any = None,
+    ) -> Any:
+        import film_pipeline.mcp.tools as tools_pkg
+        from film_pipeline.mcp.envelope import new_envelope
+        from film_pipeline.mcp.tools.context import ToolContext
+
+        # `runtime=` is for a test that built its own runtime and wants the
+        # handler to see it. Otherwise honour whichever runtime the test made
+        # visible by patching `film_pipeline.mcp.tools.get_runtime` — which is
+        # the accessor dispatch itself reads, so a test that patched nothing gets
+        # the process runtime, exactly as production would.
+        rt = runtime if runtime is not None else tools_pkg.get_runtime()
+
+        envelope = new_envelope(project_ref=project_id)
+        # A tool that needs a project gets the runtime's active project, which is
+        # what dispatch's resolution step produces.
+        resolved = project_id if project_id is not None else _active_project_id(rt)
+        context = ToolContext(runtime=rt, project_id=resolved, envelope=envelope)
+        # Both handler shapes are legal while doc 01's migration is in flight;
+        # the same signature check dispatch uses picks which call this is. A
+        # legacy handler still gets `"_envelope"`, exactly as dispatch passes it.
+        from film_pipeline.mcp.server import _accepts_context
+
+        any_handler = cast("Any", handler)
+        if _accepts_context(handler):
+            result = any_handler(context, args or {})
+        else:
+            result = any_handler({**(args or {}), "_envelope": envelope})
+        if inspect.isawaitable(result):
+            awaited: Any = asyncio.run(cast("Any", result))
+            return awaited
+        return result
+
+    yield _call
+
+
+def _active_project_id(runtime: Any) -> str | None:
+    """The runtime's active project id, matching dispatch's resolution step."""
+    active = runtime.get_active()
+    if active is None:
+        return None
+    return str(active.get("project_id", "")) or None

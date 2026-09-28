@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from film_pipeline.cli.driver import HeadlessDriver, HeadlessDriverError
+
+CallTool = Callable[..., Any]
 
 
 def test_setup_runtime_rejects_invalid_mode(tmp_path: Path) -> None:
@@ -35,7 +39,7 @@ def test_unknown_target_phase(tmp_path: Path) -> None:
         rt_mod._RUNTIME_MODE_OVERRIDE = previous_override
 
 
-def test_call_tool_unknown_tool() -> None:
+def test_call_tool_unknown_tool(call_tool: CallTool) -> None:
     """An unknown tool is a typed `UNKNOWN_TOOL` error, not a raised driver error.
 
     `_call_tool` goes through `MCPServer.call` (see

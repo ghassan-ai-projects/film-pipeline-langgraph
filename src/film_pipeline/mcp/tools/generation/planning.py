@@ -5,8 +5,8 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
 )
@@ -15,8 +15,6 @@ from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_id,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -49,15 +47,15 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
     return shot_ids
 
 
-async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
+async def plan_generation_batch(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Plan a generation batch: add rows to the ledger for each shot.
 
     Reads shot IDs from the shot bible artifact if none are provided.
     In text-only policy mode, no media is generated; completed requests are
     created directly so the graph can advance to delivery.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
 
     if is_text_only_policy(active):
@@ -105,7 +103,9 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def preview_generation_prompts(args: dict[str, object]) -> dict[str, object]:
+async def preview_generation_prompts(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Resolve the exact prompt each shot will send to its provider.
 
     Available as soon as the shot matrix exists so the operator can read and
@@ -118,8 +118,8 @@ async def preview_generation_prompts(args: dict[str, object]) -> dict[str, objec
         preview_generation_prompts as build_previews,
     )
 
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
 
     try:
         state = rt.get_project(project_id) or {}

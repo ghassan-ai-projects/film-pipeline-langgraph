@@ -16,24 +16,21 @@ from uuid import uuid4
 
 from pydantic import BaseModel
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import (
     resolve_project_config,
     resolved_config_state_keys,
 )
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage.contract import sanitize_artifact_id
 
 from .helpers import (
-    _active_project_id,
     _error,
     _ok,
     _services,
     register_profile_providers,
-    require_project_id,
-    require_project_state,
 )
 
 _PROFILE_STACK_KEYS = (
@@ -45,7 +42,7 @@ _PROFILE_STACK_KEYS = (
 )
 
 
-async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
+async def propose_profile_change(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Propose a mid-project change to the profile stack.
 
     Validates the requested profiles, resolves the projected configuration,
@@ -53,9 +50,9 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     ``ProfileChangeProposal`` artifact. The change is not applied until a
     human approves it via ``approve_profile_change``.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    project_id = str(state["project_id"])
 
     reason = str(args.get("reason", "")).strip()
     if not reason:
@@ -96,16 +93,16 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
+async def approve_profile_change(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Approve a pending profile-change proposal and apply it to the project.
 
     Requires ``confirmed=True``. Bumps ``profile_version``, re-resolves the
     configuration, persists a new ``project_config`` artifact, invalidates
     downstream artifacts, and records the approval.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    project_id = str(state["project_id"])
 
     proposal_id = str(args.get("proposal_id", "")).strip()
     if not proposal_id:
@@ -146,17 +143,6 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
         approval_ref=approval_ref,
         message="Profile change approved and applied.",
     )
-
-
-def _active_state(rt: Any, args: dict[str, object]) -> tuple[str, Any] | None:
-    """Resolve ``(project_id, state)`` for the request, or ``None`` without one."""
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    state = rt.get_project(project_id)
-    if state is None:
-        return None
-    return project_id, state
 
 
 def _requested_profile_changes(args: dict[str, object]) -> dict[str, str]:

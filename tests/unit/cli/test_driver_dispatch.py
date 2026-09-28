@@ -40,12 +40,16 @@ that is the seam 01 replaces.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from film_pipeline.cli.driver import HeadlessDriver
 from film_pipeline.mcp.errors import MCPErrorCode
+
+CallTool = Callable[..., Any]
 
 
 @pytest.fixture
@@ -55,7 +59,9 @@ def driver(tmp_path: Path) -> HeadlessDriver:
     return HeadlessDriver(rt, "dispatch-test")
 
 
-def test_driver_enforces_the_active_project_precondition(driver: HeadlessDriver) -> None:
+def test_driver_enforces_the_active_project_precondition(
+    driver: HeadlessDriver, call_tool: CallTool
+) -> None:
     """A `requires_active_project` tool with no project yields a typed error.
 
     Through dispatch this is `NO_ACTIVE_PROJECT`. Through the direct path the
@@ -76,7 +82,9 @@ def test_driver_enforces_the_active_project_precondition(driver: HeadlessDriver)
     )
 
 
-def test_driver_enforces_confirmation_on_a_human_gate(driver: HeadlessDriver) -> None:
+def test_driver_enforces_confirmation_on_a_human_gate(
+    driver: HeadlessDriver, call_tool: CallTool
+) -> None:
     """`approve_phase` without `confirmed` is refused, not silently applied.
 
     This is the finding's sharpest form: on the direct path the call *succeeded*

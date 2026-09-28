@@ -10,15 +10,12 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import load_profile_flex, provider_specs
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT as NO_ACTIVE_PROJECT
-from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.providers.credentials import (
     missing_provider_credentials,
 )
 from film_pipeline.schemas.artifact import ArtifactRef
-from film_pipeline.studio.runtime import StudioRuntime
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -41,63 +38,9 @@ def _error(message: str, **extra: object) -> dict[str, object]:
     return {"ok": False, "error": message, **extra}
 
 
-def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
-    """Return the project id for the current request.
-
-    Prefers the project resolved from ``project_ref`` in the request envelope,
-    then falls back to the runtime's active project. Returns ``None`` when no
-    project can be determined.
-    """
-    envelope = args.get("_envelope")
-    resolved = getattr(envelope, "resolved_project_id", None) if envelope is not None else None
-    if resolved:
-        return str(resolved)
-    active = rt.get_active()
-    if active is not None:
-        return str(active["project_id"])
-    return None
-
-
 def _no_active_project() -> dict[str, object]:
     """The standard "nothing to act on" error response."""
     return _error(NO_ACTIVE_PROJECT)
-
-
-def require_project_id(args: dict[str, object]) -> str:
-    """Return the request's project id, assuming the dispatch precondition held.
-
-    `MCPServer.call` checks `ToolContract.requires_active_project` before
-    dispatch and returns a typed error when there is no project, so a handler
-    reached through the operator surface always has one. Handlers therefore
-    state the assumption instead of re-deriving it — the check existed at 48
-    call sites with three wordings and five emptiness tests.
-
-    Raises `ProjectNotFoundError` rather than returning an error response. The
-    dispatch layer already maps service errors to typed MCP errors, so a handler
-    cannot invent a different error shape by accident. A raise here means the
-    guarantee was violated — a bug in the contract declaration, not a user error.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
-    return project_id
-
-
-def require_project_state(args: dict[str, object]) -> dict[str, Any]:
-    """Return the request's project state, assuming the dispatch precondition held.
-
-    See :func:`require_project_id` for why this raises rather than returning an
-    error response.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
-    state = rt.get_project(project_id)
-    if state is None:
-        raise ProjectNotFoundError(f"Project '{project_id}' is not loaded.")
-    return state
 
 
 def _services(rt: object) -> Any:

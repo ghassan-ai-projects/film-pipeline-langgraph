@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -11,8 +11,18 @@ import pytest
 from film_pipeline.mcp.tools import generate_plan, generate_shot_bible
 from film_pipeline.studio.runtime import StudioRuntime
 
+CallTool = Callable[..., Any]
 
-def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRuntime:
+
+def _build_runtime_with_shot_bible(
+    tmp_path: Path, project_id: str, call_tool: CallTool
+) -> StudioRuntime:
+    """Drive a runtime to visual_dev, then generate its shot bible.
+
+    `generate_shot_bible` takes a `ToolContext` now, so the helper borrows the
+    test's `call_tool` fixture rather than patching `get_runtime` itself: the
+    fixture is what knows how to build a context for the runtime under test.
+    """
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project(project_id, "Planning Test")
     rt.set_active(project_id)
@@ -28,7 +38,7 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
     original_get_runtime = mcp_tools.get_runtime
     mcp_tools.get_runtime = lambda: rt
     try:
-        result = asyncio.run(generate_shot_bible({}))
+        result = call_tool(generate_shot_bible, {})
     finally:
         mcp_tools.get_runtime = original_get_runtime
     assert result["ok"] is True, result
@@ -36,26 +46,24 @@ def _build_runtime_with_shot_bible(tmp_path: Path, project_id: str) -> StudioRun
 
 
 def test_generate_plan_requires_shot_matrix(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("plan-no-matrix", "No Matrix")
     rt.set_active("plan-no-matrix")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
     assert result["ok"] is False
     assert "MasterFilmMatrix not found" in cast(str, result["error"])
 
 
 def test_generate_plan_validates_raw_persisted_matrix(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     """The real artifact store returns a dict that must be validated at the boundary."""
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-success-1")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-success-1", call_tool)
 
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
 
     assert result["ok"] is True
     assert cast(int, result["shot_count"]) > 0
@@ -70,7 +78,9 @@ def test_generate_plan_validates_raw_persisted_matrix(
     assert stored["provider_utilization"] == {"mock-video-provider": result["shot_count"]}
 
 
-def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_plan_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("plan-success-2", "Plan Success")
     rt.set_active("plan-success-2")
@@ -82,7 +92,6 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
             "video": [{"provider_id": "mock-video-provider", "models": ["mock-fast"]}],
         }
     }
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
     from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 
@@ -111,7 +120,7 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
         return original_load(project_id, phase, artifact_id, version)
 
     monkeypatch.setattr(store, "load", _fake_load)
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
 
     assert result["ok"] is True
     assert "generation_plan_ref" in result
@@ -122,9 +131,9 @@ def test_generate_plan_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_generate_plan_uses_configured_seedance_route(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-seedance-1")
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-seedance-1", call_tool)
     # This test configures a REAL provider, so the runtime must be in real mode for
     # that id to be one the runtime knows. It previously passed in mock mode only
     # because the provider pricing table was mode-agnostic (and was doubling as the
@@ -143,9 +152,8 @@ def test_generate_plan_uses_configured_seedance_route(
             ],
         }
     }
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
 
     assert result["ok"] is True
     assert rt.services is not None
@@ -162,9 +170,9 @@ def test_generate_plan_uses_configured_seedance_route(
 
 
 def test_generate_plan_rejects_unknown_configured_provider(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    rt = _build_runtime_with_shot_bible(tmp_path, "plan-unknown-provider")
+    rt = _build_runtime_with_shot_bible(tmp_path, "plan-unknown-provider", call_tool)
     active = rt.get_active()
     assert active is not None
     active["resolved_config"] = {
@@ -173,19 +181,19 @@ def test_generate_plan_rejects_unknown_configured_provider(
             "video": [{"provider_id": "unknown-provider", "models": ["free-looking-model"]}],
         }
     }
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
 
     assert result["ok"] is False
     assert "unknown provider" in cast(str, result["error"])
 
 
-def test_generate_plan_save_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_plan_save_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("plan-save-fail", "Plan Save Fail")
     rt.set_active("plan-save-fail")
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
     from film_pipeline.schemas.matrix import MasterFilmMatrix, MasterFilmMatrixRow
 
@@ -217,6 +225,6 @@ def test_generate_plan_save_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(store, "load", _fake_load)
     monkeypatch.setattr(store, "save", _raise)
-    result = asyncio.run(generate_plan({}))
+    result = call_tool(generate_plan, {}, runtime=rt)
     assert result["ok"] is False
     assert "Plan generation failed" in cast(str, result["error"])

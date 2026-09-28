@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.reference_generation.composites import (
     _build_composites,
 )
@@ -40,7 +40,6 @@ from ..helpers import (
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 
 
@@ -89,10 +88,10 @@ class _GenerationInputs:
 
 def _resolve_generation_inputs(
     rt: Any,
+    active: dict[str, Any],
     args: dict[str, object],
 ) -> _GenerationInputs | dict[str, object]:
     """Validate request-level inputs; return an error payload or the inputs."""
-    active = require_project_state(args)
     project_id = str(active["project_id"])
     data = _load_latest_reference_index(rt, project_id, active)
     if data is None:
@@ -164,10 +163,10 @@ def _generate_all_references(
     return counts["generated"], counts["skipped"], failed
 
 
-async def generate_reference_images(args: dict[str, object]) -> dict[str, object]:
+async def generate_reference_images(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate persisted reference images from the visual-dev reference index."""
-    rt = tools_pkg.get_runtime()
-    resolved = _resolve_generation_inputs(rt, args)
+    rt = ctx.runtime
+    resolved = _resolve_generation_inputs(rt, ctx.project_state(), args)
     if isinstance(resolved, dict):
         return resolved
 

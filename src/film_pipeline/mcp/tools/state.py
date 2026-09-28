@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+from film_pipeline.mcp.tools.context import ToolContext
+
 from .helpers import (
     _ok,
-    require_project_state,
 )
 
 
-async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_current_phase(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     return _ok(current_phase=state.get("current_phase", ""))
 
 
-async def get_film_state(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_film_state(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     # Return a sanitized copy (no internal keys)
     safe = {
         k: v
@@ -24,8 +27,9 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
     return _ok(state=safe)
 
 
-async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_orchestrator_summary(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
 
     from film_pipeline.orchestration import orchestrator_state as ostate
     from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
@@ -55,8 +59,9 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
     )
 
 
-async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_next_actions(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     actions = compute_actions(dict(state))
@@ -67,7 +72,7 @@ async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def get_blockers(args: dict[str, object]) -> dict[str, object]:
+async def get_blockers(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Report what currently blocks the project, derived from live state.
 
     Mirrors ``get_next_actions``: the router computes blocked transitions from
@@ -75,7 +80,8 @@ async def get_blockers(args: dict[str, object]) -> dict[str, object]:
     see one truthful picture. Response shape is stable:
     ``{blockers: [{action, reason}], has_blockers: bool}``.
     """
-    state = require_project_state(args)
+    _ = args
+    state = ctx.project_state()
     from film_pipeline.orchestration.router import get_blockers_for_state
 
     blockers = get_blockers_for_state(state)

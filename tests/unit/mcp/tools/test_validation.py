@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
@@ -17,8 +17,12 @@ from film_pipeline.mcp.tools import (
 )
 from film_pipeline.studio.runtime import StudioRuntime
 
+CallTool = Callable[..., Any]
 
-def test_run_validation_unknown_phase(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_run_validation_unknown_phase(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-bad-phase", "Bad Phase")
     rt.set_active("val-bad-phase")
@@ -27,13 +31,13 @@ def test_run_validation_unknown_phase(tmp_path: Path, monkeypatch: pytest.Monkey
     active["current_phase"] = "not-a-real-phase"
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is False
     assert "Unknown phase" in cast(str, result["error"])
 
 
 def test_run_validation_no_validators_for_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-no-validators", "No Validators")
@@ -43,13 +47,13 @@ def test_run_validation_no_validators_for_phase(
     active["current_phase"] = "intake"
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is True
     assert result["message"] == "No validators found for this phase."
 
 
 def test_run_validation_script_phase_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-script-1", "Script Phase")
@@ -62,14 +66,14 @@ def test_run_validation_script_phase_success(
     rt.projects["val-script-1"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is True
     assert result["phase"] == "script"
     assert len(cast(list[object], result["reports"])) >= 1
 
 
 def test_run_validation_visual_dev_phase_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-visdev-1", "Visual Dev Phase")
@@ -83,15 +87,15 @@ def test_run_validation_visual_dev_phase_success(
     rt.projects["val-visdev-1"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is True
     assert result["phase"] == "visual_dev"
     assert len(cast(list[object], result["reports"])) >= 1
 
 
-def test_get_validation_report_uses_qc_stored_reports() -> None:
-    asyncio.run(create_film_project({"project_id": "val-stored-1"}))
-    asyncio.run(set_active_project({"project_ref": "val-stored-1"}))
+def test_get_validation_report_uses_qc_stored_reports(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "val-stored-1"})
+    call_tool(set_active_project, {"project_ref": "val-stored-1"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -100,15 +104,15 @@ def test_get_validation_report_uses_qc_stored_reports() -> None:
     active["_validation_reports"] = [{"validator_id": "fake", "score": 1.0}]
     rt.projects["val-stored-1"] = active
 
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is True
     assert result["source"] == "qc_node"
     assert len(cast(list[object], result["reports"])) == 1
 
 
-def test_get_validation_report_no_phase_and_no_stored_reports() -> None:
-    asyncio.run(create_film_project({"project_id": "val-no-phase-1"}))
-    asyncio.run(set_active_project({"project_ref": "val-no-phase-1"}))
+def test_get_validation_report_no_phase_and_no_stored_reports(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "val-no-phase-1"})
+    call_tool(set_active_project, {"project_ref": "val-no-phase-1"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -118,12 +122,12 @@ def test_get_validation_report_no_phase_and_no_stored_reports() -> None:
     active.pop("_validation_reports", None)
     rt.projects["val-no-phase-1"] = active
 
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is False
 
 
 def test_get_validation_report_live_dispatch_script_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-live-script-1", "Live Script")
@@ -137,14 +141,14 @@ def test_get_validation_report_live_dispatch_script_phase(
     rt.projects["val-live-script-1"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is True
     assert result["source"] == "live"
     assert result["phase"] == "script"
 
 
 def test_get_validation_report_live_dispatch_visual_dev_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-live-visdev-1", "Live VisDev")
@@ -159,15 +163,15 @@ def test_get_validation_report_live_dispatch_visual_dev_phase(
     rt.projects["val-live-visdev-1"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is True
     assert result["source"] == "live"
     assert result["phase"] == "visual_dev"
 
 
-def test_list_validation_issues_with_stored_issues() -> None:
-    asyncio.run(create_film_project({"project_id": "val-issues-1"}))
-    asyncio.run(set_active_project({"project_ref": "val-issues-1"}))
+def test_list_validation_issues_with_stored_issues(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "val-issues-1"})
+    call_tool(set_active_project, {"project_ref": "val-issues-1"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -183,21 +187,21 @@ def test_list_validation_issues_with_stored_issues() -> None:
     ]
     rt.projects["val-issues-1"] = active
 
-    result = asyncio.run(list_validation_issues({}))
+    result = call_tool(list_validation_issues, {})
     assert result["ok"] is True
     assert len(cast(list[object], result["issues"])) == 1
 
 
-def test_list_validation_issues_empty() -> None:
-    asyncio.run(create_film_project({"project_id": "val-issues-2"}))
-    asyncio.run(set_active_project({"project_ref": "val-issues-2"}))
-    result = asyncio.run(list_validation_issues({}))
+def test_list_validation_issues_empty(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "val-issues-2"})
+    call_tool(set_active_project, {"project_ref": "val-issues-2"})
+    result = call_tool(list_validation_issues, {})
     assert result["ok"] is True
     assert result["issues"] == []
 
 
 def test_run_validation_visual_dev_no_reference_index(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-visdev-empty", "Visual Dev Empty")
@@ -207,13 +211,13 @@ def test_run_validation_visual_dev_no_reference_index(
     rt.projects["val-visdev-empty"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is True
     assert result["message"] == "No validators found for this phase."
 
 
 def test_run_validation_script_no_script_artifact(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-script-empty", "Script Empty")
@@ -223,12 +227,14 @@ def test_run_validation_script_no_script_artifact(
     rt.projects["val-script-empty"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is True
     assert result["message"] == "No validators found for this phase."
 
 
-def test_run_validation_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_validation_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-exception", "Exception")
     rt.set_active("val-exception")
@@ -246,13 +252,13 @@ def test_run_validation_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
         raise RuntimeError("boom")
 
     monkeypatch.setattr(ScriptStructureValidator, "run", _raise)
-    result = asyncio.run(run_validation({}))
+    result = call_tool(run_validation, {})
     assert result["ok"] is False
     assert "boom" in cast(str, result["error"])
 
 
 def test_get_validation_report_unknown_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-unknown-phase", "Unknown Phase")
@@ -263,7 +269,7 @@ def test_get_validation_report_unknown_phase(
     rt.projects["val-unknown-phase"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is False
     assert "Unknown phase" in cast(str, result["error"])
 
@@ -273,7 +279,7 @@ def test_get_validation_report_unknown_phase(
     ["gen_planning", "shot_bible", "post", "delivery"],
 )
 def test_get_validation_report_phase_branches(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project(f"val-phase-{phase}", f"Phase {phase}")
@@ -307,7 +313,7 @@ def test_get_validation_report_phase_branches(
         return original_load(project_id, phase_obj, artifact_id, version)
 
     monkeypatch.setattr(store, "load", _fake_load)
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
 
     assert result["ok"] is True
     assert result["phase"] == phase
@@ -316,7 +322,7 @@ def test_get_validation_report_phase_branches(
 
 
 def test_get_validation_report_phase_branch_missing_artifact(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("val-phase-missing", "Missing Artifact")
@@ -334,16 +340,16 @@ def test_get_validation_report_phase_branch_missing_artifact(
         raise FileNotFoundError("no artifact")
 
     monkeypatch.setattr(store, "load", _raise)
-    result = asyncio.run(get_validation_report({}))
+    result = call_tool(get_validation_report, {})
     assert result["ok"] is True
     assert result["phase"] == "delivery"
     assert result["source"] == "live"
     assert result["reports"] == []
 
 
-def test_list_validation_issues_skips_non_dict_items() -> None:
-    asyncio.run(create_film_project({"project_id": "val-issues-skip"}))
-    asyncio.run(set_active_project({"project_ref": "val-issues-skip"}))
+def test_list_validation_issues_skips_non_dict_items(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "val-issues-skip"})
+    call_tool(set_active_project, {"project_ref": "val-issues-skip"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -361,6 +367,6 @@ def test_list_validation_issues_skips_non_dict_items() -> None:
     ]
     rt.projects["val-issues-skip"] = active
 
-    result = asyncio.run(list_validation_issues({}))
+    result = call_tool(list_validation_issues, {})
     assert result["ok"] is True
     assert len(cast(list[object], result["issues"])) == 1

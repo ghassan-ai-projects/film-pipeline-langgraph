@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -18,6 +18,8 @@ from film_pipeline.mcp.tools import (
 from film_pipeline.mcp.tools.bibles import _extract_script_text
 from film_pipeline.studio.mock_responses import default_mock_responses
 from film_pipeline.studio.runtime import StudioRuntime
+
+CallTool = Callable[..., Any]
 
 
 def test_extract_script_text_none_returns_empty() -> None:
@@ -61,7 +63,9 @@ def _build_runtime_through_script(tmp_path: Path, project_id: str) -> StudioRunt
 
 
 def test_generate_environment_bible_missing_constitution(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-env-3", "No Constitution")
@@ -95,55 +99,65 @@ def test_generate_environment_bible_missing_constitution(
     )
     store.save(script, meta)
 
-    result = asyncio.run(
-        generate_environment_bible({"environment_id": "studio", "environment_name": "Studio"})
+    result = call_tool(
+        generate_environment_bible, {"environment_id": "studio", "environment_name": "Studio"}
     )
     assert result["ok"] is False
     assert "FilmConstitution not found" in cast(str, result["error"])
 
 
 def test_generate_style_bible_missing_constitution(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-style-2", "No Constitution")
     rt.set_active("bible-style-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_style_bible({}))
+    result = call_tool(generate_style_bible, {})
     assert result["ok"] is False
     assert "FilmConstitution not found" in cast(str, result["error"])
 
 
 def test_generate_character_bible_requires_character_id(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-char-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_character_bible({}))
+    result = call_tool(generate_character_bible, {})
     assert result["ok"] is False
     assert "character_id is required" in cast(str, result["error"])
 
 
 def test_generate_character_bible_missing_script(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-char-2", "No Script")
     rt.set_active("bible-char-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_character_bible({"character_id": "leo"}))
+    result = call_tool(generate_character_bible, {"character_id": "leo"})
     assert result["ok"] is False
     assert "Script artifact not found" in cast(str, result["error"])
 
 
-def test_generate_character_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_character_bible_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
+) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-char-3")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_character_bible({"character_id": "leo", "character_name": "Leo"}))
+    result = call_tool(generate_character_bible, {"character_id": "leo", "character_name": "Leo"})
     assert result["ok"] is True
     assert result["character_id"] == "leo"
     assert result["identity_block"]
@@ -153,7 +167,9 @@ def test_generate_character_bible_success(tmp_path: Path, monkeypatch: pytest.Mo
 
 
 def test_saved_character_bible_is_about_the_requested_character(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     """The persisted artifact's identity must be the request, not the mock's.
 
@@ -171,8 +187,8 @@ def test_saved_character_bible_is_about_the_requested_character(
 
     saved: list[str] = []
     for character_id in ("hero", "villain"):
-        result = asyncio.run(
-            generate_character_bible({"character_id": character_id, "character_name": character_id})
+        result = call_tool(
+            generate_character_bible, {"character_id": character_id, "character_name": character_id}
         )
         assert result["ok"] is True
         assert result["character_id"] == character_id
@@ -198,7 +214,9 @@ def test_saved_character_bible_is_about_the_requested_character(
 
 
 def test_saved_environment_bible_is_about_the_requested_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     """Same rule for the environment bible, whose id the response also echoes."""
     import json
@@ -207,8 +225,8 @@ def test_saved_environment_bible_is_about_the_requested_environment(
     rt = _build_runtime_through_script(tmp_path, project_id)
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(
-        generate_environment_bible({"environment_id": "neon_market", "environment_name": "Neon"})
+    result = call_tool(
+        generate_environment_bible, {"environment_id": "neon_market", "environment_name": "Neon"}
     )
     assert result["ok"] is True
 
@@ -232,20 +250,18 @@ def test_saved_environment_bible_is_about_the_requested_environment(
 
 
 def test_generate_character_bible_creates_new_version(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     project_id = "bible-char-version"
     rt = _build_runtime_through_script(tmp_path, project_id)
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result1 = asyncio.run(
-        generate_character_bible({"character_id": "leo", "character_name": "Leo"})
-    )
+    result1 = call_tool(generate_character_bible, {"character_id": "leo", "character_name": "Leo"})
     assert result1["ok"] is True
 
-    result2 = asyncio.run(
-        generate_character_bible({"character_id": "leo", "character_name": "Leo"})
-    )
+    result2 = call_tool(generate_character_bible, {"character_id": "leo", "character_name": "Leo"})
     assert result2["ok"] is True
 
     assert rt.services is not None
@@ -257,24 +273,28 @@ def test_generate_character_bible_creates_new_version(
 
 
 def test_generate_environment_bible_requires_environment_id(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-env-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_environment_bible({}))
+    result = call_tool(generate_environment_bible, {})
     assert result["ok"] is False
     assert "environment_id is required" in cast(str, result["error"])
 
 
 def test_generate_environment_bible_success(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-env-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(
-        generate_environment_bible({"environment_id": "studio", "environment_name": "Studio"})
+    result = call_tool(
+        generate_environment_bible, {"environment_id": "studio", "environment_name": "Studio"}
     )
     assert result["ok"] is True
     assert result["environment_id"] == "studio"
@@ -282,50 +302,66 @@ def test_generate_environment_bible_success(
 
 
 def test_generate_camera_bible_missing_constitution(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-camera-1", "No Constitution")
     rt.set_active("bible-camera-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_camera_bible({}))
+    result = call_tool(generate_camera_bible, {})
     assert result["ok"] is False
     assert "FilmConstitution not found" in cast(str, result["error"])
 
 
-def test_generate_camera_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_camera_bible_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
+) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-camera-2")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_camera_bible({}))
+    result = call_tool(generate_camera_bible, {})
     assert result["ok"] is True
     assert cast(int, result["profiles"]) >= 1
 
 
-def test_generate_style_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_style_bible_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
+) -> None:
     rt = _build_runtime_through_script(tmp_path, "bible-style-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_style_bible({}))
+    result = call_tool(generate_style_bible, {})
     assert result["ok"] is True
     assert result["palette"]
 
 
 def test_generate_shot_bible_missing_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-shot-1", "No Refs")
     rt.set_active("bible-shot-1")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_shot_bible({}))
+    result = call_tool(generate_shot_bible, {})
     assert result["ok"] is False
     assert "Required artifacts not found" in cast(str, result["error"])
 
 
-def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_generate_shot_bible_success(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
+) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("bible-shot-2", "Shot Bible")
     rt.set_active("bible-shot-2")
@@ -337,7 +373,7 @@ def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
     rt.projects["bible-shot-2"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_shot_bible({}))
+    result = call_tool(generate_shot_bible, {})
     assert result["ok"] is True
     # Pinned rather than `>= 1`: this tool used to fall back to a hand-written
     # single-row matrix, and now takes the same registered mock the graph path
@@ -352,7 +388,9 @@ def test_generate_shot_bible_success(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_shot_bible_reports_success_with_a_ledger(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    call_tool: CallTool,
 ) -> None:
     """The happy path still returns both promised artifacts, unwarned."""
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
@@ -364,7 +402,7 @@ def test_shot_bible_reports_success_with_a_ledger(
     rt.projects["bible-shot-ok"] = state
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(generate_shot_bible({}))
+    result = call_tool(generate_shot_bible, {})
 
     assert result["ok"] is True
     assert result["continuity_ledger_ref"], "the ledger ref must be present"
@@ -372,7 +410,7 @@ def test_shot_bible_reports_success_with_a_ledger(
 
 
 def test_shot_bible_flags_a_ledger_that_failed_to_persist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     """A missing ledger must not look like an unqualified success.
 
@@ -399,7 +437,7 @@ def test_shot_bible_flags_a_ledger_that_failed_to_persist(
 
     monkeypatch.setattr(shot_module, "_persist_continuity_ledger", _explode)
 
-    result = asyncio.run(generate_shot_bible({}))
+    result = call_tool(generate_shot_bible, {})
 
     assert result["ok"] is True, "the matrix is still the deliverable"
     assert result["shot_matrix_ref"], "the matrix must still be persisted"

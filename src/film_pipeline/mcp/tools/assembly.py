@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import cast
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _ok,
     _stub,
-    require_project_state,
 )
 
 
@@ -32,10 +31,9 @@ async def approve_coverage_generation(args: dict[str, object]) -> dict[str, obje
 # --- Assembly tools ------------------------------------------------------
 
 
-async def assemble_review_cut(args: dict[str, object]) -> dict[str, object]:
+async def assemble_review_cut(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Assemble a review cut using the AssemblyAgent."""
-    tools_pkg.get_runtime()
-    active = require_project_state(args)
+    active = ctx.project_state()
     from film_pipeline.post.assembly_agent import AssemblyAgent
 
     agent = AssemblyAgent()
@@ -52,10 +50,9 @@ async def assemble_final_cut(args: dict[str, object]) -> dict[str, object]:
     return _stub("assemble_final_cut")
 
 
-async def export_delivery_package(args: dict[str, object]) -> dict[str, object]:
+async def export_delivery_package(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Export a delivery package using the DeliveryPackagingAgent."""
-    tools_pkg.get_runtime()
-    active = require_project_state(args)
+    active = ctx.project_state()
     from film_pipeline.post.delivery_packaging_agent import DeliveryPackagingAgent
 
     agent = DeliveryPackagingAgent()

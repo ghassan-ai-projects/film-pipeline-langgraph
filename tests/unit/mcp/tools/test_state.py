@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import cast
+from collections.abc import Callable
+from typing import Any, cast
 
 from film_pipeline.mcp.tools import (
     create_film_project,
@@ -15,28 +15,30 @@ from film_pipeline.mcp.tools import (
 )
 from film_pipeline.studio.runtime import get_runtime as gr
 
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+CallTool = Callable[..., Any]
 
 
-def test_get_current_phase_success() -> None:
-    _make_active_project("state-phase-1")
-    result = asyncio.run(get_current_phase({}))
+def _make_active_project(project_id: str, call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": project_id})
+    call_tool(set_active_project, {"project_ref": project_id})
+
+
+def test_get_current_phase_success(call_tool: CallTool) -> None:
+    _make_active_project("state-phase-1", call_tool)
+    result = call_tool(get_current_phase, {})
     assert result["ok"] is True
     assert "current_phase" in result
 
 
-def test_get_film_state_sanitizes_internal_keys() -> None:
-    _make_active_project("state-film-1")
+def test_get_film_state_sanitizes_internal_keys(call_tool: CallTool) -> None:
+    _make_active_project("state-film-1", call_tool)
     rt = gr()
     active = rt.get_active()
     assert active is not None
     active["_internal_secret"] = "hidden"
     rt.projects["state-film-1"] = active
 
-    result = asyncio.run(get_film_state({}))
+    result = call_tool(get_film_state, {})
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
     assert "_internal_secret" not in state
@@ -44,15 +46,17 @@ def test_get_film_state_sanitizes_internal_keys() -> None:
     assert "human_approval_required" not in state
 
 
-def test_get_next_actions_success() -> None:
-    _make_active_project("state-next-1")
-    result = asyncio.run(get_next_actions({}))
+def test_get_next_actions_success(call_tool: CallTool) -> None:
+    _make_active_project("state-next-1", call_tool)
+    result = call_tool(get_next_actions, {})
     assert result["ok"] is True
     assert "next_action" in result
 
 
-def test_read_only_action_views_do_not_mutate_state_or_expose_router_metadata() -> None:
-    _make_active_project("state-read-only")
+def test_read_only_action_views_do_not_mutate_state_or_expose_router_metadata(
+    call_tool: CallTool,
+) -> None:
+    _make_active_project("state-read-only", call_tool)
     rt = gr()
     state = rt.get_active()
     assert state is not None
@@ -61,8 +65,8 @@ def test_read_only_action_views_do_not_mutate_state_or_expose_router_metadata() 
     state["issues"] = [{"code": "bad-script", "severity": "blocking", "message": "Fix it."}]
     before = dict(state)
 
-    next_actions = asyncio.run(get_next_actions({}))
-    summary = asyncio.run(get_orchestrator_summary({}))
+    next_actions = call_tool(get_next_actions, {})
+    summary = call_tool(get_orchestrator_summary, {})
 
     assert state == before
     next_blocked = cast(list[dict[str, object]], next_actions["blocked"])

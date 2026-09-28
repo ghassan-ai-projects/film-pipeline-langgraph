@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
-from typing import cast
+from collections.abc import Callable
+from typing import Any, cast
 
 import pytest
 
@@ -20,20 +20,22 @@ from film_pipeline.mcp.tools import (
     set_active_project,
 )
 
-
-def _make_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+CallTool = Callable[..., Any]
 
 
-def test_create_and_list_checkpoints() -> None:
-    _make_active_project("proj-cp-1")
-    created = asyncio.run(create_checkpoint({"reason": "unit test checkpoint"}))
+def _make_active_project(project_id: str, call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": project_id})
+    call_tool(set_active_project, {"project_ref": project_id})
+
+
+def test_create_and_list_checkpoints(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-1", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "unit test checkpoint"})
     assert created["ok"] is True
     checkpoint_id = cast(str, created["checkpoint_id"])
     assert checkpoint_id.startswith("checkpoint:proj-cp-1:")
 
-    listed = asyncio.run(list_checkpoints({"project_id": "proj-cp-1"}))
+    listed = call_tool(list_checkpoints, {"project_id": "proj-cp-1"})
     assert listed["ok"] is True
     rows = cast(list[dict[str, object]], listed["checkpoints"])
     ids = [c["checkpoint_id"] for c in rows]
@@ -52,57 +54,56 @@ def test_create_and_list_checkpoints() -> None:
     assert row["reason"] == "unit test checkpoint"
 
 
-def test_get_checkpoint_found_and_missing() -> None:
-    _make_active_project("proj-cp-2")
-    created = asyncio.run(create_checkpoint({"reason": "for get"}))
+def test_get_checkpoint_found_and_missing(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-2", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "for get"})
     checkpoint_id = created["checkpoint_id"]
 
-    found = asyncio.run(get_checkpoint({"checkpoint_id": checkpoint_id}))
+    found = call_tool(get_checkpoint, {"checkpoint_id": checkpoint_id})
     assert found["ok"] is True
     assert found["checkpoint_id"] == checkpoint_id
 
-    missing = asyncio.run(get_checkpoint({"checkpoint_id": "no-such-checkpoint"}))
+    missing = call_tool(get_checkpoint, {"checkpoint_id": "no-such-checkpoint"})
     assert missing["ok"] is False
 
 
-def test_compare_versions() -> None:
-    _make_active_project("proj-cp-3")
-    cp_a = asyncio.run(create_checkpoint({"reason": "a"}))
-    cp_b = asyncio.run(create_checkpoint({"reason": "b"}))
+def test_compare_versions(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-3", call_tool)
+    cp_a = call_tool(create_checkpoint, {"reason": "a"})
+    cp_b = call_tool(create_checkpoint, {"reason": "b"})
 
-    result = asyncio.run(
-        compare_versions(
-            {
-                "checkpoint_id_a": cp_a["checkpoint_id"],
-                "checkpoint_id_b": cp_b["checkpoint_id"],
-            }
-        )
+    result = call_tool(
+        compare_versions,
+        {
+            "checkpoint_id_a": cp_a["checkpoint_id"],
+            "checkpoint_id_b": cp_b["checkpoint_id"],
+        },
     )
     assert result["ok"] is True
     assert result["older_reason"] == "a"
     assert result["newer_reason"] == "b"
 
 
-def test_compare_versions_missing_checkpoint() -> None:
-    result = asyncio.run(
-        compare_versions({"checkpoint_id_a": "missing-a", "checkpoint_id_b": "missing-b"})
+def test_compare_versions_missing_checkpoint(call_tool: CallTool) -> None:
+    result = call_tool(
+        compare_versions, {"checkpoint_id_a": "missing-a", "checkpoint_id_b": "missing-b"}
     )
     assert result["ok"] is False
 
 
-def test_list_artifact_versions_returns_ok() -> None:
-    _make_active_project("proj-cp-4")
-    asyncio.run(create_checkpoint({"reason": "versions"}))
-    result = asyncio.run(list_artifact_versions({}))
+def test_list_artifact_versions_returns_ok(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-4", call_tool)
+    call_tool(create_checkpoint, {"reason": "versions"})
+    result = call_tool(list_artifact_versions, {})
     assert result["ok"] is True
     assert "versions" in result
 
 
-def test_rollback_to_checkpoint_requires_confirmation_message() -> None:
-    _make_active_project("proj-cp-5")
-    created = asyncio.run(create_checkpoint({"reason": "rollback target"}))
-    result = asyncio.run(
-        rollback_to_checkpoint({"confirmed": True, "checkpoint_id": created["checkpoint_id"]})
+def test_rollback_to_checkpoint_requires_confirmation_message(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-5", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "rollback target"})
+    result = call_tool(
+        rollback_to_checkpoint, {"confirmed": True, "checkpoint_id": created["checkpoint_id"]}
     )
     assert result["ok"] is True
     assert "Rollback completed" in cast(str, result["message"])
@@ -110,64 +111,63 @@ def test_rollback_to_checkpoint_requires_confirmation_message() -> None:
     assert result.get("rollback_record_ref")
 
 
-def test_rollback_to_checkpoint_rejects_without_confirmation() -> None:
-    _make_active_project("proj-cp-no-confirm")
-    created = asyncio.run(create_checkpoint({"reason": "rollback target"}))
-    result = asyncio.run(
-        rollback_to_checkpoint({"confirmed": False, "checkpoint_id": created["checkpoint_id"]})
+def test_rollback_to_checkpoint_rejects_without_confirmation(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-no-confirm", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "rollback target"})
+    result = call_tool(
+        rollback_to_checkpoint, {"confirmed": False, "checkpoint_id": created["checkpoint_id"]}
     )
     assert result["ok"] is False
     assert "confirmation" in cast(str, result["error"])
 
 
-def test_rollback_to_checkpoint_not_found() -> None:
-    result = asyncio.run(rollback_to_checkpoint({"confirmed": True, "checkpoint_id": "no-such-id"}))
+def test_rollback_to_checkpoint_not_found(call_tool: CallTool) -> None:
+    result = call_tool(rollback_to_checkpoint, {"confirmed": True, "checkpoint_id": "no-such-id"})
     assert result["ok"] is False
 
 
-def test_rollback_artifact_rejects_without_confirmation() -> None:
-    _make_active_project("proj-cp-art-no-confirm")
-    asyncio.run(create_checkpoint({"reason": "rollback target"}))
-    result = asyncio.run(rollback_artifact({"confirmed": False, "artifact_id": "script"}))
+def test_rollback_artifact_rejects_without_confirmation(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-art-no-confirm", call_tool)
+    call_tool(create_checkpoint, {"reason": "rollback target"})
+    result = call_tool(rollback_artifact, {"confirmed": False, "artifact_id": "script"})
     assert result["ok"] is False
     assert "confirmation" in cast(str, result["error"])
 
 
-def test_get_invalidation_report_not_found() -> None:
-    result = asyncio.run(get_invalidation_report({"checkpoint_id": "no-such-id"}))
+def test_get_invalidation_report_not_found(call_tool: CallTool) -> None:
+    result = call_tool(get_invalidation_report, {"checkpoint_id": "no-such-id"})
     assert result["ok"] is False
 
 
-def test_get_invalidation_report_success() -> None:
-    _make_active_project("proj-cp-6")
-    created = asyncio.run(create_checkpoint({"reason": "for invalidation"}))
-    result = asyncio.run(get_invalidation_report({"checkpoint_id": created["checkpoint_id"]}))
+def test_get_invalidation_report_success(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-6", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "for invalidation"})
+    result = call_tool(get_invalidation_report, {"checkpoint_id": created["checkpoint_id"]})
     assert result["ok"] is True
     assert "rollback_target" in result
 
 
-def test_rollback_artifact_requires_artifact_id() -> None:
-    result = asyncio.run(rollback_artifact({"confirmed": True}))
+def test_rollback_artifact_requires_artifact_id(call_tool: CallTool) -> None:
+    result = call_tool(rollback_artifact, {"confirmed": True})
     assert result["ok"] is False
     assert "artifact_id is required" in cast(str, result["error"])
 
 
-def test_rollback_artifact_checkpoint_not_found() -> None:
-    _make_active_project("proj-cp-7")
-    result = asyncio.run(
-        rollback_artifact(
-            {"confirmed": True, "artifact_id": "script", "checkpoint_id": "no-such-checkpoint"}
-        )
+def test_rollback_artifact_checkpoint_not_found(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-7", call_tool)
+    result = call_tool(
+        rollback_artifact,
+        {"confirmed": True, "artifact_id": "script", "checkpoint_id": "no-such-checkpoint"},
     )
     assert result["ok"] is False
     assert "not found" in cast(str, result["error"])
 
 
 def test_rollback_artifact_checkpoint_without_git_commit(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    _make_active_project("proj-cp-8")
-    created = asyncio.run(create_checkpoint({"reason": "no git ref"}))
+    _make_active_project("proj-cp-8", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "no git ref"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -176,27 +176,28 @@ def test_rollback_artifact_checkpoint_without_git_commit(
     no_git_cp = cp.model_copy(update={"git_commit": ""})
     monkeypatch.setattr(rt, "get_checkpoint", lambda _id: no_git_cp)
 
-    result = asyncio.run(
-        rollback_artifact(
-            {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]}
-        )
+    result = call_tool(
+        rollback_artifact,
+        {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]},
     )
     assert result["ok"] is False
     assert "no git commit ref" in cast(str, result["error"])
 
 
-def test_rollback_artifact_no_checkpoint_contains_artifact() -> None:
-    _make_active_project("proj-cp-9")
-    asyncio.run(create_checkpoint({"reason": "no matching artifact"}))
-    result = asyncio.run(
-        rollback_artifact({"confirmed": True, "artifact_id": "totally-unused-artifact-xyz"})
+def test_rollback_artifact_no_checkpoint_contains_artifact(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-9", call_tool)
+    call_tool(create_checkpoint, {"reason": "no matching artifact"})
+    result = call_tool(
+        rollback_artifact, {"confirmed": True, "artifact_id": "totally-unused-artifact-xyz"}
     )
     assert result["ok"] is False
     assert "No checkpoint found containing artifact" in cast(str, result["error"])
 
 
-def test_create_checkpoint_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    _make_active_project("proj-cp-ve")
+def test_create_checkpoint_value_error(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
+    _make_active_project("proj-cp-ve", call_tool)
     from film_pipeline.studio.runtime import get_runtime as gr
 
     def _raise(**_kwargs: object) -> None:
@@ -204,23 +205,23 @@ def test_create_checkpoint_value_error(monkeypatch: pytest.MonkeyPatch) -> None:
 
     rt = gr()
     monkeypatch.setattr(rt, "create_checkpoint", _raise)
-    result = asyncio.run(create_checkpoint({"reason": "will fail"}))
+    result = call_tool(create_checkpoint, {"reason": "will fail"})
     assert result["ok"] is False
     assert "bad checkpoint" in cast(str, result["error"])
 
 
-def test_list_artifact_versions_no_checkpoints() -> None:
-    _make_active_project("proj-cp-empty")
-    result = asyncio.run(list_artifact_versions({}))
+def test_list_artifact_versions_no_checkpoints(call_tool: CallTool) -> None:
+    _make_active_project("proj-cp-empty", call_tool)
+    result = call_tool(list_artifact_versions, {})
     assert result["ok"] is True
     assert result["versions"] == []
 
 
 def test_rollback_artifact_specific_checkpoint_git_restore_fails(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    _make_active_project("proj-cp-restore-fail")
-    created = asyncio.run(create_checkpoint({"reason": "restore fail"}))
+    _make_active_project("proj-cp-restore-fail", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "restore fail"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -236,18 +237,19 @@ def test_rollback_artifact_specific_checkpoint_git_restore_fails(
         raise RuntimeError("git")
 
     monkeypatch.setattr(manager.git, "restore_files", _raise)
-    result = asyncio.run(
-        rollback_artifact(
-            {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]}
-        )
+    result = call_tool(
+        rollback_artifact,
+        {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]},
     )
     assert result["ok"] is False
     assert "git" in cast(str, result["error"])
 
 
-def test_rollback_artifact_fallback_loop_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    _make_active_project("proj-cp-fallback")
-    asyncio.run(create_checkpoint({"reason": "fallback"}))
+def test_rollback_artifact_fallback_loop_success(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
+    _make_active_project("proj-cp-fallback", call_tool)
+    call_tool(create_checkpoint, {"reason": "fallback"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -270,7 +272,7 @@ def test_rollback_artifact_fallback_loop_success(monkeypatch: pytest.MonkeyPatch
         manager.git, "list_files", lambda _c: ["artifacts/post/my_artifact/meta.json"]
     )
     monkeypatch.setattr(manager.git, "restore_files", _restore)
-    result = asyncio.run(rollback_artifact({"confirmed": True, "artifact_id": "my_artifact"}))
+    result = call_tool(rollback_artifact, {"confirmed": True, "artifact_id": "my_artifact"})
 
     assert result["ok"] is True
     assert result["artifact_id"] == "my_artifact"
@@ -278,10 +280,10 @@ def test_rollback_artifact_fallback_loop_success(monkeypatch: pytest.MonkeyPatch
 
 
 def test_rollback_artifact_specific_checkpoint_success(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    _make_active_project("proj-cp-restore-ok")
-    created = asyncio.run(create_checkpoint({"reason": "restore ok"}))
+    _make_active_project("proj-cp-restore-ok", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "restore ok"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -293,10 +295,9 @@ def test_rollback_artifact_specific_checkpoint_success(
         manager.git, "list_files", lambda _c: ["artifacts/03-script/script/meta.json"]
     )
     monkeypatch.setattr(manager.git, "restore_files", lambda *_args, **_kwargs: None)
-    result = asyncio.run(
-        rollback_artifact(
-            {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]}
-        )
+    result = call_tool(
+        rollback_artifact,
+        {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]},
     )
     assert set(result) == {
         "ok",
@@ -320,26 +321,27 @@ def test_rollback_artifact_specific_checkpoint_success(
 
 
 def test_rollback_artifact_specific_checkpoint_no_manager(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
-    _make_active_project("proj-cp-no-manager")
-    created = asyncio.run(create_checkpoint({"reason": "no manager"}))
+    _make_active_project("proj-cp-no-manager", call_tool)
+    created = call_tool(create_checkpoint, {"reason": "no manager"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     monkeypatch.setattr(rt, "checkpoint_managers", {})
-    result = asyncio.run(
-        rollback_artifact(
-            {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]}
-        )
+    result = call_tool(
+        rollback_artifact,
+        {"confirmed": True, "artifact_id": "script", "checkpoint_id": created["checkpoint_id"]},
     )
     assert result["ok"] is False
     assert "No checkpoint manager" in cast(str, result["error"])
 
 
-def test_rollback_artifact_fallback_no_manager(monkeypatch: pytest.MonkeyPatch) -> None:
-    _make_active_project("proj-cp-fallback-no-manager")
-    asyncio.run(create_checkpoint({"reason": "fallback no manager"}))
+def test_rollback_artifact_fallback_no_manager(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
+    _make_active_project("proj-cp-fallback-no-manager", call_tool)
+    call_tool(create_checkpoint, {"reason": "fallback no manager"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -351,14 +353,16 @@ def test_rollback_artifact_fallback_no_manager(monkeypatch: pytest.MonkeyPatch) 
     rt.checkpoint_managers[project_id].checkpoints[cp.checkpoint_id] = updated
     monkeypatch.setattr(rt, "checkpoint_managers", {})
 
-    result = asyncio.run(rollback_artifact({"confirmed": True, "artifact_id": "my_artifact"}))
+    result = call_tool(rollback_artifact, {"confirmed": True, "artifact_id": "my_artifact"})
     assert result["ok"] is False
     assert "No checkpoint found containing artifact" in cast(str, result["error"])
 
 
-def test_rollback_artifact_fallback_exception(monkeypatch: pytest.MonkeyPatch) -> None:
-    _make_active_project("proj-cp-fallback-exc")
-    asyncio.run(create_checkpoint({"reason": "fallback exc"}))
+def test_rollback_artifact_fallback_exception(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
+    _make_active_project("proj-cp-fallback-exc", call_tool)
+    call_tool(create_checkpoint, {"reason": "fallback exc"})
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -375,6 +379,6 @@ def test_rollback_artifact_fallback_exception(monkeypatch: pytest.MonkeyPatch) -
         raise RuntimeError("git")
 
     monkeypatch.setattr(manager.git, "restore_files", _raise)
-    result = asyncio.run(rollback_artifact({"confirmed": True, "artifact_id": "my_artifact"}))
+    result = call_tool(rollback_artifact, {"confirmed": True, "artifact_id": "my_artifact"})
     assert result["ok"] is False
     assert "No checkpoint found containing artifact" in cast(str, result["error"])

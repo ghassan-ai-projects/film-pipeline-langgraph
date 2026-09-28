@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from ..helpers import (
     _error,
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import (
     InvalidBibleOutput,
@@ -54,15 +53,17 @@ def _deliver_environment_bible(
     )
 
 
-async def generate_environment_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_environment_bible(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Generate an EnvironmentBible from Script + FilmConstitution.
 
     Produces a locked environment description (locked_prompt_block, fingerprint,
     zones, viewpoints, lighting states, color palette) used by
     generate_reference_images for structured prompt construction.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
 
     project_id = str(active["project_id"])
     environment_id = str(args.get("environment_id", "")).strip()

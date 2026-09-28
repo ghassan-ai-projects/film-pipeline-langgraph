@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _error,
@@ -13,7 +13,6 @@ from .helpers import (
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 
 #: Fallback cap when neither the caller nor the project supplies one. Kept
@@ -170,10 +169,11 @@ def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -
     return ref
 
 
-async def generate_plan(args: dict[str, object]) -> dict[str, object]:
+async def generate_plan(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate a GenerationPlan from the shot matrix."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 

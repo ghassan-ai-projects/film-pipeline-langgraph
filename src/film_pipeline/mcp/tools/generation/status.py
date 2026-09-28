@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
 
 from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_id,
 )
 
 
-async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
+async def get_generation_status(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Get status of a generation by id."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
@@ -36,10 +35,10 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
+async def list_active_generations(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List active (non-terminal) generation rows."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
     from film_pipeline.schemas.base import FilmPhase
 

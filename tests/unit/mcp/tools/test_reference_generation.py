@@ -9,9 +9,8 @@ image generation.
 
 from __future__ import annotations
 
-import asyncio
 import json
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,6 +27,8 @@ from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase, 
 from film_pipeline.schemas.reference import ReferenceIndex, ReferenceIndexEntry
 from film_pipeline.studio.mock_responses import default_mock_responses
 from film_pipeline.studio.runtime import StudioRuntime
+
+CallTool = Callable[..., Any]
 
 
 @dataclass
@@ -180,33 +181,37 @@ def _make_entry(
 # ---------------------------------------------------------------------------
 
 
-def test_missing_reference_index(rt: StudioRuntime) -> None:
-    result = asyncio.run(generate_reference_images({}))
+def test_missing_reference_index(rt: StudioRuntime, call_tool: CallTool) -> None:
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is False
     assert "Reference index not yet generated" in str(result.get("error", ""))
 
 
-def test_empty_entries(rt: StudioRuntime) -> None:
+def test_empty_entries(rt: StudioRuntime, call_tool: CallTool) -> None:
     _save_reference_index(rt, [])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is False
     assert "no entries" in str(result.get("error", "")).lower()
 
 
-def test_no_image_provider(rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_no_image_provider(
+    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     _save_reference_index(rt, [_make_entry("ref:leo:front")])
     rt.provider_adapters.clear()
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is False
     assert "No image provider" in str(result.get("error", ""))
 
 
-def test_project_root_not_found(rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_project_root_not_found(
+    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     _save_reference_index(rt, [_make_entry("ref:leo:front")])
     rt.project_roots.clear()
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is False
     assert "Project root" in str(result.get("error", ""))
 
@@ -216,15 +221,19 @@ def test_project_root_not_found(rt: StudioRuntime, monkeypatch: pytest.MonkeyPat
 # ---------------------------------------------------------------------------
 
 
-def test_success_single_entry(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_success_single_entry(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
     assert result["failed"] == 0
 
 
-def test_success_review_passed(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_success_review_passed(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     mocks["should_review"].return_value = True
     mocks["review_frame"].return_value = _FakeReviewResult(
         passed=True,
@@ -233,12 +242,14 @@ def test_success_review_passed(rt: StudioRuntime, mocks: dict[str, mock.MagicMoc
         actionable_feedback="",
     )
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
 
-def test_requested_ids_filter(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_requested_ids_filter(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(
         rt,
         [
@@ -246,14 +257,16 @@ def test_requested_ids_filter(rt: StudioRuntime, mocks: dict[str, mock.MagicMock
             _make_entry("ref:leo:side", frame_role="side-profile"),
         ],
     )
-    result = asyncio.run(generate_reference_images({"reference_ids": ["ref:leo:side"]}))
+    result = call_tool(generate_reference_images, {"reference_ids": ["ref:leo:side"]})
     assert result["ok"] is True
     assert result["generated"] == 1
     results = cast(list[dict[str, object]], result.get("results", []))
     assert any(str(r.get("reference_id")) == "ref:leo:side" for r in results)
 
 
-def test_force_regeneration(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_force_regeneration(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     project_root = rt.project_roots[str(rt.active_project_id)]
     existing = project_root / "references" / "characters" / "leo" / "master-frames"
     existing.mkdir(parents=True, exist_ok=True)
@@ -268,13 +281,13 @@ def test_force_regeneration(rt: StudioRuntime, mocks: dict[str, mock.MagicMock])
             )
         ],
     )
-    result = asyncio.run(generate_reference_images({"force": True}))
+    result = call_tool(generate_reference_images, {"force": True})
     assert result["ok"] is True
     assert result["generated"] == 1
 
 
 def test_asset_path_missing_file_generates(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     """Asset path is set but the file does not exist, so generation runs."""
     _save_reference_index(
@@ -287,12 +300,14 @@ def test_asset_path_missing_file_generates(
             )
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
 
-def test_empty_reference_id_filtered(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_empty_reference_id_filtered(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(
         rt,
         [
@@ -300,7 +315,7 @@ def test_empty_reference_id_filtered(rt: StudioRuntime, mocks: dict[str, mock.Ma
             {"reference_id": "", "subject_type": "character", "subject_id": "leo"},
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
@@ -310,17 +325,21 @@ def test_empty_reference_id_filtered(rt: StudioRuntime, mocks: dict[str, mock.Ma
 # ---------------------------------------------------------------------------
 
 
-def test_generation_fails_all_retries(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_generation_fails_all_retries(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     provider = rt.provider_adapters["mock-image-provider"]
     provider.submit.side_effect = RuntimeError("provider down")
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["failed"] == 1
     assert result["generated"] == 0
 
 
-def test_retry_then_succeed(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_retry_then_succeed(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     """First attempt fails generation; second attempt succeeds."""
     provider = rt.provider_adapters["mock-image-provider"]
     calls: list[int] = []
@@ -333,24 +352,28 @@ def test_retry_then_succeed(rt: StudioRuntime, mocks: dict[str, mock.MagicMock])
 
     provider.submit.side_effect = _submit
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
     assert result["failed"] == 0
 
 
-def test_heuristic_fails_all_retries(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_heuristic_fails_all_retries(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     mocks["heuristics"].return_value = _FakeHeuristicResult(
         passed=False, failures=["resolution_too_low"]
     )
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["failed"] == 1
     assert result["generated"] == 0
 
 
-def test_review_failed_then_passed(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_review_failed_then_passed(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     """First review fails with feedback; retry passes."""
     mocks["should_review"].return_value = True
     attempts: list[int] = []
@@ -373,12 +396,14 @@ def test_review_failed_then_passed(rt: StudioRuntime, mocks: dict[str, mock.Magi
 
     mocks["review_frame"].side_effect = _review
     _save_reference_index(rt, [_make_entry("ref:leo:side", frame_role="side-profile")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
 
-def test_review_failed_all_retries(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_review_failed_all_retries(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     mocks["should_review"].return_value = True
     mocks["review_frame"].return_value = _FakeReviewResult(
         passed=False,
@@ -387,16 +412,18 @@ def test_review_failed_all_retries(rt: StudioRuntime, mocks: dict[str, mock.Magi
         actionable_feedback="Face missing.",
     )
     _save_reference_index(rt, [_make_entry("ref:leo:side", frame_role="side-profile")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1  # accepted as needs_regeneration
     assert result["failed"] == 0
 
 
-def test_review_skipped(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_review_skipped(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     mocks["should_review"].return_value = False
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
@@ -407,7 +434,7 @@ def test_review_skipped(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> 
 
 
 def test_standard_tier_uses_seed_and_identity_state(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     """Standard tier should set seed and propagate identity state."""
     _save_reference_index(
@@ -417,7 +444,7 @@ def test_standard_tier_uses_seed_and_identity_state(
             _make_entry("ref:leo:side", frame_role="side-profile", tier="standard"),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 2
     provider = rt.provider_adapters["mock-image-provider"]
@@ -427,7 +454,7 @@ def test_standard_tier_uses_seed_and_identity_state(
 
 
 def test_delta_regeneration_strengthens_i2i(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     """Failed subject score on non-anchor activates i2i state."""
     mocks["should_review"].return_value = True
@@ -444,24 +471,26 @@ def test_delta_regeneration_strengthens_i2i(
             _make_entry("ref:leo:side", frame_role="side-profile"),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
 
 
-def test_anchor_frame_tracks_path(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_anchor_frame_tracks_path(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(
         rt,
         [
             _make_entry("ref:leo:front", frame_role="front-face", tier="standard"),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
 
 def test_delta_regeneration_reduces_i2i_strength(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     """Second failed subject review for a group reduces i2i_strength to 0.3."""
     mocks["should_review"].return_value = True
@@ -482,16 +511,16 @@ def test_delta_regeneration_reduces_i2i_strength(
             _make_entry("ref:leo:3-4", frame_role="3-4-left"),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
 
 
 def test_sidecar_exception_is_non_blocking(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     mocks["write_sidecar"].side_effect = RuntimeError("sidecar boom")
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 1
 
@@ -502,7 +531,7 @@ def test_sidecar_exception_is_non_blocking(
 
 
 def test_composite_sheets_called_for_character_and_environment(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     assert rt.services is not None
     store = rt.services.artifact_store
@@ -540,13 +569,15 @@ def test_composite_sheets_called_for_character_and_environment(
             ),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     mocks["character_sheet"].assert_called_once()
     mocks["environment_board"].assert_called_once()
 
 
-def test_optional_sheets_called(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_optional_sheets_called(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(
         rt,
         [
@@ -558,13 +589,13 @@ def test_optional_sheets_called(rt: StudioRuntime, mocks: dict[str, mock.MagicMo
             ),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     mocks["expression_sheet"].assert_called_once()
 
 
 def test_composite_exceptions_are_non_blocking(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     mocks["character_sheet"].side_effect = RuntimeError("sheet boom")
     mocks["environment_board"].side_effect = RuntimeError("board boom")
@@ -589,21 +620,25 @@ def test_composite_exceptions_are_non_blocking(
             ),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 2
 
 
-def test_sidecar_written(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_sidecar_written(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     mocks["write_sidecar"].assert_called_once()
 
 
-def test_index_files_written(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_index_files_written(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     _save_reference_index(rt, [_make_entry("ref:leo:front", frame_role="front-face")])
-    asyncio.run(generate_reference_images({}))
+    call_tool(generate_reference_images, {})
     project_root = rt.project_roots[str(rt.active_project_id)]
     idx_dir = project_root / "references" / "index"
     assert (idx_dir / "reference-index.json").exists()
@@ -611,7 +646,9 @@ def test_index_files_written(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
     assert len(data["entries"]) == 1
 
 
-def test_no_entries_needed_generation(rt: StudioRuntime, mocks: dict[str, mock.MagicMock]) -> None:
+def test_no_entries_needed_generation(
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
+) -> None:
     project_root = rt.project_roots[str(rt.active_project_id)]
     existing = project_root / "references" / "characters" / "leo" / "master-frames"
     existing.mkdir(parents=True, exist_ok=True)
@@ -626,7 +663,7 @@ def test_no_entries_needed_generation(rt: StudioRuntime, mocks: dict[str, mock.M
             )
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 0
     assert result["skipped"] == 1
@@ -638,7 +675,7 @@ def test_no_entries_needed_generation(rt: StudioRuntime, mocks: dict[str, mock.M
 
 
 def test_character_bible_preloaded_when_available(
-    rt: StudioRuntime, mocks: dict[str, mock.MagicMock]
+    rt: StudioRuntime, mocks: dict[str, mock.MagicMock], call_tool: CallTool
 ) -> None:
     assert rt.services is not None
     store = rt.services.artifact_store
@@ -677,6 +714,6 @@ def test_character_bible_preloaded_when_available(
             ),
         ],
     )
-    result = asyncio.run(generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     assert result["ok"] is True
     assert result["generated"] == 2

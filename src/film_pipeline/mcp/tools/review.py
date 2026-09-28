@@ -4,14 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.filmspec import blocking_issues as _blocking_issues_of
+from film_pipeline.mcp.tools.context import ToolContext
 
 from .helpers import (
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -76,15 +75,15 @@ def _blocking_issues(state: dict[str, Any]) -> list[dict[str, Any]]:
     return _blocking_issues_of(state.get("issues", []))
 
 
-async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
+async def review_phase_artifacts(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Build a review package for the current phase with orchestrator recommendations.
 
     Returns a structured ReviewPackage instead of a plain artifact list.
     The package includes candidate vs approved diffs, validation results,
     open issues, risks, and recommended next actions.
     """
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     phase = str(args.get("phase", state.get("current_phase", "")))
     if not phase:
         return _error("No phase specified and no active phase.")
@@ -152,8 +151,9 @@ def _build_orchestrator_recommendation(state: dict[str, Any], router_result: Any
     return f"Current action: {action}."
 
 
-async def approve_phase(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def approve_phase(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
     try:
         state = rt.approve_phase()
         return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
@@ -161,8 +161,8 @@ async def approve_phase(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def request_revision(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def request_revision(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     try:
         state = rt.request_revision(note=str(args.get("note", "")))
         return _ok(

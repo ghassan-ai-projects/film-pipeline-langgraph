@@ -8,8 +8,9 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -26,6 +27,8 @@ from film_pipeline.mcp import (
 )
 from film_pipeline.mcp.errors import MCPErrorCode, MCPResponse
 from film_pipeline.mcp.server import MCPServer
+
+CallTool = Callable[..., Any]
 
 
 def _pin_tools_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -693,7 +696,7 @@ def test_resolution_result_dataclass() -> None:
 # --- Wired MCP tool tests (runtime integration) --------------------------
 
 
-def test_wired_get_orchestrator_summary() -> None:
+def test_wired_get_orchestrator_summary(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -702,13 +705,13 @@ def test_wired_get_orchestrator_summary() -> None:
 
     from film_pipeline.mcp.tools import get_orchestrator_summary
 
-    result = asyncio.run(get_orchestrator_summary({"project_ref": "test-os"}))
+    result = call_tool(get_orchestrator_summary, {"project_ref": "test-os"})
     assert result["ok"] is True
     assert result["project_id"] == "test-os"
     assert "current_phase" in result
 
 
-def test_wired_get_blockers_empty() -> None:
+def test_wired_get_blockers_empty(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -717,13 +720,13 @@ def test_wired_get_blockers_empty() -> None:
 
     from film_pipeline.mcp.tools import get_blockers
 
-    result = asyncio.run(get_blockers({}))
+    result = call_tool(get_blockers, {})
     assert result["ok"] is True
     assert result["has_blockers"] is False
     assert result["blockers"] == []
 
 
-def test_wired_get_blockers_with_issues() -> None:
+def test_wired_get_blockers_with_issues(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -739,14 +742,14 @@ def test_wired_get_blockers_with_issues() -> None:
 
     from film_pipeline.mcp.tools import get_blockers
 
-    result = asyncio.run(get_blockers({}))
+    result = call_tool(get_blockers, {})
     assert result["ok"] is True
     assert result["has_blockers"] is True
     blockers = cast(list[dict[str, str]], result["blockers"])
     assert any("script_below_floor" in b.get("reason", "") for b in blockers)
 
 
-def test_wired_create_and_list_checkpoints() -> None:
+def test_wired_create_and_list_checkpoints(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -755,16 +758,16 @@ def test_wired_create_and_list_checkpoints() -> None:
 
     from film_pipeline.mcp.tools import create_checkpoint, list_checkpoints
 
-    cp_result = asyncio.run(create_checkpoint({"reason": "test checkpoint"}))
+    cp_result = call_tool(create_checkpoint, {"reason": "test checkpoint"})
     assert cp_result["ok"] is True
     assert cast(str, cp_result["checkpoint_id"]).startswith("checkpoint:test-cp:")
 
-    list_result = asyncio.run(list_checkpoints({"project_id": "test-cp"}))
+    list_result = call_tool(list_checkpoints, {"project_id": "test-cp"})
     assert list_result["ok"] is True
     assert len(cast(list[object], list_result["checkpoints"])) >= 1
 
 
-def test_wired_get_checkpoint() -> None:
+def test_wired_get_checkpoint(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -773,19 +776,19 @@ def test_wired_get_checkpoint() -> None:
 
     from film_pipeline.mcp.tools import create_checkpoint, get_checkpoint
 
-    cp_result = asyncio.run(create_checkpoint({"reason": "get test"}))
+    cp_result = call_tool(create_checkpoint, {"reason": "get test"})
     cid = cp_result["checkpoint_id"]
 
-    result = asyncio.run(get_checkpoint({"checkpoint_id": cid}))
+    result = call_tool(get_checkpoint, {"checkpoint_id": cid})
     assert result["ok"] is True
     assert result["checkpoint_id"] == cid
 
     # Missing checkpoint
-    missing = asyncio.run(get_checkpoint({"checkpoint_id": "nonexistent"}))
+    missing = call_tool(get_checkpoint, {"checkpoint_id": "nonexistent"})
     assert missing["ok"] is False
 
 
-def test_wired_compare_versions() -> None:
+def test_wired_compare_versions(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -794,22 +797,21 @@ def test_wired_compare_versions() -> None:
 
     from film_pipeline.mcp.tools import compare_versions, create_checkpoint
 
-    cp_a = asyncio.run(create_checkpoint({"reason": "first"}))
-    cp_b = asyncio.run(create_checkpoint({"reason": "second"}))
+    cp_a = call_tool(create_checkpoint, {"reason": "first"})
+    cp_b = call_tool(create_checkpoint, {"reason": "second"})
 
-    result = asyncio.run(
-        compare_versions(
-            {
-                "checkpoint_id_a": cp_a["checkpoint_id"],
-                "checkpoint_id_b": cp_b["checkpoint_id"],
-            }
-        )
+    result = call_tool(
+        compare_versions,
+        {
+            "checkpoint_id_a": cp_a["checkpoint_id"],
+            "checkpoint_id_b": cp_b["checkpoint_id"],
+        },
     )
     assert result["ok"] is True
     assert "older_phase" in result
 
 
-def test_wired_rollback_to_checkpoint() -> None:
+def test_wired_rollback_to_checkpoint(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -818,15 +820,15 @@ def test_wired_rollback_to_checkpoint() -> None:
 
     from film_pipeline.mcp.tools import create_checkpoint, rollback_to_checkpoint
 
-    cp = asyncio.run(create_checkpoint({"reason": "rollback target"}))
-    result = asyncio.run(
-        rollback_to_checkpoint({"checkpoint_id": cp["checkpoint_id"], "confirmed": True})
+    cp = call_tool(create_checkpoint, {"reason": "rollback target"})
+    result = call_tool(
+        rollback_to_checkpoint, {"checkpoint_id": cp["checkpoint_id"], "confirmed": True}
     )
     assert result["ok"] is True
     assert result["rollback_target"] == cp["checkpoint_id"]
 
 
-def test_wired_get_invalidation_report() -> None:
+def test_wired_get_invalidation_report(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -835,8 +837,8 @@ def test_wired_get_invalidation_report() -> None:
 
     from film_pipeline.mcp.tools import create_checkpoint, get_invalidation_report
 
-    cp = asyncio.run(create_checkpoint({"reason": "invalidation test"}))
-    result = asyncio.run(get_invalidation_report({"checkpoint_id": cp["checkpoint_id"]}))
+    cp = call_tool(create_checkpoint, {"reason": "invalidation test"})
+    result = call_tool(get_invalidation_report, {"checkpoint_id": cp["checkpoint_id"]})
     assert result["ok"] is True
     assert "will_revert" in result
     assert "will_invalidate" in result
@@ -868,7 +870,7 @@ def test_wired_explain_last_decision() -> None:
     assert result["action"] == "create_project"
 
 
-def test_wired_provider_health_tools() -> None:
+def test_wired_provider_health_tools(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -876,15 +878,15 @@ def test_wired_provider_health_tools() -> None:
 
     from film_pipeline.mcp.tools import check_provider_health, list_providers
 
-    health = asyncio.run(check_provider_health({"provider_id": "mock-video-provider"}))
+    health = call_tool(check_provider_health, {"provider_id": "mock-video-provider"})
     assert health["ok"] is True
     assert health["status"] == "healthy"
 
-    providers = asyncio.run(list_providers({}))
+    providers = call_tool(list_providers, {})
     assert providers["ok"] is True
 
 
-def test_wired_resolve_provider_block() -> None:
+def test_wired_resolve_provider_block(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -892,7 +894,7 @@ def test_wired_resolve_provider_block() -> None:
 
     from film_pipeline.mcp.tools import resolve_provider_block
 
-    result = asyncio.run(resolve_provider_block({"provider_id": "mock-video-provider"}))
+    result = call_tool(resolve_provider_block, {"provider_id": "mock-video-provider"})
     assert result["ok"] is True
     assert result["status"] == "healthy"
 
@@ -901,7 +903,7 @@ def test_wired_resolve_provider_block() -> None:
     assert health["status"] == "healthy"
 
 
-def test_wired_get_next_actions() -> None:
+def test_wired_get_next_actions(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
@@ -910,7 +912,7 @@ def test_wired_get_next_actions() -> None:
 
     from film_pipeline.mcp.tools import get_next_actions
 
-    result = asyncio.run(get_next_actions({}))
+    result = call_tool(get_next_actions, {})
     assert result["ok"] is True
     assert "next_action" in result
 
@@ -925,10 +927,10 @@ def test_wired_explain_kb_context() -> None:
     assert resp.success is True
 
 
-def test_wired_kb_explain_context_choice() -> None:
+def test_wired_kb_explain_context_choice(call_tool: CallTool) -> None:
     from film_pipeline.mcp.tools import kb_explain_context_choice
 
-    result = asyncio.run(kb_explain_context_choice({}))
+    result = call_tool(kb_explain_context_choice, {})
     assert result["ok"] is True
 
 
@@ -962,19 +964,23 @@ def test_wired_inspect_profile() -> None:
     assert missing["ok"] is False
 
 
-def test_wired_get_runtime_mode_default_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wired_get_runtime_mode_default_mock(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.mcp.tools import get_runtime_mode
     from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
-    result = asyncio.run(get_runtime_mode({}))
+    result = call_tool(get_runtime_mode, {})
     assert result["ok"] is True
     assert result["server_mode"] == "mock"
     assert result["runtime_mode"] == "mock"
 
 
-def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wired_get_runtime_mode_after_project(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.studio import runtime as runtime_mod
 
     runtime_mod.reset_runtime("real")
@@ -991,7 +997,7 @@ def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -
 
     from film_pipeline.mcp.tools import get_runtime_mode
 
-    result = asyncio.run(get_runtime_mode({}))
+    result = call_tool(get_runtime_mode, {})
     assert result["ok"] is True
     assert result["server_mode"] == "real"
     assert result["runtime_mode"] == "real"
@@ -999,7 +1005,9 @@ def test_wired_get_runtime_mode_after_project(monkeypatch: pytest.MonkeyPatch) -
     assert stack["provider_profile"] == "seedance_primary"
 
 
-def test_wired_get_runtime_mode_rejects_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wired_get_runtime_mode_rejects_mismatch(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.mcp.tools import get_runtime_mode
     from film_pipeline.studio import runtime as runtime_mod
 
@@ -1010,14 +1018,14 @@ def test_wired_get_runtime_mode_rejects_mismatch(monkeypatch: pytest.MonkeyPatch
     rt.set_active("test-mode-mismatch")
     rt.projects["test-mode-mismatch"]["runtime_mode"] = "mock"
 
-    result = asyncio.run(get_runtime_mode({}))
+    result = call_tool(get_runtime_mode, {})
     assert result["ok"] is False
     assert result["server_mode"] == "real"
     assert result["project_runtime_mode"] == "mock"
 
 
 def test_wired_create_film_project_rejects_mock_in_real_mode(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio import runtime as runtime_mod
@@ -1027,16 +1035,15 @@ def test_wired_create_film_project_rejects_mock_in_real_mode(
     _pin_tools_runtime(monkeypatch)
 
     # Create with mock provider in real mode — should reject
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-real-reject-provider",
-                "title": "Test",
-                "slug": "test",
-                "runtime_mode": "real",
-                "provider_profile": "mock-demo",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-real-reject-provider",
+            "title": "Test",
+            "slug": "test",
+            "runtime_mode": "real",
+            "provider_profile": "mock-demo",
+        },
     )
     assert result["ok"] is False
     error = cast(str, result.get("error", ""))
@@ -1047,7 +1054,7 @@ def test_wired_create_film_project_rejects_mock_in_real_mode(
 
 
 def test_wired_create_film_project_accepts_real_provider(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio import runtime as runtime_mod
@@ -1057,16 +1064,15 @@ def test_wired_create_film_project_accepts_real_provider(
     runtime_mod.reset_runtime("real")
     _pin_tools_runtime(monkeypatch)
     # Create with real provider in real mode — should accept
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-real-accept",
-                "title": "Test",
-                "slug": "test",
-                "runtime_mode": "real",
-                "provider_profile": "seedance_primary",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-real-accept",
+            "title": "Test",
+            "slug": "test",
+            "runtime_mode": "real",
+            "provider_profile": "seedance_primary",
+        },
     )
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
@@ -1091,28 +1097,29 @@ def test_wired_create_film_project_accepts_real_provider(
 
 
 def test_wired_create_film_project_rejects_invalid_runtime_mode(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-invalid-mode",
-                "title": "Test",
-                "runtime_mode": "production",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-invalid-mode",
+            "title": "Test",
+            "runtime_mode": "production",
+        },
     )
     assert result["ok"] is False
     error = cast(str, result.get("error", ""))
     assert "mock" in error or "real" in error
 
 
-def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wired_create_film_project_defaults_to_mock_mode(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio import runtime as runtime_mod
 
@@ -1120,14 +1127,13 @@ def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.Mon
     rt = runtime_mod.get_runtime()
     _pin_tools_runtime(monkeypatch)
 
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-default-mock",
-                "title": "Test",
-                "slug": "test",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-default-mock",
+            "title": "Test",
+            "slug": "test",
+        },
     )
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
@@ -1138,7 +1144,7 @@ def test_wired_create_film_project_defaults_to_mock_mode(monkeypatch: pytest.Mon
 
 
 def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio.runtime import reset_runtime
@@ -1147,15 +1153,14 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
     monkeypatch.setenv("GOOGLE_API_KEY", "AIza-test-google")
     reset_runtime("real")
     _pin_tools_runtime(monkeypatch)
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-default-real",
-                "title": "Test",
-                "slug": "test-real",
-                "provider_profile": "provider.seedance_primary",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-default-real",
+            "title": "Test",
+            "slug": "test-real",
+            "provider_profile": "provider.seedance_primary",
+        },
     )
     assert result["ok"] is True
     state = cast(dict[str, object], result["state"])
@@ -1165,7 +1170,9 @@ def test_wired_create_film_project_defaults_to_real_mode_when_server_is_real(
     assert pstack["provider_profile"] == "provider.seedance_primary"
 
 
-def test_wired_create_film_project_reports_all_providers_missing_google_key() -> None:
+def test_wired_create_film_project_reports_all_providers_missing_google_key(
+    call_tool: CallTool,
+) -> None:
     from unittest import mock
 
     from film_pipeline.mcp.tools import create_film_project
@@ -1189,16 +1196,15 @@ def test_wired_create_film_project_reports_all_providers_missing_google_key() ->
         providers_before = rt.list_providers()
         health_before = rt.get_all_health()
         _pin_tools_runtime(monkeypatch)
-        result = asyncio.run(
-            create_film_project(
-                {
-                    "project_id": "test-missing-google-key",
-                    "title": "Test",
-                    "slug": "test-missing-google-key",
-                    "runtime_mode": "real",
-                    "provider_profile": "provider.seedance_primary",
-                }
-            )
+        result = call_tool(
+            create_film_project,
+            {
+                "project_id": "test-missing-google-key",
+                "title": "Test",
+                "slug": "test-missing-google-key",
+                "runtime_mode": "real",
+                "provider_profile": "provider.seedance_primary",
+            },
         )
 
     assert result["ok"] is False
@@ -1213,21 +1219,22 @@ def test_wired_create_film_project_reports_all_providers_missing_google_key() ->
     assert rt.get_all_health() == health_before
 
 
-def test_wired_create_film_project_rejects_mode_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wired_create_film_project_rejects_mode_mismatch(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.mcp.tools import create_film_project
     from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("mock")
     _pin_tools_runtime(monkeypatch)
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "test-mode-mismatch-reject",
-                "title": "Mismatch",
-                "runtime_mode": "real",
-                "provider_profile": "provider.seedance_primary",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "test-mode-mismatch-reject",
+            "title": "Mismatch",
+            "runtime_mode": "real",
+            "provider_profile": "provider.seedance_primary",
+        },
     )
     assert result["ok"] is False
     assert result["server_mode"] == "mock"
@@ -1235,9 +1242,10 @@ def test_wired_create_film_project_rejects_mode_mismatch(monkeypatch: pytest.Mon
 
 
 def test_generate_reference_images_persists_assets_and_updates_reference_index(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     import film_pipeline.mcp.tools as mcp_tools
+    from film_pipeline.mcp.tools import generate_reference_images, inspect_reference
     from film_pipeline.studio import runtime as runtime_mod
     from film_pipeline.studio._provider_factory import build_provider_adapter
 
@@ -1261,7 +1269,7 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
     rt.set_provider_health("mock-image-provider", "healthy")
 
     monkeypatch.setattr(mcp_tools, "get_runtime", lambda: rt)
-    result = asyncio.run(mcp_tools.generate_reference_images({}))
+    result = call_tool(generate_reference_images, {})
     # The function may return ok=True with varying counts depending on
     # mock VisualDevAgent output and test environment. Verify it completes.
     assert result["ok"] is True
@@ -1271,7 +1279,7 @@ def test_generate_reference_images_persists_assets_and_updates_reference_index(
     ref = str(active.get("visual_refs", ""))
     assert ref.startswith("artifact:visual_dev:reference_index:v")
 
-    inspect_result = asyncio.run(mcp_tools.inspect_reference({"reference_id": "ref_001"}))
+    inspect_result = call_tool(inspect_reference, {"reference_id": "ref_001"})
     assert inspect_result["ok"] is True
     reference = cast(dict[str, object], inspect_result["reference"])
     asset_path = cast(str, reference["asset_path"])
@@ -1309,13 +1317,15 @@ def test_tool_registry_has_config_group() -> None:
     }
 
 
-def test_list_providers_real_mode_has_no_mock_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_providers_real_mode_has_no_mock_fallback(
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
+) -> None:
     from film_pipeline.mcp.tools import list_providers
     from film_pipeline.studio.runtime import reset_runtime
 
     reset_runtime("real")
     _pin_tools_runtime(monkeypatch)
-    result = asyncio.run(list_providers({}))
+    result = call_tool(list_providers, {})
     assert result["ok"] is True
     assert result["providers"] == []
     assert result["total"] == 0

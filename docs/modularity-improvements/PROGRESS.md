@@ -18,7 +18,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `fb14d31` | both fail, by design | n/a |
 | 8 | CLI through `MCPServer.call`; public runtime installer | `30575ec` | Step 7's two tests pass; no `_RUNTIME` writes outside `studio` | 0 |
 | 9 | Delete the orphaned operator surface | `f717013` | coverage ≥ 90% **without new tests**; `mcp -> studio._operator_runtime` stays 1 | 0 |
-| 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `_pending_` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
+| 10a | `ToolContext` mechanism + first group (`audit`); slice 3 (one active project) | `2ae1db7` | `call_tool` fixture; `MCPServer.active_project_id` deleted | 0 |
+| 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `_pending_` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -481,3 +482,75 @@ the duplication this program keeps removing.
   root-collapse artifact).
 - Recorded surface growth, re-measured not asserted: `mcp` 14→15 declared names and
   37→38 public modules, `mcp.tools` 31→32 modules.
+
+## Step 10b — every tool module on `ToolContext` (2026-09-28)
+
+**Doc 01 slice 2's falsifiable check is met.** `measure.py`:
+
+```text
+get_runtime() calls in mcp:  61  ->  3
+```
+
+All three survivors are in `mcp/server.py` and they are dispatch itself:
+`_resolve_project_ref`'s active-project read, `_build_context`, and
+`_active_project_from_runtime`. That is the target — one place resolves the
+runtime, instead of 61 handlers doing it for themselves.
+
+### What moved
+
+All 25 handler modules migrated, each by changing its signature to
+`handler(ctx, args)` — `MCPServer._accepts_context` picks the shape from the first
+parameter's name, so no registry flag had to be kept in step. Groups, in the order
+they landed: `audit`, `providers`, `intake`, `config`, `assembly`, `review`,
+`validation`, `operator`, `planning`, `bibles` (5 modules), `generation` (4),
+`artifacts`, `checkpoints`, `state`, `kb`, `projects`, `_profile_change`,
+`reference_generation`.
+
+**Deleted with the migration**, because the context made them dead:
+
+- `helpers.require_project_id` and `helpers.require_project_state` — 44 handlers
+  called one of them to re-derive a project dispatch had already resolved. They
+  now call `ctx.project_state()`, whose rule lives once, on the context.
+- `helpers._active_project_id` — the two-source fallback (envelope, then runtime)
+  that existed only because the handler had to reconstruct the resolution.
+- `mcp/tools/context.py` gained `project_state()`. It was removed in Step 10a
+  because `require_project_state` still owned the rule; once the migrated callers
+  needed it, the context became the owner — and, from `mcp/tools/`, it no longer
+  closes the `mcp -> tools -> mcp` cycle that forced it out in Step 10a.
+
+### The test seam
+
+`call_tool` moved from `tests/unit/mcp/tools/conftest.py` to the **root**
+`tests/conftest.py`, so `tests/unit/`, `tests/integration/` and the smoke suite can
+all use it. It builds the real `ToolContext` for a runtime the test owns, and it
+still handles the legacy `handler(args)` shape — which is why a half-migrated tree
+stayed runnable throughout, and why the remaining legacy handlers in the tree today
+are only those with no `get_runtime` call to remove.
+
+It reads `tools_pkg.get_runtime()` on purpose: a test that patched that accessor
+gets its own runtime, and a test that patched nothing gets the process runtime,
+exactly as dispatch would.
+
+### Four defects the migration surfaced, all caught by tools rather than review
+
+1. **`project_state()` was needed after all.** Removing it in 10a was premature —
+   see above. The cycle that justified its removal was a *placement* problem, not a
+   reason to lose the rule.
+2. **A nested helper was given the fixture parameter.** My codemod added
+   `call_tool: CallTool` to `_fake_poll`, `is_configured` and a `_explode` stub
+   because they were in functions that used the fixture. Every one was a
+   `TypeError` at runtime, and mypy and ruff were both silent.
+3. **A `return` was dropped** from `asyncio.run`-wrapped closures when they became
+   sync, which mypy caught as `Missing return statement`.
+4. **`ctx.project_id` is `str | None`** where a handler needed `str`. The fix was
+   not a cast: `project_state()` already proves the guarantee by returning, so the
+   id is read from the resolved state.
+
+### Evidence
+
+- `measure.py`: `get_runtime()` in `mcp` **61 → 3**; `rt: Any` parameters **37 → 35**.
+- `make ci-check`: **2335 passed, 91.63% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean across 212 test files.
+- `enola check` exit 0, **cycle count still 1** (only the known `orchestration`
+  root-collapse artifact).
+- No `git stash`-style experiments left behind: the tree is the committed state.

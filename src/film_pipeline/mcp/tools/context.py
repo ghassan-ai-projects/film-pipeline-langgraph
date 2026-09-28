@@ -27,16 +27,37 @@ class ToolContext:
     04's slice, and doing both at once would conflate "where does the runtime come
     from" with "what shape are the arguments".
 
-    It carries no `project_state()` helper: `helpers.require_project_state` already
-    owns "the project's state, or a raise", and a second method for the same rule is
-    the duplication this program keeps removing. Adding one here also dragged
-    `filmspec` and `operations.errors` into `contract`, which sits at the `mcp`
-    package root and closed an `mcp -> tools -> mcp` cycle Enola reports.
+    It carries `project_state()` because migrating a handler means replacing its
+    `require_project_state(args)` call, and the context already holds the resolved
+    project — so this is where the rule belongs now, not a duplicate of it. The
+    earlier placement (at the `mcp` package root) could not have it: the method
+    imports `filmspec` and `operations.errors`, which made `mcp.contract` depend on
+    modules the tool subpackages also reach, closing an `mcp -> tools -> mcp` cycle.
+    From `mcp/tools/`, that import is internal to the subpackage Enola treats as one
+    node, so the cycle does not form.
     """
 
     runtime: Any
     project_id: str | None
     envelope: Any
+
+    def project_state(self) -> dict[str, Any]:
+        """Return the context project's live state.
+
+        Raises `ProjectNotFoundError` when no project resolved, mirroring
+        `helpers.require_project_state` (which this replaces at migrated call
+        sites): dispatch checks `requires_active_project` before the handler runs,
+        so reaching here without one is a contract bug rather than a user error.
+        """
+        from film_pipeline.filmspec import NO_ACTIVE_PROJECT
+        from film_pipeline.operations.errors import ProjectNotFoundError
+
+        if self.project_id is None:
+            raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
+        state: dict[str, Any] | None = self.runtime.get_project(self.project_id)
+        if state is None:
+            raise ProjectNotFoundError(f"Project '{self.project_id}' is not loaded.")
+        return state
 
 
 __all__ = ["ToolContext"]

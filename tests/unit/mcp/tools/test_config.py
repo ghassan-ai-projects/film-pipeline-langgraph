@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Generator
-from typing import cast
+from collections.abc import Callable, Generator
+from typing import Any, cast
 
 import pytest
 
@@ -18,6 +18,8 @@ from film_pipeline.mcp.tools import (
     set_active_project,
 )
 from film_pipeline.studio.runtime import reset_runtime
+
+CallTool = Callable[..., Any]
 
 
 @pytest.fixture(autouse=True)
@@ -48,36 +50,35 @@ def test_inspect_profile_not_found() -> None:
     assert result["ok"] is False
 
 
-def test_get_runtime_mode_default_mock() -> None:
-    result = asyncio.run(get_runtime_mode({}))
+def test_get_runtime_mode_default_mock(call_tool: CallTool) -> None:
+    result = call_tool(get_runtime_mode, {})
     assert result["ok"] is True
     assert result["server_mode"] == "mock"
     assert result["runtime_mode"] == "mock"
     assert result["aligned"] is True
 
 
-def test_get_runtime_mode_no_active_project_uses_server_mode() -> None:
+def test_get_runtime_mode_no_active_project_uses_server_mode(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
-    result = asyncio.run(get_runtime_mode({}))
+    result = call_tool(get_runtime_mode, {})
     assert result["ok"] is True
     assert result["project_runtime_mode"] == ""
 
 
 def test_quality_environment_override_updates_effective_profile_stack(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     monkeypatch.setenv("FILM_PIPELINE_QUALITY", "draft")
 
-    result = asyncio.run(
-        create_film_project(
-            {
-                "project_id": "quality-env-override",
-                "quality_profile": "quality.studio",
-            }
-        )
+    result = call_tool(
+        create_film_project,
+        {
+            "project_id": "quality-env-override",
+            "quality_profile": "quality.studio",
+        },
     )
 
     assert result["ok"] is True
@@ -88,35 +89,34 @@ def test_quality_environment_override_updates_effective_profile_stack(
     assert config["quality_profile"] == "draft"
 
 
-def _create_active_project(project_id: str) -> None:
-    asyncio.run(create_film_project({"project_id": project_id, "title": "T", "slug": project_id}))
-    asyncio.run(set_active_project({"project_ref": project_id}))
+def _create_active_project(project_id: str, call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": project_id, "title": "T", "slug": project_id})
+    call_tool(set_active_project, {"project_ref": project_id})
 
 
-def test_propose_profile_change_requires_reason() -> None:
-    _create_active_project("profile-change-no-reason")
-    result = asyncio.run(propose_profile_change({"quality_profile": "quality.draft"}))
+def test_propose_profile_change_requires_reason(call_tool: CallTool) -> None:
+    _create_active_project("profile-change-no-reason", call_tool)
+    result = call_tool(propose_profile_change, {"quality_profile": "quality.draft"})
     assert result["ok"] is False
     assert "reason is required" in cast(str, result["error"])
 
 
-def test_propose_profile_change_requires_change() -> None:
-    _create_active_project("profile-change-no-change")
-    result = asyncio.run(propose_profile_change({"reason": "No actual change"}))
+def test_propose_profile_change_requires_change(call_tool: CallTool) -> None:
+    _create_active_project("profile-change-no-change", call_tool)
+    result = call_tool(propose_profile_change, {"reason": "No actual change"})
     assert result["ok"] is False
     assert "At least one profile change" in cast(str, result["error"])
 
 
-def test_propose_profile_change_creates_pending_proposal() -> None:
-    _create_active_project("profile-change-propose")
-    result = asyncio.run(
-        propose_profile_change(
-            {
-                "reason": "Switch to draft quality for faster iteration",
-                "quality_profile": "quality.draft",
-                "proposed_by": "operator-test",
-            }
-        )
+def test_propose_profile_change_creates_pending_proposal(call_tool: CallTool) -> None:
+    _create_active_project("profile-change-propose", call_tool)
+    result = call_tool(
+        propose_profile_change,
+        {
+            "reason": "Switch to draft quality for faster iteration",
+            "quality_profile": "quality.draft",
+            "proposed_by": "operator-test",
+        },
     )
     assert result["ok"] is True
     assert "proposal_id" in result
@@ -126,28 +126,29 @@ def test_propose_profile_change_creates_pending_proposal() -> None:
     assert "proposal_ref" in result
 
 
-def test_approve_profile_change_requires_confirmed() -> None:
-    _create_active_project("profile-change-confirm")
-    proposed = asyncio.run(
-        propose_profile_change({"reason": "R", "quality_profile": "quality.draft"})
+def test_approve_profile_change_requires_confirmed(call_tool: CallTool) -> None:
+    _create_active_project("profile-change-confirm", call_tool)
+    proposed = call_tool(
+        propose_profile_change, {"reason": "R", "quality_profile": "quality.draft"}
     )
     proposal_id = cast(str, proposed["proposal_id"])
-    result = asyncio.run(approve_profile_change({"proposal_id": proposal_id}))
+    result = call_tool(approve_profile_change, {"proposal_id": proposal_id})
     # The MCP server enforces confirmation before the handler is invoked, but
     # calling the handler directly without confirmed=True should still work.
     assert result["ok"] is True
 
 
-def test_approve_profile_change_updates_config_and_registers_profile_providers() -> None:
-    _create_active_project("profile-change-approve")
-    proposed = asyncio.run(
-        propose_profile_change(
-            {
-                "reason": "R",
-                "quality_profile": "quality.draft",
-                "provider_profile": "mock-demo",
-            }
-        )
+def test_approve_profile_change_updates_config_and_registers_profile_providers(
+    call_tool: CallTool,
+) -> None:
+    _create_active_project("profile-change-approve", call_tool)
+    proposed = call_tool(
+        propose_profile_change,
+        {
+            "reason": "R",
+            "quality_profile": "quality.draft",
+            "provider_profile": "mock-demo",
+        },
     )
     proposal_id = cast(str, proposed["proposal_id"])
 
@@ -158,10 +159,9 @@ def test_approve_profile_change_updates_config_and_registers_profile_providers()
     assert project_state is not None
     project_state["profile_version"] = 2
 
-    result = asyncio.run(
-        approve_profile_change(
-            {"proposal_id": proposal_id, "confirmed": True, "approved_by": "human-test"}
-        )
+    result = call_tool(
+        approve_profile_change,
+        {"proposal_id": proposal_id, "confirmed": True, "approved_by": "human-test"},
     )
     assert result["ok"] is True
     assert result["profile_version"] == 3
@@ -185,10 +185,8 @@ def test_approve_profile_change_updates_config_and_registers_profile_providers()
     }
 
 
-def test_approve_profile_change_rejects_missing_proposal() -> None:
-    _create_active_project("profile-change-missing")
-    result = asyncio.run(
-        approve_profile_change({"proposal_id": "does-not-exist", "confirmed": True})
-    )
+def test_approve_profile_change_rejects_missing_proposal(call_tool: CallTool) -> None:
+    _create_active_project("profile-change-missing", call_tool)
+    result = call_tool(approve_profile_change, {"proposal_id": "does-not-exist", "confirmed": True})
     assert result["ok"] is False
     assert "not found" in cast(str, result["error"])
