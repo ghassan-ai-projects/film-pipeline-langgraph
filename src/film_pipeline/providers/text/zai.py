@@ -16,12 +16,12 @@ from dataclasses import replace
 from typing import Any
 from urllib.parse import urlsplit
 
-from film_pipeline.agents.transports.chat_completions import (
+from film_pipeline.providers.credentials import env_or_dotenv, lookup
+from film_pipeline.providers.http_transport import post_json
+from film_pipeline.providers.text.chat_completions import (
     ChatRequest,
     chat_completions_payload,
 )
-from film_pipeline.providers.credentials import env_or_dotenv, lookup
-from film_pipeline.providers.http_transport import post_json
 
 ZAI_MODEL_PREFIX = "zai/"
 ZAI_API_BASE = "https://api.z.ai/api/paas/v4"

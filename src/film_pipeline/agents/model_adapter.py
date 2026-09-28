@@ -21,12 +21,6 @@ from __future__ import annotations
 from typing import Any
 
 from film_pipeline.agents._json_extraction import extract_json_object
-from film_pipeline.agents.transports import chat_completions, gemini, zai
-from film_pipeline.agents.transports.chat_completions import (
-    ChatRequest as _ChatRequest,
-)
-from film_pipeline.agents.transports.gemini import GeminiRequest as _GeminiRequest
-from film_pipeline.agents.transports.zai import ZAI_MODEL_PREFIX
 
 # Historical import paths kept stable for callers and tests (explicit alias
 # form so mypy strict's no_implicit_reexport passes them through).
@@ -37,6 +31,12 @@ from film_pipeline.providers.http_transport import (
     _open_with_timeout as _open_with_timeout,
 )
 from film_pipeline.providers.http_transport import post_json as post_json
+from film_pipeline.providers.text import chat_completions, gemini, zai
+from film_pipeline.providers.text.chat_completions import (
+    ChatRequest as _ChatRequest,
+)
+from film_pipeline.providers.text.gemini import GeminiRequest as _GeminiRequest
+from film_pipeline.providers.text.zai import ZAI_MODEL_PREFIX
 
 _ZAI_MODEL_PREFIX = ZAI_MODEL_PREFIX
 _GEMINI_MODEL_PREFIX = "google/"

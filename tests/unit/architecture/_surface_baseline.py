@@ -44,12 +44,11 @@ class Surface(NamedTuple):
 
 #: package -> (declared `__all__` size or None, public module count).
 SURFACE_BASELINE: dict[str, Surface] = {
-    "agents": Surface(5, 28),
+    "agents": Surface(5, 25),
     "agents.impl": Surface(14, 15),
     "agents.model_routing": Surface(2, 0),
     "agents.prompt_templates": Surface(3, 5),
     "agents.prompt_templates.defaults": Surface(24, 3),
-    "agents.transports": Surface(19, 3),
     "checkpoints": Surface(8, 6),
     "cli": Surface(None, 4),
     "config": Surface(15, 6),
@@ -75,7 +74,9 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "orchestration.subgraphs": Surface(None, 1),
     "post": Surface(13, 6),
     "projects": Surface(10, 2),
-    "providers": Surface(18, 14),
+    "providers": Surface(18, 17),
+    # Text transports moved here from `agents.transports` (doc 06 slice 6.3).
+    "providers.text": Surface(19, 3),
     "providers.adapters": Surface(3, 3),
     "schemas": Surface(107, 36),
     "schemas.registries": Surface(5, 3),

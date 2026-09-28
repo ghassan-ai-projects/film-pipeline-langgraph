@@ -12,13 +12,13 @@ The network boundary itself lives in ``providers.http_transport.post_json``;
 these modules only shape requests and resolve keys.
 """
 
-from film_pipeline.agents.transports.chat_completions import (
+from film_pipeline.providers.text.chat_completions import (
     ChatRequest,
     chat_completions_payload,
     openrouter_api_key,
     send_chat_completion,
 )
-from film_pipeline.agents.transports.gemini import (
+from film_pipeline.providers.text.gemini import (
     GEMINI_ERROR_PREFIX,
     GEMINI_MODEL_PREFIX,
     GeminiRequest,
@@ -28,7 +28,7 @@ from film_pipeline.agents.transports.gemini import (
     gemini_url,
     send_generate_content,
 )
-from film_pipeline.agents.transports.zai import (
+from film_pipeline.providers.text.zai import (
     ZAI_API_BASE,
     ZAI_CODING_API_BASE,
     ZAI_ERROR_PREFIX,

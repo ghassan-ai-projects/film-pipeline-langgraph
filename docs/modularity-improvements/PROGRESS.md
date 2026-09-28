@@ -41,7 +41,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 6.8 | AGENTS.md package table completed | `14fd555` | table rows **17 → 20**; now exactly matches the tree | 0 |
 | 6.11 | Enum import spellings — **no sweep**, recorded | `5afbf85` | 11 re-exported names, **0 divergent**; decision documented | 0 |
 | 6.7 | Text-only row builders out of `filmspec` into `generation` | `dd220d1` | `filmspec` declared names **22 → 20**; `generation` 21 → 22 modules | 0 |
-| 6.6 | `governance/validators` → `governance/gates`; `MVP_VALIDATORS` folded in | `_pending_` | one-file package deleted; surface **8,3 identical** after rename | 0 |
+| 6.6 | `governance/validators` → `governance/gates`; `MVP_VALIDATORS` folded in | `5ec72fe` | one-file package deleted; surface **8,3 identical** after rename | 0 |
+| 6.3 | Text transports moved to `providers/text/` | `_pending_` | `agents <-> providers` edges: **15 → 8**; surface (19,3) identical | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1919,3 +1920,60 @@ because `__init__` re-exported `MVP_VALIDATORS` before and still does.
 ### Remaining in the program
 
 Doc 06 slice 6.3 (where text transports live) and doc 03 slice 2's optional test split.
+
+## Doc 06 slice 6.3 — text transports move to `providers` (2026-09-28)
+
+Doc 06 framed this as an either/or: *"Either move `agents/transports/` to
+`providers/text/` … or state in `agents/transports/__init__.py` why text transports
+are an agent concern. Not both rules at once."*
+
+### Deciding on measurement rather than taste
+
+Doc 06 asked for a decision. The measurement made it:
+
+```text
+agents -> providers edges:  15
+providers -> agents edges:   0
+providers reaches agents?   False
+```
+
+The dependency is **strictly one-directional**. Fifteen edges cross from `agents` into
+`providers` (`credentials.lookup`, `http_transport.post_json`, `vendor_endpoints`), and
+nothing in `providers` knows `agents` exists. Moving the three transport modules to the
+far side of that one-way edge therefore *removes* fifteen cross-package edges and adds
+none — which is what the numbers now show:
+
+```text
+agents <-> providers edges:  15  ->  8
+```
+
+The other option — writing down why text transports are an agent concern — would have
+meant documenting a violation of a rule `providers/gemini_review_client.py` states in
+its own docstring: *"talking to a concrete provider API and resolving that provider's
+credentials … is provider-adapter work … so it lives in `providers`."* The transports
+do exactly that. The rule was right and the directory was wrong.
+
+### What moved and what did not
+
+`agents/transports/{gemini,zai,chat_completions}.py` → `providers/text/`. The modules
+are portable: `gemini.py` and `chat_completions.py` reference `agents` **zero** times,
+and `zai.py`'s single reference is to its own sibling. `agents/model_adapter.py` keeps
+its role — it is the *agent-facing* adapter that chooses a transport and shapes a
+response; the wire formats now live with the other provider code that speaks them.
+
+The surface measurement confirms a pure move: `providers.text` is **(19 declared, 3
+modules)** — identical to the `agents.transports` row it replaced.
+
+### Evidence
+
+- Coupling: `agents <-> providers` **15 → 8**; `providers -> agents` still **0**, so no
+  cycle was introduced.
+- Surface: `agents.transports` (19, 3) → `providers.text` (19, 3), identical;
+  `agents` 28 → 25 modules, `providers` 14 → 17.
+- `make ci-check`: **2346 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Doc 06 is now complete
+
+All five slices (6.3, 6.6, 6.7, 6.8, 6.11) are done or explicitly recorded as
+no-change. The only optional item left in the programme is doc 03 slice 2's test split.
