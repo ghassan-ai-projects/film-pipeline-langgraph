@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
@@ -118,3 +121,65 @@ async def kb_explain_context_choice(ctx: ToolContext, args: dict[str, object]) -
         "Canonical rules (authority=CANONICAL) take priority over playbooks and case studies. "
         "Use kb_get_context_packet to see the current packet.",
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class KbSearchArgs(ToolArgs):
+    """Arguments for `kb_search`."""
+
+    query: str = Field(description="What to search the knowledge base for.")
+    phase: str = Field(default="", description="Restrict to one phase; empty searches all.")
+
+
+class KbGetItemArgs(ToolArgs):
+    """Arguments for `kb_get_item`."""
+
+    item_id: str = Field(description="Knowledge-base item to fetch.")
+
+
+class KbGetContextPacketArgs(ToolArgs):
+    """Arguments for `kb_get_context_packet`."""
+
+    agent_id: str = Field(default="", description="Agent the packet is for.")
+    phase: str = Field(default="", description="Phase the packet is for.")
+    task: str = Field(default="", description="Task description to select context for.")
+
+
+class KbExplainContextChoiceArgs(ToolArgs):
+    """Arguments for `kb_explain_context_choice` (none)."""
+
+
+KB_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="kb_search",
+        group=ToolGroup.KB,
+        description="Search the knowledge base by tag or text, optionally within one phase.",
+        args=KbSearchArgs,
+        handler=kb_search,
+    ),
+    ToolSpec(
+        name="kb_get_item",
+        group=ToolGroup.KB,
+        description="Fetch one knowledge-base item by id.",
+        args=KbGetItemArgs,
+        handler=kb_get_item,
+    ),
+    ToolSpec(
+        name="kb_get_context_packet",
+        group=ToolGroup.KB,
+        description="Build the knowledge-base context packet an agent would receive.",
+        args=KbGetContextPacketArgs,
+        handler=kb_get_context_packet,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="kb_explain_context_choice",
+        group=ToolGroup.KB,
+        description="Explain how context selection works for each phase.",
+        args=KbExplainContextChoiceArgs,
+        handler=kb_explain_context_choice,
+    ),
+)

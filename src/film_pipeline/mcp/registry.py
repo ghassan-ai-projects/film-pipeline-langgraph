@@ -4,13 +4,7 @@ from __future__ import annotations
 
 from film_pipeline.mcp.contract import ToolRegistry
 from film_pipeline.mcp.tools.artifacts import (
-    inspect_artifact,
-    inspect_reference,
-    inspect_scene,
-    inspect_shot,
-    list_artifacts,
-    list_assets,
-    list_shots,
+    ARTIFACT_TOOLS,
 )
 from film_pipeline.mcp.tools.assembly import (
     approve_coverage_generation,
@@ -39,10 +33,7 @@ from film_pipeline.mcp.tools.generation import (
 )
 from film_pipeline.mcp.tools.intake import approve_intake, get_intake_analysis, submit_idea
 from film_pipeline.mcp.tools.kb import (
-    kb_explain_context_choice,
-    kb_get_context_packet,
-    kb_get_item,
-    kb_search,
+    KB_TOOLS,
 )
 from film_pipeline.mcp.tools.operator import add_operator_comment, list_operator_comments
 from film_pipeline.mcp.tools.planning import generate_plan
@@ -56,16 +47,11 @@ from film_pipeline.mcp.tools.reference_generation import generate_reference_imag
 from film_pipeline.mcp.tools.review import approve_phase, request_revision, review_phase_artifacts
 from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup, ToolHandler
 from film_pipeline.mcp.tools.state import (
-    get_blockers,
-    get_current_phase,
-    get_film_state,
-    get_next_actions,
-    get_orchestrator_summary,
+    STATE_TOOLS,
 )
 from film_pipeline.mcp.tools.validation import (
-    get_validation_report,
-    list_validation_issues,
-    run_validation,
+    RUN_VALIDATION,
+    VALIDATION_TOOLS,
 )
 
 
@@ -148,23 +134,8 @@ def register_all_tools(registry: ToolRegistry) -> None:
     )
 
     # state
-    _register(
-        registry,
-        "get_current_phase",
-        ToolGroup.STATE,
-        get_current_phase,
-        active_project=True,
-    )
-    _register(registry, "get_film_state", ToolGroup.STATE, get_film_state, active_project=True)
-    _register(
-        registry,
-        "get_orchestrator_summary",
-        ToolGroup.STATE,
-        get_orchestrator_summary,
-        active_project=True,
-    )
-    _register(registry, "get_next_actions", ToolGroup.STATE, get_next_actions, active_project=True)
-    _register(registry, "get_blockers", ToolGroup.STATE, get_blockers, active_project=True)
+    for spec in STATE_TOOLS:
+        registry.register_spec(spec)
 
     # review
     _register(
@@ -193,41 +164,12 @@ def register_all_tools(registry: ToolRegistry) -> None:
     )
 
     # artifact
-    _register(registry, "list_artifacts", ToolGroup.ARTIFACT, list_artifacts, active_project=True)
-    _register(
-        registry,
-        "inspect_artifact",
-        ToolGroup.ARTIFACT,
-        inspect_artifact,
-        active_project=True,
-    )
-    _register(registry, "list_assets", ToolGroup.ARTIFACT, list_assets, active_project=True)
-    _register(registry, "list_shots", ToolGroup.ARTIFACT, list_shots, active_project=True)
-    _register(registry, "inspect_shot", ToolGroup.ARTIFACT, inspect_shot, active_project=True)
-    _register(registry, "inspect_scene", ToolGroup.ARTIFACT, inspect_scene, active_project=True)
-    _register(
-        registry,
-        "inspect_reference",
-        ToolGroup.ARTIFACT,
-        inspect_reference,
-        active_project=True,
-    )
+    for spec in ARTIFACT_TOOLS:
+        registry.register_spec(spec)
 
     # validation
-    _register(
-        registry,
-        "get_validation_report",
-        ToolGroup.VALIDATION,
-        get_validation_report,
-        active_project=True,
-    )
-    _register(
-        registry,
-        "list_validation_issues",
-        ToolGroup.VALIDATION,
-        list_validation_issues,
-        active_project=True,
-    )
+    for spec in VALIDATION_TOOLS:
+        registry.register_spec(spec)
 
     # generation
     for spec in GENERATION_PLANNING_TOOLS:
@@ -247,14 +189,7 @@ def register_all_tools(registry: ToolRegistry) -> None:
         active_project=True,
     )
     # Registered in its historical slot so per-group registration order is unchanged.
-    _register(
-        registry,
-        "run_validation",
-        ToolGroup.VALIDATION,
-        run_validation,
-        mutates=True,
-        active_project=True,
-    )
+    registry.register_spec(RUN_VALIDATION)
     _register(
         registry,
         "generate_reference_images",
@@ -265,16 +200,8 @@ def register_all_tools(registry: ToolRegistry) -> None:
     for spec in GENERATION_PROMOTE_TOOLS:
         registry.register_spec(spec)
     # kb
-    _register(registry, "kb_search", ToolGroup.KB, kb_search)
-    _register(registry, "kb_get_item", ToolGroup.KB, kb_get_item)
-    _register(
-        registry,
-        "kb_get_context_packet",
-        ToolGroup.KB,
-        kb_get_context_packet,
-        active_project=True,
-    )
-    _register(registry, "kb_explain_context_choice", ToolGroup.KB, kb_explain_context_choice)
+    for spec in KB_TOOLS:
+        registry.register_spec(spec)
 
     # checkpoint
     for spec in CHECKPOINT_TOOLS:

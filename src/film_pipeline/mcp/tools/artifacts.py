@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pydantic import Field
+
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 from film_pipeline.storage.manifest import read_manifest
 
 from .helpers import (
@@ -178,3 +181,107 @@ async def list_assets(ctx: ToolContext, args: dict[str, object]) -> dict[str, ob
             for entry in manifest.entries
         ]
     )
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1).
+
+
+class ListArtifactsArgs(ToolArgs):
+    """Arguments for `list_artifacts`."""
+
+    phase: str = Field(default="", description="Restrict to one phase; empty lists every phase.")
+
+
+class InspectArtifactArgs(ToolArgs):
+    """Arguments for `inspect_artifact`."""
+
+    artifact_id: str = Field(description="Artifact to inspect.")
+    phase: str = Field(default="", description="Phase holding it; empty searches all phases.")
+    version: str = Field(default="", description="Specific version; empty uses the latest.")
+
+
+class ListShotsArgs(ToolArgs):
+    """Arguments for `list_shots` (none)."""
+
+
+class InspectShotArgs(ToolArgs):
+    """Arguments for `inspect_shot`."""
+
+    shot_id: str = Field(description="Shot to inspect.")
+
+
+class InspectSceneArgs(ToolArgs):
+    """Arguments for `inspect_scene`."""
+
+    scene_id: str = Field(description="Scene to inspect.")
+
+
+class InspectReferenceArgs(ToolArgs):
+    """Arguments for `inspect_reference`."""
+
+    reference_id: str = Field(description="Reference image to inspect.")
+
+
+class ListAssetsArgs(ToolArgs):
+    """Arguments for `list_assets` (none)."""
+
+
+ARTIFACT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="list_artifacts",
+        group=ToolGroup.ARTIFACT,
+        description="List the artifacts stored for a project, optionally one phase.",
+        args=ListArtifactsArgs,
+        handler=list_artifacts,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_artifact",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one artifact's content and metadata at a chosen version.",
+        args=InspectArtifactArgs,
+        handler=inspect_artifact,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_shots",
+        group=ToolGroup.ARTIFACT,
+        description="List the shots in the project's master film matrix.",
+        args=ListShotsArgs,
+        handler=list_shots,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_shot",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one shot's definition and its generated assets.",
+        args=InspectShotArgs,
+        handler=inspect_shot,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_scene",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one scene's definition and the shots it contains.",
+        args=InspectSceneArgs,
+        handler=inspect_scene,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_reference",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one reference image entry and the file it points at.",
+        args=InspectReferenceArgs,
+        handler=inspect_reference,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_assets",
+        group=ToolGroup.ARTIFACT,
+        description="List the generated media assets recorded for the project.",
+        args=ListAssetsArgs,
+        handler=list_assets,
+        active_project=True,
+    ),
+)

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeGuard
 
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
@@ -357,3 +358,58 @@ async def list_validation_issues(ctx: ToolContext, args: dict[str, object]) -> d
         return _ok(phase="", issues=[], message="No active phase and no stored issues.")
 
     return _ok(phase=phase_str, issues=[], message="No validation issues found.")
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1). None take
+# arguments: they validate the active project's current phase.
+
+
+class RunValidationArgs(ToolArgs):
+    """Arguments for `run_validation` (none)."""
+
+
+class GetValidationReportArgs(ToolArgs):
+    """Arguments for `get_validation_report` (none)."""
+
+
+class ListValidationIssuesArgs(ToolArgs):
+    """Arguments for `list_validation_issues` (none)."""
+
+
+#: The validation tools registered in the `# validation` section.
+#:
+#: `run_validation` is deliberately absent: it is registered in the `# generation`
+#: block at its historical slot, and the original registry recorded that the order
+#: was deliberate. Its spec lives below as `RUN_VALIDATION` so both paths share one
+#: declaration.
+VALIDATION_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_validation_report",
+        group=ToolGroup.VALIDATION,
+        description="Read the current phase's validation report, from stored or live validators.",
+        args=GetValidationReportArgs,
+        handler=get_validation_report,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_validation_issues",
+        group=ToolGroup.VALIDATION,
+        description="List the validation issues recorded for the current phase.",
+        args=ListValidationIssuesArgs,
+        handler=list_validation_issues,
+        active_project=True,
+    ),
+)
+
+
+#: Registered from the `# generation` block at its historical slot.
+RUN_VALIDATION = ToolSpec(
+    name="run_validation",
+    group=ToolGroup.VALIDATION,
+    description="Run the validators for the current phase and persist the report.",
+    args=RunValidationArgs,
+    handler=run_validation,
+    mutates=True,
+    active_project=True,
+)

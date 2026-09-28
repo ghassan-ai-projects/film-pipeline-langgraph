@@ -20,7 +20,7 @@ from pathlib import Path
 TOOLS = Path(__file__).resolve().parents[3] / "src" / "film_pipeline" / "mcp" / "tools"
 
 #: Keys dispatch injects or consumes itself, which no handler declares.
-PROTOCOL_KEYS = {"confirmed", "_envelope"}
+PROTOCOL_KEYS = {"confirmed", "project_ref", "_envelope"}
 
 
 def _reads_key(node: ast.AST, name: str) -> set[str]:
@@ -165,19 +165,26 @@ def test_every_key_a_handler_reads_is_declared_on_its_args_model() -> None:
     )
 
 
-def test_the_protocol_confirmed_field_is_really_declared() -> None:
-    """`ToolArgs.confirmed` must exist, not merely be referenced.
+def test_the_protocol_fields_are_really_declared() -> None:
+    """`ToolArgs` must declare the fields dispatch consumes itself.
 
-    `MCPServer._check_confirmation` reads `arguments["confirmed"]` for every
-    `confirm=True` tool. If the base model does not declare it, `extra="forbid"`
-    rejects the very field the gate requires — and nothing else notices, because
-    the handler never looks at it and the field is absent rather than wrong.
+    - `confirmed` — `MCPServer._check_confirmation` reads it for every
+      `confirm=True` tool.
+    - `project_ref` — `MCPServer.call` lifts it into the request envelope, so a
+      per-call project selection never reaches the handler either.
 
-    This is a regression guard with a real incident behind it: an edit meant to add
-    the field silently did not apply, every gate stayed green, and only the smoke
-    suite's `promote_test_to_production` call failed.
+    If the base model does not declare one, `extra="forbid"` rejects the very field
+    the protocol sends — and nothing else notices, because no handler looks at it
+    and the field is absent rather than wrong.
+
+    Both are regression guards with real incidents behind them: an edit meant to add
+    `confirmed` silently did not apply (every gate stayed green; only the smoke
+    suite's `promote_test_to_production` failed), and `project_ref` was discovered
+    the same way, by `list_artifacts` rejecting a per-call project selection.
     """
     from film_pipeline.mcp.tools.spec import ToolArgs
 
-    assert "confirmed" in ToolArgs.model_fields
-    assert ToolArgs.model_validate({"confirmed": True}).confirmed is True
+    assert {"confirmed", "project_ref"} <= set(ToolArgs.model_fields)
+    parsed = ToolArgs.model_validate({"confirmed": True, "project_ref": "proj-x"})
+    assert parsed.confirmed is True
+    assert parsed.project_ref == "proj-x"

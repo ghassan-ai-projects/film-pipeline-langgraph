@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _ok,
@@ -86,3 +87,56 @@ async def get_blockers(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
 
     blockers = get_blockers_for_state(state)
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)
+
+
+# ── Tool declarations ────────────────────────────────────────────────────────
+# Declared next to the handlers they describe (doc 04 slice 1). None of these
+# take arguments: they all report on the project the context resolved.
+
+
+class NoArgs(ToolArgs):
+    """Arguments for the state read tools (none)."""
+
+
+STATE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_current_phase",
+        group=ToolGroup.STATE,
+        description="Report the phase the active project is currently in.",
+        args=NoArgs,
+        handler=get_current_phase,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_film_state",
+        group=ToolGroup.STATE,
+        description="Return the active project's state with internal keys stripped.",
+        args=NoArgs,
+        handler=get_film_state,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_orchestrator_summary",
+        group=ToolGroup.STATE,
+        description="Summarise what the orchestrator is tracking for the active project.",
+        args=NoArgs,
+        handler=get_orchestrator_summary,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_next_actions",
+        group=ToolGroup.STATE,
+        description="List the actions the active project can take next.",
+        args=NoArgs,
+        handler=get_next_actions,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_blockers",
+        group=ToolGroup.STATE,
+        description="List what is blocking the active project from advancing.",
+        args=NoArgs,
+        handler=get_blockers,
+        active_project=True,
+    ),
+)

@@ -42,7 +42,7 @@ from film_pipeline.mcp.contract import make_registry
 #: Raised group by group as doc 04's per-tool `ToolSpec` declarations land. It is
 #: a floor, not a target: `test_the_catalog_floor_has_not_fallen` fails if a tool
 #: loses its spec.
-TOOLS_WITH_DECLARED_ARGS = 18
+TOOLS_WITH_DECLARED_ARGS = 50
 
 
 @pytest.fixture(scope="module")

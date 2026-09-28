@@ -124,12 +124,29 @@ class ToolArgs(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
+    # Dispatch consumes both of these before a handler runs; neither is a tool
+    # argument, so neither belongs on an individual model:
+    #
+    # - `confirmed` gates tools whose contract sets `requires_confirmation`
+    #   (`MCPServer._check_confirmation`).
+    # - `project_ref` names the project for this one call. `MCPServer.call` lifts it
+    #   into the request envelope (`new_envelope(project_ref=...)`), so it never
+    #   reaches the handler either.
+    #
+    # Declaring them once keeps `extra="forbid"` honest: without them every tool
+    # would reject the two fields the protocol itself sends.
     confirmed: bool = Field(
         default=False,
         description=(
-            "Required to be true for tools that ask for confirmation. Declared here "
-            "because it is a protocol field, not a tool argument: dispatch reads it "
-            "before the handler runs and never passes it on."
+            "Required to be true for tools that ask for confirmation; consumed by "
+            "dispatch before the handler runs."
+        ),
+    )
+    project_ref: str = Field(
+        default="",
+        description=(
+            "Project to act on for this call only, leaving the active project "
+            "unchanged; consumed by dispatch."
         ),
     )
 

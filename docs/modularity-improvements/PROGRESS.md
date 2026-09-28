@@ -22,7 +22,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 10b | **All 25 tool modules** on `ToolContext`; `require_project_*` deleted | `e34c3e0` | `get_runtime()` in `mcp` **61 → 3**, all in `server.py` | 0 |
 | 11a | `ToolSpec`/`ToolArgs` mechanism + `audit` declarations + catalog guard | `8f182f1` | `input_schema`: 0 → 4; generic descriptions 75 → 71 | 0 |
 | 11b | `checkpoints` (8) + `projects` (6) declared | `ec1c323` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
-| 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `_pending_` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
+| 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `cc83fcd` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
+| 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `_pending_` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -745,3 +746,61 @@ order was deliberate.
 - `make ci-check`: **2342 passed, 91.68% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
 - Recorded surface growth: `mcp.tools.bibles` 6 → 12, `mcp.tools.generation` 11 → 15.
+
+## Step 11d — `artifact`, `state`, `kb`, `validation` declared (2026-09-28)
+
+19 tools. `input_schema` **31 → 50**; generic descriptions **44 → 25**. Two thirds
+of the catalogue now delivers its contract.
+
+### A second protocol field
+
+`list_artifacts` rejected a per-call project selection:
+
+```text
+project_ref   Extra inputs are not permitted
+```
+
+Like `confirmed`, `project_ref` is **not a tool argument**. `MCPServer.call` lifts
+it out of `arguments` into the request envelope (`new_envelope(project_ref=...)`)
+before dispatch, so it never reaches a handler. Declared once on `ToolArgs`
+alongside `confirmed`, with the reason for each in the docstring, and the regression
+guard extended to cover both.
+
+That is now **two** protocol fields found this way. Both were found by a failing
+call, not by reading `server.py` — which is the argument for making the boundary
+strict rather than documenting it.
+
+### The section swap that deleted 18 tools, and the check that caught it
+
+Replacing the `# state` … `# artifact` … `# validation` … `# kb` blocks assumed each
+marker's next marker bounded that block. It does not: `# state` is followed by
+`# review`, not `# artifact`, so the swap swallowed the whole `# review` section, and
+one boundary also cut into `# generation`. Eighteen tools vanished from the registry.
+
+The flag-parity diff reported them as `None` (absent, not different), which is how
+it was caught immediately rather than at the next gate. The redo counted
+registrations per block *before* replacing — `removed 4 (expected 4)` — and that
+check caught a second, subtler error: `# validation` holds only **2** registrations,
+because `run_validation` is registered in the `# generation` block at a slot the
+original marked "so per-group registration order is unchanged". It is now
+`RUN_VALIDATION`, a named spec registered from that block, so both paths share one
+declaration.
+
+Final state, all re-measured against HEAD:
+
+- tools: **75**, tool set **IDENTICAL**
+- flag diff: **NONE**
+- registration order: **IDENTICAL**
+- args-coverage sweep: **50 specs, 0 with undeclared keys**
+
+### Evidence
+
+- `measure.py`: `input_schema` **31 → 50**; generic descriptions **44 → 25**.
+- `make ci-check`: **2342 passed, 91.70% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+### Remaining for slice 1
+
+25 tools in 8 groups: `assembly` (7 incl. coverage), `config` (5), `intake` (3),
+`operator` (2), `provider` (3), `review` (3), plus `generate_plan` and
+`generate_reference_images`.
