@@ -15,6 +15,7 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 4 | **Test first:** `_PHASE_NODES` identity + reducer parity | `4112a9e` | 9 cases fail, by design | n/a |
 | 5 | Derive the manual merge from `StudioGraphState` | `2cc1bdb` | 8 of 9 cases flip to pass | 0 |
 | 6 | One QC implementation: the parallel subgraph | `a0b016e` | identity test passes; SCCs back to 1 | 0 |
+| 7 | **Test first:** CLI driver gets `NO_ACTIVE_PROJECT` / `CONFIRMATION_REQUIRED` | `_pending_` | both fail, by design | n/a |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -268,3 +269,26 @@ measurements above are recorded in the decision doc as evidence it is a modellin
 artifact. `enola check` exits 0.
 
 Full `make ci-check`: 2387 passed, 91.82% coverage, product gate PASS.
+
+## Step 7 — the CLI's dispatch bypass, as failing tests (2026-09-28)
+
+New `tests/unit/cli/test_driver_dispatch.py`. **Deliberately red**, same rationale
+as Step 4: 07 puts the failing test on the old tree so Step 8's fix is proven by
+the test flipping.
+
+Reproduced on this tree:
+
+```text
+test_driver_enforces_the_active_project_precondition  FAILED
+  film_pipeline.operations.errors.ProjectNotFoundError: No active project.
+  (raised out of the handler, not returned as a typed MCP error)
+
+test_driver_enforces_confirmation_on_a_human_gate     FAILED
+  approve_phase without `confirmed` returned
+  {'ok': True, 'project_id': 'dispatch-test', 'current_phase': 'constitution'}
+  — a human gate advanced with no confirmation.
+```
+
+Both are the *public* surface (`HeadlessDriver._call_tool`), because that is the
+seam Step 8 replaces. The second is the finding's sharpest form: not a wrong error
+code, an applied gate.
