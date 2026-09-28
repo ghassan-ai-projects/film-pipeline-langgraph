@@ -48,11 +48,12 @@ def _tool_modules() -> dict[str, str]:
     which is the cycle this file is careful to avoid.
     """
     mapping: dict[str, str] = {}
-    # lazy: exists to locate the package root at first use; at module level it would
-    # import `film_pipeline` while that package is still initialising.
-    import film_pipeline
-
-    package_root = _Path(film_pipeline.__file__).resolve().parent
+    # The package root is two levels up (`.../film_pipeline/mcp/tools` ->
+    # `.../film_pipeline`), so no import is needed to locate it. An earlier version
+    # imported `film_pipeline` here to read `__file__`, justified by a claim that a
+    # module-level import would run "while that package is still initialising" —
+    # impossible, since this module's body only runs once that package exists.
+    package_root = _TOOLS_DIR.parent.parent
     for path in sorted(_TOOLS_DIR.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text())

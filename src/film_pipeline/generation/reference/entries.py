@@ -5,8 +5,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from film_pipeline.generation.prompt_builder import build_structured_prompt
-
 _logger = logging.getLogger(__name__)
 
 
@@ -89,6 +87,11 @@ def reference_prompt(
     environment prompts from locked blocks (CharacterBible, FilmConstitution).
     Falls back to the entry's ``prompt_text`` when no structured sources exist.
     """
+
+    # lazy: tests patch `generation.prompt_builder.build_structured_prompt` at its
+    # source module, so the name has to resolve at call time; a module-level
+    # binding would be resolved before the patch and the mock would never be used.
+    from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     return build_structured_prompt(
         dict(entry),

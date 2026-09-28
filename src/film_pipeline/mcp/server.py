@@ -39,7 +39,6 @@ from film_pipeline.projects import (
     ProjectRegistry,
 )
 from film_pipeline.studio._persistence import runtime_root_from_config
-from film_pipeline.studio.bootstrap import validate_environment
 from film_pipeline.studio.runtime import get_runtime
 
 
@@ -68,13 +67,29 @@ class MCPServer:
         if isinstance(resolved, MCPResponse):
             return resolved
         reg, resolved_envelope = resolved
-        confirmation = self._check_confirmation(reg, tool_name, arguments, resolved_envelope)
+        # Validate before either gate. `_check_confirmation` reads the *typed*
+        # `confirmed`, so a truthy string like `"no"` can no longer clear the
+        # gate on a destructive tool; a malformed call is refused as a typed
+        # error before any gate consults it.
+        parsed, invalid = self._validate_arguments(reg, arguments, resolved_envelope)
+        if invalid is not None:
+            return invalid
+        confirmed = parsed.confirmed if parsed is not None else None
+        confirmation = self._check_confirmation(reg, tool_name, confirmed, resolved_envelope)
         if confirmation is not None:
             return confirmation
         missing_project = self._check_active_project(reg, resolved_envelope)
         if missing_project is not None:
             return missing_project
-        return await self._dispatch_handler(reg, arguments, resolved_envelope)
+        # The *raw* arguments reach the handler, not `parsed.model_dump()`.
+        # Validation is a gate, not a rewrite: `model_dump()` fills in every
+        # default, so a handler that distinguishes an absent optional key from a
+        # present-but-empty one changes meaning when it does. `inspect_artifact`
+        # is the live example — it takes the "latest version" branch only when
+        # `version` is `None`, and its declared default is `""`, so dispatching
+        # the dump sent `""` and the handler raised `int("")`; two smoke tests
+        # caught it. The model owns the *contract*; the handler owns coercion.
+        return await self._dispatch_handler(reg, dict(arguments), resolved_envelope)
 
     def _resolve_tool_and_project(
         self,
@@ -218,15 +233,49 @@ class MCPServer:
             ),
         )
 
+    def _validate_arguments(
+        self,
+        registration: ToolRegistration,
+        arguments: dict[str, object],
+        envelope: RequestEnvelope,
+    ) -> tuple[Any, MCPResponse | None]:
+        """Parse `arguments` into the tool's args model, or shape a refusal.
+
+        Returns ``(parsed, None)`` on success and ``(None, response)`` when the
+        arguments do not satisfy the tool's declared schema. A tool registered
+        without a spec — only tests do that now — parses to ``None`` and passes
+        its arguments through unchanged.
+        """
+        try:
+            return registration.validate(dict(arguments)), None
+        except ValidationError as exc:
+            return None, MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.VALIDATION_ERROR,
+                    message=(
+                        f"Invalid arguments for '{registration.contract.name}': "
+                        f"{exc.error_count()} error(s)."
+                    ),
+                    details={"tool": registration.contract.name, "errors": str(exc)},
+                ),
+            )
+
     def _check_confirmation(
         self,
         registration: ToolRegistration,
         tool_name: str,
-        arguments: dict[str, object],
+        confirmed: bool | None,
         envelope: RequestEnvelope,
     ) -> MCPResponse | None:
-        """Return a CONFIRMATION_REQUIRED response, or None when the gate passes."""
-        if registration.contract.requires_confirmation and not arguments.get("confirmed"):
+        """Return a CONFIRMATION_REQUIRED response, or None when the gate passes.
+
+        `confirmed` is the value from the tool's *validated* args model, not the
+        raw request body: dispatch validates first precisely so that a truthy
+        non-boolean such as `"no"` cannot authorize a destructive call.
+        """
+        if registration.contract.requires_confirmation and not confirmed:
             return MCPResponse(
                 success=False,
                 request_id=envelope.request_id,
@@ -249,36 +298,21 @@ class MCPServer:
     ) -> MCPResponse:
         """Invoke the handler and shape result or failure into a response.
 
+        `arguments` is the caller's own dict, which `_validate_arguments` has
+        already accepted but not rewritten. Handlers read it with `args.get(...)`
+        and own their coercion; passing a dumped args model instead would fill in
+        declared defaults and change what "absent" means to them.
+
         Handlers come in two shapes while doc 01's migration is in flight:
 
         - `handler(ctx, args)` — the target. Dispatch builds the `ToolContext`, so
           the handler never resolves the runtime or the project itself.
-        - `handler(args)` — the legacy shape, still receiving `"_envelope"` inside
-          the argument dict. Deleted group by group; when the last one moves, this
-          branch and the `"_envelope"` key both go.
+        - `handler(args)` — the legacy shape. The seven remaining handlers take
+          the same argument dict; there is no `"_envelope"` key any more, because
+          no handler ever read one.
         """
 
         handler = reg.handler
-        # A tool declared with a `ToolSpec` validates its arguments first, so a
-        # malformed call is a typed `VALIDATION_ERROR` rather than a `KeyError`
-        # deep inside a handler (doc 04 slice 1). Tools registered the older way
-        # have no spec and pass through unchanged.
-        try:
-            reg.validate(dict(arguments))
-        except ValidationError as exc:
-            return MCPResponse(
-                success=False,
-                request_id=envelope.request_id,
-                error=MCPError(
-                    code=MCPErrorCode.VALIDATION_ERROR,
-                    message=(
-                        f"Invalid arguments for '{reg.contract.name}': "
-                        f"{exc.error_count()} error(s)."
-                    ),
-                    details={"tool": reg.contract.name, "errors": str(exc)},
-                ),
-            )
-        new_args: dict[str, object] = {**arguments, "_envelope": envelope}
         # The union in `ToolHandler` admits both shapes, so mypy cannot narrow it
         # from a runtime signature check. `_accepts_context` just proved which
         # call this is; the cast states that.
@@ -293,7 +327,9 @@ class MCPServer:
                     else any_handler(context, dict(arguments))
                 )
             else:
-                data = await any_handler(new_args) if is_async else any_handler(new_args)
+                data = (
+                    await any_handler(dict(arguments)) if is_async else any_handler(dict(arguments))
+                )
             return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
@@ -384,6 +420,15 @@ def main() -> int:
     # neither `FILM_PIPELINE_RUNTIME_ROOT` nor persistence enabled the runtime
     # falls back to a throwaway tempdir. `configure_logging` tolerates `None` and
     # adds the file handler only when it has a root.
+
+    # lazy: tests patch `studio.bootstrap.validate_environment` at its source
+    # module; a module-level binding resolves before the patch and bypasses it
+    # (verified: with a module-level binding `main()` calls the patched-through
+    # function, so `test_mcp_main_configures_logging_before_stdio_server` and its
+    # sibling were relying on a patch that had no effect). Bootstrap validation
+    # also probes the filesystem — it touches and unlinks `artifacts/.write_test`
+    # — so resolving it here keeps that probe out of the test run too.
+    from film_pipeline.studio.bootstrap import validate_environment
 
     # lazy: tests patch `studio.logging_setup.configure_logging` at its source; a
     # module-level binding resolves before the patch and bypasses it.

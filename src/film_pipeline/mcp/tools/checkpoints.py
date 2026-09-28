@@ -249,14 +249,18 @@ class RollbackArtifactArgs(ToolArgs):
     checkpoint_id: str = Field(
         default="", description="Checkpoint to restore from; empty uses the latest."
     )
-    confirmed: bool = Field(default=False, description="Must be true to perform the rollback.")
+    confirmed: bool | None = Field(
+        default=None, description="Must be true to perform the rollback."
+    )
 
 
 class RollbackToCheckpointArgs(ToolArgs):
     """Arguments for `rollback_to_checkpoint`."""
 
     checkpoint_id: str = Field(description="Checkpoint to roll the project back to.")
-    confirmed: bool = Field(default=False, description="Must be true to perform the rollback.")
+    confirmed: bool | None = Field(
+        default=None, description="Must be true to perform the rollback."
+    )
 
 
 class GetInvalidationReportArgs(ToolArgs):

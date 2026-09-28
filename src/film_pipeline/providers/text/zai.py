@@ -2,7 +2,7 @@
 
 z.ai speaks the same wire format as OpenRouter, so this module reuses
 ``ChatRequest`` and ``chat_completions_payload`` from
-``transports.chat_completions`` and adds only what is z.ai-specific: the
+``providers.text.chat_completions`` and adds only what is z.ai-specific: the
 ``zai/`` model prefix, the two-endpoint base-URL allowlist, and key resolution.
 
 The allowlist is a security boundary: an unvetted ``ZAI_BASE_URL`` would send

@@ -232,7 +232,10 @@ async def find_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, o
 
 async def set_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     rt = ctx.runtime
-    project_id = str(args.get("project_ref", args.get("project_id", "")))
+    # `or` rather than a `.get` default: the model now materializes
+    # `project_ref` as an explicit `None`, which a two-argument `get` would
+    # stringify into the project id "None".
+    project_id = str(args.get("project_ref") or args.get("project_id") or "")
     if not project_id:
         return _error("project_ref is required")
     try:
@@ -311,6 +314,18 @@ class CreateFilmProjectArgs(ToolArgs):
     title: str = Field(default="", description="Human-readable project title.")
     slug: str = Field(default="", description="URL-safe short name.")
     idea: str = Field(default="", description="Optional idea text to run intake on.")
+    target_runtime_seconds: int | float | str | None = Field(
+        default=None,
+        description=(
+            "Requested film length in seconds, authoritative for the whole "
+            "pipeline; takes precedence over `target_runtime_minutes`. Numeric "
+            "strings are accepted."
+        ),
+    )
+    target_runtime_minutes: int | float | str | None = Field(
+        default=None,
+        description="Requested film length in minutes, used only when seconds is unset.",
+    )
     runtime_mode: str = Field(
         default="", description="'mock' or 'real'; empty uses the server's mode."
     )
@@ -337,7 +352,7 @@ class FindProjectArgs(ToolArgs):
 class SetActiveProjectArgs(ToolArgs):
     """Arguments for `set_active_project`."""
 
-    project_ref: str = Field(default="", description="Project id to make active.")
+    project_ref: str | None = Field(default=None, description="Project id to make active.")
     project_id: str = Field(default="", description="Alias for `project_ref`.")
 
 

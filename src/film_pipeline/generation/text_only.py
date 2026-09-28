@@ -75,9 +75,6 @@ def text_only_generation_requests(
     return requests
 
 
-#: The one message for "this request has no project to act on". It lives in the
-#: shared vocabulary module because both the MCP dispatcher and the tool layer
-
 __all__ = [
     "text_only_generation_request",
     "text_only_generation_requests",

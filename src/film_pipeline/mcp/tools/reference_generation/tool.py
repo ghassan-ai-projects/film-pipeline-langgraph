@@ -223,6 +223,13 @@ class GenerateReferenceImagesArgs(ToolArgs):
     """Arguments for `generate_reference_images`."""
 
     force: bool = Field(default=False, description="Regenerate entries that already have an image.")
+    reference_ids: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Filter to these reference-index entry ids; omit or leave empty to "
+            "consider every entry. Ids that name no entry are ignored."
+        ),
+    )
 
 
 GENERATE_REFERENCE_IMAGES = ToolSpec(
@@ -235,4 +242,5 @@ GENERATE_REFERENCE_IMAGES = ToolSpec(
     args=GenerateReferenceImagesArgs,
     handler=generate_reference_images,
     mutates=True,
+    active_project=True,
 )

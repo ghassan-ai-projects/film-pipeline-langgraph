@@ -59,14 +59,14 @@ KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
     # a real option; it is left here because the reach-in is one call site at
     # process start and no defect follows from it.
     ("mcp", "studio._persistence"): 1,
-    # `_operator_runtime` — provably irreducible. Building a wired `OperatorService`
-    # needs `StudioRuntimeProvider` and the provider composition, which is
-    # composition-root policy: `operations` cannot supply them without importing
-    # `studio`, which already imports `operations`, and that mutual dependency is
-    # the exact cycle `operations/ports.py` exists to prevent (Enola gates on it).
-    # The alternative is a DI container with no current second implementation, which
-    # `06` section 4 forbids. The `mcp`-side accessor already collapsed four
-    # importers into this one; that crossing is the minimum.
+    # `_operator_runtime` — the profile-provider composition root. The row is
+    # legitimate; the reason it used to give here named `OperatorService`,
+    # `StudioRuntimeProvider` and a provider composition that have all been deleted.
+    # What `mcp` actually imports is `register_profile_providers`, which selects and
+    # builds the adapters a profile stack names — composition-root policy that
+    # `operations` cannot supply without importing `studio` (the mutual dependency
+    # `operations/ports.py` exists to prevent). The `mcp`-side callers were
+    # collapsed into `mcp/tools/helpers.py`, so this is one module-level crossing.
     ("mcp", "studio._operator_runtime"): 1,
     # The `studio -> orchestration._repair_loop` row is gone: graph execution moved
     # into `orchestration/execution.py` (doc 02 slice 3), so the phase-node table is

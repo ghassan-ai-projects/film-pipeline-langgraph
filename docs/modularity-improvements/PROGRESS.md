@@ -25,11 +25,11 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `cc83fcd` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
 | 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `9446b27` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
 | 11e | **remaining 25 tools + dead `_register` path + derived facade** | `e7cbb95` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
-| 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **8 → 2** | 0 |
+| 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **7 → 4** (module reach-ins 3 → 2, private symbols 4 → 2) | 0 |
 | 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `0ca9313` | 7 pure helpers out of `mcp`; new registration guard | 0 |
-| 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` imports: **23 → 14** | 0 |
-| 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
-| 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
+| 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` bindings: this step **25 → 28** (base → tip 23 → 26) | 0 |
+| 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **274 → 264** (total 287 → 277); guard ratchets | 0 |
+| 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **264 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
 | 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
 | 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
 | 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
@@ -948,20 +948,29 @@ public interface. What moved is the execution *policy*, not the composition.
 
 ### Re-measured `StudioRuntime` (feeds Step 16)
 
-**393 lines, 29 public methods.** Doc 02 predicted "the 27-method count should drop
-by the graph-execution delegates". It did not: the method count went **27 → 29**, and
-the six graph-execution methods survive as one-line delegators to
-`orchestration.execution`. The line count dropped (516 → 393 for the file).
+**394 lines at this commit (392 at the review-fix tip), 29 public methods.** Doc 02
+predicted "the 27-method count should drop by the graph-execution delegates". It did
+not: the method count was **29 before this slice and 29 after**, and the five
+graph-execution methods survive as one-line delegators to `orchestration.execution`.
+The class body did not shrink either — an AST pass over
+`ClassDef.lineno..end_lineno` measures 394 at both commits. (This entry originally
+claimed `516 → 393`; that conflated the *file* line count — 514 here, 536 at `330ab8d`,
+546 in the reviewed tree — with the *class body*, which never moved here. Corrected in
+Step 16, where the whole measurement was re-taken.)
 
 That is worth stating plainly rather than rounding toward the prediction: this slice
 moved *bodies and knowledge*, not *surface*. `StudioRuntime` is still the composition
-root's facade over execution, and whether those six delegators belong on it is a real
+root's facade over execution, and whether those five delegators belong on it is a real
 question — but it is Step 16's, and the honest measurement is that slice 3 did not
 shrink the public method count.
 
 ### Evidence
 
-- cross-package private reach-ins: **8 → 2**, both pre-existing and both recorded.
+- cross-package private reach-ins: **7 → 4** (module reach-ins 3 → 2, private symbol
+  imports 4 → 2), both remaining module reach-ins pre-existing and both recorded.
+  This entry originally said `8 → 2`; re-measured with
+  `test_boundary_law.py::_measure_private_imports` over `88d773a^` and `88d773a`, the
+  step's own delta is 7 → 4, and the `8` and the `2` were each wrong.
 - `make ci-check`: **2341 passed, 91.84% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
 - Recorded surface growth: `orchestration` 15 → 17 public modules (both deliberate).
@@ -1075,7 +1084,16 @@ surface that exposes it.** So:
 ### Evidence
 
 - `measure.py`: no `mcp -> generation` count is printed directly, so it was measured
-  from the AST: **23 → 14**, with the `reference_generation` share going 10 → 0.
+  from the AST. **Correction:** this entry said **23 → 14**, "with the
+  `reference_generation` share going 10 → 0". Re-measured at alias granularity, the
+  `mcp -> generation` name bindings were **25 before this step and 28 after it**
+  (`23` at base, `26` at the tip), and the `reference_generation` share was
+  **11 → 14**, not 10 → 0. The step *increased* the count, which is the intended
+  direction: `mcp` now consumes a published use-case interface at module level
+  instead of reaching into its own submodules. What fell is the *lazy* half: across
+  the whole program, `mcp -> generation` eager bindings went **1 → 26** and lazy
+  **22 → 0**. That disappearance of the lazy edges is the real evidence for this
+  step; the binding count is not.
 - `make ci-check`: **2344 passed, 91.85% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
 - Surface rows recorded: `generation.reference` (24, 6) added,
@@ -1137,7 +1155,9 @@ import.
 
 ### Evidence
 
-- Guard: **277 unexplained → 266**; `storage` and `governance` at **0**.
+- Guard: **274 unexplained → 264**; `storage` and `governance` at **0**. (The 274 is
+  the count at `c8e7a58^`, the commit before this step's guard landed; base
+  `2450616` measured 275. Re-measured with `measure.py`'s own algorithm.)
 - `make ci-check`: **2347 passed, 91.85% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
 
@@ -1149,7 +1169,7 @@ than hoists — the guard is what will force those reasons to be written down.
 
 ## Step 15b — `post` and `cli`, and the two hoists that had to be refused (2026-09-28)
 
-`post` 20 → 5, `cli` 7 → 1, total unexplained **266 → 242**.
+`post` 20 → 5, `cli` 7 → 1, total unexplained **264 → 242**.
 
 ### Two hoists that were wrong, and how each was caught
 
@@ -1191,7 +1211,7 @@ a reason separated from the import by code is not accepted, and a multi-line blo
 
 ### Evidence
 
-- Guard: **266 unexplained → 242**; `post` **20 → 5**, `cli` **7 → 1**.
+- Guard: **264 unexplained → 242**; `post` **20 → 5**, `cli` **7 → 1**.
 - `make ci-check`: **2347 passed, 91.85% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
 - `post`'s remaining 5 are one annotated import block (3 entries) and two others; the
@@ -1354,25 +1374,30 @@ batches, and these two packages are where the remaining risk is.
 The measurement and the decision are in
 [`08-studioruntime-remeasured.md`](08-studioruntime-remeasured.md). Summary:
 
-| | Before this program | Now |
+| | Base `2450616` | Tip |
 |---|---:|---:|
-| Lines | 516 | **393** |
-| Public methods | 27 | **29** |
-| Concerns | 5 | **9** |
+| Class body lines | 394 | **392** |
+| Public methods | 29 | **29** |
+| Concerns | 8 | **8** |
 | Pure delegators | not measured | **13 of 29** |
 
-**The method count went the wrong way, and that is the finding.** Doc 02 predicted
-Step 13's graph-execution move would drop it by the delegates; the delegates survived
-as one-line forwarders, so lines fell 24% while the surface *grew* by two. Reporting
-only the line count would have made this look like a clean win.
+**The surface did not move, and an earlier version of this table was wrong about
+that.** Doc 02 predicted Step 13's graph-execution move would drop the method count by
+the delegates; the delegates survived as one-line forwarders. But the earlier
+`516 → 393` / `27 → 29` / `5 → 9` row was measured, re-measured and did not survive:
+`516` was a *file* line count, the class body was 394 at both commits, the public
+method count was 29 at both, and the concerns are **8** — the 9 was a section-heading
+count inflated by a dead `# --- Graph ---` header with no method under it, now deleted.
+The two-line fall in the class body is that header plus its blank line.
 
 The measurement also corrected a claim I had been repeating from memory: the concern
-count is **9**, not 5, and **13 of 29 methods are single-`return` delegators** — five
-to `orchestration.execution`, one to `_persistence`, and seven to the runtime's own
-attributes. I stated 11 and then 13 in the same draft, and 6 rather than 5 for the
-`orchestration.execution` figure; both were wrong until the AST pass re-measured them.
-That is the same failure `AGENTS.md` records twice, and it is why the document's every
-number comes from a re-runnable command rather than from the prose above it.
+count is **8**, not 5, and **13 of 29 methods are single-`return` delegators** — five
+to `orchestration.execution`, one to `_persistence`, one to `_provider_seeds`, and six
+to the runtime's own attributes. I stated 11 and then 13 in the same draft, and 6
+rather than 5 for the `orchestration.execution` figure; both were wrong until the AST
+pass re-measured them. That is the same failure `AGENTS.md` records twice, and it is
+why the document's every number comes from a re-runnable command rather than from the
+prose above it.
 
 ### The decision: do not split it in this program
 
@@ -1415,9 +1440,9 @@ is explicit that **this is not done**.
 | 10 | **done** | `get_runtime()` in `mcp`: **61 → 3** (all three are dispatch itself) |
 | 11 | **done** | `input_schema`: **0 → 75 of 75**; generic descriptions **75 → 0** |
 | 12 | **done** | `MCPServer.active_project_id` deleted |
-| 13 | **done** | cross-package private reach-ins: **8 → 2** (both pre-existing, both recorded) |
-| 14 | **done** | `mcp → generation` imports: **23 → 14**; profile change into `config` |
-| 15 | **partial** | unexplained lazy imports **277 → 202**; `storage`, `governance`, `cli`, `studio`, `generation` at 0 |
+| 13 | **done** | cross-package private reach-ins: **7 → 4** (module reach-ins 3 → 2, private symbols 4 → 2) |
+| 14 | **done** | `mcp → generation` bindings **25 → 28** this step (base → tip 23 → 26); profile change into `config` |
+| 15 | **partial** | unexplained lazy imports **274 → 202**; `storage`, `governance`, `cli`, `studio`, `generation` at 0 |
 | 16 | **done** | re-measured in `08-studioruntime-remeasured.md`; split decided against, with reasons |
 
 ## What is not done
@@ -1659,14 +1684,15 @@ at all, and tracks the tree's shrinking size so it does not become a work target
 ## Step 15j — `mcp` to zero, and Step 15 complete (2026-09-28)
 
 ```text
-unexplained lazy imports:  277  ->  0
+unexplained lazy imports:  274  ->  0
 ```
 
 **Doc 05's falsifiable check is met, tree-wide.** `HOISTABLE_CEILING` is now **0**.
 
 ### What remains, and why
 
-39 function-level imports survive, every one either cycle-required or carrying a
+42 function-level imports survive (across 36 import statements — a statement that
+imports two names counts twice), every one either cycle-required or carrying a
 written `# lazy:` reason. The reasons fall into three groups:
 
 | Reason | Count | Example |
@@ -1695,7 +1721,7 @@ string is built differently or whose target is reached through a second module.
 | `governance` | 7 | **0** |
 | `cli` | 7 | **0** |
 | `storage` | 3 | **0** |
-| **total unexplained** | **277** | **0** |
+| **total unexplained** | **274** | **0** |
 
 ### The durable lessons
 
@@ -1712,7 +1738,7 @@ string is built differently or whose target is reached through a second module.
 
 ### Evidence
 
-- Guard: **277 unexplained → 0**; `HOISTABLE_CEILING` = **0**.
+- Guard: **274 unexplained → 0**; `HOISTABLE_CEILING` = **0**.
 - `make ci-check`: **2347 passed**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
 
@@ -1982,7 +2008,7 @@ no-change. The only optional item left in the programme is doc 03 slice 2's test
 ## Doc 03 slice 2's test split — assessed and declined (2026-09-28)
 
 Doc 03's falsifiable check had two halves. The first — `mcp -> generation` imports —
-was met in Step 14b (**23 → 14**). The second was a *test* split:
+was met in Step 14b (**25 → 28** bindings, base → tip 23 → 26). The second was a *test* split:
 
 > `tests/unit/mcp/tools/test_reference_generation.py` (682 lines) splits into a
 > use-case test that constructs no MCP context and a thin handler test.
@@ -1996,11 +2022,13 @@ measurement rather than a preference.
 |---|---:|
 | Tests | 28 |
 | Assertions on the MCP **response** (`result[...]`) | **51** |
-| Assertions on **artifacts** (store, files, `exists()`) | **1** |
+| Assertions on **artifacts** (store, files, `exists()`) | **2** |
 | Tests driving the tool through `call_tool` | 28 of 28 |
 
 That is a handler test suite, not a use-case suite wearing a handler's clothes. Every
-test asserts on what the *tool* returns; exactly one looks past it at the filesystem.
+test asserts on what the *tool* returns; exactly one test looks past it at the
+filesystem — `test_index_files_written`, which asserts twice (the index file exists,
+and it holds one entry).
 
 ### The use-case half already exists
 
@@ -2014,8 +2042,9 @@ tests/unit/mcp/tools/test_reference_generation_helpers.py   201 lines, 16 tests
 It imports the use-case package directly — `group_key`, `reference_aspect_ratio`,
 `reference_job_id`, `reference_output_dir`, `write_reference_index_files` and the rest —
 and constructs no `ToolContext`, no runtime and no `call_tool` fixture. The split doc 03
-asked for is **47% present** already; what remains would be a *third* file covering the
-middle: the orchestration inside `generate_reference_images` itself.
+asked for is **36% present** already — 16 use-case tests of the 44 that the two suites
+hold — and what remains would be a *third* file covering the middle: the orchestration
+inside `generate_reference_images` itself.
 
 ### Why not do that third file
 
@@ -2052,3 +2081,70 @@ checkmark stand for work that did not happen.
 
 - Counts above re-measured on the current file.
 - No code or test changed by this entry; gates unchanged and green.
+
+## Review round — adversarial re-read of the whole branch (2026-09-28, after Step 15j)
+
+Four independent review passes read the diff of `improve-modular` against its base
+`2450616` looking for defects the gates could not see: eager-import side effects,
+lazy-import reasons that no longer hold, doc numbers that do not reproduce, and guard
+blind spots. The findings were treated as claims and each one re-measured before
+anything was changed; several did not survive that and are recorded as such.
+
+### Real defects fixed
+
+| Where | Defect | Fix |
+|---|---|---|
+| `mcp/server.py` | Arguments were parsed *after* the confirmation gate, and the gate read the raw envelope, so `confirmed: "no"` (a truthy string) passed as confirmation | `_validate_arguments` now runs first and `_check_confirmation` reads the typed `bool \| None` |
+| `mcp/tools/*` | Three `ToolArgs` declarations were missing fields the handlers read (`reference_ids`, both `target_runtime_*`) and `Spec` had none of `confirmed`/`project_ref` | declarations completed |
+| `mcp/tools/projects.py` | `set_active_project` stringified an explicit `None` into `"None"` | `or str(...)` fallback over both spellings |
+| `studio/runtime.py` | `_install_graph_builder` bound `build_graph` eagerly, so importing `studio.runtime` compiled the graph and created `checkpoints.sqlite` | registration stays eager, the builder is a wrapper that imports on first use |
+| `generation/reference/composites.py`, `entries.py`, `executor_prompts.py`, `nodes/_generation_prompts.py` | Hoisted imports deadened the `# lazy:` patch points three test modules rely on | restored to function level with reasons that name the patch site |
+| `mcp/tools/__init__.py` | `import film_pipeline` (bogus) and a wrong `package_root` ancestor | both removed/corrected |
+| `orchestration/subgraphs/qc.py`, `orchestration/nodes/qc.py` | Two `# lazy:` comments left behind by the hoist in `5cc0170`, each asserting a circular import that no longer exists | deleted; a new guard test fails on any `# lazy:` that annotates no import |
+| `studio/runtime.py` | A dead `# --- Graph ---` section header with no method under it | deleted (this is why the concern count is 8, not 9) |
+| `tests/unit/architecture/test_no_duplicate_functions.py` | The body fingerprint hashed source text from the first `(`, so differing annotations or docstrings hid real duplicates — it found 0 | fingerprint is a docstring-stripped `ast.dump` of the body; it finds the 2 real pairs, now recorded with reasons and a staleness test |
+| `tests/unit/architecture/test_surface_ratchet.py` | A public symbol added to a *bare* root (`studio/__init__.py`) was graded by nothing, and a `names=None` baseline row on a package that declares `__all__` exempted its whole surface | `BARE_ROOT_SYMBOLS` set equality per bare root, and the `names=None` rows must be exactly `BARE_ROOT_REASONS` |
+| `tests/conftest.py` | `call_tool` injected a `"_envelope"` key no production path sends | removed; the harness now rejects undeclared argument keys |
+| `mcp/server.py` | **my own fix regressed the smoke suite**: dispatching `parsed.model_dump()` to handlers fills in every declared default, and `InspectArtifactArgs.version` defaults to `""` while `inspect_artifact` treats `None` as "use the latest version" — so `int("")` raised | handlers receive the caller's raw dict again; validation is a gate, not a rewrite. Caught by `tests/smoke/`, not by the unit suite |
+| `mcp/server.py` (`main`) | `validate_environment` was resolved at module level, so the two `tests/unit/test_entrypoints.py` patches of `studio.bootstrap.validate_environment` were ineffective (verified) | function-level import with the patch-point reason; the tests' patches now take effect |
+| `AGENTS.md`, `_surface_baseline.py`, `test_surface_ratchet.py` | StudioRuntime row `370 / 27 / 5`; "why three packages declare no `__all__`" (there are four); "reached by submodule 35 times" (measured 25) | all corrected to the measured values |
+
+### Claims that did not survive re-measurement
+
+| Claim | Measured |
+|---|---|
+| `StudioRuntime` `516 → 393` lines, `27 → 29` methods, `5 → 9` concerns | class body `394 → 392`, methods `29 → 29`, concerns `8 → 8`; `516` was a file line count for a file that was never 516 lines |
+| Step 13 private reach-ins `8 → 2` | `7 → 4` (module reach-ins `3 → 2`, private symbols `4 → 2`) |
+| Step 14b `mcp -> generation` imports `23 → 14`, `reference_generation` share `10 → 0` | bindings `25 → 28` for the step (`23 → 26` base to tip), reference share `11 → 14`; what fell is the *lazy* half, `22 → 0` |
+| Step 15a unexplained lazy imports `277 → 266` (and the `277` in the Step 15 totals) | `274 → 264`; `277` was the *total* import count after the step, not the unexplained count. Base `2450616` measured 275 |
+| Agent-test artifact assertions `1`; test split "47% present" | `2`; `16/44 = 36%` |
+| Reviewer: `film_pipeline.studio._provider_factory` is not eagerly imported by `mcp` | it is; the lazy reason beside it was false and is now rewritten, but no code change was needed |
+| Reviewer: `test_no_duplicate_functions.py` legitimately finds no duplicates | its old fingerprint compared raw source from the first `(`, so differing annotations or docstrings hashed differently; the AST-dump fingerprint finds 2 real pairs |
+| Reviewer: Step 13 moved `orchestration` from 17 to 20 public modules | Step 13 moved it `15 → 17` (base `14`), which is what the entry already said — the reviewer measured the wrong boundary |
+| Reviewer: a doc claims the `generation.reference` split is `14 + 10` | no document makes that claim; the only related statement (`23` base, `26` now, `14` names in one handler module) reproduces exactly |
+
+### Verified and left alone
+
+- The two module-level cycles `measure.py` reports are **2 at base and 2 at the
+  tip**; the membership of the first changed (see `README.md`). Its one lazy edge is
+  genuinely cycle-required: hoisting `_repair_loop -> subgraphs.qc` raises
+  `ImportError: cannot import name 'qc_phase_node' from partially initialized module`.
+  `test_package_acyclicity.py` is package-granular and cannot see module-level cycles;
+  that is a known limit, not a regression.
+- Handler-level unconfirmed branches in `checkpoints.py` are kept: they carry an
+  invalidation preview the dispatch gate cannot produce.
+- `measure.py` on the tip: **42 function-level internal import edges across 36
+  statements** — 11 edges (10 statements) cycle-required, 31 edges annotated, **0
+  unexplained**. Each cycle-required edge was verified by a real `ImportError` when
+  hoisted.
+- The `generation.reference` docstring's `23 at base, 26 now` for `mcp -> generation`
+  imported names reproduces exactly, as does its `14 names` for the single handler
+  module that consumes the facade.
+
+### Evidence for this round
+
+- `make ci-check`: PASS (format, lint, `mypy src tests`, pytest at 90% floor, `uv build`,
+  product gate).
+- `enola check --baseline=docs/modular-architecture/enola-out
+  docs/modular-architecture/enola-config.yaml`: exit **0**, cycle count **1**.
+- `uv run pytest -m e2e --no-cov`: PASS.

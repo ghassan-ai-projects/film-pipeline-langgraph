@@ -186,7 +186,7 @@ and the number of *concerns*, not the line count:
 
 | Class | Lines | Public methods | Concerns | Verdict |
 |---|---:|---:|---:|---|
-| `StudioRuntime` | 370 | 27 | 5 | split |
+| `StudioRuntime` | 393 | 29 | 8 | split deferred (doc 08) |
 | `ArtifactStore` | 605 | 15 | 1 | leave alone |
 
 Judge a file by "how many reasons does it have to change", not by how long it is.

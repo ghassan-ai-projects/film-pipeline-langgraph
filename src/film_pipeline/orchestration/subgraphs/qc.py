@@ -265,11 +265,6 @@ def emit_matrix_patch_from_findings(state: StudioGraphState) -> None:
     wired anyway so the capability the sequential node had is accounted for
     rather than silently absent, and a test asserts the wiring.
     """
-    # lazy: `nodes._agent_artifacts` is reached through `nodes/__init__`, which
-    # binds `_PHASE_NODES` and therefore compiles this module; a module-level
-    # import here is a real circular import (ImportError), not just an Enola
-    # artifact.
-
     pending_updates: list[Any] = state.pop("_pending_row_updates", [])
     shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
     if not (pending_updates and shot_matrix_ref):

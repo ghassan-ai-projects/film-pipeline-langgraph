@@ -32,20 +32,32 @@ from film_pipeline.studio.safety import ProductionDataError, can_delete_project,
 
 
 def _install_graph_builder() -> None:
-    """Hand `build_graph` to graph execution, once.
+    """Hand a lazy `build_graph` to graph execution, once.
 
     `orchestration.execution` cannot import `studio.graph_factory` (that would close
     a cycle — this package imports `orchestration` to wire the nodes), so the
-    composition root installs it. This runs at `studio.runtime` import because that
-    module is loaded before any runtime exists, whereas `graph_factory` is imported
-    lazily and a runtime that never built a graph would otherwise fail at its first
+    composition root installs the builder. Registration itself runs at
+    `studio.runtime` import because that module is loaded before any runtime exists;
+    a runtime that never built a graph would otherwise fail at its first
     `ensure_graph` call with nothing registered.
-    """
-    # lazy: `graph_factory` imports `orchestration`, which would close a cycle if
-    # this module imported it eagerly at the top level.
-    import film_pipeline.studio.graph_factory as _graph_factory
 
-    _graph_exec.register_graph_builder(_graph_factory.build_graph)
+    The registered callable is a *wrapper*, not `build_graph` itself, because
+    importing `graph_factory` runs its module body — `graph = build_graph()` at the
+    bottom — which compiles the entire graph and, when persistence is enabled, opens
+    `<storage_root>/checkpoints/checkpoints.sqlite`. Binding the real function here
+    made every `import film_pipeline.studio.runtime` pay that cost and create that
+    file. Deferring to first use keeps registration eager and the side effect lazy.
+    """
+
+    def _build_graph(*args: Any, **kwargs: Any) -> Any:
+        # lazy: `graph_factory`'s module body compiles the graph and, with
+        # persistence enabled, opens the checkpointer database, so importing it at
+        # module level would run both as a side effect of importing `studio.runtime`.
+        from film_pipeline.studio.graph_factory import build_graph
+
+        return build_graph(*args, **kwargs)
+
+    _graph_exec.register_graph_builder(_build_graph)
 
 
 _install_graph_builder()
@@ -246,8 +258,6 @@ class StudioRuntime:
         if not self.active_project_id:
             return None
         return self.projects.get(self.active_project_id)
-
-    # --- Graph ---
 
     # --- Graph execution (see orchestration.execution) ---
 

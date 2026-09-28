@@ -2,7 +2,7 @@
 
 ``ModelAdapter`` is tested through its public ``chat`` / ``chat_multimodal`` /
 ``chat_json`` surface plus the dispatch policy in ``TestDispatchPolicy``.
-Per-provider wire-format details are tested against ``agents.transports``
+Per-provider wire-format details are tested against ``providers.text``
 directly in ``TestTransportModules``, which is where that code now lives.
 """
 
@@ -475,7 +475,7 @@ class TestDispatchPolicy:
 
     Every assertion here is about *which* transport a model id selects, not
     about what that transport does. That policy lives in ``ModelAdapter``; the
-    per-provider behaviour is tested against ``agents.transports`` directly.
+    per-provider behaviour is tested against ``providers.text`` directly.
     """
 
     @staticmethod

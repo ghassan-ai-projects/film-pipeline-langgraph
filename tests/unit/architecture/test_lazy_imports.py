@@ -31,15 +31,15 @@ A function-level `film_pipeline` import is allowed in exactly two cases:
 `HOISTABLE_CEILING` is the number of function-level imports that are *neither*
 cycle-required *nor* annotated. It may only fall.
 
-**It is now 0, and the migration is complete.** It began at 277 of 287 function-level
+**It is now 0, and the migration is complete.** It began at 275 of 287 function-level
 imports and fell across Steps 15a-15j: `storage`, `governance`, `cli`, `studio`,
-`generation`, `post`, `orchestration`, `mcp`. The 39 function-level imports that remain
-are each cycle-required or carry a written `# lazy:` reason — nine of them for a patch
-point, several for a real cycle, and one because hoisting would shadow a same-named
-class.
+`generation`, `post`, `orchestration`, `mcp`. The function-level imports that remain
+are each cycle-required or carry a written `# lazy:` reason — most for a patch point
+(a test patching a name at its source module), several for a real cycle, and one
+because hoisting would shadow a same-named class.
 
 It was deliberately a count of the *unexplained* imports rather than all of them: a
-guard that failed on all 277 could not have been committed until the migration
+guard that failed on all 275 could not have been committed until the migration
 finished, so it would not have existed during the migration — which is when it was
 needed.
 
@@ -82,8 +82,9 @@ def _has_reason(path: Path, lineno: int) -> bool:
     shadowing hazard in three lines, and a two-line window would have rejected it
     for being *too well* explained.
 
-    Scanning stops at the first non-comment, non-blank line, so a reason cannot be
-    inherited from an unrelated comment further up the function.
+    Scanning stops at the first line that is not a comment, so a reason cannot be
+    inherited from an unrelated comment further up the function. A blank line ends
+    the block too: it is not a comment, so it stops the scan.
     """
     lines = path.read_text().split("\n")
     index = lineno - 1
@@ -156,13 +157,50 @@ def test_every_lazy_reason_is_a_reason() -> None:
     )
 
 
+def test_every_lazy_reason_annotates_an_import() -> None:
+    """A `# lazy:` must sit on, or directly above, the import it justifies.
+
+    This is the guard's own blind spot, found by adversarial review of the guard
+    rather than of the code. `_has_reason` only ever *looks upward from an import*:
+    it answers "does this import have a reason", never "does this reason belong to
+    an import". So a `# lazy:` left behind when an import was hoisted is invisible —
+    and the hoisting commit `5cc0170` left two of them, in
+    `orchestration/subgraphs/qc.py` and `orchestration/nodes/qc.py`, each asserting
+    a circular import that no longer existed. A false reason is worse than no
+    reason: it is a written claim that the next reader will trust, and
+    `AGENTS.md` records two rounds lost to exactly that.
+
+    The rule is the mirror of `_has_reason`: on the comment's own line, or after
+    the contiguous comment block below it, must come an ``import``/``from`` line.
+    """
+    offenders: list[str] = []
+    for source, path in sorted(_module_paths().items()):
+        lines = path.read_text().split("\n")
+        for lineno, line in enumerate(lines):
+            if not _LAZY_REASON.search(line):
+                continue
+            if re.match(r"\s*(?:from|import)\s", line.split("#", 1)[0]):
+                continue  # on the import's own line
+            index = lineno + 1
+            while index < len(lines) and lines[index].strip().startswith("#"):
+                index += 1
+            if index < len(lines) and re.match(r"\s*(?:from|import)\s", lines[index]):
+                continue  # in the comment block directly above an import
+            offenders.append(f"{source}:{lineno + 1}")
+    assert not offenders, (
+        f"these `# lazy:` reasons annotate no import: {offenders}. A reason left "
+        "behind by a hoist is a false claim about the tree — delete it, or move it "
+        "to the import it justifies."
+    )
+
+
 def test_the_guard_has_something_to_check() -> None:
     """Guard the guard: a broken collector would report zero and pass.
 
     The threshold *fell* as the migration proceeded — 200 → 150 → 100 → 30 — each time
     because the real total dropped to meet it. That is the point: it catches a
     collector that reads nothing, not a migration that finished. The migration is now
-    finished: 39 function-level imports remain, every one cycle-required or carrying a
+    finished: every remaining function-level import is cycle-required or carries a
     `# lazy:` reason, and `HOISTABLE_CEILING` is **0**.
 
     Lowering this is not lowering a finding. `HOISTABLE_CEILING` is the number that

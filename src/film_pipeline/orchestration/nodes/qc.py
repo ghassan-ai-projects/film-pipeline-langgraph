@@ -81,8 +81,6 @@ def _run_validators(state: StudioGraphState) -> None:
     _execute_phase_validators(state, artifacts, issues, services)
     state["issues"] = issues
 
-    # lazy: `orchestration.qc_steps` imports back into `nodes._agent_artifacts`
-
     build_consensus_if_needed(state, phase)
 
 

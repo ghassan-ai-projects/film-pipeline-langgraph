@@ -95,6 +95,17 @@ class SubmitIdeaArgs(ToolArgs):
 
     idea: str = Field(default="", description="The film idea to submit.")
     text: str = Field(default="", description="Alias for `idea`.")
+    target_runtime_seconds: int | float | str | None = Field(
+        default=None,
+        description=(
+            "Requested film length in seconds; takes precedence over "
+            "`target_runtime_minutes`. Numeric strings are accepted."
+        ),
+    )
+    target_runtime_minutes: int | float | str | None = Field(
+        default=None,
+        description="Requested film length in minutes, used only when seconds is unset.",
+    )
     target_scene_count: object = Field(
         default=None, description="Requested number of scenes, if any."
     )

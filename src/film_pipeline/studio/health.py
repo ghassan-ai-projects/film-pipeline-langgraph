@@ -37,8 +37,9 @@ def _record_bootstrap_status(status: HealthStatus) -> None:
 
 def _record_provider_status(status: HealthStatus) -> None:
     """Record whether every registered provider reports healthy."""
-    # lazy: tests patch `studio.health.get_runtime`; a module-level binding resolves
-    # before the patch and bypasses it (measured: hoisting this made
+    # lazy: tests patch `studio.runtime.get_runtime` at that module, so the name has
+    # to resolve at call time — a module-level binding here would be resolved before
+    # the patch and bypass it (measured: hoisting this made
     # `test_check_readiness_reports_degraded_provider` report ready=True).
     from film_pipeline.studio.runtime import get_runtime
 

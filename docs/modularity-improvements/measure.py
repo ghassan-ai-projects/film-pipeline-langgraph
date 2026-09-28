@@ -54,6 +54,31 @@ def _nearest_module(name: str) -> str | None:
     return name if name in MODULES else None
 
 
+#: Same rule as `test_lazy_imports._has_reason`: `# lazy: <why>` on the import's
+#: line or in the contiguous comment block directly above it.
+_LAZY_REASON = re.compile(r"#\s*lazy:\s*\S+")
+
+
+def _has_lazy_reason(source: str, lineno: int) -> bool:
+    """True when the lazy import at `source:lineno` carries a written reason."""
+    path = MODULES.get(source)
+    if path is None:
+        return False
+    lines = path.read_text().split("\n")
+    index = lineno - 1
+    if 0 <= index < len(lines) and _LAZY_REASON.search(lines[index]):
+        return True
+    index -= 1
+    while index >= 0:
+        stripped = lines[index].strip()
+        if not stripped.startswith("#"):
+            break
+        if _LAZY_REASON.search(lines[index]):
+            return True
+        index -= 1
+    return False
+
+
 def _parents(mod: str) -> list[str]:
     parts = mod.split(".")
     return [".".join(parts[:i]) for i in range(2, len(parts)) if ".".join(parts[:i]) in MODULES]
@@ -177,10 +202,24 @@ def main() -> None:
 
     print("\n== Function-level (lazy) internal imports")
     required = [(s, t, n) for s, t, n in lazy if reaches(eager, t, s)]
-    hoistable = len(lazy) - len(required)
-    print(f"  total={len(lazy)} cycle-required={len(required)} hoistable={hoistable}")
-    by_pkg = collections.Counter(package_of(s) for s, t, n in lazy if (s, t, n) not in required)
-    print("  hoistable by package:", dict(by_pkg.most_common()))
+    # A lazy import can also be justified by a written reason. Report it the way
+    # `tests/unit/architecture/test_lazy_imports.py` grades it, so the two numbers
+    # cannot be read as disagreeing: a bare `lazy - required` count includes the
+    # annotated patch points and reads as "hoistable" when it is not.
+    annotated = [
+        (s, t, n) for s, t, n in lazy if (s, t, n) not in required and _has_lazy_reason(s, n)
+    ]
+    unexplained = [
+        (s, t, n) for s, t, n in lazy if (s, t, n) not in required and (s, t, n) not in annotated
+    ]
+    print(
+        f"  total={len(lazy)} cycle-required={len(required)} "
+        f"annotated={len(annotated)} unexplained={len(unexplained)}"
+    )
+    by_pkg = collections.Counter(package_of(s) for s, t, n in annotated)
+    print("  annotated by package:", dict(by_pkg.most_common()))
+    for s, t, n in unexplained:
+        print(f"  unexplained: {s}:{n} -> {t}")
     for s, t, n in required:
         print(f"  required: {s}:{n} -> {t}")
 
@@ -208,8 +247,12 @@ def main() -> None:
     print("  with output_schema:", sum(1 for t in catalog if t["output_schema"]))
     generic = sum(1 for t in catalog if t["description"] == f"MCP tool: {t['name']}")
     print("  with generic 'MCP tool: <name>' description:", generic)
-    tools_init = (ROOT / "mcp/tools/__init__.py").read_text()
-    lazy_map = set(re.findall(r'^\s+"(\w+)": "film_pipeline', tools_init, re.M))
+    # Ask the facade for its map instead of regexing the source: the map is derived
+    # from the `ToolSpec` declarations at runtime (it used to be a literal dict in
+    # the file), so a source regex sees only `_NON_TOOL_EXPORTS` and reports 1.
+    from film_pipeline.mcp.tools import _NON_TOOL_EXPORTS, _tool_modules
+
+    lazy_map = set(_tool_modules())
     print("  _TOOL_MODULES entries:", len(lazy_map))
     stub = (ROOT / "mcp/tools/__init__.pyi").read_text()
     stub_names = set(re.findall(r"\bas (\w+)\b", stub))
@@ -218,8 +261,8 @@ def main() -> None:
         sorted({t["name"] for t in catalog} - stub_names),
     )
     print(
-        "  names in _TOOL_MODULES but not registered:",
-        sorted(lazy_map - {t["name"] for t in catalog}),
+        "  names in _TOOL_MODULES but not registered (excluding declared non-tools):",
+        sorted(lazy_map - {t["name"] for t in catalog} - set(_NON_TOOL_EXPORTS)),
     )
 
     print("\n== Operations layer consumers (outside operations/)")

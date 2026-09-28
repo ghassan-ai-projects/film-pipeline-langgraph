@@ -8,12 +8,17 @@ of them touches an MCP context, shapes a response, or reads a tool argument.
 The MCP handler stayed in `mcp/tools/reference_generation/tool.py`. It is the one
 piece that speaks MCP (`ToolContext`, `ToolArgs`, `_ok`/`_error`), and keeping it
 here would close `generation <-> mcp` — a package that owns a use case must not
-depend on the surface that exposes it. Before the split, `mcp -> generation` was 23
-imports; the handler plus the five `generation` tool modules now account for 14.
+depend on the surface that exposes it.
 
-The facade below is private-name-heavy on purpose: these helpers were `_`-prefixed
-when they were `mcp`-internal and are still internal to the use case. Only the tool
-module imports them.
+This did not shrink the `mcp -> generation` edge. Measured by imported names it was
+23 at the base commit and is 26 now. What changed is the shape: the reference use
+case is reached through that one handler module (14 names) instead of the seven
+`mcp/tools/reference_generation/*` modules that used to spread it across the tool
+package.
+
+The facade below is used only by that handler module. These names were `_`-prefixed
+while they lived in `mcp`; they are public here because they are this use case's own
+surface now, not because a second consumer exists.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""The recorded public surface of every package, and why three declare none.
+"""The recorded public surface of every package, and why four declare none.
 
 ## How to read this
 
@@ -18,12 +18,15 @@ resolves surfaces from imported modules rather than by parsing AST. That matters
 an AST literal parser read `mcp/tools`'s computed `__all__` as `None`, silently
 skipping 77 declared names.
 
-## Why three packages declare no `__all__`
+## Why four packages declare no `__all__`
 
 `BARE_ROOT_REASONS` is checked by the guard: a package with no `__all__` and no
 entry here fails, so the absence is a stated decision rather than an oversight.
 Each reason is falsifiable — `test_bare_package_roots.py` measures the property
 each one claims (no eager submodule load, no `langgraph` on the import path).
+`BARE_ROOT_SYMBOLS` records the public symbols reachable on each of those roots, so
+a `def` added to a bare `__init__.py` is a recorded edit rather than an invisible
+widening of the surface.
 
 Adding `__all__` to any of these is not forbidden, but it is not free: for
 `orchestration` it would eagerly load the graph. The sanctioned path if one ever
@@ -108,6 +111,23 @@ BARE_ROOT_REASONS: dict[str, str] = {
         "vocabulary of its own. `__version__` is the only root binding, and it is "
         "not part of any consumer's contract."
     ),
+}
+
+#: Public *symbols* reachable on a bare package root (`dir()` names minus
+#: submodules and minus `ARTIFACT_NAMES`), recorded per package.
+#:
+#: `SURFACE_BASELINE` grades a bare root only by its *module* count, so before this
+#: table existed a bare package could add a public function or class to its
+#: `__init__.py` and no guard noticed: `test_no_package_leaks_an_undeclared_symbol_off_its_root`
+#: skips any package without `__all__`, and the module count is unchanged by an
+#: added statement. All four roots reach no public symbol today, so the recorded
+#: value is empty for each — the entry exists so that the first one is a
+#: deliberate, reviewed edit rather than a silent widening.
+BARE_ROOT_SYMBOLS: dict[str, frozenset[str]] = {
+    "cli": frozenset(),
+    "orchestration": frozenset(),
+    "orchestration.subgraphs": frozenset(),
+    "studio": frozenset(),
 }
 
 #: Public names that appear on a package root only because the package imported

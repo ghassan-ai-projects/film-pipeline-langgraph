@@ -25,7 +25,9 @@ def _routing_summary(routing_decisions: list[dict[str, Any]]) -> str:
 
 
 async def get_audit_log(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
-    project_id = str(args.get("project_id", "") or "")
+    # An explicit `project_id` wins; otherwise the context's resolved project is
+    # the active-project fallback `GetAuditLogArgs.project_id` documents.
+    project_id = str(args.get("project_id", "") or "") or (ctx.project_id or "")
     limit_raw = args.get("limit", 100)
     limit = int(limit_raw) if isinstance(limit_raw, int) else int(str(limit_raw))
     events = ctx.runtime.get_audit_log(project_id if project_id else None, limit=limit)

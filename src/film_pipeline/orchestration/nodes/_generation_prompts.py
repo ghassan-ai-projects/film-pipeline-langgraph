@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from film_pipeline.generation.prompt_builder import build_structured_prompt
 from film_pipeline.orchestration.nodes._context import (
     _parse_ref,
 )
@@ -102,6 +101,10 @@ def _build_prompt_from_matrix_row(
     row: dict[str, Any],
 ) -> str:
     """Build a structured generation prompt from the shot matrix row."""
+
+    # lazy: tests patch `generation.prompt_builder.build_structured_prompt` at its
+    # source module, so the name has to resolve at call time.
+    from film_pipeline.generation.prompt_builder import build_structured_prompt
 
     characters = row.get("characters") or []
     environment = str(row.get("environment", "") or "")

@@ -30,8 +30,9 @@ class ToolContext:
     04's slice, and doing both at once would conflate "where does the runtime come
     from" with "what shape are the arguments".
 
-    It carries `project_state()` because migrating a handler means replacing its
-    `require_project_state(args)` call, and the context already holds the resolved
+    It carries `project_state()` because migrating a handler means replacing the
+    guard it used to call for itself (`helpers.require_project_state`, deleted once
+    every handler had moved), and the context already holds the resolved
     project — so this is where the rule belongs now, not a duplicate of it. The
     earlier placement (at the `mcp` package root) could not have it: the method
     imports `filmspec` and `operations.errors`, which made `mcp.contract` depend on
@@ -47,9 +48,9 @@ class ToolContext:
     def project_state(self) -> dict[str, Any]:
         """Return the context project's live state.
 
-        Raises `ProjectNotFoundError` when no project resolved, mirroring
-        `helpers.require_project_state` (which this replaces at migrated call
-        sites): dispatch checks `requires_active_project` before the handler runs,
+        Raises `ProjectNotFoundError` when no project resolved, mirroring the
+        deleted `helpers.require_project_state` it replaced at migrated call
+        sites: dispatch checks `requires_active_project` before the handler runs,
         so reaching here without one is a contract bug rather than a user error.
         """
 

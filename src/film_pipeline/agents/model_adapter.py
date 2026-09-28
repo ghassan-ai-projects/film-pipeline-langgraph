@@ -11,7 +11,7 @@ API (``GOOGLE_API_KEY``), everything else goes to OpenRouter
 (``OPENROUTER_API_KEY``).
 
 This module owns dispatch and request shaping only. Per-provider wire formats
-live in ``agents.transports``; the network boundary lives in
+live in ``providers.text``; the network boundary lives in
 ``providers.http_transport``. Model-text JSON recovery lives in
 ``_json_extraction``.
 """
@@ -59,7 +59,7 @@ class ModelAdapter:
 
     This class is dispatch plus request shaping: it decides which transport a
     model id targets, builds that transport's value object, and normalizes the
-    text response. Each provider's wire format lives in ``agents.transports``.
+    text response. Each provider's wire format lives in ``providers.text``.
     """
 
     def __init__(
@@ -86,7 +86,7 @@ class ModelAdapter:
         return zai.zai_api_key(self._configured_zai_api_key)
 
     def _zai_base_url(self) -> str:
-        """Resolve the z.ai API base URL (see ``transports.zai.zai_base_url``)."""
+        """Resolve the z.ai API base URL (see ``providers.text.zai.zai_base_url``)."""
         return zai.zai_base_url()
 
     def _request(self, request: _ChatRequest) -> dict[str, Any]:

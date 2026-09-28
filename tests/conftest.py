@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import Callable, Iterator
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
 
@@ -207,22 +208,62 @@ def call_tool() -> Iterator[Callable[..., Any]]:
         # what dispatch's resolution step produces.
         resolved = project_id if project_id is not None else _active_project_id(rt)
         context = ToolContext(runtime=rt, project_id=resolved, envelope=envelope)
+        # Every key this call passes must be one the tool's model declares. This
+        # is the `extra="forbid"` rule of the production boundary, asserted at
+        # the seam tests use: without it the fixture enforced that rule nowhere,
+        # so a model that had dropped a live argument kept its tests green while
+        # dispatch would have refused the call.
+        #
+        # Only *unknown* keys are checked, not missing required ones: tests
+        # deliberately call a handler without a required argument to exercise the
+        # handler's own guard.
+        _assert_args_are_declared(handler, args or {})
         # Both handler shapes are legal while doc 01's migration is in flight;
-        # the same signature check dispatch uses picks which call this is. A
-        # legacy handler still gets `"_envelope"`, exactly as dispatch passes it.
+        # the same signature check dispatch uses picks which call this is.
         from film_pipeline.mcp.server import _accepts_context
 
         any_handler = cast("Any", handler)
         if _accepts_context(handler):
             result = any_handler(context, args or {})
         else:
-            result = any_handler({**(args or {}), "_envelope": envelope})
+            result = any_handler(args or {})
         if inspect.isawaitable(result):
             awaited: Any = asyncio.run(cast("Any", result))
             return awaited
         return result
 
     yield _call
+
+
+@lru_cache(maxsize=1)
+def _registrations_by_handler() -> dict[Any, Any]:
+    """Map each registered tool handler to its `ToolRegistration`.
+
+    Built once from the real registry, so the fixture checks against the same
+    declarations the server publishes rather than a copy that can drift.
+    """
+    from film_pipeline.mcp.contract import make_registry
+
+    registry = make_registry()
+    return {registry.get(name).handler: registry.get(name) for name in registry.all_names()}
+
+
+def _assert_args_are_declared(handler: Callable[..., Any], args: dict[str, Any]) -> None:
+    """Fail when `args` carries a key `handler`'s own args model does not declare.
+
+    A handler that is not a registered tool, or one registered without a spec, is
+    passed through unchanged, so the fixture stays usable for plain helpers.
+    """
+    registration = _registrations_by_handler().get(handler)
+    if registration is None or registration.spec is None:
+        return
+    declared = set(registration.spec.args.model_fields)
+    undeclared = sorted(set(args) - declared)
+    assert not undeclared, (
+        f"{handler.__name__} does not declare {undeclared}; "
+        f"dispatch would reject this call with VALIDATION_ERROR. "
+        f"Declared keys: {sorted(declared)}"
+    )
 
 
 def _active_project_id(runtime: Any) -> str | None:

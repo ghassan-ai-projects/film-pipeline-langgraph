@@ -82,13 +82,13 @@ class ToolContract:
 #:
 #: - ``(ctx, args)`` — the target. Dispatch builds a `ToolContext`, so the handler
 #:   never resolves the runtime or the active project for itself.
-#: - ``(args)`` — the legacy shape, which dispatch still hands an ``"_envelope"``
-#:   key inside ``args``.
+#: - ``(args)`` — the legacy shape, still in the union until the last seven
+#:   handlers move. Dispatch passes it the same validated argument dict.
 #:
 #: `MCPServer._accepts_context` picks the shape from the first parameter's name,
 #: so a handler is migrated by changing its signature — there is no registry flag
-#: to keep in step. When the last legacy handler moves, the second member and the
-#: ``"_envelope"`` key are deleted together.
+#: to keep in step. When the last legacy handler moves, the second member is
+#: deleted.
 #:
 #: This lives here, beside `ToolContext`, rather than in `contract.py`: a tool
 #: module now declares its own `ToolSpec` and therefore imports `contract`, so
@@ -99,9 +99,6 @@ ToolHandler = (
     | Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
     | Callable[[dict[str, Any]], dict[str, Any]]
 )
-
-
-__all__ = ["ToolContext", "ToolHandler"]
 
 
 class ToolArgs(BaseModel):
@@ -124,26 +121,29 @@ class ToolArgs(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    # Dispatch consumes both of these before a handler runs; neither is a tool
-    # argument, so neither belongs on an individual model:
+    # Both of these belong to the protocol rather than to any one tool, so they
+    # are declared once here instead of on 75 models. Declaring them keeps
+    # `extra="forbid"` honest: without them every tool would reject the two
+    # fields the protocol itself sends.
     #
-    # - `confirmed` gates tools whose contract sets `requires_confirmation`
-    #   (`MCPServer._check_confirmation`).
-    # - `project_ref` names the project for this one call. `MCPServer.call` lifts it
-    #   into the request envelope (`new_envelope(project_ref=...)`), so it never
-    #   reaches the handler either.
-    #
-    # Declaring them once keeps `extra="forbid"` honest: without them every tool
-    # would reject the two fields the protocol itself sends.
-    confirmed: bool = Field(
-        default=False,
+    # - `confirmed` gates tools whose contract sets `requires_confirmation`.
+    #   `MCPServer.call` validates the arguments *first* and then reads the typed
+    #   value (`MCPServer._check_confirmation`), so `"no"` cannot clear the gate.
+    # - `project_ref` names the project for this one call, leaving the active
+    #   project unchanged. `MCPServer.call` also lifts it into the request
+    #   envelope (`new_envelope(project_ref=...)`) *before* validation, from the
+    #   raw arguments. It stays on the model because a handler may read it —
+    #   `set_active_project` does — and because the envelope path tolerates a
+    #   missing or null ref that the model would otherwise reject.
+    confirmed: bool | None = Field(
+        default=None,
         description=(
             "Required to be true for tools that ask for confirmation; consumed by "
             "dispatch before the handler runs."
         ),
     )
-    project_ref: str = Field(
-        default="",
+    project_ref: str | None = Field(
+        default=None,
         description=(
             "Project to act on for this call only, leaving the active project "
             "unchanged; consumed by dispatch."

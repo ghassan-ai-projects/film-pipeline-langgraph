@@ -248,10 +248,12 @@ def is_text_only_policy(state: object) -> bool:
     return str(state.get("generation_policy", "")).strip().lower() == TEXT_ONLY_POLICY
 
 
-#: need it, and a constant in either package would import the other. It was
-#: previously written inline at 48 call sites in three different wordings, with
-#: five different emptiness tests — `if not active` and `if active is None`
-#: disagree on an empty dict — so one condition produced different answers.
+#: The one message for "this request has no project to act on". Both the MCP
+#: dispatcher and the tool layer need it, and a constant in either package would
+#: import the other. It was previously written inline at 48 call sites in three
+#: wordings, with five different emptiness tests — `if not active` and
+#: `if active is None` disagree on an empty dict — so one condition produced
+#: different answers.
 NO_ACTIVE_PROJECT = "No active project."
 
 
