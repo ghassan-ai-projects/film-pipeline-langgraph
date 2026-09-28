@@ -30,7 +30,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` imports: **23 → 14** | 0 |
 | 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `c8e7a58` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
 | 15b | `post`, `cli` hoisted; `# lazy:` handling for real blockers | `ac4b505` | unexplained lazy imports: **266 → 242**; `post` 20 → 5, `cli` 7 → 1 | 0 |
-| 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `_pending_` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
+| 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
+| 15d | `studio` hoisted to 0 | `_pending_` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1249,3 +1250,48 @@ after every hoist rather than at the end of the batch matters.
 `mcp` (108), `orchestration` (89), `studio` (15), `post` (5), `generation` (5). `mcp`
 and `orchestration` are 89% of what is left and will need per-module commits rather
 than package-level batches.
+
+## Step 15d — `studio` to zero (2026-09-28)
+
+`studio` 15 → 0; total unexplained **222 → 207**.
+
+Ten of the fifteen hoisted without incident. Five are load-bearing and now carry
+reasons, all for the same two causes:
+
+**Patch points (4).** `studio/health.py` is the densest case in the tree — three of
+its four checks call a function the test suite patches at its source:
+
+| Import | Patched at | Symptom if hoisted |
+|---|---|---|
+| `get_runtime` | `studio.health.get_runtime` | readiness reports `True` when the fake has no providers |
+| `validate_environment` | `studio.bootstrap.validate_environment` | bootstrap check passes against a missing profiles dir |
+| `kb_manifest_path` | `kb.paths.kb_manifest_path` | KB check passes with no manifest |
+
+**Real cycles (2, in `studio/runtime.py` and `studio/_operator_runtime.py`).**
+`graph_factory` imports `orchestration`, which is the cycle Step 13 broke; and
+`_provider_factory` imports this package. Both are stated rather than silently lazy.
+
+`smoke.py`'s five imports were the one judgement call. They sat inside `try/except`
+blocks, which can *look* like deliberate failure isolation, but each check already
+catches its own exceptions — the `try` supplies that, not the import's position. And
+no test patches them. Hoisted.
+
+### The pattern, now measured four times
+
+Across Steps 15b–15d the same rule held every time: **a hoist is safe unless the name
+is looked up by a test's patch target.** That is a mechanical test — `grep` the dotted
+name across `tests/` before hoisting — and it would have saved the bisect in 15c. It
+is recorded here as the procedure for the remaining work rather than rediscovered per
+package.
+
+### Evidence
+
+- Guard: **222 unexplained → 207**; `studio` **15 → 0**.
+- `make ci-check`: **2347 passed, 91.86% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (89), `post` (5), `generation` (5). `mcp` and
+`orchestration` are 95% of what is left; both need per-module commits at the batch
+size Step 15c's bisect recommended.

@@ -39,6 +39,8 @@ def register_profile_providers(
     if not specs:
         return
 
+    # lazy: `_provider_factory` imports this package, so a top-level import here
+    # would close a cycle inside `studio`.
     from film_pipeline.studio._provider_factory import build_provider_adapter
 
     runtime.clear_providers()

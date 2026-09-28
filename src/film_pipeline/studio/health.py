@@ -26,6 +26,8 @@ def check_readiness() -> HealthStatus:
 
 def _record_bootstrap_status(status: HealthStatus) -> None:
     """Record whether the environment passes bootstrap validation."""
+    # lazy: tests patch `studio.bootstrap.validate_environment`; a module-level
+    # binding resolves before the patch and bypasses it.
     from film_pipeline.studio.bootstrap import validate_environment
 
     env_issues = validate_environment()
@@ -35,6 +37,9 @@ def _record_bootstrap_status(status: HealthStatus) -> None:
 
 def _record_provider_status(status: HealthStatus) -> None:
     """Record whether every registered provider reports healthy."""
+    # lazy: tests patch `studio.health.get_runtime`; a module-level binding resolves
+    # before the patch and bypasses it (measured: hoisting this made
+    # `test_check_readiness_reports_degraded_provider` report ready=True).
     from film_pipeline.studio.runtime import get_runtime
 
     rt = get_runtime()
@@ -53,6 +58,7 @@ def _record_provider_status(status: HealthStatus) -> None:
 
 def _record_kb_status(status: HealthStatus) -> None:
     """Record whether the knowledge-base manifest is present."""
+    # lazy: tests patch `kb.paths.kb_manifest_path`; see above.
     from film_pipeline.kb.paths import kb_manifest_path
 
     kb_manifest_present = kb_manifest_path().exists()

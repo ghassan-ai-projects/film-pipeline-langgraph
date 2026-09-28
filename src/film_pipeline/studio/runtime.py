@@ -41,6 +41,8 @@ def _install_graph_builder() -> None:
     lazily and a runtime that never built a graph would otherwise fail at its first
     `ensure_graph` call with nothing registered.
     """
+    # lazy: `graph_factory` imports `orchestration`, which would close a cycle if
+    # this module imported it eagerly at the top level.
     import film_pipeline.studio.graph_factory as _graph_factory
 
     _graph_exec.register_graph_builder(_graph_factory.build_graph)
@@ -507,6 +509,7 @@ def _build_services_for_mode(
 ) -> GraphServices:
     if server_mode == "real":
         return GraphServices.for_real_runtime(artifacts_root=artifacts_root)
+    # lazy: only the mock branch needs it, and it pulls the mock response tables.
     from film_pipeline.studio.mock_responses import default_mock_responses
 
     return GraphServices.for_mock_runtime(
