@@ -5,9 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from film_pipeline.governance.orchestrator_reads import get_execution_brief
+from film_pipeline.governance.scope_contract import avg_shot_duration_for
 from film_pipeline.governance.validators._shared import (
     _blocking,
 )
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 
 # ── Helpers: load ExecutionBrief from state or artifact store ─────────────
@@ -19,7 +23,6 @@ def _load_brief_from_state(state: Mapping[str, object]) -> ExecutionBrief | None
     ``set_execution_brief`` persists ``model_dump(mode="json")``, so live
     state holds a plain mapping once the brief crosses any node boundary.
     """
-    from film_pipeline.governance.orchestrator_reads import get_execution_brief
 
     data = get_execution_brief(state)
     if data is None:
@@ -34,8 +37,6 @@ def _load_brief_from_store(state: Mapping[str, object], store: Any) -> Execution
     """Load the ExecutionBrief from the artifact store."""
     if store is None:
         return None
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     project_id = str(state.get("project_id", ""))
     if not project_id:
@@ -102,7 +103,6 @@ def _movement_count_issues(brief: ExecutionBrief) -> list[dict[str, Any]]:
 
 def _runtime_inconsistency_issues(brief: ExecutionBrief, total_shots: int) -> list[dict[str, Any]]:
     """Runtime self-consistency: total shots * avg_duration ~= target_runtime."""
-    from film_pipeline.governance.scope_contract import avg_shot_duration_for
 
     avg_duration = avg_shot_duration_for(brief.pacing_style)
     estimated_runtime = total_shots * avg_duration
@@ -171,8 +171,6 @@ def _story_bible_cross_check(
     story_bible_ref = str(state.get("story_bible_ref", ""))
     if not story_bible_ref:
         return []
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     if store is None:
         return []

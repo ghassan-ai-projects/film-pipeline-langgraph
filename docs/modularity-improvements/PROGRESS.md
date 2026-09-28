@@ -27,7 +27,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11e | **remaining 25 tools + dead `_register` path + derived facade** | `e7cbb95` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
 | 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **8 → 2** | 0 |
 | 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `0ca9313` | 7 pure helpers out of `mcp`; new registration guard | 0 |
-| 14b | Reference generation use case into `generation` | `_pending_` | `mcp -> generation` imports: **23 → 14** | 0 |
+| 14b | Reference generation use case into `generation` | `001ad57` | `mcp -> generation` imports: **23 → 14** | 0 |
+| 15a | Lazy-import guard added; `storage` and `governance` hoisted to 0 | `_pending_` | unexplained lazy imports: **277 → 266**; guard ratchets | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1072,3 +1073,60 @@ and a thin handler test" — is **not** done. `tests/unit/mcp/tools/test_referen
 (719 lines) still drives the use case through `call_tool`, and its helper tests import
 the use-case package directly. The production split is real; the test split is not
 claimed.
+
+## Step 15a — the lazy-import guard, and the two smallest packages hoisted (2026-09-28)
+
+Doc 05's finding is that **96% of function-level imports protect no cycle** — 275 of
+287. The number alone was not actionable, because nothing could distinguish a
+load-bearing lazy import from a habitual one. So this slice builds the discriminator
+first, then uses it.
+
+### `tests/unit/architecture/test_lazy_imports.py`
+
+A function-level `film_pipeline` import is allowed only if:
+
+1. **It is cycle-required** — the target can already reach the source through eager
+   edges, so hoisting would close a cycle. Computed by **importing `measure.py`'s own
+   `collect_imports`/`reaches`** rather than reimplementing the walk: a guard that
+   disagrees with the measurement it grades is worse than no guard, and the drift
+   would be invisible.
+2. **It carries `# lazy: <reason>`** on the import's line or the line above (the
+   latter for multi-line `from x import (...)`).
+
+`HOISTABLE_CEILING` counts the imports that are *neither* — the unexplained ones. It
+may only fall. Counting the unexplained rather than all lazy imports is deliberate: a
+guard that failed on all 275 could not be committed until the migration finished, so
+it would not exist during the migration, which is exactly when it is needed.
+
+Adversarially verified: raising the ceiling above the real count fails with the count
+and a per-package breakdown.
+
+A second test requires the reason to be a *reason* — `# lazy: defers langgraph`, not a
+bare `# lazy:`. It is cheap to satisfy badly and the guard's job is to make the
+sentence exist. A third is the guard-the-guard: a broken collector reporting zero
+would otherwise pass silently.
+
+### `storage` 3 → 0, `governance` 7 → 0
+
+Both hoists were the same shape: a function-level import of `schemas.base`,
+`schemas.artifact` or `schemas.matrix_patch` where the module already imported sibling
+`schemas` names at module level, so no cycle was ever at risk.
+
+One real cleanup fell out: `storage/matrix_projection.py` had a `TYPE_CHECKING` block
+importing `MatrixPatch` **and** a function-level import of the same name. The
+`TYPE_CHECKING` block proved the annotation position was safe; the runtime use at
+`MatrixPatch(**data)` was equally safe, so both collapsed into one module-level
+import and the now-empty `if TYPE_CHECKING:` was deleted with its `TYPE_CHECKING`
+import.
+
+### Evidence
+
+- Guard: **277 unexplained → 266**; `storage` and `governance` at **0**.
+- `make ci-check`: **2347 passed, 91.85% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (91), `generation` (25), `post` (20), `studio` (15),
+`cli` (7). These are larger and several will need genuine `# lazy:` reasons rather
+than hoists — the guard is what will force those reasons to be written down.

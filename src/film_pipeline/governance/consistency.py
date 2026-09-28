@@ -8,6 +8,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from film_pipeline.schemas.artifact import ArtifactRef
+
 
 def _staleness_warnings(
     artifact_id: str,
@@ -47,8 +49,6 @@ def check_staleness(
 
     Returns a list of staleness warnings. Empty list = all deps are current.
     """
-    from film_pipeline.schemas.artifact import ArtifactRef
-
     try:
         parsed = ArtifactRef.from_string(artifact_ref)
     except ValueError:
