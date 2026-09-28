@@ -33,7 +33,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15c | `generation.reference` hoisted where safe; patched call targets kept lazy | `637ceac` | unexplained lazy imports: **242 → 222**; `generation` 25 → 5 | 0 |
 | 15d | `studio` hoisted to 0 | `b7ca469` | unexplained lazy imports: **222 → 207**; `studio` 15 → 0 | 0 |
 | 15e | `generation` hoisted to 0 | `485a7cc` | unexplained lazy imports: **207 → 202**; `generation` 25 → 0 | 0 |
-| 15f | `post` to 0; the guard's per-line reason rule made explicit | `_pending_` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
+| 15f | `post` to 0; the guard's per-line reason rule made explicit | `9a99fcb` | unexplained lazy imports: **202 → 197**; `post` 5 → 0 | 0 |
+| 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `_pending_` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1498,3 +1499,51 @@ decorative.
 
 `mcp` (108), `orchestration` (89) — 197 of 197. Both are now the whole remainder and
 need per-module commits.
+
+## Step 15g — `orchestration`, first four modules (2026-09-28)
+
+`orchestration` 89 → 56; total unexplained **197 → 164**.
+
+The grep-first rule from Step 15d paid off directly here: of the 35 imports across
+`nodes/visual.py`, `subgraphs/qc.py` and `nodes/qc.py`, exactly two matched a patch
+target, and **both turned out to be false positives**:
+
+- `ScriptStructureValidator` — `tests/unit/mcp/tools/test_validation.py` patches
+  `ScriptStructureValidator.run`, i.e. a *method on the class*. Hoisting the import
+  changes nothing about that; the class object is the same one either way.
+- `_save_artifact` — patched as `wrapup_module._save_artifact`, which resolves to
+  `orchestration/nodes/wrapup.py`. The name also appears in `subgraphs/qc.py`, but
+  that is a different module object with its own binding; patching one does not affect
+  the other.
+
+So all 35 hoisted. 13 of the 35 were validator imports in the two QC modules, which is
+the shape doc 02 described: the QC subgraph and the sequential QC node each pulled
+their validators in at call time.
+
+### A guard threshold that had to move, honestly
+
+`test_the_guard_has_something_to_check` asserted `len(lazy) > 200`. Total
+function-level imports fell to exactly 200 as the migration proceeded, so the *sanity
+check* started failing — the guard's own "is the collector reading anything" probe had
+become a work target.
+
+This is the distinction the goal's constraint is about: the rule is **never lower a
+count to make a finding disappear**, and this is the opposite case. The threshold exists
+to catch a collector that parses nothing, not to assert the migration is unfinished, so
+it moves down alongside `HOISTABLE_CEILING` and is now 150. The comment on it says so,
+because the next reader will otherwise see a threshold that has been lowered and
+suspect the worst. `HOISTABLE_CEILING` itself **fell** (197 → 164), which is the real
+measurement.
+
+### Evidence
+
+- Guard: **197 unexplained → 164**; `orchestration` **89 → 56**, `visual` and both QC
+  modules at 0.
+- `make ci-check`: **2347 passed**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+
+### Remaining for doc 05
+
+`mcp` (108), `orchestration` (56): `_repair_loop` 9, `approval` 8, `execution` 7,
+`_agent_artifacts` 5, `prep` 5, `_generation_batch_planning` 4, and ten modules with
+1–3 each.

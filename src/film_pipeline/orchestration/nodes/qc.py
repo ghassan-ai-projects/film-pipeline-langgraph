@@ -15,8 +15,21 @@ from film_pipeline.orchestration.nodes._shared import (
     _collect_updates,
     _phase_gate_updates,
 )
+from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
+from film_pipeline.validation.impl.assembly import AssemblyValidator
+from film_pipeline.validation.impl.delivery_completeness import (
+    DeliveryCompletenessValidator,
+)
+from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 _logger = logging.getLogger(__name__)
 
@@ -69,16 +82,12 @@ def _run_validators(state: StudioGraphState) -> None:
     state["issues"] = issues
 
     # lazy: `orchestration.qc_steps` imports back into `nodes._agent_artifacts`
-    from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
 
     build_consensus_if_needed(state, phase)
 
 
 def _collect_artifacts(state: StudioGraphState, services: Any) -> dict[str, Any]:
     """Load artifacts referenced by ``state["artifact_refs"]`` from their phases."""
-
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     store = services.artifact_store
     project_id = str(state.get("project_id", ""))
@@ -177,8 +186,6 @@ def _run_script_validators(
     services: Any,
 ) -> None:
     """Run the two script-phase validators against loaded artifacts."""
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
     artifact = _pick_artifact(artifact_data, "script", "scene_list")
     if artifact is None:
@@ -202,7 +209,6 @@ def _run_reference_validators(
     services: Any,
 ) -> None:
     """Run reference usability validator against visual_dev artifacts."""
-    from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
     artifact = _pick_artifact(artifact_data, "reference_index")
     if artifact is not None:
@@ -216,7 +222,6 @@ def _run_prompt_validators(
     services: Any,
 ) -> None:
     """Run prompt readiness validator against gen_planning artifacts."""
-    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     artifact = _pick_artifact(artifact_data, "prompt_registry", "execution_brief")
     if artifact is not None:
@@ -230,7 +235,6 @@ def _run_continuity_validators(
     services: Any,
 ) -> None:
     """Run scene continuity validator against shot_bible artifacts."""
-    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     artifact = _pick_artifact(artifact_data, "shot_matrix", "shot_bible")
     if artifact is not None:
@@ -250,7 +254,6 @@ def _run_assembly_validators(
     services: Any,
 ) -> None:
     """Run assembly validator against post/assembly artifacts."""
-    from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     artifact = _pick_artifact(artifact_data, "assembly_manifest", "review_cut", "final_cut")
     if artifact is not None:
@@ -264,9 +267,6 @@ def _run_delivery_validators(
     services: Any,
 ) -> None:
     """Run delivery completeness validator against delivery artifacts."""
-    from film_pipeline.validation.impl.delivery_completeness import (
-        DeliveryCompletenessValidator,
-    )
 
     artifact = _pick_artifact(artifact_data, "delivery_manifest", "delivery_package")
     if artifact is not None:
@@ -338,7 +338,6 @@ def _issue_entry(report: Any, finding: Any, severity: str) -> dict[str, Any]:
 
 def _track_matrix_row_updates(state: StudioGraphState, report: Any) -> None:
     """Record per-row findings so qc_node can emit a matrix patch."""
-    from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
 
     pending: list[Any] = state.setdefault("_pending_row_updates", [])
     for finding in report.blocking_issues + report.warnings:

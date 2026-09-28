@@ -148,7 +148,7 @@ def test_every_lazy_reason_is_a_reason() -> None:
 def test_the_guard_has_something_to_check() -> None:
     """Guard the guard: a broken collector would report zero and pass."""
     eager, lazy = collect_imports()
-    assert len(lazy) > 200, (
+    assert len(lazy) > 150, (
         f"only {len(lazy)} function-level internal imports found; the collector is "
         "probably not reading the tree, which would make the ceiling vacuous."
     )

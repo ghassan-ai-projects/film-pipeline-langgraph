@@ -19,7 +19,20 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 
+from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
+from film_pipeline.orchestration.orchestrator_state import require_human_approval
+from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
+from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.matrix_patch import MatrixPatch
+from film_pipeline.validation.impl.assembly import AssemblyValidator
+from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+from film_pipeline.validation.impl.reference_usability import (
+    ReferenceUsabilityValidator,
+)
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 # ── Worker nodes ───────────────────────────────────────────────────────
 
@@ -83,7 +96,6 @@ def _run_validator(
     validator_id: str, _class_name: str, state: StudioGraphState
 ) -> dict[str, object]:
     """Run a single validator in parallel and append its report to the raw channel."""
-    from film_pipeline.orchestration.services import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
@@ -118,15 +130,6 @@ def _run_validator(
 
 def _resolve_validator_instance(srv: Any, validator_id: str) -> Any:
     """Resolve a validator class from the registry and instantiate it."""
-
-    from film_pipeline.validation.impl.assembly import AssemblyValidator
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
-    from film_pipeline.validation.impl.reference_usability import (
-        ReferenceUsabilityValidator,
-    )
-    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
     cls_map: dict[str, Any] = {
         "ScriptStructureValidator": ScriptStructureValidator,
@@ -176,8 +179,6 @@ def _load_artifact_for_validator(
     project profile), so each validator only runs when its artifact exists.
     """
     from copy import deepcopy
-
-    from film_pipeline.orchestration.services import _get_services
 
     srv: Any = _get_services(dict(state))
     if srv is None:
@@ -268,14 +269,11 @@ def emit_matrix_patch_from_findings(state: StudioGraphState) -> None:
     # binds `_PHASE_NODES` and therefore compiles this module; a module-level
     # import here is a real circular import (ImportError), not just an Enola
     # artifact.
-    from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
 
     pending_updates: list[Any] = state.pop("_pending_row_updates", [])
     shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
     if not (pending_updates and shot_matrix_ref):
         return
-
-    from film_pipeline.schemas.matrix_patch import MatrixPatch
 
     patch = MatrixPatch(
         patch_id=f"qc_{state.get('project_id', '')}",
@@ -311,12 +309,10 @@ def reduce_qc_reports(state: StudioGraphState) -> dict[str, object]:
     ``nodes.qc``, which already owns them; see
     ``documentation/qc-single-implementation.md``.
     """
-    from film_pipeline.orchestration.orchestrator_state import require_human_approval
 
     # `build_consensus_if_needed` is shared with the sequential runner in
     # `nodes.qc`, so it lives at the `orchestration` root; the matrix-patch
     # emitter is QC's own output and is defined here.
-    from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
 
     raw_raw = state.get("_qc_raw_reports", [])
     raw: list[dict[str, Any]] = list(raw_raw) if isinstance(raw_raw, list) else []
