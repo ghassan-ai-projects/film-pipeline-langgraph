@@ -1,49 +1,148 @@
-"""Graph execution for the studio runtime: invoke, resume, validate, advance.
+"""Graph execution: invoke, resume, validate, advance.
 
-Owns every interaction between ``StudioRuntime`` and the LangGraph state
-machine — running the graph, resuming it at approval gates, running validators
-against live state, and the manual phase-advance fallback.
+Owns every interaction between a runtime and the LangGraph state machine —
+running the graph, resuming it at approval gates, running validators against live
+state, and the manual phase-advance fallback.
+
+## Why this lives in `orchestration`
+
+It was `studio/_graph_exec.py`. To do its job it imported three *private*
+`orchestration` names — `services._SERVICES_CTX`, `nodes._run_validators` and
+`nodes.approval._PHASE_NODES` — which was 3 of the 5 remaining cross-package
+private reach-ins in the tree
+(`docs/modularity-improvements/02-graph-execution-has-two-executors.md`, finding A).
+A module that needs three of another package's private names is not a consumer of
+that package; it is part of it.
+
+`studio` keeps the composition it owns: `graph_factory` still wires the services and
+the checkpointer together, and `StudioRuntime` still exposes the graph-execution
+methods as its public interface. What moved is the execution *policy*.
+
+## What the runtime must provide
+
+`GraphHost` below states the whole requirement structurally, so this module
+imports neither the composition root nor `operations`. It must not import
+`operations`: that package imports `orchestration.services`, so reaching for
+`operations.ports.RuntimePort` here would close `operations <-> orchestration`.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable, Mapping
+from typing import Any, Protocol, cast
 
 from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
-from film_pipeline.orchestration.services import _SERVICES_CTX
-from film_pipeline.orchestration.state_schema import StudioGraphState
-from film_pipeline.schemas.base import FilmPhase
-from film_pipeline.schemas.runtime_state import GraphStateSnapshot
-from film_pipeline.storage.project_storage import graph_state_location
-from film_pipeline.studio import _persistence
-from film_pipeline.studio._resume import (
+from film_pipeline.orchestration.resume import (
     _approval_made_progress,
     _build_resume_payload,
     _has_stale_generation_request_blocker,
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
-
-if TYPE_CHECKING:
-    from film_pipeline.studio.runtime import StudioRuntime
+from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices
+from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.schemas.runtime_state import GraphStateSnapshot
+from film_pipeline.storage.project_storage import graph_state_location
+from film_pipeline.storage.runtime_gateway import project_storage_for
 
 _logger = logging.getLogger(__name__)
 
 
-def ensure_graph(rt: StudioRuntime) -> Any:
+#: Builds a compiled graph for a runtime root.
+GraphBuilder = Callable[..., Any]
+
+
+class GraphHost(Protocol):
+    """The runtime surface graph execution drives.
+
+    Deliberately self-contained rather than extending `operations.ports.RuntimePort`:
+    `operations` imports `orchestration.services`, so extending it here would close a
+    package cycle, and the two protocols only overlap on `services` and the
+    persist/audit pair. Stating the requirement in one place also means a runtime can
+    be substituted in a test without the composition root.
+    """
+
+    #: The service bundle a graph run needs (artifact store, agent registry, ...).
+    services: GraphServices | None
+
+    graph: Any
+    projects: dict[str, Any]
+    project_roots: dict[str, Any]
+    runtime_root: Any
+    active_project_id: str
+
+    def get_active(self) -> dict[str, Any] | None:
+        """Return the active project's state."""
+        ...
+
+    def get_project(self, project_id: str) -> dict[str, Any] | None:
+        """Return one project's state by id."""
+        ...
+
+    def create_checkpoint(
+        self,
+        project_id: str,
+        phase: str,
+        reason: str,
+        *,
+        artifact_versions: dict[str, str] | None = None,
+        graph_state_ref: str = "",
+    ) -> Any:
+        """Take a checkpoint of one project.
+
+        Spelled out rather than `**kwargs: Any` so the protocol matches the
+        concrete runtime's keyword-only signature; a looser declaration would be
+        satisfied by a method this module cannot actually call.
+        """
+        ...
+
+    def persist_project_state(self, project_id: str) -> None:
+        """Write one project's state to disk."""
+        ...
+
+    def record_audit(self, actor: str, action: str, **details: Any) -> None:
+        """Append one audit event."""
+        ...
+
+
+#: Builds the compiled graph for a runtime root. Registered by the composition
+#: root so this module never names it.
+#:
+#: The alternative was a function-level `from film_pipeline.studio.graph_factory
+#: import build_graph` here. That is what this module did before it moved, but the
+#: move makes the edge a *cycle* — `studio.graph_factory` imports `orchestration`
+#: to wire the nodes — and `test_package_acyclicity` reads `ast`, so a lazy import
+#: is still an edge. Injecting the builder inverts the dependency: `studio` knows
+#: about `orchestration`, and this module knows only that a builder exists.
+_GRAPH_BUILDER: GraphBuilder | None = None
+
+
+def register_graph_builder(builder: GraphBuilder) -> None:
+    """Install the compiled-graph factory. Called once by the composition root."""
+    global _GRAPH_BUILDER
+    _GRAPH_BUILDER = builder
+
+
+def ensure_graph(rt: GraphHost) -> Any:
     """Lazy-load and cache the graph instance."""
     if rt.graph is None:
-        from film_pipeline.studio.graph_factory import build_graph
-
-        rt.graph = build_graph(runtime_root=rt.runtime_root)
+        if _GRAPH_BUILDER is None:
+            raise RuntimeError(
+                "No graph builder is registered. The composition root "
+                "(film_pipeline.studio) must call "
+                "orchestration.execution.register_graph_builder(build_graph) at "
+                "import; a runtime used without it cannot execute the graph."
+            )
+        rt.graph = _GRAPH_BUILDER(runtime_root=rt.runtime_root)
     return rt.graph
 
 
-def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
+def run_graph(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any]:
     """Run the graph with the given state.
 
     Supplies ``GraphServices`` through runtime context before invocation
@@ -79,7 +178,7 @@ def run_graph(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
+def auto_checkpoint(rt: GraphHost, state: dict[str, Any]) -> None:
     """Persist the state snapshot and create a checkpoint after a graph step."""
     project_id = str(state.get("project_id", ""))
     if not project_id or project_id not in rt.projects:
@@ -115,7 +214,7 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
         # A failed auto-checkpoint must not crash the run, but it must be
         # visible: log with traceback and record an audit event.
         _logger.warning("Auto-checkpoint failed for %s at %s", project_id, phase, exc_info=True)
-        rt._record_audit(
+        rt.record_audit(
             "system",
             "auto_checkpoint_failed",
             project_id=project_id,
@@ -124,14 +223,14 @@ def auto_checkpoint(rt: StudioRuntime, state: dict[str, Any]) -> None:
         )
 
 
-def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) -> None:
+def save_graph_state(rt: GraphHost, state: dict[str, Any], project_id: str) -> None:
     """Persist one machine state snapshot for crash recovery (atomic).
 
     Values the typed snapshot cannot serialize degrade through ``str()`` —
     crash recovery must never fail on state content. The write itself belongs
     to the storage core; this function only shapes the snapshot.
     """
-    storage = _persistence.storage_for(rt)
+    storage = project_storage_for(rt)
     if storage is None or project_id not in rt.project_roots:
         return
     safe = {k: v for k, v in state.items() if not k.startswith("_services")}
@@ -150,7 +249,9 @@ def save_graph_state(rt: StudioRuntime, state: dict[str, Any], project_id: str) 
     storage.write_graph_state(project_id, snapshot)
 
 
-def _approval_stalled(state: dict[str, Any], active: dict[str, Any], current_phase: str) -> bool:
+def _approval_stalled(
+    state: Mapping[str, object], active: Mapping[str, object], current_phase: str
+) -> bool:
     """True when approval made no progress or a stale generation blocker remains."""
     return not _approval_made_progress(
         state, current_phase
@@ -174,7 +275,7 @@ def _has_pending_human_interrupt(snapshot: Any) -> bool:
 
 
 def _resume_after_approval(
-    rt: StudioRuntime,
+    rt: GraphHost,
     active: dict[str, Any],
     current_phase: str,
 ) -> Any:
@@ -205,7 +306,7 @@ def _resume_after_approval(
                 active.get("project_id", ""),
                 current_phase,
             )
-            rt._record_audit(
+            rt.record_audit(
                 "system",
                 "resume_failed",
                 project_id=str(active.get("project_id", "")),
@@ -226,7 +327,7 @@ def _resume_after_approval(
                 active.get("project_id", ""),
                 current_phase,
             )
-            rt._record_audit(
+            rt.record_audit(
                 "system",
                 "resume_failed",
                 project_id=str(active.get("project_id", "")),
@@ -237,7 +338,7 @@ def _resume_after_approval(
         _preserve_external_generation_requests(state, active)
         _strip_stale_generation_request_blockers(state)
         if _approval_stalled(state, active, current_phase):
-            rt._record_audit(
+            rt.record_audit(
                 "system",
                 "resume_stalled_manual_advance",
                 project_id=str(active.get("project_id", "")),
@@ -250,7 +351,7 @@ def _resume_after_approval(
         _SERVICES_CTX.reset(token)
 
 
-def _approve_phase_artifacts(rt: StudioRuntime, project_id: str, phase: str) -> None:
+def _approve_phase_artifacts(rt: GraphHost, project_id: str, phase: str) -> None:
     """Transition the approved phase's current artifacts to APPROVED.
 
     The human gate is the one place the artifact status machine fires in
@@ -276,7 +377,7 @@ def _approve_phase_artifacts(rt: StudioRuntime, project_id: str, phase: str) -> 
             )
 
 
-def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
+def approve_phase(rt: GraphHost) -> dict[str, Any]:
     """Approve the current phase and advance.
 
     Resumes the graph at the approval gate (see ``_resume_after_approval``)
@@ -293,7 +394,7 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     state = cast(dict[str, Any], _resume_after_approval(rt, active, current_phase))
 
     rt.projects[active["project_id"]] = state
-    rt._persist_project_state(active["project_id"])
+    rt.persist_project_state(active["project_id"])
     save_graph_state(rt, dict(state), active["project_id"])
     _approve_phase_artifacts(rt, active["project_id"], current_phase)
 
@@ -303,7 +404,7 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
         reason=f"Approved at {current_phase}",
     )
 
-    rt._record_audit(
+    rt.record_audit(
         "human",
         "approve_phase",
         project_id=active["project_id"],
@@ -314,7 +415,7 @@ def approve_phase(rt: StudioRuntime) -> dict[str, Any]:
     return state
 
 
-def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str, Any]:
+def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, Any]:
     """Run validators against the active project's current-phase artifacts.
 
     Executes the same validator dispatch the QC node uses, but against the
@@ -406,8 +507,8 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
     if consensus_ref:
         active["consensus_report_ref"] = consensus_ref
     rt.projects[project_id_value] = active
-    rt._persist_project_state(project_id_value)
-    rt._record_audit(
+    rt.persist_project_state(project_id_value)
+    rt.record_audit(
         "human",
         "run_validation",
         project_id=project_id_value,
@@ -416,7 +517,7 @@ def run_validation(rt: StudioRuntime, project_id: str | None = None) -> dict[str
     return active
 
 
-def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
+def request_revision(rt: GraphHost, note: str = "") -> dict[str, Any]:
     """Request revision of the current phase.
 
     Resumes a live approval interrupt with ``Command(resume=...)``. If the
@@ -458,7 +559,7 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
                 active.get("project_id", ""),
                 active.get("current_phase", ""),
             )
-            rt._record_audit(
+            rt.record_audit(
                 "system",
                 "resume_failed",
                 project_id=str(active.get("project_id", "")),
@@ -471,10 +572,10 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
     state = cast(dict[str, Any], state)
 
     rt.projects[active["project_id"]] = state
-    rt._persist_project_state(active["project_id"])
+    rt.persist_project_state(active["project_id"])
     save_graph_state(rt, dict(state), active["project_id"])
 
-    rt._record_audit(
+    rt.record_audit(
         "human",
         "request_revision",
         project_id=active["project_id"],
@@ -483,11 +584,11 @@ def request_revision(rt: StudioRuntime, note: str = "") -> dict[str, Any]:
     return state
 
 
-def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str, Any]:
+def advance_to_next_phase(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any]:
     current_phase = str(state.get("current_phase", ""))
     if current_phase not in PHASE_SEQUENCE:
         rt.projects[state["project_id"]] = state
-        rt._persist_project_state(state["project_id"])
+        rt.persist_project_state(state["project_id"])
         return state
 
     successor = next_phase(current_phase)
@@ -496,16 +597,16 @@ def advance_to_next_phase(rt: StudioRuntime, state: dict[str, Any]) -> dict[str,
         final_state["completed"] = True
         final_state["human_approval_phase"] = ""
         rt.projects[state["project_id"]] = final_state
-        rt._persist_project_state(state["project_id"])
+        rt.persist_project_state(state["project_id"])
         return final_state
 
     advanced_state = run_phase_node(rt, state, successor)
     rt.projects[state["project_id"]] = advanced_state
-    rt._persist_project_state(state["project_id"])
+    rt.persist_project_state(state["project_id"])
     return advanced_state
 
 
-def run_phase_node(rt: StudioRuntime, state: dict[str, Any], phase: str) -> dict[str, Any]:
+def run_phase_node(rt: GraphHost, state: dict[str, Any], phase: str) -> dict[str, Any]:
     from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
     from film_pipeline.orchestration.services import SERVICES_KEY
     from film_pipeline.orchestration.state_schema import apply_node_update

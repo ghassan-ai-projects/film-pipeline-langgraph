@@ -129,6 +129,14 @@ _COMPUTED_KEY_WRITERS: dict[str, str] = {
     "add_failure_decision": "writes under the computed `_FAILURE_DECISIONS` key",
     "update_provider_health": "writes under the computed `_PROVIDER_HEALTH_SNAPSHOT` key",
     "ensure_orchestrator_state": "seeds six state domains under computed keys",
+    # The resume helpers pass the state straight to `remove_issues_by_code`, whose
+    # own signature is `dict[str, Any]` because it calls `merge_issues` — the
+    # reducer that owns the removal rule. Narrowing these to `MutableMapping`
+    # satisfies this guard but fails mypy at that call, and widening the reducer to
+    # accept a mapping would change the rule's owner to accommodate a caller.
+    "_strip_stale_generation_request_blockers": (
+        "hands the state to remove_issues_by_code, which takes dict[str, Any]"
+    ),
     # The gate law mutates through the injected fact port, not by a direct write:
     # `compute_actions` -> `facts.ensure_state(state)` ->
     # `OrchestratorGateFacts.ensure_state` -> `ensure_orchestrator_state`, which

@@ -51,7 +51,7 @@ class _LazyQcPhaseNode:
       guard checks),
     - calling it runs the same compiled subgraph `build_graph` wires,
     - ``isinstance(x, CompiledStateGraph)`` is False, so
-      ``studio._graph_exec._call_phase_node`` needs its own resolution — see
+      ``orchestration.execution._call_phase_node`` needs its own resolution — see
       :func:`resolved_phase_node`, which both callers use.
     """
 

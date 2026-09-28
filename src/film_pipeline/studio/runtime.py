@@ -18,11 +18,12 @@ from uuid import uuid4
 
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
+from film_pipeline.orchestration import execution as _graph_exec
 from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.storage.storage import default_runtime_root, resolve_storage_root
-from film_pipeline.studio import _graph_exec, _persistence, _provider_seeds
+from film_pipeline.studio import _persistence, _provider_seeds
 from film_pipeline.studio._persistence import (
     configured_runtime_root,
     use_persistent_runtime,
@@ -228,7 +229,7 @@ class StudioRuntime:
 
     # --- Graph ---
 
-    # --- Graph execution (see _graph_exec) ---
+    # --- Graph execution (see orchestration.execution) ---
 
     def ensure_graph(self) -> Any:
         """Lazy-load and cache the graph instance."""

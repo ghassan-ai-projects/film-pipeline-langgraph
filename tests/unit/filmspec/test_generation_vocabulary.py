@@ -117,6 +117,6 @@ class TestTextOnlyRequestBuilder:
         module; `studio._resume` is the remaining consumer that could plausibly
         re-declare them.
         """
-        import film_pipeline.studio._resume as resume
+        import film_pipeline.orchestration.resume as resume
 
         assert resume.__dict__["_STALE_REQUEST_CODES"] is STALE_GENERATION_REQUEST_CODES

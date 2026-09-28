@@ -68,13 +68,9 @@ KNOWN_PRIVATE_REACH_INS: dict[tuple[str, str], int] = {
     # `06` section 4 forbids. The `mcp`-side accessor already collapsed four
     # importers into this one; that crossing is the minimum.
     ("mcp", "studio._operator_runtime"): 1,
-    # `_repair_loop` owns `_PHASE_NODES` and `resolved_phase_node`; studio is
-    # the composition root that drives the graph, so it is the legitimate
-    # caller. Same reach-in as the old `orchestration._PHASE_NODES` symbol row,
-    # one level up. Publishing the table from `orchestration.nodes` (which the
-    # symbol row used) is the alternative; it is not free, because the
-    # package root is the facade that the surface ratchet grades.
-    ("studio", "orchestration._repair_loop"): 1,
+    # The `studio -> orchestration._repair_loop` row is gone: graph execution moved
+    # into `orchestration/execution.py` (doc 02 slice 3), so the phase-node table is
+    # now read from inside its own package and `studio` no longer names it at all.
 }
 
 # Private *symbols* imported across a package boundary. A narrower concern than a
@@ -96,13 +92,12 @@ KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
     # composition root driving the graph, which is its job, but it does so
     # through private names rather than a declared seam.
     #
-    # The phase-node table was a third row here. `_graph_exec.run_phase_node`
-    # now calls `resolved_phase_node(phase)` instead of indexing `_PHASE_NODES`
-    # itself, which moved the reach-in from that private *symbol* to the private
-    # *module* defining the accessor — recorded in KNOWN_PRIVATE_REACH_INS
-    # rather than duplicated here.
-    ("studio", "orchestration._SERVICES_CTX"): 1,
-    ("studio", "orchestration._run_validators"): 1,
+    # Three rows were here: the phase-node table (moved to a private *module*
+    # reach-in by `resolved_phase_node`), `_SERVICES_CTX` and `_run_validators`.
+    # All three are gone with doc 02 slice 3 — `_graph_exec` was 3 of the 5
+    # cross-package private reach-ins in the tree precisely because it needed
+    # orchestration's internals to execute the graph, and it now lives in
+    # `orchestration/execution.py` where they are not reach-ins at all.
 }
 
 # Assignments to another package's private module attributes, frozen 2026-09-27.

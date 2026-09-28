@@ -89,6 +89,18 @@ class RuntimePort(Protocol):
         """Record a provider's health status."""
         ...
 
+    # ── persistence and audit ─────────────────────────────────────────────
+    # Graph execution (`orchestration/execution.py`) drives a runtime's project
+    # state and audit trail. Declaring the pair here is what lets that module
+    # depend on the *capability* instead of importing the composition root.
+    def persist_project_state(self, project_id: str) -> None:
+        """Write one project's state to disk."""
+        ...
+
+    def record_audit(self, actor: str, action: str, **details: Any) -> None:
+        """Append one audit event."""
+        ...
+
 
 def artifact_store_of(runtime: RuntimePort) -> ArtifactStorePort | None:
     """The artifact store behind a runtime, or ``None`` when services are absent."""

@@ -24,7 +24,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11b | `checkpoints` (8) + `projects` (6) declared | `ec1c323` | `input_schema`: 4 → 18; generic descriptions 71 → 57 | 0 |
 | 11c | `generation` (9) + `bibles` (5) declared; args-coverage guard | `cc83fcd` | `input_schema`: 18 → 31; generic descriptions 57 → 44 | 0 |
 | 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `9446b27` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
-| 11e | **remaining 25 tools + dead `_register` path + derived facade** | `_pending_` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
+| 11e | **remaining 25 tools + dead `_register` path + derived facade** | `e7cbb95` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
+| 13 | Graph execution moved into `orchestration` | `_pending_` | cross-package private reach-ins: **8 → 2** | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -872,3 +873,78 @@ here.
 - `make ci-check`: **2342 passed, 91.74% coverage**, product gate PASS.
 - `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count 1.
 - Recorded surface growth: `mcp.tools.reference_generation` 14 → 15.
+
+## Step 13 — graph execution lives with the graph (2026-09-28)
+
+Doc 02 slice 3. `studio/_graph_exec.py` (542 lines) and `studio/_resume.py` (99)
+became `orchestration/execution.py` and `orchestration/resume.py`.
+
+### The check
+
+```text
+cross-package private reach-ins:  8  ->  2
+  mcp -> studio._operator_runtime      (1, provably irreducible; see the guard)
+  mcp -> studio._persistence           (1, one call site at process start)
+```
+
+Doc 02's target was 5 → 2. The measured start was 8, because earlier steps in this
+program had already added reach-ins of their own; the three named in the finding
+(`services._SERVICES_CTX`, `nodes._run_validators`, `nodes.approval._PHASE_NODES`)
+are gone, and the remaining two are the same two the finding did *not* claim.
+
+The finding's own reasoning is what the measurement confirms: *a module that needs
+three of another package's private names is not a consumer of that package, it is
+part of it.* No port was invented — moving the module removed all three.
+
+### Two cycles the move created, and the inversions that removed them
+
+The move was not mechanical. Putting execution in `orchestration` gave it two
+back-edges, both caught by `test_package_acyclicity` (which reads `ast`, so a
+function-level import would not have hidden either):
+
+1. **`orchestration.execution -> studio.graph_factory`** — `ensure_graph` built the
+   graph, and `graph_factory` imports `orchestration` to wire the nodes. Fixed by
+   **injecting the builder**: `execution.register_graph_builder(build_graph)`, called
+   once by the composition root at import. `studio` knows about `orchestration`;
+   `execution` now knows only that a builder exists. A runtime used without the
+   registration raises a message naming the missing call rather than an
+   `AttributeError`.
+2. **`orchestration.execution -> operations.ports`** — the obvious way to type the
+   runtime argument, since `RuntimePort` already declares persist/audit. But
+   `operations.ports` imports `orchestration.services`, so extending it closed
+   `operations <-> orchestration`. Fixed by making **`GraphHost` self-contained**:
+   it declares `services` plus the persist/audit pair itself. The two protocols
+   overlap on exactly those three members, which is not enough to justify a cycle.
+
+`GraphHost` also states `create_checkpoint`'s full keyword-only signature rather
+than `**kwargs: Any`. A looser protocol would have been satisfied by a method the
+module cannot actually call — a protocol that lies about its requirement is worse
+than none.
+
+### `studio` keeps what it owns
+
+`graph_factory` still wires services and the checkpointer; `StudioRuntime` still
+exposes `run_graph`, `approve_phase`, `run_validation` and `request_revision` as its
+public interface. What moved is the execution *policy*, not the composition.
+
+### Re-measured `StudioRuntime` (feeds Step 16)
+
+**393 lines, 29 public methods.** Doc 02 predicted "the 27-method count should drop
+by the graph-execution delegates". It did not: the method count went **27 → 29**, and
+the six graph-execution methods survive as one-line delegators to
+`orchestration.execution`. The line count dropped (516 → 393 for the file).
+
+That is worth stating plainly rather than rounding toward the prediction: this slice
+moved *bodies and knowledge*, not *surface*. `StudioRuntime` is still the composition
+root's facade over execution, and whether those six delegators belong on it is a real
+question — but it is Step 16's, and the honest measurement is that slice 3 did not
+shrink the public method count.
+
+### Evidence
+
+- cross-package private reach-ins: **8 → 2**, both pre-existing and both recorded.
+- `make ci-check`: **2341 passed, 91.84% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+- Recorded surface growth: `orchestration` 15 → 17 public modules (both deliberate).
+- Three boundary-law rows deleted because they reached zero — the guard requires
+  tightening rather than allowing a stale row.

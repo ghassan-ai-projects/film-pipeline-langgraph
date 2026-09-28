@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from film_pipeline.filmspec import PHASE_SEQUENCE as CANONICAL_PHASE_SEQUENCE
 from film_pipeline.filmspec import FilmPhase as CanonicalFilmPhase
 from film_pipeline.filmspec import next_phase as canonical_next_phase
+from film_pipeline.orchestration import execution as _graph_exec
 from film_pipeline.orchestration.edges import after_approval
 from film_pipeline.orchestration.nodes._repair_loop import _PHASE_NODES
 from film_pipeline.orchestration.phase_sequence import (
@@ -22,7 +23,6 @@ from film_pipeline.orchestration.phase_sequence import (
 )
 from film_pipeline.orchestration.router import PHASE_ORDER as PUBLIC_PHASE_ORDER
 from film_pipeline.schemas import FilmPhase
-from film_pipeline.studio import _graph_exec
 from film_pipeline.studio.graph_factory import (
     _APPROVAL_DESTINATIONS,
     _route_current_phase,

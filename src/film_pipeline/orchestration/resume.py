@@ -7,13 +7,14 @@ checkpoint never sees stale state.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, is_blocking_issue
 from film_pipeline.filmspec import STALE_GENERATION_REQUEST_CODES as _STALE_REQUEST_CODES
 
 
-def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
+def _approval_made_progress(state: Mapping[str, object], previous_phase: str) -> bool:
     """Return whether a graph approval resume changed phase or intentionally blocked."""
     if state.get("completed"):
         return True
@@ -31,8 +32,8 @@ def _approval_made_progress(state: dict[str, Any], previous_phase: str) -> bool:
 
 
 def _has_stale_generation_request_blocker(
-    resumed_state: dict[str, Any],
-    active_state: dict[str, Any],
+    resumed_state: Mapping[str, object],
+    active_state: Mapping[str, object],
 ) -> bool:
     """Detect graph checkpoints that predate externally planned generation requests."""
     if str(active_state.get("current_phase", "")) != "generation":

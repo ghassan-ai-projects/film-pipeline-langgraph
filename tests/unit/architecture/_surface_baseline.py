@@ -67,7 +67,7 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "mcp.tools.generation": Surface(15, 4),
     "mcp.tools.reference_generation": Surface(15, 7),
     "operations": Surface(12, 3),
-    "orchestration": Surface(None, 15),
+    "orchestration": Surface(None, 17),
     "orchestration.nodes": Surface(43, 6),
     "orchestration.subgraphs": Surface(None, 1),
     "post": Surface(13, 6),
