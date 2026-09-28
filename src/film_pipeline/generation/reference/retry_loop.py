@@ -8,15 +8,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, cast
 
-from film_pipeline.mcp.tools.reference_generation.context import (
+from film_pipeline.generation.reference.context import (
+    GenerationBatch,
     _EntryContext,
-    _GenerationBatch,
+    reference_services,
 )
-from film_pipeline.mcp.tools.reference_generation.entries import (
-    _reference_job_id,
+from film_pipeline.generation.reference.entries import (
+    reference_job_id,
 )
-
-from ..helpers import _services
 
 
 class _AttemptVerdict(Enum):
@@ -95,14 +94,14 @@ def _execute_provider_attempt(
         return Path(), {}, exc
 
     ext = Path(downloaded_path).suffix or ".png"
-    target_name = f"{_reference_job_id(ctx.reference_id)}{ext}"
+    target_name = f"{reference_job_id(ctx.reference_id)}{ext}"
     target_path = Path(ctx.output_dir) / target_name
     Path(downloaded_path).rename(target_path)
     return target_path, metadata, None
 
 
 def _collect_frame_review(
-    batch: _GenerationBatch,
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
     state: _LoopState,
@@ -116,7 +115,7 @@ def _collect_frame_review(
         return review_frame(
             cast(Path, state.target_path),
             state.retry_prompt,
-            model=_services(batch.rt).prompt_runner.model_router.resolve_or_raise(
+            model=reference_services(batch.rt).prompt_runner.model_router.resolve_or_raise(
                 "visual_reasoner"
             ),
             subject_type=str(raw.get("subject_type", "character")),
@@ -126,7 +125,7 @@ def _collect_frame_review(
 
 
 def _grade_generated_frame(
-    batch: _GenerationBatch,
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
     state: _LoopState,
@@ -171,7 +170,7 @@ def _grade_generated_frame(
 
 
 def _attempt_reference_once(
-    batch: _GenerationBatch,
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
     state: _LoopState,
@@ -203,8 +202,8 @@ def _attempt_reference_once(
     return _AttemptVerdict.FAILED
 
 
-def _run_retry_attempts(
-    batch: _GenerationBatch,
+def run_retry_attempts(
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
 ) -> _RetryOutcome:

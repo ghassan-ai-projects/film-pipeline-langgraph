@@ -6,17 +6,36 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from film_pipeline.mcp.tools.reference_generation.entries import (
-    _group_key,
-    _reference_aspect_ratio,
-    _reference_job_id,
-    _reference_output_dir,
-    _reference_prompt,
+from film_pipeline.generation.reference.entries import (
+    group_key,
+    reference_aspect_ratio,
+    reference_job_id,
+    reference_output_dir,
+    reference_prompt,
 )
 
 
+def reference_services(rt: Any) -> Any:
+    """Return a runtime's service bundle, asserting it is initialized.
+
+    Local to this package rather than imported from the MCP helper layer: these
+    modules are the reference-generation *use case*, and reaching into
+    `mcp.tools.helpers` for a three-line assertion would keep the use case
+    depending on the tool surface it is supposed to sit beneath.
+    """
+    assert hasattr(rt, "services") and rt.services is not None
+    return rt.services
+
+
+def latest_artifact_version(store: Any, project_id: str, fp: Any, artifact_id: str) -> int:
+    """Return the highest recorded version of one artifact, or 0."""
+    artifacts = store.list_artifacts(project_id, fp)
+    versions = [artifact.version for artifact in artifacts if artifact.artifact_id == artifact_id]
+    return max(versions) if versions else 0
+
+
 @dataclass(frozen=True)
-class _GenerationBatch:
+class GenerationBatch:
     """Shared services and accumulators for one generation batch."""
 
     rt: Any
@@ -40,7 +59,7 @@ class _EntryContext:
     provider_kwargs: dict[str, object]
 
 
-def _requested_reference_ids(args: dict[str, object]) -> set[str]:
+def requested_reference_ids(args: dict[str, object]) -> set[str]:
     """Normalized set of explicitly requested reference ids."""
     return {
         str(item)
@@ -49,7 +68,7 @@ def _requested_reference_ids(args: dict[str, object]) -> set[str]:
     }
 
 
-def _copied_entries(grouped_entries: list[dict[str, object]]) -> list[dict[str, object]]:
+def copied_entries(grouped_entries: list[dict[str, object]]) -> list[dict[str, object]]:
     """Shallow-copy every entry so persisted state keeps the pre-run values."""
     return [dict(r) for r in grouped_entries]  # use modified copies
 
@@ -76,7 +95,7 @@ def _maybe_cache_character_bible(
         pass  # CharacterBible not yet generated — fall back to prompt_text
 
 
-def _load_character_bibles(
+def load_character_bibles(
     store: Any,
     project_id: str,
     grouped_entries: list[dict[str, object]],
@@ -93,7 +112,7 @@ def _load_character_bibles(
 # Identity consistency is enforced via the ID_REINFORCE prompt block
 # (the Imagen API does not support reference-image conditioning).
 # anchor_frame_path and i2i_active in identity_states are consumed by
-# _reference_prompt() → build_structured_prompt() to strengthen the
+# reference_prompt() → build_structured_prompt() to strengthen the
 # ID_REINFORCE instruction when Gemini detects subject drift.
 
 
@@ -113,7 +132,7 @@ def _seed_from_identity_state(
         identity_states.setdefault(group_key, {})["anchor_seed"] = provider_kwargs["seed"]
 
 
-def _prepare_entry_context(
+def prepare_entry_context(
     raw: dict[str, object],
     reference_id: str,
     char_bibles: dict[str, dict[str, object]],
@@ -121,14 +140,14 @@ def _prepare_entry_context(
     project_root: Path,
 ) -> _EntryContext:
     """Build prompt, output, and provider-routing context for one entry."""
-    prompt_text = _reference_prompt(
+    prompt_text = reference_prompt(
         raw,
         character_bible=char_bibles.get(str(raw.get("subject_id", "")).strip()),
-        identity_state=identity_states.get(_group_key(raw)),
+        identity_state=identity_states.get(group_key(raw)),
     )
-    aspect_ratio = _reference_aspect_ratio(raw)
-    shot_id = _reference_job_id(reference_id)
-    output_dir = str(_reference_output_dir(raw, project_root).resolve())
+    aspect_ratio = reference_aspect_ratio(raw)
+    shot_id = reference_job_id(reference_id)
+    output_dir = str(reference_output_dir(raw, project_root).resolve())
     # Ensure the directory tree exists
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +155,7 @@ def _prepare_entry_context(
     tier = str(raw.get("tier", "fast"))
     provider_kwargs: dict[str, object] = {"duration": 0.0, "aspect_ratio": aspect_ratio}
     if tier in ("standard", "ultra"):
-        _seed_from_identity_state(identity_states, _group_key(raw), shot_id, provider_kwargs)
+        _seed_from_identity_state(identity_states, group_key(raw), shot_id, provider_kwargs)
 
     return _EntryContext(
         reference_id=reference_id,

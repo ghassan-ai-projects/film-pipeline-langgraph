@@ -26,7 +26,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 11d | `artifact` (7), `state` (5), `kb` (4), `validation` (3) declared | `9446b27` | `input_schema`: 31 → 50; generic descriptions 44 → 25 | 0 |
 | 11e | **remaining 25 tools + dead `_register` path + derived facade** | `e7cbb95` | `input_schema`: 50 → **75/75**; generic descriptions 25 → **0** | 0 |
 | 13 | Graph execution moved into `orchestration` | `88d773a` | cross-package private reach-ins: **8 → 2** | 0 |
-| 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `_pending_` | 7 pure helpers out of `mcp`; new registration guard | 0 |
+| 14a | Profile-change resolve/diff into `config`; graph-builder regression fixed | `0ca9313` | 7 pure helpers out of `mcp`; new registration guard | 0 |
+| 14b | Reference generation use case into `generation` | `_pending_` | `mcp -> generation` imports: **23 → 14** | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
 
@@ -1011,3 +1012,63 @@ naming `register_graph_builder` when nothing is registered, rather than returnin
 
 Slice 2 (reference generation into `generation`, ~1350 lines across 8 modules) is not
 done. `mcp -> generation` is the measurement it moves.
+
+## Step 14b — reference generation moves to its owner (2026-09-28)
+
+Doc 03 slice 2. The seven use-case modules left
+`mcp/tools/reference_generation/` (1353 lines) for `generation/reference/`, and the
+MCP handler stayed behind.
+
+### The check
+
+```text
+mcp -> generation imports:  23  ->  14
+```
+
+Doc 03 predicted 20 → "one entry function per tool". The measured start was 23, and
+the 14 that remain are the five `generation` *tool* modules (13) plus one registry
+import — i.e. the tool surface, which is where they belong. The
+`reference_generation` half went from 10 to 0.
+
+### Where the split had to fall
+
+Moving the whole package into `generation` closed `generation <-> mcp`, because
+`tool.py` imports `ToolContext`, `ToolArgs` and `_ok`/`_error`. That is a real
+boundary, not a technicality: **a package that owns a use case must not depend on the
+surface that exposes it.** So:
+
+- `generation/reference/` — retry loop, outcome recording, composite assembly, index
+  persistence, entry loading. No MCP context, no response shaping, no tool arguments.
+- `mcp/tools/reference_generation/tool.py` — argument validation, response shaping,
+  and the `ToolSpec`.
+
+### Two things the move forced, both improvements
+
+1. **`_services` and `_latest_artifact_version` had to leave `mcp`.** The use case
+   called `mcp.tools.helpers` for a three-line assertion and a store query. They are
+   now `reference_services` and `latest_artifact_version` in the use case's own
+   `context.py`. Reaching into the tool layer for them was the use case depending on
+   the surface above it.
+2. **14 helpers became public.** They were `_`-prefixed while they were `mcp`-internal;
+   crossing a package boundary makes them the use case's API, and the boundary-law
+   guard correctly refused to let them cross as private symbols. That guard is what
+   forced the rename, and it is the right outcome: `mcp` now consumes a *published*
+   interface rather than another package's internals.
+
+### Evidence
+
+- `measure.py`: no `mcp -> generation` count is printed directly, so it was measured
+  from the AST: **23 → 14**, with the `reference_generation` share going 10 → 0.
+- `make ci-check`: **2344 passed, 91.85% coverage**, product gate PASS.
+- `mypy src tests` clean; `ruff` clean; `enola check` exit 0, cycle count **1**.
+- Surface rows recorded: `generation.reference` (24, 6) added,
+  `mcp.tools.reference_generation` lowered to (2, 1), `generation` 15 → 21 modules,
+  and the shrunken `mcp`/`mcp.tools` rows lowered to match (39 → 33, 33 → 27).
+
+### What this does not establish
+
+The test split doc 03 also predicted — "a use-case test that constructs no MCP context
+and a thin handler test" — is **not** done. `tests/unit/mcp/tools/test_reference_generation.py`
+(719 lines) still drives the use case through `call_tool`, and its helper tests import
+the use-case package directly. The production split is real; the test split is not
+claimed.

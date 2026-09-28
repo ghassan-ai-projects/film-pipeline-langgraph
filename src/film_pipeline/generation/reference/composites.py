@@ -102,7 +102,7 @@ def _build_identity_sheets(project_root: Path, char_frames: dict[str, dict[str, 
         try:
             build_character_identity_sheet(subject_id, subject_id, frames, sheet_path)
             # Phase 8 — Composite validation
-            _validate_composite(sheet_path, "character_identity_sheet", subject_id)
+            validate_composite(sheet_path, "character_identity_sheet", subject_id)
         except Exception as exc:
             _logger.warning("Identity sheet build failed for %s: %s", subject_id, exc)
 
@@ -128,12 +128,12 @@ def _build_environment_boards(
                 palette_colors=env_palettes.get(subject_id),
             )
             # Phase 8 — Composite validation
-            _validate_composite(sheet_path, "environment_board", subject_id)
+            validate_composite(sheet_path, "environment_board", subject_id)
         except Exception as exc:
             _logger.warning("Environment board build failed for %s: %s", subject_id, exc)
 
 
-def _build_composites(
+def build_composites(
     project_root: Path,
     project_id: str,
     entries: list[dict[str, object]],
@@ -148,10 +148,10 @@ def _build_composites(
     _build_environment_boards(project_root, env_frames, env_palettes)
 
     # Phase 05 — Additional composite templates
-    _build_optional_sheets(project_root, project_id, char_frames, env_palettes)
+    build_optional_sheets(project_root, project_id, char_frames, env_palettes)
 
 
-def _build_optional_sheets(
+def build_optional_sheets(
     project_root: Path,
     project_id: str,
     char_frames: dict[str, dict[str, Path]],
@@ -222,7 +222,7 @@ def _build_style_board(
         _logger.warning("Style board build failed for %s: %s", project_id, exc)
 
 
-def _validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
+def validate_composite(sheet_path: Path, sheet_type: str, subject_id: str) -> None:
     """Run Gemini composite validation on a sheet (Phase 8). Non-blocking."""
     try:
         from film_pipeline.agents.model_routing import ModelRouter

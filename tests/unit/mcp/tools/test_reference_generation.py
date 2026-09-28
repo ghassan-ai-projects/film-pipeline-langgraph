@@ -1,4 +1,4 @@
-"""Unit tests for film_pipeline.mcp.tools.reference_generation.generate_reference_images.
+"""Unit tests for film_pipeline.generation.reference.generate_reference_images.
 
 These tests exercise the main async tool end-to-end with heavy mocking for
 provider calls, frame heuristics, frame review, compositing, and sidecar

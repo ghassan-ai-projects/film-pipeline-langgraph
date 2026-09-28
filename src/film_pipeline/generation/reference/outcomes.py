@@ -6,19 +6,19 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from film_pipeline.mcp.tools.reference_generation.context import (
+from film_pipeline.generation.reference.context import (
+    GenerationBatch,
     _EntryContext,
-    _GenerationBatch,
 )
-from film_pipeline.mcp.tools.reference_generation.entries import (
-    _group_key,
+from film_pipeline.generation.reference.entries import (
+    group_key,
 )
-from film_pipeline.mcp.tools.reference_generation.retry_loop import (
+from film_pipeline.generation.reference.retry_loop import (
     _RetryOutcome,
 )
 
 
-def _stamp_retry_stats(raw: dict[str, object], outcome: _RetryOutcome) -> None:
+def stamp_retry_stats(raw: dict[str, object], outcome: _RetryOutcome) -> None:
     """Record attempts spent and the best reviewed score on the entry."""
     raw["retry_count"] = outcome.best_attempt  # 0 if all attempts failed
     raw["best_score"] = outcome.best_score
@@ -37,7 +37,7 @@ def _apply_identity_drift_policy(
         cast(float, frame_review_result.scores.get("subject", {}).get("score", 10))
     )
     if subject_score < 7 and not is_anchor:
-        ist = identity_states.setdefault(_group_key(raw), {})
+        ist = identity_states.setdefault(group_key(raw), {})
         if not ist.get("i2i_active"):
             ist["i2i_active"] = True
             ist["i2i_strength"] = 0.5
@@ -45,13 +45,13 @@ def _apply_identity_drift_policy(
             ist["i2i_strength"] = 0.3
 
 
-def _update_identity_group(
+def update_identity_group(
     identity_states: dict[str, dict[str, object]],
     raw: dict[str, object],
     outcome: _RetryOutcome,
 ) -> None:
     """Track the anchor frame and enforce drift policy for the entry's group."""
-    ist = identity_states.setdefault(_group_key(raw), {})
+    ist = identity_states.setdefault(group_key(raw), {})
     is_anchor = str(raw.get("frame_role", "")).strip().lower() in (
         "front-face",
         "wide-establishing",
@@ -157,7 +157,7 @@ def _write_frame_sidecar_safely(
 
 
 def _stamp_asset_fields(
-    batch: _GenerationBatch,
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
     outcome: _RetryOutcome,
@@ -176,7 +176,7 @@ def _stamp_asset_fields(
 
 
 def _append_generated_result(
-    batch: _GenerationBatch,
+    batch: GenerationBatch,
     ctx: _EntryContext,
     asset_posix: str,
     provider_id: str,
@@ -192,8 +192,8 @@ def _append_generated_result(
     )
 
 
-def _register_generated_entry(
-    batch: _GenerationBatch,
+def register_generated_entry(
+    batch: GenerationBatch,
     raw: dict[str, object],
     ctx: _EntryContext,
     outcome: _RetryOutcome,

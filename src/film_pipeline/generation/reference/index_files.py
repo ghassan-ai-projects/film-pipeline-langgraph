@@ -6,9 +6,11 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from film_pipeline.generation.reference.context import (
+    latest_artifact_version,
+    reference_services,
+)
 from film_pipeline.storage.project_storage import ProjectStorage
-
-from ..helpers import _latest_artifact_version, _services
 
 if TYPE_CHECKING:
     from film_pipeline.schemas.reference import ReferenceIndexEntry
@@ -16,7 +18,7 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-def _write_reference_index_files(project_root: Path, entries: list[dict[str, object]]) -> None:
+def write_reference_index_files(project_root: Path, entries: list[dict[str, object]]) -> None:
     """Write human-readable reference index files (Phase 11)."""
     idx_dir = project_root / "references" / "index"
     idx_dir.mkdir(parents=True, exist_ok=True)
@@ -59,7 +61,7 @@ def _write_reference_index_files(project_root: Path, entries: list[dict[str, obj
     )
 
 
-def _select_image_provider(rt: Any) -> Any | None:
+def select_image_provider(rt: Any) -> Any | None:
     for provider_id in rt.list_providers():
         adapter = rt.get_provider(provider_id)
         entry = getattr(adapter, "entry", None)
@@ -68,7 +70,7 @@ def _select_image_provider(rt: Any) -> Any | None:
     return None
 
 
-def _save_reference_index_artifact(
+def save_reference_index_artifact(
     rt: Any,
     state: dict[str, object],
     artifact: dict[str, object],
@@ -79,9 +81,9 @@ def _save_reference_index_artifact(
     from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
     project_id = str(state.get("project_id", ""))
-    store = _services(rt).artifact_store
+    store = reference_services(rt).artifact_store
     version = (
-        _latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "reference_index") + 1
+        latest_artifact_version(store, project_id, FilmPhase("visual_dev"), "reference_index") + 1
     )
     meta = ArtifactMetadata(
         artifact_id="reference_index",
@@ -96,13 +98,13 @@ def _save_reference_index_artifact(
     )
     from film_pipeline.schemas.reference import ReferenceIndex
 
-    entries = _reference_entries_from_grouped(artifact)
+    entries = reference_entries_from_grouped(artifact)
     reference_index = ReferenceIndex(project_id=project_id, entries=entries)
     ref: ArtifactRef = store.save(reference_index, meta)
     return ref.to_string()
 
 
-def _reference_entries_from_grouped(
+def reference_entries_from_grouped(
     artifact: dict[str, object],
 ) -> list[ReferenceIndexEntry]:
     """Build typed ``ReferenceIndexEntry`` objects from grouped raw entries."""

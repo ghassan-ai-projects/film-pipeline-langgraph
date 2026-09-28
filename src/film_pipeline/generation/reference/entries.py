@@ -8,14 +8,14 @@ from pathlib import Path
 _logger = logging.getLogger(__name__)
 
 
-def _group_key(entry: dict[str, object]) -> str:
+def group_key(entry: dict[str, object]) -> str:
     """Deterministic group key for identity/geometry consistency."""
     subject_type = str(entry.get("subject_type", "")).strip().lower()
     subject_id = str(entry.get("subject_id", "")).strip().lower()
     return f"{subject_type}:{subject_id}"
 
 
-def _group_and_sort_entries(
+def group_and_sort_entries(
     entries: list[object],
     requested_ids: set[str],
     force: bool,
@@ -47,7 +47,7 @@ def _group_and_sort_entries(
 
     # Sort: group by key, anchor first within each group
     def sort_key(r: dict[str, object]) -> tuple[str, int, str]:
-        gk = _group_key(r)
+        gk = group_key(r)
         role = str(r.get("frame_role", "")).strip().lower()
         anchor_prio = ANCHOR_PRIORITY.get(role, 50)
         return (gk, anchor_prio, str(r.get("reference_id", "")))
@@ -56,7 +56,7 @@ def _group_and_sort_entries(
     return filtered
 
 
-def _reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
+def reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
     """Compute organized output directory for a reference entry.
 
     Produces paths like:
@@ -74,7 +74,7 @@ def _reference_output_dir(entry: dict[str, object], project_root: Path) -> Path:
     return project_root / "references" / subject_type
 
 
-def _reference_prompt(
+def reference_prompt(
     entry: dict[str, object],
     *,
     character_bible: dict[str, object] | None = None,
@@ -97,7 +97,7 @@ def _reference_prompt(
     )
 
 
-def _reference_aspect_ratio(entry: dict[str, object]) -> str:
+def reference_aspect_ratio(entry: dict[str, object]) -> str:
     asset_type = str(entry.get("asset_type", ""))
     subject_type = str(entry.get("subject_type", ""))
     if "environment" in asset_type or subject_type == "environment":
@@ -107,5 +107,5 @@ def _reference_aspect_ratio(entry: dict[str, object]) -> str:
     return "3:4"
 
 
-def _reference_job_id(reference_id: str) -> str:
+def reference_job_id(reference_id: str) -> str:
     return reference_id.replace(":", "-").replace("/", "-")
