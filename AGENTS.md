@@ -158,12 +158,15 @@ compatibility shims, and all consumers import the owners directly.
 | `agents` | 07 — Agent registry, prompts | |
 | `governance` | 08 — Review packages, gate law | Formerly `review` plus the graph gate modules |
 | `validation` | 09 — Validator registry | |
+| `generation` | — | Generation lifecycle: ledger, executor, prompt construction, compositor, frame/sheet review |
+| `constraints` | — | Extraction of project constraints from operator input |
 | `providers` | 10, 13 — Provider adapters | |
 | `checkpoints` | 11 — Checkpoints, resume | |
 | `mcp` | 02 — MCP tool surface | |
 | `post` | 14 — Post-production | |
 | `operations` | — | Operator use cases, view models, runtime ports |
 | `projects` | — | Project identity, classification, resolution |
+| `cli` | — | Headless driver and product gate |
 | `studio` | — | Composition root; formerly `app` |
 | `devharness` | — | Test doubles and scenarios; formerly `testing` |
 

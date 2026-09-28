@@ -37,7 +37,8 @@ pinned baseline is not comparable — regenerating is the fix, never a filter ch
 | 15g | `orchestration`: `visual` (13), `subgraphs/qc` (11), `nodes/qc` (11) hoisted | `5cc0170` | unexplained lazy imports: **197 → 164**; `orchestration` 89 → 56 | 0 |
 | 15h | `orchestration`: `_repair_loop`, `approval`, `execution` hoisted | `e829c1d` | unexplained lazy imports: **164 → 144**; `orchestration` 56 → 36 | 0 |
 | 15i | **`orchestration` to 0**; AST-based hoister replaces the regex | `51bba6a` | unexplained lazy imports: **144 → 108**; `orchestration` 36 → **0** | 0 |
-| 15j | **`mcp` to 0 — Step 15 complete** | `_pending_` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
+| 15j | **`mcp` to 0 — Step 15 complete** | `b020c22` | unexplained lazy imports: **108 → 0**; 39 remain, all explained | 0 |
+| 6.8 | AGENTS.md package table completed | `_pending_` | table rows **17 → 20**; now exactly matches the tree | 0 |
 | 16 | `StudioRuntime` re-measured and the split decided against | `_pending_` | **393 lines, 29 methods, 9 concerns**, 13 delegators | 0 |
 
 ## Step 0 — Enola gate restored (2026-09-28)
@@ -1715,3 +1716,55 @@ string is built differently or whose target is reached through a second module.
 The five docs-only slices from doc 06 (6.3, 6.6, 6.7, 6.8, 6.11) and doc 03 slice 2's
 test split. Step 16 is done
 ([`08-studioruntime-remeasured.md`](08-studioruntime-remeasured.md)).
+
+## Doc 06 slice 6.8 — the AGENTS.md package table (2026-09-28)
+
+Three packages existed under `src/film_pipeline/` and were absent from the canonical
+instructions' sub-package table: `generation`, `constraints`, and `cli`. An agent
+reading AGENTS.md could not tell who owned generation lifecycle.
+
+Added:
+
+| Sub-package | Notes |
+|---|---|
+| `generation` | Generation lifecycle: ledger, executor, prompt construction, compositor, frame/sheet review |
+| `constraints` | Extraction of project constraints from operator input |
+| `cli` | Headless driver and product gate |
+
+### The measurement, which the finding did not have
+
+Doc 06 said the table was "missing three packages". That is a claim about a list, so it
+was re-derived from the tree rather than trusted: enumerate the directories under
+`src/film_pipeline/` and diff them against the table's rows.
+
+```text
+table rows: 20
+missing: []
+extra  : []
+```
+
+Before the change the same command reported **17 rows and 3 missing**, which confirms
+the finding's count exactly. It also confirms there were no *extra* rows — a stale row
+naming a package that no longer exists would have been the more dangerous error, since
+it would send an agent to a path that is gone.
+
+### What the finding also named, and why it was not done
+
+Doc 06 said the three packages appear "in neither the AGENTS.md sub-package table nor
+`06-independent-review-and-decision.md` §4's ownership map". The second half does not
+apply: §4 is not a per-package list. It is a **concern → preferred owner** table
+("Phase vocabulary… → `graph`", "Operator contract → `mcp`"), written before the
+package renames and still using the pre-migration names. Adding package rows there
+would mean restructuring a decision table to hold a different kind of content, and no
+reader is misled: §4 answers "which concern has which owner", which the AGENTS.md table
+now complements by answering "which packages exist".
+
+Recorded rather than silently skipped, since half of the finding named a change this
+slice did not make.
+
+### Evidence
+
+- Table: **17 → 20 rows**; re-derived diff against the tree reports **missing: [],
+  extra: []**.
+- Documentation only; `make ci-check`, `mypy src tests` and `enola check` unchanged and
+  green.
