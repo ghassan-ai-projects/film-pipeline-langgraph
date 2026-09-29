@@ -356,7 +356,7 @@ def test_the_reach_in_detector_sees_every_import_form() -> None:
     and reading it statically would mean evaluating expressions. If one ever
     appears, the guard has to be extended deliberately rather than assumed.
     """
-    cases: dict[str, tuple[str, bool]] = {
+    cases: dict[str, tuple[tuple[str, str], bool]] = {
         "from film_pipeline.storage._layout import read_json": (("storage", "_layout"), True),
         "from film_pipeline.storage import _layout": (("storage", "_layout"), True),
         "import film_pipeline.storage._layout": (("storage", "_layout"), True),
