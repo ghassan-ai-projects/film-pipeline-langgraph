@@ -299,19 +299,6 @@ def test_the_guard_has_something_to_check() -> None:
     assert reachable_public_names("schemas"), "no names reachable on a known package"
 
 
-# --- 6. Declared private exports must have a consumer ---------------------
-
-
-#: Underscore-prefixed names each package declares in `__all__`, measured
-#: 2026-09-29 (doc 10 B5). A leading underscore says "internal"; putting the name
-#: in `__all__` says "exportable". A package can say both, and four do.
-#:
-#: The count is recorded rather than banned because most of these are legitimate:
-#: `<package>/__init__.py` publishing its own submodules is how the package
-#: exposes a grouped API, and `test_boundary_law.py` covers the reach-in that
-#: would actually be a boundary break. What this guard adds is the *other* half
-#: of B5's question — how many of them does anybody import by name? — so the
-#: number can only fall by deliberate edit.
 DECLARED_PRIVATE_EXPORTS: dict[str, int] = {
     "agents.prompt_templates.defaults": 22,
     "mcp.tools.bibles": 1,

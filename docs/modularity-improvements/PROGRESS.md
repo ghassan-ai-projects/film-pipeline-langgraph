@@ -2314,3 +2314,43 @@ src/film_pipeline/mcp/` is empty; `make enola` exits 0 **with**
 
 **Not established:** the orchestration cycle is recorded, not fixed — removing it
 needs a shared module below `nodes` and `subgraphs`.
+
+## Comments removed from the branch — intent moved into docstrings (2026-09-29)
+
+165 `#` comments the branch had added across 14 files, replaced by docstrings (or
+deleted where the docstring already said it). 98 insertions, 192 deletions, and one
+dead constant the sweep exposed.
+
+**The rule, now in `AGENTS.md`:** no `#` comments in `src/` or `tests/`. Machine
+directives stay (`# noqa`, `# type: ignore`, `# pragma: no cover` — a tool reads
+them); everything else is intent, and intent belongs in the docstring of the module,
+class, or function that owns the behaviour. Section separators count as comments too,
+so no new ones.
+
+Measured before: 165 comments across 14 files, 41 in `src/` and 124 in `tests/`.
+Measured after: **5**, all machine directives (4 × `# pragma: no cover`, 1 ×
+`# type: ignore`). Identified with `tokenize` over COMMENT tokens only — never a regex
+on `#`, which would eat `#` inside strings — and compared against each file at
+`origin/main`, so a pre-existing comment could not be mistaken for a new one.
+
+**Verified that only comments changed.** Normalising docstrings out of the AST and
+comparing `ast.dump` against `HEAD` leaves exactly one file with a code-shape
+difference: `_ROOT_MODULE_OF_SELF: str = "."` in `test_package_acyclicity.py`, a
+constant defined once and never read, introduced by the B1 rewrite. The comment sweep
+is what surfaced it. Everything else is comment and docstring text.
+
+**Two stale claims fixed while moving intent**, both of which the comments had been
+masking:
+
+- `test_self_imports_are_measured_and_do_not_grow` asserted "Measured 2026-09-29:
+  **556** of those" — 556 was the old *ceiling*, never a measurement, and the real
+  count is **98**. The docstring now records both the number and the defect that made
+  the old one wrong.
+- The `KNOWN_PACKAGE_CYCLES` rationale (what the single recorded cycle is, why it is
+  cycle-required, what removing it would take) lived only in a `#:` block, so deleting
+  the comment would have deleted the reasoning. It moved into the guard test's
+  docstring.
+
+Failure message in `test_package_acyclicity.py` also repaired: it read
+"A \`test-function-level import does NOT remove an edge\`", which parsed as a test name
+rather than a statement about imports.

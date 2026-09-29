@@ -61,21 +61,6 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SRC = _REPO_ROOT / "src" / "film_pipeline"
 
-#: Packages whose own root module participates in the graph. The orchestration
-#: root is the only package with a cycle today, and that cycle is *about* the
-#: root: `orchestration/execution.py` imports `orchestration.nodes`, which
-#: reaches `orchestration.subgraphs`, which imports back into `nodes`. Reading
-#: "the root package" as a node is what makes that visible; a root file is not
-#: part of any subpackage.
-_ROOT_MODULE_OF_SELF: str = "."
-
-#: Measured 2026-09-29 by `_root_self_imports()`. Lower it when a package drops
-#: a re-export; raising it needs the reason in the commit message.
-#:
-#: This read 556 while the function returned **2**: the filter re-parsed a
-#: human-readable string and rejected every real site, so the ceiling carried ~554
-#: units of slack and an injected 554 sites passed with the guard green. The number
-#: is now the measured count of the shape the docstring describes.
 _SELF_IMPORT_CEILING: int = 100
 
 
@@ -207,12 +192,9 @@ class _EdgeCollector(ast.NodeVisitor):
     ) -> None:
         self._importer_node = importer_node
         self._packages = packages
-        # The importer's own dotted module path, for resolving relative imports.
         self._importer_module = importer_module
         self.edges: set[tuple[str, str]] = set()
         self._type_checking_depth = 0
-
-    # -- scope tracking ---------------------------------------------------
 
     def visit_If(self, node: ast.If) -> None:
         if _is_type_checking_test(node.test):
@@ -227,8 +209,6 @@ class _EdgeCollector(ast.NodeVisitor):
             return
         self.generic_visit(node)
 
-    # -- edges ------------------------------------------------------------
-
     def visit_Import(self, node: ast.Import) -> None:
         if self._type_checking_depth:
             return
@@ -239,19 +219,12 @@ class _EdgeCollector(ast.NodeVisitor):
         if self._type_checking_depth:
             return
         if node.level:
-            # A relative import is a real runtime edge and used to be dropped here,
-            # which made a cycle spelled `from ..nodes import _x` invisible while the
-            # identical absolute spelling was reported. `test_boundary_law.py`
-            # resolved these from the start, so the two guards disagreed about the
-            # same file.
             for module in _resolve_relative(node, self._importer_module):
                 self._add(module)
             return
         if node.module:
             self._add(node.module)
             return
-        # `from film_pipeline.orchestration import nodes` — the module is named in
-        # the alias, not in `node.module`.
         for alias in node.names:
             self._add(f"film_pipeline.{alias.name}")
 
@@ -304,7 +277,6 @@ def _resolve_relative(node: ast.ImportFrom, importer_module: str) -> list[str]:
     if not importer_module:
         return []
     parts = importer_module.split(".")
-    # Drop the module itself; `parts` is now the containing package.
     base = parts[:-1]
     for _ in range(node.level - 1):
         if not base:
@@ -315,7 +287,6 @@ def _resolve_relative(node: ast.ImportFrom, importer_module: str) -> list[str]:
     prefix = ".".join(base)
     if node.module:
         return [f"{prefix}.{node.module}"]
-    # `from .. import nodes` — the module is named in the alias.
     return [f"{prefix}.{alias.name}" for alias in node.names if alias.name != "*"]
 
 
@@ -456,10 +427,6 @@ def _cycles(edges: Mapping[tuple[str, str], object]) -> list[list[str]]:
         if key in seen:
             continue
         seen.add(key)
-        # The cycle is the *component*; the walked path is one loop through it. A
-        # short path through a three-member component would hide a member from any
-        # caller matching on the result, so the closed loop is closed over the
-        # whole component: path first, then any member it did not visit.
         members = sorted(component)
         loop = list(cycle)
         for member in members:
@@ -475,8 +442,6 @@ def _cycles_with_components(
     """Each cycle and the component that produced it, before any filtering."""
     adjacency: dict[str, set[str]] = {}
     for source, target in edges:
-        # A self-edge is reported by `_self_edge_sources`, not as a cycle: it is
-        # a package reaching its own surface, which is the normal shape.
         if source != target:
             adjacency.setdefault(source, set()).add(target)
         adjacency.setdefault(target, set())
@@ -653,8 +618,6 @@ def test_the_cycle_check_detects_injected_cycles() -> None:
     }
 
     assert _mutual_pairs(three_node) == [], "the old check could not see this case"
-    # Two sibling subpackages of one package: not an ancestor/descendant pair, so
-    # this is a real finding even though both names share a prefix.
     sibling = {
         ("p", "p.x"): {"a"},
         ("p.x", "p"): {"b"},
@@ -663,17 +626,12 @@ def test_the_cycle_check_detects_injected_cycles() -> None:
         ("p.y", "p"): {"e"},
     }
     assert _cycles(sibling), "two sibling subpackages in a cycle must be reported"
-    # Inherent: every edge runs between a package and its own descendant.
     assert _inherent_nesting_only({"p", "p.x"}, {("p", "p.x"): {"a"}, ("p.x", "p"): {"b"}})
-    # Real: a sibling edge is present, so the parent does not order the pair.
     assert not _inherent_nesting_only(
         {"p", "p.x", "p.y"},
         {("p", "p.x"): {"a"}, ("p.x", "p.y"): {"b"}, ("p.y", "p.x"): {"c"}},
     )
 
-    # The inherent Python shape: a package and its own subpackage. Ordinary, and
-    # excluded — failing on it would leave the superseded layer law as the only
-    # remedy. `_all_cycles` still sees it, so the exclusion stays measurable.
     inherent = {("p", "p.sub"): {"a"}, ("p.sub", "p"): {"b"}}
     assert _all_cycles(inherent), "the detector must still see it"
     assert _cycles(inherent) == [], "but it is not a violation"
@@ -693,17 +651,6 @@ def test_the_cycle_check_detects_injected_cycles() -> None:
     assert _describe_cycle(cycles[0], three_node).count("->") >= 3
 
 
-#: Package cycles that exist today, recorded rather than hidden.
-#:
-#: `orchestration.nodes <-> orchestration.subgraphs` is one real cycle: two sibling
-#: subpackages of `orchestration` that import each other. Both edges are *deferred*
-#: (function-level) and the pair is cycle-required — hoisting either one raises
-#: `ImportError: cannot import name ... from partially initialized module` — which
-#: is why `test_lazy_imports.py` counts 11 such imports as the floor.
-#:
-#: Removing it means giving the two subpackages a shared module below both, which
-#: is a structural change to the QC path, not a guard fix. Recorded here so the
-#: number cannot grow silently and so nobody reads a green guard as "no cycles".
 KNOWN_PACKAGE_CYCLES: frozenset[frozenset[str]] = frozenset(
     {frozenset({"orchestration", "orchestration.nodes", "orchestration.subgraphs"})}
 )
@@ -718,10 +665,21 @@ def test_package_graph_has_no_unrecorded_cycles() -> None:
     original cycle here was 15 files of `orchestration -> schemas` against one
     file of `schemas -> orchestration`.
 
-    A `test-function-level import does NOT remove an edge`: this reads `ast`, so
+    A function-level import does **not** remove an edge: this reads `ast`, so
     hoisting an import out of a function, or hiding it behind `TYPE_CHECKING`
     (which erases it at runtime and therefore does break the edge), each have to
     be decided deliberately rather than by moving a line.
+
+    `KNOWN_PACKAGE_CYCLES` records what exists today rather than hiding it. The one
+    entry is `orchestration.nodes <-> orchestration.subgraphs` — two sibling
+    subpackages of `orchestration` importing each other. Both edges are
+    function-level, and the pair is cycle-required: hoisting either one raises
+    `ImportError: cannot import name ... from partially initialized module`, which
+    is why `test_lazy_imports.py` counts 11 such imports as its floor. Removing it
+    means giving the two subpackages a shared module below both, which is a
+    structural change to the QC path and not a guard fix. Recording it keeps the
+    number from growing silently and keeps a green guard from reading as "no
+    cycles".
     """
     edges = _cross_package_edges()
     cycles = _cycles(edges)
@@ -835,7 +793,6 @@ def _root_self_imports(sources: Mapping[str, ast.Module] | None = None) -> list[
         parts = Path(path).parts
         if len(parts) != 2 or parts[1] != "__init__.py":
             continue
-        # `<package>.<leaf>`: three dotted segments including `film_pipeline`.
         if module.count(".") == 2:
             found.append(f"{path}: imports {module} by full name")
     return sorted(found)
@@ -869,9 +826,6 @@ def test_the_cycle_check_sees_subpackages_as_nodes() -> None:
     assert len(cycles) == 1, f"expected exactly the orchestration cycle, got {cycles}"
     assert set(cycles[0]) == {"orchestration", "orchestration.nodes", "orchestration.subgraphs"}
 
-    # Every reported component contains at least one edge between packages that
-    # are not in one ancestor chain. Without that, the report is the inherent
-    # package/subpackage shape and should have been filtered.
     for cycle in cycles:
         members = set(cycle)
         assert any(
@@ -883,11 +837,6 @@ def test_the_cycle_check_sees_subpackages_as_nodes() -> None:
             for a, b in edges
         ), f"{cycle} has no sibling edge — it should not have been reported"
 
-    # The measured split, asserted on both halves so the filter cannot quietly
-    # start passing everything or nothing. Parsing subpackages as nodes finds
-    # **5** strongly connected components in this tree; **4** are a package and one
-    # subpackage publishing each other (inherent to Python), and the 5th is the
-    # orchestration sibling pair.
     components = {frozenset(cycle) for cycle in _all_cycles(edges)}
     assert len(components) == 5, f"component count changed: {sorted(map(sorted, components))}"
     inherent = {c for c in components if _inherent_nesting_only(set(c), edges)}
@@ -909,12 +858,8 @@ def test_the_self_edge_check_detects_an_injected_self_import() -> None:
     found = _self_edge_sources(injected)
     assert found == ["storage/probe.py: imports film_pipeline.storage by full name"], found
     assert _importing_node(("storage", "probe.py"), packages) == "storage"
-    # The same measurement as a structured pair, which is what a caller filtering
-    # on a field must use — re-parsing the rendered string is how the root filter
-    # came to measure 2 sites out of 98.
     assert _self_edge_sites(injected) == [("storage/probe.py", "film_pipeline.storage")]
 
-    # A cross-package import is not a self-edge, and must not be counted as one.
     foreign = {"storage/probe.py": ast.parse("from film_pipeline.schemas import base\n")}
     assert _self_edge_sources(foreign) == []
 
@@ -929,8 +874,15 @@ def test_self_imports_are_measured_and_do_not_grow() -> None:
     it names an absolute path, so "self-import" as a raw count measures nothing
     useful. The shape worth guarding is narrower and is what the original test's
     name actually meant: a **package root file** (`<package>/__init__.py`)
-    reaching a **leaf module** of the same package by full name. Measured 2026-09-29:
-    **556** of those, essentially every `__init__.py` re-exporting its surface.
+    reaching a **leaf module** of the same package by full name. Measured
+    2026-09-29: **98** of those, essentially every `__init__.py` re-exporting its
+    surface.
+
+    That measurement was wrong until an adversarial review caught it: the filter
+    re-parsed its own rendered entry string and rejected every real site, reporting
+    **2** against a ceiling of **556** — ~554 units of slack, so an injected 554
+    sites of this shape left the guard green. The filter now reads the structured
+    `(path, module)` pair and the ceiling is the measured count plus two.
 
     The ceiling makes a new one deliberate. It is a count, which is a weak guard —
     the same criticism B5 makes of the surface ratchet — and that is stated rather

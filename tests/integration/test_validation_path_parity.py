@@ -78,9 +78,6 @@ def rt(tmp_path: Path) -> Generator[StudioRuntime, None, None]:
     state = runtime.get_active()
     assert state is not None
     state["current_phase"] = PHASE
-    # Missing RCTCO fields and no artifact refs: PromptReadinessValidator scores
-    # this BLOCKED with blocking findings, so "did the validators run" and "were
-    # the findings recorded" are both observable.
     state["artifact_refs"] = [_save_unready_prompt_registry(store)]
     state["issues"] = []
     state["_validation_reports"] = []
@@ -148,9 +145,6 @@ def _assert_evidence_is_durable(rt: StudioRuntime) -> None:
         )
 
 
-# ── the runtime operation: what the two paths must agree on ──────────────────
-
-
 def test_runtime_validation_covers_gen_planning(rt: StudioRuntime) -> None:
     rt.run_validation(PROJECT_ID)
 
@@ -161,9 +155,6 @@ def test_runtime_validation_records_report_artifact_refs(rt: StudioRuntime) -> N
     rt.run_validation(PROJECT_ID)
 
     _assert_evidence_is_durable(rt)
-
-
-# ── the MCP action must produce the same persisted result ────────────────────
 
 
 def test_mcp_validation_covers_the_same_phases(rt: StudioRuntime, call_tool: CallTool) -> None:
@@ -216,9 +207,6 @@ def test_a_crashed_validator_is_persisted_not_just_reported(
         original(state)
         state.setdefault("_validation_failures", []).append("ProbeValidator: boom")
 
-    # Patched where the operation *reads* the name: `execution` does
-    # `from ...nodes import _run_validators`, so patching the defining module would
-    # be a no-op here (AGENTS.md's "patch point" exception, in reverse).
     monkeypatch.setattr(execution, "_run_validators", _with_failure)
 
     outcome = rt.run_validation(PROJECT_ID)
@@ -256,8 +244,6 @@ def test_partial_validator_failure_keeps_the_reports(
     )
 
     def _partial(state: Any) -> None:
-        # The chain records serializable payloads, which is what `_typed_reports`
-        # re-hydrates at the boundary.
         state.setdefault("_validation_reports", []).append(report.model_dump())
         state.setdefault("_validation_failures", []).append("BoomValidator: unreadable")
 

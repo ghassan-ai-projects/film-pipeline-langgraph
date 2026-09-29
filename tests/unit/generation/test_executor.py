@@ -399,7 +399,6 @@ class TestGenerationExecutor:
         assert result.failed == 2
         assert result.outcomes[0].kind is RowOutcomeKind.POLL_FAILED
         assert "poll exploded" in result.outcomes[0].detail
-        # A job the provider accepted stays live: a failed poll is recoverable.
         from film_pipeline.generation.ledger import GenerationLedgerManager
         from film_pipeline.schemas.base import GenerationStatus
 

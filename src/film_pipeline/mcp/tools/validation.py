@@ -72,6 +72,11 @@ async def run_validation(ctx: ToolContext, args: dict[str, object]) -> dict[str,
     The phase scope, the selection, and the persistence all belong to the
     operation; this handler only refuses an unknown phase and shapes the
     response.
+
+    A validator that could not run fails the *action*, and the reports its siblings
+    produced are carried on the error rather than discarded: the QC chain is built
+    to survive a crashing validator, so dropping every successful finding left the
+    operator with a failed action and no evidence of the part that worked.
     """
     _ = args
     rt = ctx.runtime
@@ -89,13 +94,6 @@ async def run_validation(ctx: ToolContext, args: dict[str, object]) -> dict[str,
 
     reports = [_report_summary(report) for report in outcome.reports]
     if outcome.failures:
-        # A validator that could not run is a failure of the *pass*, which is the
-        # contract this tool has always had (`test_run_validation_exception`): one
-        # crashing validator fails the action. What changed is that the reports its
-        # siblings produced are now carried on the error rather than discarded —
-        # the QC chain is deliberately built to survive a crashing validator, so
-        # throwing away every successful finding left the operator with a failed
-        # action and no evidence of the part that worked.
         return _error(
             f"Validation run failed: {outcome.failures[0]}",
             phase=outcome.phase,

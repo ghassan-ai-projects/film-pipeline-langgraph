@@ -60,12 +60,13 @@ def _register_active_artifact_ref(
     in two modules and inlined a third time, so dropping the ``artifact_refs``
     append from one copy failed no test in any suite — the three copies could
     drift apart with nothing able to notice.
+
+    ``active`` is the runtime's live project mapping — ``get_project`` returns it
+    rather than a copy — and it is installed through ``apply_project_state``, which
+    persists in the same call so the intent and its durability cannot come apart.
     """
     active[state_key] = ref
     active.setdefault("artifact_refs", []).append(ref)
-    # `active` IS the runtime's live mapping (measured: `get_project` returns it
-    # rather than a copy), so this write happens through the one operation that
-    # says so and persists in the same call.
     rt.apply_project_state(project_id, active)
 
 

@@ -264,10 +264,6 @@ class StudioGraphState(TypedDict, total=False):
     _context_load_failures: list[str]
     consistency_warnings: list[str]
     _validation_reports: list[dict[str, Any]]
-    # Validators that could not run, as "<validator>: <error>". The chain skips
-    # them so one broken validator cannot abort a QC pass; recording them here is
-    # what lets a validation action report the failure instead of silently
-    # producing no reports at all.
     _validation_failures: list[str]
     # Written concurrently by the QC fan-out workers — must be reducers.
     _qc_reports: Annotated[list[dict[str, Any]], add]

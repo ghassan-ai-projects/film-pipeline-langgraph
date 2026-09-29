@@ -80,9 +80,6 @@ def rt(tmp_path: Path) -> Generator[StudioRuntime, None, None]:
     yield runtime
 
 
-# ── shared helpers: one statement per invariant ───────────────────────────────
-
-
 def _store(rt: StudioRuntime) -> ArtifactStore:
     assert rt.services is not None
     return rt.services.artifact_store
@@ -140,9 +137,6 @@ def _break_polling(rt: StudioRuntime) -> Any:
     return mock.patch.object(adapter, "poll", side_effect=RuntimeError("poll boom"))
 
 
-# ── the executor contract (green: this is what the two paths must agree on) ───
-
-
 def test_executor_start_records_submission_evidence(rt: StudioRuntime) -> None:
     generation_id = _plan_and_approve(rt, ["S001"])
 
@@ -159,9 +153,6 @@ def test_executor_poll_once_delivers_completed_job(rt: StudioRuntime) -> None:
     assert executor.poll_once(PROJECT_ID).completed == 1
 
     _assert_delivered(rt, generation_id)
-
-
-# ── the MCP entry path must produce the same persisted result ────────────────
 
 
 def test_mcp_start_batch_records_submission_evidence(
@@ -234,11 +225,7 @@ def test_mcp_resume_polling_does_not_deliver_the_same_job_twice(
 
     call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
 
-    # Still exactly one take: resuming a finished row must not re-download.
     _assert_delivered(rt, generation_id)
-
-
-# ── poll failure: one policy, and a job the provider accepted stays live ─────
 
 
 def test_executor_poll_failure_leaves_the_row_recoverable(rt: StudioRuntime) -> None:
@@ -255,7 +242,6 @@ def test_executor_poll_failure_leaves_the_row_recoverable(rt: StudioRuntime) -> 
     assert row.error_code == "poll_failed"
     assert "poll boom" in str(row.blocking_reason)
 
-    # The provider accepted the job; a later poll must be able to finish it.
     assert executor.poll_once(PROJECT_ID).completed == 1
     _assert_delivered(rt, generation_id)
 
@@ -276,7 +262,6 @@ def test_mcp_poll_failure_leaves_the_row_recoverable(
     assert row.status not in TERMINAL_GENERATION_STATUSES
     assert row.error_code == "poll_failed"
 
-    # The same row, polled again once the provider recovers, must deliver.
     result = call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
     assert result["ok"] is True
     _assert_delivered(rt, generation_id)
@@ -310,7 +295,6 @@ def test_unregistered_provider_leaves_the_row_pollable(
     assert after.error_code is None
     assert after.next_action == "poll"
 
-    # And the row still works once the provider exists.
     _register_missing_provider(rt)
     call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
     _assert_delivered(rt, generation_id)

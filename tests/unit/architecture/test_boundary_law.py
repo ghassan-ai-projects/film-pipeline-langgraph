@@ -108,13 +108,6 @@ KNOWN_PRIVATE_SYMBOL_IMPORTS: dict[tuple[str, str], int] = {
 # case is visible, not so ordinary ones can be frozen.
 KNOWN_PRIVATE_ATTRIBUTE_WRITES: dict[tuple[str, str], int] = {}
 
-# Sites that mutate the live project mapping through the accessor, recorded rather
-# than banned. The guard below flags the *shape*; these are the two where the shape
-# is not the doc 10 B4 defect.
-#
-# - `cli/driver.py` assembles a project's state before handing it to the graph and
-#   owns the runtime it built; it is the composition root for a headless run, the
-#   same role `studio` has for the MCP path. Recorded so a *new* one is deliberate.
 KNOWN_LIVE_STATE_MUTATIONS: dict[str, str] = {
     "cli/driver.py": "headless composition root: sets target_runtime_seconds on the "
     "state it is about to hand to run_graph, and owns the runtime it built",
@@ -386,26 +379,14 @@ def test_the_reach_in_detector_sees_every_import_form() -> None:
             f"for {key}, got {found}"
         )
 
-    # Relative imports resolve against the file's own package, so a relative form
-    # that stays inside the package is not a reach-in, and one that leaves it is.
     inside, _ = _measure_private_imports_in(ast.parse("from . import _layout"), "storage")
     assert inside == {}, "a relative import inside the package is not a reach-in"
 
-    # A relative import is resolved against the file's own package. `from .
-    # import _layout` inside `storage.sub` names `storage.sub._layout`, which is
-    # private to `storage.sub` and therefore not a *cross-package* reach-in: the
-    # guard must not report a package reaching into itself.
     self_relative, _ = _measure_private_imports_in(
         ast.parse("from . import _layout"), "storage.sub"
     )
     assert self_relative == {}, "a package reaching into itself is not a reach-in"
 
-    # Leaving the package is what makes it one. `from .. import _layout` inside
-    # `storage.sub` names `storage._layout` from package `storage.sub`, so the
-    # owner (`storage`) is not the importer's package root (`storage`) — the key
-    # is built from the source package's first segment, and `storage` equal
-    # `storage` means this is still inside the package. The interesting case is a
-    # *different* top-level package, which the absolute cases above already cover.
     foreign, _ = _measure_private_imports_in(ast.parse("import film_pipeline.studio._x"), "mcp")
     assert foreign == {("mcp", "studio._x"): 1}, "a bare private-module import counts"
 
@@ -727,9 +708,6 @@ def test_the_write_detector_sees_every_shape_it_was_written_for() -> None:
         "annotated": (
             "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME: object = None\n"
         ),
-        # A bare `from ... import x` name is ambiguous from syntax alone (module
-        # handle vs function), so it is a stated limit rather than a finding:
-        # `_module_handles` records only aliased forms. Asserted, not assumed.
         "from ... import bare name (stated limit)": (
             "from film_pipeline.studio.runtime import install_runtime\n"
             "install_runtime._RUNTIME = object()\n"
@@ -752,9 +730,6 @@ def test_the_write_detector_sees_every_shape_it_was_written_for() -> None:
             assert hits == [], f"{name}: a function handle is not a module handle: {hits}"
         else:
             assert hits == [("studio", hits[0][1])], f"{name}: not detected: {hits}"
-
-
-# --- 5. No handler replaces a project's live state mapping ----------------
 
 
 def _measure_live_state_replacements() -> list[str]:
@@ -808,7 +783,6 @@ def _measure_live_state_replacements() -> list[str]:
         for func in ast.walk(tree):
             if not isinstance(func, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            # Names in this function body that hold the live project mapping.
             handles: set[str] = set()
             for node in ast.walk(func):
                 if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
@@ -829,14 +803,9 @@ def _measure_live_state_replacements() -> list[str]:
                     base = target.value if isinstance(target, ast.Subscript) else target
                     if not isinstance(base, ast.Name) or base.id not in handles:
                         continue
-                    # Setting a *field* of the live state (`active["idea"] = idea`)
-                    # is ordinary work on a handle; what B4 is about is *replacing
-                    # the project's mapping*. The distinguishing token is the key: a
-                    # replacement is indexed by a project id, not by a state key.
                     if isinstance(target, ast.Subscript) and not _subscript_key_is_project(target):
                         continue
                     found.append(f"{relative}:{node.lineno} (live-state mutation)")
-        # The direct spelling, which is what the operation replaced.
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign, ast.Call)):
                 continue
@@ -854,9 +823,6 @@ def _measure_live_state_replacements() -> list[str]:
     )
 
 
-#: State keys a handler legitimately sets on the live mapping. A store whose
-#: subscript is one of these is field assignment; anything else is treated as a
-#: project-id replacement, which is the defect this guard names.
 _STATE_FIELD_KEYS: frozenset[str] = frozenset(
     {
         "idea",
@@ -911,7 +877,14 @@ def _assigned_targets(node: ast.AST) -> list[ast.expr]:
 
 
 def test_no_handler_replaces_live_project_state_directly() -> None:
-    """State replacement goes through the declared operation, not the mapping."""
+    """State replacement goes through the declared operation, not the mapping.
+
+    `KNOWN_LIVE_STATE_MUTATIONS` records the shapes that are not the doc 10 B4
+    defect rather than banning them outright. `cli/driver.py` assembles a project's
+    state before handing it to the graph and owns the runtime it built — the
+    composition root for a headless run, the same role `studio` has for the MCP
+    path. A new entry needs the same kind of reason.
+    """
     found = _measure_live_state_replacements()
     assert found == [], (
         "these sites assign into `runtime.projects[...]` from outside `studio`: "

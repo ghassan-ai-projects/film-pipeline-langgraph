@@ -455,6 +455,12 @@ def run_validation(
     without writing findings, artifacts or refs. That is what a read-only caller
     ('show me the current reports') needs, and it keeps one phase→validator table
     instead of a second copy for reading.
+
+    ``validation_report_refs`` describes the latest pass and is replaced along with
+    ``_validation_reports`` — they are the refs and the bodies of the same reports,
+    so appending one while replacing the other would let them disagree and grow.
+    ``_validation_failures`` is carried back with them, or a validator that crashed
+    would be reported to the caller and dropped from the state a later reader sees.
     """
 
     active = rt.get_project(project_id) if project_id else rt.get_active()
@@ -531,18 +537,7 @@ def run_validation(
     active["issues"] = list(issues)
     active["_validation_reports"] = list(working.get("_validation_reports", []))
     if report_refs:
-        # The refs channel describes *this* pass, so it is replaced, not extended.
-        # `_validation_reports` is replaced wholesale on the line above, and the two
-        # are the bodies and the refs of the same reports: appending here made the
-        # channel grow without bound (v1, v2, v3 …) while the bodies stayed at one,
-        # so `len(refs) == len(reports)` — the invariant this branch's own parity
-        # test asserts — held only for the first call, and the channel became a
-        # history instead of a pointer to the evidence of the latest pass.
         active["validation_report_refs"] = list(report_refs)
-    # `_validation_failures` used to be read into the returned outcome and then
-    # dropped: it is a key the chain writes, registered `full` in ORCH_CHANNELS,
-    # and the QC path carries it — so a validator that crashed was reported to the
-    # caller and thrown away, and a later reader of project state saw a clean pass.
     active["_validation_failures"] = list(working.get("_validation_failures", []))
     # Every key the chain can write is carried back, not only the two this
     # function reports: dropping the rest would lose validator side effects.

@@ -64,8 +64,6 @@ class RowOutcomeKind(StrEnum):
     DOWNLOAD_FAILED = "download_failed"
 
 
-#: Outcome kinds where this side could not run the step, so a transport owes the
-#: operator an error rather than a status.
 UNRUNNABLE_OUTCOMES: frozenset[RowOutcomeKind] = frozenset(
     {
         RowOutcomeKind.PROVIDER_MISSING,
@@ -109,8 +107,6 @@ class GenerationRowProviderMissing(GenerationRowError):
     """No adapter is registered for the provider the row names."""
 
 
-#: Statuses a poll sweep may act on: the row holds a provider job and is not
-#: waiting on a human decision.
 _POLLABLE_STATUSES: frozenset[GenerationStatus] = frozenset(
     {GenerationStatus.RUNNING, GenerationStatus.BLOCKED_PROVIDER}
 )
@@ -348,6 +344,11 @@ class GenerationExecutor:
         polling harder. A row that already reached a terminal status is returned as
         ``NO_OP`` rather than re-polled, so resuming a finished row cannot deliver
         its output twice.
+
+        An unregistered provider is an operator precondition, not a property of the
+        job, so it raises before any ledger write. Recording it as a row failure
+        would be terminal, and registering the provider is the remedy — which only
+        works while the row is still pollable.
         """
         row = self._ledger.get_row(project_id, generation_id)
         if row is None:
@@ -360,12 +361,6 @@ class GenerationExecutor:
         if is_terminal(row.status):
             result.outcomes.append(_outcome(row, RowOutcomeKind.NO_OP))
             return result
-        # An unregistered provider is an *operator* precondition, not a property of
-        # the job. Raising keeps the row exactly as it was: routing through
-        # `_poll_row` used to write FAILED, which is terminal, so a row whose
-        # `provider` string merely named something not yet registered could never be
-        # polled again once it was. Registering the provider and retrying is the
-        # remedy, and it only works while the row is still pollable.
         if row.provider not in self._providers:
             raise GenerationRowProviderMissing(f"Provider '{row.provider}' not registered.")
         result.processed = 1
