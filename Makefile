@@ -100,11 +100,20 @@ product-gate: ## Enforce the working-product acceptance gate
 	@$(UV_RUN) python -m film_pipeline.cli.product_gate
 
 enola: ## Grade architecture against the pinned baseline (must exit 0)
-	@enola check --baseline=docs/modular-architecture/enola-out \
+	@enola check --fail-on=cycles \
+	    --baseline=docs/modular-architecture/enola-out \
 	    docs/modular-architecture/enola-config.yaml; \
 	  code=$$?; \
 	  echo "  enola exit $$code (0 clean, 1 regression, 2 error, 3 declined)"; \
 	  exit $$code
+
+enola-baseline: ## Re-pin the docs-local baseline from the current clean HEAD
+	@test -z "$$(git status --porcelain)" || { \
+	  echo "  refusing: the tree is dirty. A baseline pinned from a dirty tree"; \
+	  echo "  records facts for files that are in no commit, and the next clean"; \
+	  echo "  check will report the committed tree as a regression."; exit 1; }
+	@enola baseline pin docs/modular-architecture/enola-config.yaml
+	@$(MAKE) enola
 
 precommit: ## Run all pre-commit hooks
 	$(UV_RUN) pre-commit run --all-files

@@ -46,6 +46,28 @@ ignore:
   - "docs/**"
 extractors:
   - python
+# The failure policy belongs in the config, not in a flag a caller can forget.
+# Doc 10 B3: this installed enola (0.4.25) defaults `--fail-on` to **none**, so
+# the documented `enola check --baseline=...` exited 0 while printing "nothing
+# enforced: no policy set" — an exit-0 receipt that certified nothing. AGENTS.md
+# said cycles were the default; that was true of an older CLI.
+#
+# `cycles` is the only explainer promoted to blocking, matching
+# `06-independent-review-and-decision.md` §4: tighten a dependency only when it
+# removes a proven cycle or unsafe reach-in. The heuristic explainers
+# (god-class, hotspots, complexity-outliers, dependency-depth, exported-surface)
+# stay advisory — they are claims to verify against the source, not verdicts, and
+# the trees that "fix" them tend to be worse than the ones that read them.
+#
+# Note for anyone extending this list: a **freshly pinned** baseline cannot catch
+# a new cycle. It grades the working tree against a snapshot, so with the baseline
+# regenerated from the same commit an injected back-edge still exits 0. The real
+# cycle check is `tests/unit/architecture/test_package_acyclicity.py`; this gate
+# catches *drift from the pinned state*, which is a different question.
+check:
+  fail_on:
+    - cycles
+  min_confidence: 1.0
 output:
   dir: "docs/modular-architecture/enola-out"
   max_context_tokens: 16000

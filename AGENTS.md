@@ -54,12 +54,20 @@ re-exporting still *passes at runtime* (Python resolves the attribute), and only
 and it must stay at exit 0 with no new *blocking* finding:
 
 ```bash
-enola check --baseline=docs/modular-architecture/enola-out \
+make enola      # wraps the command below and propagates its exit code
+enola check --fail-on=cycles --baseline=docs/modular-architecture/enola-out \
             docs/modular-architecture/enola-config.yaml
 ```
 
 Rules for using it:
 
+- **Pass `--fail-on=cycles` explicitly.** This installed enola (`0.4.25`) defaults
+  `--fail-on` to **none**, so a bare `enola check --baseline=...` prints
+  *"nothing enforced: no policy set"* and exits **0** no matter what it found. An
+  exit-0 receipt from that command certifies nothing, and an earlier version of
+  this file was wrong to call cycles "the default" — that was an older CLI. The
+  policy is also stated in `enola-config.yaml`, but this CLI does not read it from
+  there (doc 10 B3), so the flag is what actually enforces; `make enola` supplies it.
 - **Run it before every commit, and again on the committed tree.** A clean
   `make ci-check` says nothing about structure.
 - **Use the docs-local baseline.** `docs/modular-architecture/enola-out` plus
@@ -75,18 +83,25 @@ Rules for using it:
   **clean** HEAD (`enola --generate`, then `enola baseline clear` + `baseline pin`)
   and confirm the fresh snapshot holds 0 facts for packages that no longer exist.
   Never fix a FAIL by editing a filter or threshold; fix the baseline's currency.
-- **A freshly pinned baseline cannot catch new cycles.** It grades against a
-  snapshot, not the working tree: with the baseline regenerated from the current
-  commit, an injected `schemas -> orchestration` back-edge still exits 0. That check
-  lives in `tests/unit/architecture/test_package_acyclicity.py` — keep it, and keep
-  it scoped to cycles. It is not a duplicate of this gate.
+- **Know what a `cycles` regression here can and cannot mean.** The explainer
+  groups by directory, so a top-level package is one node and its subpackages
+  (`orchestration`, `orchestration/nodes`, `orchestration/subgraphs`) are others;
+  a cycle "through a package root" is usually an edge that exists only for the
+  type checker, which does not exist at runtime. The authoritative package-cycle
+  check is `tests/unit/architecture/test_package_acyclicity.py` — it reads function
+  bodies and ignores type-only edges. If the two disagree, the test is right about
+  *runtime* cycles and the explainer is reporting a type-only dependency.
 - **Exit codes:** `0` clean, `1` regression (policy violated), `2` error
   (gate could not run — no baseline, bad flag), `3` declined (baseline not
   comparable). Anything but `0` must be resolved or explained, not ignored.
-- **`cycles` is the failure policy** (`--fail-on` defaults to it). Heuristic
-  explainers — `god-class`, `hotspots`, `complexity-outliers`, `dependency-depth`,
-  `exported-surface` — report as *advisory* and do not fail the gate. Treat them
-  as claims to verify against the source, not as verdicts.
+- **Heuristic explainers are advisory.** `god-class`, `hotspots`,
+  `complexity-outliers`, `dependency-depth` and `exported-surface` report and do
+  not fail the gate. Treat them as claims to verify against the source, not as
+  verdicts.
+- **A freshly pinned baseline cannot catch a new cycle.** It grades against a
+  snapshot: regenerate it from the same commit and an injected back-edge still
+  exits 0. Keep the architecture test for that; this gate catches *drift from the
+  pinned state*, which is a different question.
 - **Never lower the count by changing an Enola filter or threshold.** The count is
   evidence, not a target.
 - A refactor is expected to *change* coupling, so "new coupling" output is normal.
