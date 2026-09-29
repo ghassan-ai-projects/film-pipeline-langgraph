@@ -7,7 +7,10 @@ from typing import TYPE_CHECKING, Any
 from pydantic import Field
 
 from film_pipeline.filmspec import is_text_only_policy
-from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.executor import (
+    GenerationExecutor,
+    GenerationRowError,
+)
 from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
@@ -21,9 +24,6 @@ from ..helpers import (
 )
 
 if TYPE_CHECKING:
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob
-    from film_pipeline.schemas.base import GenerationStatus
     from film_pipeline.schemas.generation import GenerationLedgerRow
 
 
@@ -168,92 +168,40 @@ async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> d
     )
 
 
-def _poll_row_status(
-    mgr: GenerationLedgerManager,
-    project_id: str,
-    generation_id: str,
-    adapter: BaseProviderAdapter,
-    job: ProviderJob,
-) -> tuple[str, int] | str:
-    """Poll the provider job, recording poll failures on the ledger row.
-
-    Returns ``(provider_status, polls)`` or the error message on failure.
-    """
-    try:
-        result = adapter.poll(job)
-    except Exception as exc:
-        mgr.update_row(
-            project_id,
-            generation_id,
-            error_code="poll_failed",
-            blocking_reason=str(exc)[:200],
-        )
-        return f"Poll failed: {exc}"
-    return result.status, result.polls
-
-
-def _generation_status(provider_status: str) -> GenerationStatus:
-    """Map a provider job status to its ledger generation status."""
-
-    try:
-        job_status = ProviderJobStatus(provider_status)
-    except ValueError:
-        return GenerationStatus.RUNNING
-    return {
-        ProviderJobStatus.COMPLETED: GenerationStatus.COMPLETED,
-        ProviderJobStatus.FAILED: GenerationStatus.FAILED,
-        ProviderJobStatus.SUBMITTED: GenerationStatus.SUBMITTED,
-        ProviderJobStatus.PROCESSING: GenerationStatus.RUNNING,
-    }.get(job_status, GenerationStatus.RUNNING)
-
-
 async def resume_generation_polling(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
-    """Poll the provider for a generation's status and update the ledger."""
+    """Poll the provider for a generation's status through the owning lifecycle.
+
+    ``generation.GenerationExecutor`` owns the transition: this handler resolves
+    the active project, asks it to poll one row, and projects the typed outcome.
+    It maps no provider status, downloads nothing, and writes no ledger row of
+    its own — that duplication is what let an MCP-driven completion reach
+    ``COMPLETED`` without the delivered output the executor requires.
+    """
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
     rt = ctx.runtime
     active = ctx.project_state()
     project_id = str(active["project_id"])
-    from datetime import UTC, datetime
 
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-    row = mgr.get_row(project_id, generation_id)
-    if row is None:
+    store = _services(rt).artifact_store
+    executor = GenerationExecutor(store, rt.provider_adapters)
+    try:
+        result = executor.poll_row(project_id, generation_id)
+    except GenerationRowError as exc:
+        return _error(str(exc))
+
+    row = GenerationLedgerManager(store).get_row(project_id, generation_id)
+    if row is None:  # pragma: no cover - poll_row proved the row exists
         return _error(f"Generation '{generation_id}' not found.")
-    if not row.provider_job_id:
-        return _error(f"Generation '{generation_id}' has no provider_job_id — not yet submitted.")
-
-    adapter = rt.get_provider(row.provider)
-    if adapter is None:
-        return _error(f"Provider '{row.provider}' not registered.")
-
-    job = ProviderJob(
-        job_id=row.provider_job_id,
-        shot_id=row.shot_id,
-        provider_id=row.provider,
-        model=row.model,
-        status=ProviderJobStatus.SUBMITTED,
-        polls=row.poll_count,
-    )
-    polled = _poll_row_status(mgr, project_id, generation_id, adapter, job)
-    if isinstance(polled, str):
-        return _error(polled)
-    provider_status, polls = polled
-
-    new_status = _generation_status(provider_status)
-    mgr.update_row(
-        project_id,
-        generation_id,
-        status=new_status,
-        poll_count=polls,
-        last_polled_at=datetime.now(UTC),
-    )
+    for outcome in result.outcomes:
+        if outcome.operator_error:
+            return _error(f"Poll failed: {outcome.detail}")
     return _ok(
         generation_id=generation_id,
         shot_id=row.shot_id,
-        status=str(new_status.value),
-        poll_count=polls,
+        status=str(row.status.value),
+        poll_count=row.poll_count,
     )
 
 

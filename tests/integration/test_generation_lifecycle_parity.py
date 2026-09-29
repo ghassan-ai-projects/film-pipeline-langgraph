@@ -4,22 +4,21 @@ Source of the invariants: ``docs/modularity-improvements/09-functional-boundarie
 finding F2.
 
 The clip-generation lifecycle — submit, poll, deliver, advance the durable
-ledger — has two implementations reachable in production: ``GenerationExecutor``
-(driven by the graph and the operator use cases) and
-``mcp.tools.generation.dispatch`` (driven by the MCP operator tools). Both write
-the *same* ledger artifact, so a divergence between them is a durable
-representation bug rather than a style problem: whichever path the operator
-happens to use decides whether a completed row carries delivered output.
+ledger — is owned by ``GenerationExecutor``. The MCP operator tools in
+``mcp.tools.generation.dispatch`` drive that owner and project its typed outcome
+instead of reimplementing it. Both write the *same* ledger artifact, so a
+divergence between them is a durable representation bug rather than a style
+problem: whichever path the operator happens to use would otherwise decide
+whether a completed row carries delivered output.
 
 Every test states one invariant on the persisted ledger row and the project's
 asset tree, then asserts it through a named entry path. The single statement of
 "a completed row is a real delivered output" lives in ``_assert_delivered`` and
 is applied to both paths, so the two can only agree or fail.
 
-The MCP-side tests that the current code cannot satisfy are marked
-``xfail(strict=True)``. ``xfail_strict`` is configured project-wide, so the fix
-turns each into an XPASS failure: the marker cannot outlive the defect, and the
-list of markers *is* the work list for the consolidation slice.
+The tests that pinned the divergence arrived first, as ``xfail(strict=True)``
+markers, and were unmarked by the slice that fixed them; ``xfail_strict`` is
+configured project-wide so a marker cannot outlive its defect.
 """
 
 from __future__ import annotations
@@ -56,20 +55,6 @@ CallTool = Callable[..., Any]
 PROJECT_ID = "gen-parity"
 PROVIDER = "mock-video-provider"
 MODEL = "mock-fast"
-
-#: The reason shared by the MCP-side markers: MCP reimplements the lifecycle.
-_MCP_DIVERGENCE = (
-    "F2 (docs/modularity-improvements/09-functional-boundaries.md): "
-    "mcp.tools.generation.dispatch reimplements the generation lifecycle instead "
-    "of driving GenerationExecutor, so the persisted result differs by entry path."
-)
-
-#: The reason shared by the poll-failure markers: one policy, two outcomes.
-_POLL_FAILURE_POLICY = (
-    "F2: a transient poll failure has one policy in GenerationExecutor (mark the "
-    "row FAILED) and another in MCP (record the error, leave the row running). "
-    "The single policy must keep a job the provider accepted recoverable."
-)
 
 
 @pytest.fixture
@@ -183,10 +168,9 @@ def test_mcp_start_batch_records_submission_evidence(
 ) -> None:
     """The one submit invariant MCP already satisfies; the consolidation keeps it.
 
-    MCP reimplements submission (``_submit_one_row``), but the fields it writes
-    agree with ``GenerationExecutor._dispatch_row`` today. This test is
-    deliberately *not* marked: it is the parity the consolidation must preserve,
-    not a divergence it must repair.
+    The submit fields MCP wrote on its own agreed with
+    ``GenerationExecutor._dispatch_row``; this is the parity the consolidation
+    had to preserve, so it was never marked as a divergence.
     """
     generation_id = _plan_and_approve(rt, ["S001"])
 
@@ -195,7 +179,6 @@ def test_mcp_start_batch_records_submission_evidence(
     _assert_submitted(rt, generation_id)
 
 
-@pytest.mark.xfail(strict=True, reason=_MCP_DIVERGENCE)
 def test_mcp_resume_polling_delivers_completed_job(rt: StudioRuntime, call_tool: CallTool) -> None:
     generation_id = _plan_and_approve(rt, ["S001"])
     call_tool(start_generation_batch, {}, runtime=rt)
@@ -206,7 +189,6 @@ def test_mcp_resume_polling_delivers_completed_job(rt: StudioRuntime, call_tool:
     _assert_delivered(rt, generation_id)
 
 
-@pytest.mark.xfail(strict=True, reason=_MCP_DIVERGENCE)
 def test_mcp_resume_polling_does_not_deliver_the_same_job_twice(
     rt: StudioRuntime, call_tool: CallTool
 ) -> None:
@@ -224,7 +206,6 @@ def test_mcp_resume_polling_does_not_deliver_the_same_job_twice(
 # ── poll failure: one policy, and a job the provider accepted stays live ─────
 
 
-@pytest.mark.xfail(strict=True, reason=_POLL_FAILURE_POLICY)
 def test_executor_poll_failure_leaves_the_row_recoverable(rt: StudioRuntime) -> None:
     generation_id = _plan_and_approve(rt, ["S001"])
     executor = _executor(rt)
@@ -244,7 +225,6 @@ def test_executor_poll_failure_leaves_the_row_recoverable(rt: StudioRuntime) -> 
     _assert_delivered(rt, generation_id)
 
 
-@pytest.mark.xfail(strict=True, reason=_POLL_FAILURE_POLICY)
 def test_mcp_poll_failure_leaves_the_row_recoverable(
     rt: StudioRuntime, call_tool: CallTool
 ) -> None:

@@ -9,7 +9,11 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from film_pipeline.generation.executor import GenerationExecutor, GenerationStepResult
+from film_pipeline.generation.executor import (
+    GenerationExecutor,
+    GenerationStepResult,
+    RowOutcomeKind,
+)
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.providers.mock_provider import MockVideoProvider
 from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -131,7 +135,7 @@ class TestGenerationExecutor:
         executor = GenerationExecutor(store, providers={})
         result = executor.plan("proj", provider="mock-video-provider", model="mock-fast")
         assert result.processed == 2
-        assert result.details[0]["shot_id"] == "S001"
+        assert result.outcomes[0].shot_id == "S001"
         assert executor.shot_ids("proj") == ["S001", "S002"]
 
     def test_plan_idempotent(self, store: ArtifactStore) -> None:
@@ -173,7 +177,7 @@ class TestGenerationExecutor:
         result = executor.start("proj")
         assert result.processed == 2
         assert result.running == 2
-        assert all(d["provider_job_id"] for d in result.details)
+        assert all(outcome.provider_job_id for outcome in result.outcomes)
 
     def test_start_skips_already_running(
         self, store: ArtifactStore, entry: ProviderRegistryEntry
@@ -346,7 +350,8 @@ class TestGenerationExecutor:
         result = executor.start("proj")
         assert result.processed == 2
         assert result.failed == 2
-        assert "submit exploded" in result.details[0]["error"]
+        assert result.outcomes[0].operator_error is True
+        assert "submit exploded" in result.outcomes[0].detail
 
     def test_poll_once_poll_exception(
         self, store: ArtifactStore, entry: ProviderRegistryEntry
@@ -392,7 +397,16 @@ class TestGenerationExecutor:
         result = executor.poll_once("proj")
         assert result.processed == 2
         assert result.failed == 2
-        assert "poll exploded" in result.details[0]["error"]
+        assert result.outcomes[0].kind is RowOutcomeKind.POLL_FAILED
+        assert "poll exploded" in result.outcomes[0].detail
+        # A job the provider accepted stays live: a failed poll is recoverable.
+        from film_pipeline.generation.ledger import GenerationLedgerManager
+        from film_pipeline.schemas.base import GenerationStatus
+
+        assert all(
+            row.status is GenerationStatus.BLOCKED_PROVIDER
+            for row in GenerationLedgerManager(store).list_rows("proj")
+        )
 
     def test_load_shot_bible_legacy(self, store: ArtifactStore) -> None:
         store.save(
