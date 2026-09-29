@@ -113,6 +113,18 @@ class GraphHost(Protocol):
         """Write one project's state to disk."""
         ...
 
+    def apply_project_state(self, project_id: str, state: dict[str, Any]) -> None:
+        """Install *state* as the project's live state and persist it.
+
+        Declared here because this module replaces project state on every graph
+        run, approval and advance, and it must do so through the operation that
+        persists in the same call — writing ``rt.projects[id] = state`` directly is
+        the reach-in doc 10 B4 records. Stating it in the protocol means a
+        substitute runtime in a test has to provide it too, instead of the
+        requirement surfacing only when the real runtime is passed.
+        """
+        ...
+
     def record_audit(self, actor: str, action: str, **details: Any) -> None:
         """Append one audit event."""
         ...
@@ -389,8 +401,7 @@ def approve_phase(rt: GraphHost) -> dict[str, Any]:
 
     state = cast(dict[str, Any], _resume_after_approval(rt, active, current_phase))
 
-    rt.projects[active["project_id"]] = state
-    rt.persist_project_state(active["project_id"])
+    rt.apply_project_state(str(active["project_id"]), state)
     save_graph_state(rt, dict(state), active["project_id"])
     _approve_phase_artifacts(rt, active["project_id"], current_phase)
 
@@ -538,8 +549,7 @@ def run_validation(
     consensus_ref = working.get("consensus_report_ref")
     if consensus_ref:
         active["consensus_report_ref"] = consensus_ref
-    rt.projects[project_id_value] = active
-    rt.persist_project_state(project_id_value)
+    rt.apply_project_state(project_id_value, active)
     rt.record_audit(
         "human",
         "run_validation",
@@ -643,8 +653,7 @@ def request_revision(rt: GraphHost, note: str = "") -> dict[str, Any]:
         _SERVICES_CTX.reset(token)
     state = cast(dict[str, Any], state)
 
-    rt.projects[active["project_id"]] = state
-    rt.persist_project_state(active["project_id"])
+    rt.apply_project_state(str(active["project_id"]), state)
     save_graph_state(rt, dict(state), active["project_id"])
 
     rt.record_audit(
@@ -659,8 +668,7 @@ def request_revision(rt: GraphHost, note: str = "") -> dict[str, Any]:
 def advance_to_next_phase(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any]:
     current_phase = str(state.get("current_phase", ""))
     if current_phase not in PHASE_SEQUENCE:
-        rt.projects[state["project_id"]] = state
-        rt.persist_project_state(state["project_id"])
+        rt.apply_project_state(str(state["project_id"]), state)
         return state
 
     successor = next_phase(current_phase)
@@ -668,13 +676,11 @@ def advance_to_next_phase(rt: GraphHost, state: dict[str, Any]) -> dict[str, Any
         final_state = dict(state)
         final_state["completed"] = True
         final_state["human_approval_phase"] = ""
-        rt.projects[state["project_id"]] = final_state
-        rt.persist_project_state(state["project_id"])
+        rt.apply_project_state(str(state["project_id"]), final_state)
         return final_state
 
     advanced_state = run_phase_node(rt, state, successor)
-    rt.projects[state["project_id"]] = advanced_state
-    rt.persist_project_state(state["project_id"])
+    rt.apply_project_state(str(state["project_id"]), advanced_state)
     return advanced_state
 
 

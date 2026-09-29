@@ -740,3 +740,73 @@ def test_the_write_detector_sees_every_shape_it_was_written_for() -> None:
             assert hits == [], f"{name}: a function handle is not a module handle: {hits}"
         else:
             assert hits == [("studio", hits[0][1])], f"{name}: not detected: {hits}"
+
+
+# --- 5. No handler replaces a project's live state mapping ----------------
+
+
+def _measure_live_state_replacements() -> list[str]:
+    """Files outside `studio` that assign into ``runtime.projects[...]``.
+
+    Doc 10 B4. `StudioRuntime.projects` is a public mutable mapping of live
+    project state, and `get_project`/`get_active` return its *members*, not copies.
+    A handler writing ``rt.projects[project_id] = state`` therefore replaces live
+    runtime state with no operation boundary, no required persistence, and no audit
+    — and it is invisible to every other guard here, because each field is
+    publicly named.
+
+    Measured when this guard was written: four such writes, in `mcp/tools/
+    intake.py`, `mcp/tools/projects.py`, `mcp/tools/helpers.py` and
+    `mcp/tools/generation/_text_only.py`. All four were also **redundant** — the
+    handler had already mutated the live mapping through the handle
+    `project_state()` returned, so the assignment was a self-assignment. That is
+    why the repair is `RuntimePort.apply_project_state` rather than a copy: the
+    problem was never the extra write, it was that the write was the *only* place
+    the intent appeared.
+
+    `studio` is exempt: it owns the mapping.
+    """
+    found: list[str] = []
+    for path in _source_files():
+        parts = path.relative_to(_SRC).parts
+        if len(parts) > 1 and parts[0] == "studio":
+            continue
+        relative = str(path.relative_to(_SRC))
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if not isinstance(target, ast.Subscript):
+                    continue
+                if not isinstance(target.value, ast.Attribute):
+                    continue
+                if target.value.attr != "projects":
+                    continue
+                found.append(f"{relative}:{node.lineno}")
+    return sorted(found)
+
+
+def test_no_handler_replaces_live_project_state_directly() -> None:
+    """State replacement goes through the declared operation, not the mapping."""
+    found = _measure_live_state_replacements()
+    assert found == [], (
+        "these sites assign into `runtime.projects[...]` from outside `studio`: "
+        f"{found}. Call `runtime.apply_project_state(project_id, state)`, which is "
+        "the declared operation and persists in the same call. If a site genuinely "
+        "cannot use it, the reason belongs in this test, not in the table."
+    )
+
+
+def test_the_live_state_guard_sees_the_shape_it_was_written_for() -> None:
+    """Guard the guard: the write this check exists to catch, on a synthetic file."""
+    source = "def handler(rt):\n    rt.projects['p'] = {'a': 1}\n"
+    hits = [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Subscript)
+        and isinstance(target.value, ast.Attribute)
+        and target.value.attr == "projects"
+    ]
+    assert hits == [2], f"the live-state detector no longer sees the write: {hits}"

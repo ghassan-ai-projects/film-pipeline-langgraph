@@ -63,8 +63,10 @@ def _register_active_artifact_ref(
     """
     active[state_key] = ref
     active.setdefault("artifact_refs", []).append(ref)
-    rt.projects[project_id] = active
-    rt.persist_project_state(project_id)
+    # `active` IS the runtime's live mapping (measured: `get_project` returns it
+    # rather than a copy), so this write happens through the one operation that
+    # says so and persists in the same call.
+    rt.apply_project_state(project_id, active)
 
 
 def missing_profile_credentials(

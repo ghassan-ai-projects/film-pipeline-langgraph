@@ -73,6 +73,5 @@ def _complete_text_only_generation(
     _apply_text_only_state(active, requests)
     _ensure_text_only_manifest_entry(store, project_id)
 
-    rt.projects[project_id] = active
-    rt.persist_project_state(project_id)
+    rt.apply_project_state(project_id, active)
     return _ok(text_only=True, completed=len(requests), rows=[])

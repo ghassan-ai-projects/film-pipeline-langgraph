@@ -151,7 +151,7 @@ def _run_intake_for_idea(
         state["idea"] = idea
         state = rt.run_graph(state)
         state["generation_policy"] = str(args.get("generation_policy", "generate"))
-        rt.projects[project_id] = state
+        rt.apply_project_state(project_id, state)
     return state
 
 

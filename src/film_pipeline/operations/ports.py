@@ -91,6 +91,17 @@ class RuntimePort(Protocol):
         """Write one project's state to disk."""
         ...
 
+    def apply_project_state(self, project_id: str, state: dict[str, Any]) -> None:
+        """Install *state* as the project's live state and persist it.
+
+        The declared way for a caller outside `studio` to replace a project's
+        state. Writing ``runtime.projects[project_id] = state`` directly is the
+        reach-in doc 10 B4 records; this is the operation that replaces it, and it
+        persists in the same call so "replace the state" and "the change is
+        durable" cannot come apart.
+        """
+        ...
+
     def record_audit(self, actor: str, action: str, **details: Any) -> None:
         """Append one audit event."""
         ...
