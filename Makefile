@@ -100,6 +100,10 @@ product-gate: ## Enforce the working-product acceptance gate
 	@$(UV_RUN) python -m film_pipeline.cli.product_gate
 
 enola: ## Grade architecture against the pinned baseline (must exit 0)
+	@# `make` reports 2 for ANY failing recipe, so the line below is the only place
+	@# the real status is legible: read "enola exit N" in the output, not `$?`.
+	@# 0 clean, 1 regression, 2 error (gate could not run), 3 declined (baseline
+	@# not comparable) — three different situations that `make` cannot distinguish.
 	@enola check --fail-on=cycles \
 	    --baseline=docs/modular-architecture/enola-out \
 	    docs/modular-architecture/enola-config.yaml; \

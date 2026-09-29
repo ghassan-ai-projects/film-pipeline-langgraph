@@ -71,7 +71,12 @@ _ROOT_MODULE_OF_SELF: str = "."
 
 #: Measured 2026-09-29 by `_root_self_imports()`. Lower it when a package drops
 #: a re-export; raising it needs the reason in the commit message.
-_SELF_IMPORT_CEILING: int = 556
+#:
+#: This read 556 while the function returned **2**: the filter re-parsed a
+#: human-readable string and rejected every real site, so the ceiling carried ~554
+#: units of slack and an injected 554 sites passed with the guard green. The number
+#: is now the measured count of the shape the docstring describes.
+_SELF_IMPORT_CEILING: int = 100
 
 
 def _packages() -> list[str]:
@@ -197,9 +202,13 @@ class _EdgeCollector(ast.NodeVisitor):
     at runtime.
     """
 
-    def __init__(self, importer_node: str | None, packages: set[str]) -> None:
+    def __init__(
+        self, importer_node: str | None, packages: set[str], importer_module: str = ""
+    ) -> None:
         self._importer_node = importer_node
         self._packages = packages
+        # The importer's own dotted module path, for resolving relative imports.
+        self._importer_module = importer_module
         self.edges: set[tuple[str, str]] = set()
         self._type_checking_depth = 0
 
@@ -227,7 +236,16 @@ class _EdgeCollector(ast.NodeVisitor):
             self._add(alias.name)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        if self._type_checking_depth or node.level:
+        if self._type_checking_depth:
+            return
+        if node.level:
+            # A relative import is a real runtime edge and used to be dropped here,
+            # which made a cycle spelled `from ..nodes import _x` invisible while the
+            # identical absolute spelling was reported. `test_boundary_law.py`
+            # resolved these from the start, so the two guards disagreed about the
+            # same file.
+            for module in _resolve_relative(node, self._importer_module):
+                self._add(module)
             return
         if node.module:
             self._add(node.module)
@@ -263,16 +281,58 @@ def _collect_module_constants(tree: ast.Module) -> None:
             _MODULE_CONSTANTS[target.id] = node.value.value
 
 
+def _module_path_of(relative_path: str) -> str:
+    """The dotted ``film_pipeline`` module path of a source-relative path."""
+    parts = Path(relative_path).with_suffix("").parts
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(["film_pipeline", *parts])
+
+
+def _resolve_relative(node: ast.ImportFrom, importer_module: str) -> list[str]:
+    """Absolute ``film_pipeline`` module paths a relative import names.
+
+    One dot means "this package", two means "the parent package", and so on, which
+    is exactly Python's rule: the base is the importing module's own package with
+    ``node.level - 1`` trailing components removed. ``from ..nodes import _x``
+    inside ``film_pipeline.orchestration.subgraphs.qc`` resolves to
+    ``film_pipeline.orchestration.nodes`` and to the ``_x`` symbol under it.
+
+    Returns ``[]`` when the importer's module path is unknown (a synthetic source
+    with no path): guessing a base would invent edges.
+    """
+    if not importer_module:
+        return []
+    parts = importer_module.split(".")
+    # Drop the module itself; `parts` is now the containing package.
+    base = parts[:-1]
+    for _ in range(node.level - 1):
+        if not base:
+            return []
+        base = base[:-1]
+    if not base:
+        return []
+    prefix = ".".join(base)
+    if node.module:
+        return [f"{prefix}.{node.module}"]
+    # `from .. import nodes` — the module is named in the alias.
+    return [f"{prefix}.{alias.name}" for alias in node.names if alias.name != "*"]
+
+
 def _edges_in(
-    tree: ast.Module, importer_node: str | None, packages: set[str]
+    tree: ast.Module,
+    importer_node: str | None,
+    packages: set[str],
+    importer_module: str = "",
 ) -> set[tuple[str, str]]:
     """Package edges one parsed module creates, honouring ``TYPE_CHECKING``.
 
     *importer_node* is the single package the file belongs to
     (`_importing_node`); ``None`` for a file in the root namespace, which imports
-    without being inside any package.
+    without being inside any package. *importer_module* is its full dotted path and
+    is what relative imports resolve against.
     """
-    collector = _EdgeCollector(importer_node, packages)
+    collector = _EdgeCollector(importer_node, packages, importer_module)
     collector.visit(tree)
     return collector.edges
 
@@ -296,8 +356,9 @@ def _cross_package_edges(
     if sources is not None:
         for name, tree in sources.items():
             importer_node = _importing_node(tuple(Path(name).parts), packages)
+            importer_module = _module_path_of(name)
             files = {f"src/film_pipeline/{name}"}
-            for edge in _edges_in(tree, importer_node, packages):
+            for edge in _edges_in(tree, importer_node, packages, importer_module):
                 edges.setdefault(edge, set()).update(files)
         return edges
 
@@ -306,13 +367,14 @@ def _cross_package_edges(
             continue
         relative = path.relative_to(_SRC)
         importer_node = _importing_node(relative.parts, packages)
+        importer_module = _module_path_of(str(relative))
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:  # pragma: no cover - a parse error is a different failure
             continue
         _collect_module_constants(tree)
         files = {str(path.relative_to(_SRC.parent.parent))}
-        for edge in _edges_in(tree, importer_node, packages):
+        for edge in _edges_in(tree, importer_node, packages, importer_module):
             edges.setdefault(edge, set()).update(files)
     return edges
 
@@ -700,17 +762,29 @@ def _self_edge_sources(sources: Mapping[str, ast.Module] | None = None) -> list[
     for. Whether it is *prohibited* is a separate question — this reports, so a
     decision about the package's own surface is made deliberately.
     """
+    return [f"{path}: imports {module} by full name" for path, module in _self_edge_sites(sources)]
+
+
+def _self_edge_sites(
+    sources: Mapping[str, ast.Module] | None = None,
+) -> list[tuple[str, str]]:
+    """The same measurement, as ``(relative_path, imported_module)`` pairs.
+
+    The pair is the primitive and `_self_edge_sources` is a readable projection of
+    it. That separation exists because re-parsing the rendered string is what broke
+    `_root_self_imports`: it cut on ``": "`` and counted dots in the *sentence*.
+    A caller that needs to filter on a field reads the field.
+    """
+    found: list[tuple[str, str]] = []
     if sources is not None:
         packages = set(_packages())
-        found: list[str] = []
         for name, tree in sources.items():
             importer = _importing_node(tuple(Path(name).parts), packages)
-            for source, target in _edges_in(tree, importer, packages):
+            for source, target in _edges_in(tree, importer, packages, _module_path_of(name)):
                 if source == target:
-                    found.append(f"{name}: imports {target} by full name")
+                    found.append((name, _reached_module(token=target)))
         return sorted(found)
 
-    found = []
     for path in sorted(_SRC.rglob("*.py")):
         if "__pycache__" in path.parts:
             continue
@@ -725,8 +799,17 @@ def _self_edge_sources(sources: Mapping[str, ast.Module] | None = None) -> list[
             for module in modules:
                 parts = module.split(".")
                 if len(parts) >= 2 and parts[0] == "film_pipeline" and parts[1] == package:
-                    found.append(f"{relative}: imports {module} by full name")
+                    found.append((str(relative), module))
     return sorted(found)
+
+
+def _reached_module(*, token: str) -> str:
+    """The imported module spelled from a package token, e.g. ``agents``.
+
+    Only used for synthetic sources, where the edge target is a package node rather
+    than the module path the source literally named.
+    """
+    return f"film_pipeline.{token}"
 
 
 def _root_self_imports(sources: Mapping[str, ast.Module] | None = None) -> list[str]:
@@ -736,16 +819,26 @@ def _root_self_imports(sources: Mapping[str, ast.Module] | None = None) -> list[
     naming `<package>.<leaf>`. A leaf inside the package importing its own
     package root is the same shape seen from the other side and is not counted —
     every module does that.
+
+    **This function measured 2 sites against a ceiling of 556 until an adversarial
+    review caught it.** The filter parsed the entry string with
+    ``partition(": ")`` and then counted dots in what remained — but
+    `_self_edge_sources` emits ``"{path}: imports {module} by full name"``, so the
+    "module" half was the whole sentence and its dot count was 2, not 3. Every real
+    site was rejected, the guard's own ``assert found`` passed on the two
+    accidental survivors, and ~554 new sites of the exact shape it exists to
+    police would have gone unnoticed. The count is now taken from the structured
+    value rather than by re-parsing a human-readable string.
     """
     found: list[str] = []
-    for entry in _self_edge_sources(sources):
-        path, _, module = entry.partition(": ")
+    for path, module in _self_edge_sites(sources):
         parts = Path(path).parts
         if len(parts) != 2 or parts[1] != "__init__.py":
             continue
-        if module.count(".") >= 3:
-            found.append(entry)
-    return found
+        # `<package>.<leaf>`: three dotted segments including `film_pipeline`.
+        if module.count(".") == 2:
+            found.append(f"{path}: imports {module} by full name")
+    return sorted(found)
 
 
 def test_the_cycle_check_sees_subpackages_as_nodes() -> None:
@@ -814,8 +907,12 @@ def test_the_self_edge_check_detects_an_injected_self_import() -> None:
         "storage/probe.py": ast.parse("from film_pipeline.storage import _layout\n"),
     }
     found = _self_edge_sources(injected)
-    assert found == ["storage/probe.py: imports storage by full name"], found
+    assert found == ["storage/probe.py: imports film_pipeline.storage by full name"], found
     assert _importing_node(("storage", "probe.py"), packages) == "storage"
+    # The same measurement as a structured pair, which is what a caller filtering
+    # on a field must use — re-parsing the rendered string is how the root filter
+    # came to measure 2 sites out of 98.
+    assert _self_edge_sites(injected) == [("storage/probe.py", "film_pipeline.storage")]
 
     # A cross-package import is not a self-edge, and must not be counted as one.
     foreign = {"storage/probe.py": ast.parse("from film_pipeline.schemas import base\n")}

@@ -280,3 +280,44 @@ def test_mcp_poll_failure_leaves_the_row_recoverable(
     result = call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
     assert result["ok"] is True
     _assert_delivered(rt, generation_id)
+
+
+def test_unregistered_provider_leaves_the_row_pollable(
+    rt: StudioRuntime, call_tool: CallTool
+) -> None:
+    """A missing adapter is an operator precondition, not a terminal row state.
+
+    Regression guard for the consolidation: routing this through `_poll_row` wrote
+    `FAILED`, which is terminal, so a row whose `provider` string merely named
+    something not yet registered could never be polled again once it was.
+    Registering the provider and retrying is the remedy, and it only works while
+    the row is still pollable.
+    """
+    generation_id = _plan_and_approve(rt, ["S001"])
+    call_tool(start_generation_batch, {}, runtime=rt)
+    GenerationLedgerManager(_store(rt)).update_row(
+        PROJECT_ID, generation_id, provider="missing-provider"
+    )
+    before = _row(rt, generation_id)
+
+    result = call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
+
+    assert result["ok"] is False
+    assert "not registered" in str(result["error"])
+    after = _row(rt, generation_id)
+    assert after.status is before.status, "a missing adapter must not change the row"
+    assert after.status not in TERMINAL_GENERATION_STATUSES
+    assert after.error_code is None
+    assert after.next_action == "poll"
+
+    # And the row still works once the provider exists.
+    _register_missing_provider(rt)
+    call_tool(resume_generation_polling, {"generation_id": generation_id}, runtime=rt)
+    _assert_delivered(rt, generation_id)
+
+
+def _register_missing_provider(rt: StudioRuntime) -> None:
+    """Point the row's provider name at a real adapter."""
+    adapter = rt.get_provider(PROVIDER)
+    assert adapter is not None
+    rt.register_provider("missing-provider", adapter)

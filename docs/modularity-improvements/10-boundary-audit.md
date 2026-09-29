@@ -293,3 +293,118 @@ steps. It is recorded here so the next attempt does not repeat the blind version
 - **`get_validation_report`'s live fallback and the QC failure channel** were
   closed by doc 09's slices, not by this document.
 - **B3's gate is a drift check, not a cycle check.** Keep both.
+
+## Adversarial review round
+
+Date: 2026-09-29, after the implementation above. Six independent reviewers were
+given the branch with different lenses — correctness, test-vacuity, guard
+self-audit, MCP contracts, persistence, hygiene — each told to reproduce what it
+claimed and to report its own injections. **Every issue below was then reproduced
+here before being fixed**, and the ones that were not real are recorded as such.
+
+The pattern worth keeping: the reviewers found five defects in *my own* work, and
+four of them were guards or tests that could not fail.
+
+### Fixed — behaviour
+
+**R1. A stale `provider` string wrote a terminal ledger state.**
+`GenerationExecutor.poll_row` routed an unregistered provider through `_poll_row`,
+which wrote `FAILED` — terminal — so a row whose `provider` merely named something
+not yet registered could never be polled again once it was. Reproduced: after an
+error response the row read `failed / wait_human / unknown_provider`, and
+`is_terminal(...)` was `True`. `origin/main` pre-checked the adapter and left the
+row untouched. Now `poll_row` raises `GenerationRowProviderMissing` before any
+write, the row is unchanged, and the error text matches `origin/main`
+(`"Provider 'x' not registered."`). Pinned by
+`test_unregistered_provider_leaves_the_row_pollable`, which also proves the row
+still delivers once the provider exists.
+
+**R2. A validator that crashed discarded every report that succeeded.** The handler
+returned an error for the whole run, so a phase with two validators where one
+raised produced a failed action and no evidence of the other's findings. The
+*contract* stays as it was — a crashing validator fails the action, which
+`test_run_validation_exception` pins — but the error now carries `reports`,
+`saved_refs` and `validator_failures`. The frozen envelope for an ordinary pass is
+unchanged, so `test_run_validation_report_and_ref_shape` still holds.
+
+**R3. `_validation_failures` was reported and then dropped.** `run_validation` read
+the channel into its outcome and never wrote it back, even though it is registered
+`full` in `ORCH_CHANNELS` and the QC path carries it — so a later reader of project
+state saw a clean pass. Reproduced: `outcome.failures == ('Boom: kaboom',)` while
+`project["_validation_failures"]` was `None`. Now carried back.
+
+**R4. `validation_report_refs` grew without bound** while `_validation_reports` was
+replaced, so the branch's own invariant (`len(refs) == len(reports)`, asserted by
+`_assert_evidence_is_durable`) held only on the first call. Reproduced: three runs
+gave `refs=1,2,3` against `reports=1,1,1`. The channel now describes the latest
+pass. Pinned by `test_refs_do_not_grow_across_passes`.
+
+### Fixed — guards that could not fail
+
+**R5. The cycle guard ignored relative imports.** `visit_ImportFrom` returned early
+on `node.level`, so a real cycle spelled `from ..nodes import _x` was invisible
+while the identical absolute spelling was reported — and `test_boundary_law.py`
+resolved relative imports correctly all along, so the two guards disagreed about
+the same file. Reproduced with a synthetic two-package cycle: relative spelling
+`[]`, absolute spelling `[['mcp.tools.bibles', 'mcp.tools.generation',
+'mcp.tools.bibles']]`. Relative imports now resolve against the importer's own
+module, and both spellings report the same cycle.
+
+**R6. `_root_self_imports()` measured 2 sites against a ceiling of 556.** The
+filter split the rendered entry on `": "` and counted dots in what remained — but
+`_self_edge_sources` emits `"{path}: imports {module} by full name"`, so the
+"module" half was the whole sentence and its dot count was 2, never 3. Every real
+site was rejected; the guard's own `assert found` passed on two accidental
+survivors; an injected 554 sites of the exact shape it polices left it green. The
+primitive is now the structured `(path, module)` pair with the string form as a
+projection, the count is the measured **98**, and the ceiling is **100**.
+
+**R7. The live-state guard missed the bypass it was written for.** It matched only
+`X.projects[...] = ...`; the review walked past it with
+`active = ctx.project_state(); active[pid] = state` — the same defect by the
+route the finding itself describes, because `project_state()` hands back the live
+mapping. Now matches a replacement on any name bound from
+`project_state()`/`get_project()`/`get_active()` in the same function, verified by
+injecting that exact bypass. Field writes (`active["idea"] = …`) are excluded by
+key, and `cli/driver.py` is recorded in `KNOWN_LIVE_STATE_MUTATIONS` as the one
+benign shape (headless composition root).
+
+**R8. `test_a_state_changing_action_persists_what_it_returns` could not fail.**
+Deleting `persist_project_state` from `apply_project_state` left all five tests in
+the file green, because `create_project` had written a record earlier in the same
+call. Replaced by `test_the_operation_persists_in_the_same_call`, which snapshots
+the record, changes the state, calls the operation, and requires the file to
+change — it fails when the persist line is removed.
+
+### Not fixed, deliberately
+
+- **`make enola` reports exit 2 whatever `enola` returned.** That is GNU `make`
+  semantics, reproduced on a two-line probe makefile, not a defect in the recipe:
+  the real status is printed on the `enola exit N` line. The target now says so at
+  the call site, since `make` cannot distinguish regression (1) from declined (3).
+- **`enola-baseline` will pin a baseline that launders an existing cycle.** Its
+  precondition is tree cleanliness, which is orthogonal. This is the documented
+  property of a pinned baseline (see the config comment and AGENTS.md), not a bug
+  in the target.
+- **A raised `KNOWN_PRIVATE_REACH_INS` row with matching new reach-ins is
+  invisible.** Inherent to a per-row ratchet, and a reviewer sees the row edit.
+- **`mcp.tools.get_runtime` remains exported**, for the reason recorded above.
+
+### Reviewers' claims not reproduced
+
+- "`_inherent_nesting_only` filters real cycles" — brute-forced over 16,204 cyclic
+  graphs of 4 and 6 nodes: none contained a sibling edge, so none was suppressed.
+- "The injected-cycle acceptance test re-implements the detector" — it calls
+  `_cycles`/`_mutual_pairs`/`_inherent_nesting_only` from the module under test;
+  only the input graph is synthetic.
+- "The MCP tool surface changed" — 75 tools on both revisions with zero field
+  differences across name, group, description, args schema, and all four flags.
+- "Report-artifact versioning disturbs other consumers" — candidate refs only, and
+  repeated runs accumulate distinct versions without clobbering.
+
+### Verification
+
+`make ci-check` 2,379 passed, 8 skipped, 1 xfailed, 92.68% coverage, product gate
+PASS. `uv run mypy src tests` clean over 517 files. `make enola` exit 0. The graph
+counts in the section above were re-measured after these fixes and are unchanged:
+**37 nodes, 174 edges, 5 components, 1 real cycle.**

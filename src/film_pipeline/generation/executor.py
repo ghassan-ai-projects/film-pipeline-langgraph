@@ -343,10 +343,11 @@ class GenerationExecutor:
         status routing, delivery, and ledger writes as the batch path; it adds
         only the lookup and the preconditions.
 
-        Raises ``GenerationRowNotFound`` / ``GenerationRowNotSubmitted``: neither
-        is something a caller can repair by polling. A row that already reached a
-        terminal status is returned as ``NO_OP`` rather than re-polled, so
-        resuming a finished row cannot deliver its output twice.
+        Raises ``GenerationRowNotFound`` / ``GenerationRowNotSubmitted`` /
+        ``GenerationRowProviderMissing``: none is something a caller can repair by
+        polling harder. A row that already reached a terminal status is returned as
+        ``NO_OP`` rather than re-polled, so resuming a finished row cannot deliver
+        its output twice.
         """
         row = self._ledger.get_row(project_id, generation_id)
         if row is None:
@@ -359,6 +360,14 @@ class GenerationExecutor:
         if is_terminal(row.status):
             result.outcomes.append(_outcome(row, RowOutcomeKind.NO_OP))
             return result
+        # An unregistered provider is an *operator* precondition, not a property of
+        # the job. Raising keeps the row exactly as it was: routing through
+        # `_poll_row` used to write FAILED, which is terminal, so a row whose
+        # `provider` string merely named something not yet registered could never be
+        # polled again once it was. Registering the provider and retrying is the
+        # remedy, and it only works while the row is still pollable.
+        if row.provider not in self._providers:
+            raise GenerationRowProviderMissing(f"Provider '{row.provider}' not registered.")
         result.processed = 1
         self._poll_row(project_id, row, result)
         return result

@@ -180,3 +180,93 @@ def test_mcp_validation_records_evidence_the_same_way(
     call_tool(run_validation, {}, runtime=rt)
 
     _assert_evidence_is_durable(rt)
+
+
+def test_refs_do_not_grow_across_passes(rt: StudioRuntime) -> None:
+    """`validation_report_refs` describes the latest pass, not the whole history.
+
+    The channel and `_validation_reports` are the refs and the bodies of the same
+    reports, so they must stay in step. They were *appended* while the bodies were
+    *replaced*, so after a second pass `len(refs) == len(reports)` — the invariant
+    `_assert_evidence_is_durable` asserts — was false, and the channel accumulated
+    one dead ref per run.
+    """
+    for _ in range(3):
+        outcome = rt.run_validation(PROJECT_ID)
+        state = _state(rt)
+        assert len(state["validation_report_refs"]) == len(outcome.reports), (
+            "the refs channel and the report bodies must describe the same pass"
+        )
+
+
+def test_a_crashed_validator_is_persisted_not_just_reported(
+    rt: StudioRuntime, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A validator that cannot run is recorded in project state, not only returned.
+
+    `_validation_failures` is registered `full` in ORCH_CHANNELS and the QC path
+    carries it, but `run_validation` read it into the outcome and then dropped it —
+    so the caller was told about the crash while a later reader of project state saw
+    a clean pass.
+    """
+    import film_pipeline.orchestration.execution as execution
+    from film_pipeline.orchestration.nodes import _run_validators as original
+
+    def _with_failure(state: Any) -> None:
+        original(state)
+        state.setdefault("_validation_failures", []).append("ProbeValidator: boom")
+
+    # Patched where the operation *reads* the name: `execution` does
+    # `from ...nodes import _run_validators`, so patching the defining module would
+    # be a no-op here (AGENTS.md's "patch point" exception, in reverse).
+    monkeypatch.setattr(execution, "_run_validators", _with_failure)
+
+    outcome = rt.run_validation(PROJECT_ID)
+
+    assert outcome.failures == ("ProbeValidator: boom",)
+    assert _state(rt).get("_validation_failures") == ["ProbeValidator: boom"]
+
+
+def test_partial_validator_failure_keeps_the_reports(
+    rt: StudioRuntime, call_tool: CallTool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One crashed validator must not discard its siblings' reports.
+
+    A crashed validator fails the *action* — that contract is pinned by
+    `test_run_validation_exception` and predates this branch — but the reports its
+    siblings produced must survive on the error. The QC chain is deliberately built
+    to survive a crashing validator, so discarding every successful finding left
+    the operator with a failed action and no evidence of the part that worked.
+    """
+    from film_pipeline.schemas.base import (
+        ValidationModality,
+        ValidationScope,
+        ValidationStatus,
+    )
+    from film_pipeline.schemas.validation import ValidationReport
+
+    report = ValidationReport(
+        validation_id="validation:ok-validator:00000000",
+        validator_id="ok-validator",
+        scope=ValidationScope.ARTIFACT,
+        modalities=[ValidationModality.TEXT],
+        score=90.0,
+        status=ValidationStatus.PASS,
+        recommended_actions=[],
+    )
+
+    def _partial(state: Any) -> None:
+        # The chain records serializable payloads, which is what `_typed_reports`
+        # re-hydrates at the boundary.
+        state.setdefault("_validation_reports", []).append(report.model_dump())
+        state.setdefault("_validation_failures", []).append("BoomValidator: unreadable")
+
+    import film_pipeline.orchestration.execution as execution
+
+    monkeypatch.setattr(execution, "_run_validators", _partial)
+    result = call_tool(run_validation, {}, runtime=rt)
+
+    assert result["ok"] is False, "a validator that could not run fails the pass"
+    assert "BoomValidator" in str(result["error"])
+    assert result["reports"], "the successful report must survive on the error"
+    assert result["validator_failures"] == ["BoomValidator: unreadable"]

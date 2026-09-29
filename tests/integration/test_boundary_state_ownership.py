@@ -51,42 +51,42 @@ def _call(server: MCPServer, tool: str, args: dict[str, object]) -> dict[str, An
     return cast(dict[str, Any], response.data)
 
 
-def test_a_state_changing_action_persists_what_it_returns(
+def test_the_operation_persists_in_the_same_call(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The state the call reports is the state on disk, not only in memory.
+    """`apply_project_state` writes to disk, and this fails if it stops.
 
-    This is the contract the direct mapping write did not enforce: a handler could
-    replace the live mapping and return the new state without ever persisting it,
-    and every other guard would stay green because the fields are public.
+    **The first version of this test could not fail.** It drove
+    `create_film_project` and then looked for a project record on disk — but
+    `create_project` persists one earlier in the same call, so deleting
+    `persist_project_state` from `apply_project_state` left all five tests in this
+    file passing. An adversarial review caught it by removing the line.
+
+    The fix is to observe the write itself: take the record's contents, change the
+    state, call the operation, and require the file to change. `persist` is then
+    load-bearing rather than incidental to a neighbouring call.
     """
-    runtime = _server(tmp_path, monkeypatch)
-    server = MCPServer()
-
-    data = _call(
-        server,
-        "create_film_project",
-        {"project_id": PROJECT_ID, "title": "Boundary B4", "idea": "A lantern in fog."},
-    )
-
-    in_memory = runtime.get_project(PROJECT_ID)
-    assert in_memory is not None, "the call must leave the project loaded"
-    assert data["project_id"] == PROJECT_ID
-
-    # The durable record `persist_project_state` writes.
     from film_pipeline.storage import _layout
 
-    record_path = tmp_path / "runtime" / "projects" / PROJECT_ID / _layout.PROJECT_FILENAME
-    if not record_path.exists():
-        # The runtime root may nest storage differently; find the record.
-        candidates = sorted(tmp_path.rglob(_layout.PROJECT_FILENAME))
-        assert candidates, (
-            "the action reported new state but no project record reached disk — "
-            "`apply_project_state` persists in the same call for this reason"
-        )
-        record_path = candidates[0]
-    assert record_path.exists()
-    assert PROJECT_ID in record_path.read_text()
+    runtime = _server(tmp_path, monkeypatch)
+    runtime.create_project(PROJECT_ID, "Boundary B4")
+    state = runtime.get_project(PROJECT_ID)
+    assert state is not None
+
+    records = sorted(tmp_path.rglob(_layout.PROJECT_FILENAME))
+    assert records, "create_project must have written a record to compare against"
+    before = records[0].read_text()
+
+    state["current_phase"] = "script"
+    runtime.apply_project_state(PROJECT_ID, state)
+
+    after = records[0].read_text()
+    assert after != before, (
+        "apply_project_state did not write to disk: the record is byte-identical "
+        "after replacing the project's state. Persistence is the operation's "
+        "contract, not a separate call a caller can forget."
+    )
+    assert "script" in after
 
 
 def test_the_live_mapping_is_shared_and_the_operation_says_so(
