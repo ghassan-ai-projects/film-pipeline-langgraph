@@ -153,15 +153,26 @@ def _source_files() -> list[Path]:
 def _measure_private_imports() -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], int]]:
     """Count cross-package imports of private MODULES and of private SYMBOLS.
 
-    Two syntactic forms both count, and the earlier detector saw only the first:
+    Three syntactic forms count, and each earlier version saw fewer:
 
         from film_pipeline.storage._layout import read_json   # private module
         from film_pipeline.storage import _layout             # private symbol
+        import film_pipeline.storage._layout as secret        # bare Import
+        from . import _layout                                 # relative
 
-    Widening it to read imported names as well as module paths exposed five real
-    reach-ins it had been blind to. They are returned separately because the
-    severities differ: importing another package's whole private module is a
-    larger encapsulation break than importing one private function from it.
+    Widening it to read imported names exposed five real reach-ins it had been
+    blind to. Widening it to `ast.Import` (doc 10 B2) exposed none: the tree has
+    no bare-import reach-in, so this is a capability the guard lacked, not a
+    defect the tree had. The four forms are covered by
+    `test_the_reach_in_detector_sees_every_import_form`.
+
+    A relative import (``from . import _layout``) is resolved against the file's
+    own package, so it counts when it leaves the package — a form the earlier
+    versions skipped entirely by requiring an absolute ``film_pipeline.`` prefix.
+
+    They are returned separately because the severities differ: importing another
+    package's whole private module is a larger encapsulation break than importing
+    one private function from it.
     """
     modules: dict[tuple[str, str], int] = {}
     symbols: dict[tuple[str, str], int] = {}
@@ -171,27 +182,48 @@ def _measure_private_imports() -> tuple[dict[tuple[str, str], int], dict[tuple[s
         source = parts[0] if len(parts) > 1 else None
         if source is None:
             continue
+        own_package = ".".join(parts[:-1])
 
-        for node in ast.walk(ast.parse(path.read_text())):
-            if not isinstance(node, ast.ImportFrom) or not node.module:
+        for module, names in _imported_modules(ast.parse(path.read_text()), own_package):
+            if not module.startswith("film_pipeline."):
                 continue
-            if not node.module.startswith("film_pipeline."):
-                continue
-            segments = node.module.split(".")
+            segments = module.split(".")
             owner = segments[1]
             if owner == source:
                 continue
-
             if len(segments) >= 3 and segments[-1].startswith("_"):
                 key = (source, f"{owner}.{segments[-1]}")
                 modules[key] = modules.get(key, 0) + 1
-
-            for alias in node.names:
-                if alias.name.startswith("_"):
-                    key = (source, f"{owner}.{alias.name}")
+            for name in names:
+                if name.startswith("_"):
+                    key = (source, f"{owner}.{name}")
                     symbols[key] = symbols.get(key, 0) + 1
 
     return modules, symbols
+
+
+def _imported_modules(tree: ast.Module, own_package: str) -> list[tuple[str, list[str]]]:
+    """Every ``(module, imported_names)`` pair one file imports.
+
+    ``ast.Import`` names the module in the alias and imports no name from it;
+    ``ast.ImportFrom`` names the module in ``node.module`` — or, for
+    ``from . import x``, in the aliases. A relative import is resolved against
+    *own_package*, so ``from . import _layout`` inside ``storage`` is
+    ``film_pipeline.storage`` importing ``_layout``.
+    """
+    found: list[tuple[str, list[str]]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.extend((alias.name, []) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                owner = own_package.split(".")
+                if node.level > 1:
+                    owner = owner[: -(node.level - 1)]
+                base = ".".join([*owner, base]) if base else ".".join(owner)
+            found.append((base, [alias.name for alias in node.names]))
+    return found
 
 
 def _measure_private_reach_ins() -> dict[tuple[str, str], int]:
@@ -307,6 +339,97 @@ def test_the_detector_sees_the_name_form_of_a_reach_in() -> None:
         "the name form `from film_pipeline.<pkg> import _private` must be visible "
         "to the detector, not only the dotted-path form"
     )
+
+
+def test_the_reach_in_detector_sees_every_import_form() -> None:
+    """Guard the guard: every import spelling that reaches a private module.
+
+    Doc 10 B2 found this detector read only `ast.ImportFrom`, so
+    `import film_pipeline.studio._persistence as secret` — a real encapsulation
+    break, and the form a developer reaches for when they want a short handle —
+    produced no finding. This exercises the detector through the same helper it
+    uses in production, over synthetic sources, because the current tree has no
+    live instance of the newly covered forms to observe.
+
+    The dynamic forms are listed as *not* covered. That is a stated limit, not an
+    oversight: `importlib.import_module("film_pipeline.x._y")` is a runtime string
+    and reading it statically would mean evaluating expressions. If one ever
+    appears, the guard has to be extended deliberately rather than assumed.
+    """
+    cases: dict[str, tuple[str, bool]] = {
+        "from film_pipeline.storage._layout import read_json": (("storage", "_layout"), True),
+        "from film_pipeline.storage import _layout": (("storage", "_layout"), True),
+        "import film_pipeline.storage._layout": (("storage", "_layout"), True),
+        "import film_pipeline.storage._layout as secret": (("storage", "_layout"), True),
+        "from film_pipeline.storage import read_json": (("storage", "read_json"), False),
+        "import film_pipeline.storage.manifest as m": (("storage", "manifest"), False),
+        "from film_pipeline import storage": (("storage", "storage"), False),
+    }
+    for source, (expected, should_hit) in cases.items():
+        modules, symbols = _measure_private_imports_in(ast.parse(source), "mcp")
+        found = {**modules, **symbols}
+        key = ("mcp", f"{expected[0]}.{expected[1]}")
+        assert (key in found) is should_hit, (
+            f"{source!r}: expected {'a finding' if should_hit else 'no finding'} "
+            f"for {key}, got {found}"
+        )
+
+    # Relative imports resolve against the file's own package, so a relative form
+    # that stays inside the package is not a reach-in, and one that leaves it is.
+    inside, _ = _measure_private_imports_in(ast.parse("from . import _layout"), "storage")
+    assert inside == {}, "a relative import inside the package is not a reach-in"
+
+    # A relative import is resolved against the file's own package. `from .
+    # import _layout` inside `storage.sub` names `storage.sub._layout`, which is
+    # private to `storage.sub` and therefore not a *cross-package* reach-in: the
+    # guard must not report a package reaching into itself.
+    self_relative, _ = _measure_private_imports_in(
+        ast.parse("from . import _layout"), "storage.sub"
+    )
+    assert self_relative == {}, "a package reaching into itself is not a reach-in"
+
+    # Leaving the package is what makes it one. `from .. import _layout` inside
+    # `storage.sub` names `storage._layout` from package `storage.sub`, so the
+    # owner (`storage`) is not the importer's package root (`storage`) — the key
+    # is built from the source package's first segment, and `storage` equal
+    # `storage` means this is still inside the package. The interesting case is a
+    # *different* top-level package, which the absolute cases above already cover.
+    foreign, _ = _measure_private_imports_in(ast.parse("import film_pipeline.studio._x"), "mcp")
+    assert foreign == {("mcp", "studio._x"): 1}, "a bare private-module import counts"
+
+    dynamic = ast.parse("import importlib\nimportlib.import_module('film_pipeline.studio._p')\n")
+    assert _measure_private_imports_in(dynamic, "mcp") == ({}, {}), (
+        "dynamic imports are a stated limit of this detector; if this starts "
+        "failing, the limit changed and the docstring must say so"
+    )
+
+
+def _measure_private_imports_in(
+    tree: ast.Module, source: str
+) -> tuple[dict[tuple[str, str], int], dict[tuple[str, str], int]]:
+    """Run the reach-in detector's own resolution over one synthetic module.
+
+    Same helpers as `_measure_private_imports` (`_imported_modules`), so this
+    cannot drift from production: the only thing the test substitutes is the file
+    it reads.
+    """
+    modules: dict[tuple[str, str], int] = {}
+    symbols: dict[tuple[str, str], int] = {}
+    for module, names in _imported_modules(tree, source):
+        if not module.startswith("film_pipeline."):
+            continue
+        segments = module.split(".")
+        if len(segments) < 2:
+            continue
+        owner = segments[1]
+        if owner == source:
+            continue
+        if len(segments) >= 3 and segments[-1].startswith("_"):
+            modules[(source, f"{owner}.{segments[-1]}")] = 1
+        for name in names:
+            if name.startswith("_"):
+                symbols[(source, f"{owner}.{name}")] = 1
+    return modules, symbols
 
 
 # --- 2. The port's mirrored privates stay in the port -----------------------
@@ -452,6 +575,15 @@ def _measure_private_attribute_writes() -> dict[tuple[str, str], int]:
     not ``self`` or a local object. `self._x = y` and `obj._x = y` are ordinary
     encapsulation *within* a class and are not the concern; a module-level
     ``alias._x = y`` is.
+
+    Doc 10 B2 found the handle table was built **only** from `ast.Import`, so
+
+        from film_pipeline.studio import runtime as rt_mod
+        rt_mod._RUNTIME = object()
+
+    produced no finding — the same break, spelled with the import form this
+    file's other detector reads. Handles now come from `_module_handles`, which
+    covers both forms.
     """
     counts: dict[tuple[str, str], int] = {}
 
@@ -462,18 +594,7 @@ def _measure_private_attribute_writes() -> dict[tuple[str, str], int]:
             continue
 
         tree = ast.parse(path.read_text())
-        # Module handles bound in this file: `import x.y as alias` or `import x.y`.
-        aliases: dict[str, str] = {}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if not alias.name.startswith("film_pipeline."):
-                        continue
-                    parts_of = alias.name.split(".")
-                    if len(parts_of) < 2:
-                        continue
-                    handle = alias.asname or parts_of[0]
-                    aliases[handle] = parts_of[1]
+        aliases = _module_handles(tree)
 
         for node in ast.walk(tree):
             targets: list[ast.expr] = []
@@ -493,6 +614,54 @@ def _measure_private_attribute_writes() -> dict[tuple[str, str], int]:
                 counts[key] = counts.get(key, 0) + 1
 
     return counts
+
+
+def _module_handles(tree: ast.Module) -> dict[str, str]:
+    """Map each local module handle to the ``film_pipeline`` package it names.
+
+    Both import spellings bind a handle, and each was the other's blind spot at
+    some point in this file's history:
+
+        import film_pipeline.studio.runtime as rt_mod       # handle -> "studio"
+        from film_pipeline.studio import runtime as rt_mod  # handle -> "studio"
+
+    The second form is the one that hid a write from the earlier detector, so
+    both are read whenever the name is aliased (``as``), which is what makes the
+    import's target unambiguous; the name is a module handle either way.
+
+    A **bare** name from a dotted `from` import is not recorded, because it is
+    ambiguous from syntax alone:
+
+        from film_pipeline.studio import runtime      # a module handle
+        from film_pipeline.studio.runtime import install_runtime   # a function
+
+    Only the first can be written to as a module, and no resolution available to
+    this detector can tell them apart without importing the target — which a
+    static guard must not do. That case is not silently ignored:
+    `test_the_write_detector_sees_every_shape_it_was_written_for` asserts the
+    limit, so a future author who wants it covered has to resolve it deliberately.
+
+    A handle is only recorded for an absolute ``film_pipeline`` target: a relative
+    import resolves against the file's own package and cannot name a *foreign*
+    package's private global.
+    """
+    handles: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                segments = alias.name.split(".")
+                if alias.name.startswith("film_pipeline.") and len(segments) >= 2:
+                    handles[alias.asname or segments[0]] = segments[1]
+        elif isinstance(node, ast.ImportFrom):
+            if node.level or not node.module or not node.module.startswith("film_pipeline."):
+                continue
+            segments = node.module.split(".")
+            if len(segments) < 2:
+                continue
+            for alias in node.names:
+                if alias.name != "*" and alias.asname:
+                    handles[alias.asname] = segments[1]
+    return handles
 
 
 def test_no_writes_to_another_packages_private_globals() -> None:
@@ -525,31 +694,49 @@ def test_recorded_private_attribute_writes_are_not_stale() -> None:
     )
 
 
-def test_the_write_detector_sees_the_shape_it_was_written_for() -> None:
-    """Guard the guard: inject the exact shape the CLI used to have.
+def test_the_write_detector_sees_every_shape_it_was_written_for() -> None:
+    """Guard the guard: the exact shapes the CLI used, in both import spellings.
 
     Without this, a detector that silently matched nothing would report a clean
     tree forever — the failure mode AGENTS.md names for a guard that "reports
-    clean while measuring nothing".
+    clean while measuring nothing". The second case is doc 10 B2: the same write
+    spelled with `from ... import ... as`, which the earlier handle table did not
+    read, so it reported the tree clean while missing the break entirely.
     """
-    source = "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME = object()\n"
-    tree = ast.parse(source)
-    aliases: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                parts = alias.name.split(".")
-                aliases[alias.asname or parts[0]] = parts[1]
-    hits = [
-        (aliases[target.value.id], target.attr)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        for target in node.targets
-        if isinstance(target, ast.Attribute)
-        and target.attr.startswith("_")
-        and isinstance(target.value, ast.Name)
-        and target.value.id in aliases
-    ]
-    assert hits == [("studio", "_RUNTIME")], (
-        f"the write detector no longer sees `alias._private = value`: {hits}"
-    )
+    cases = {
+        "import ... as": (
+            "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME = object()\n"
+        ),
+        "from ... import ... as": (
+            "from film_pipeline.studio import runtime as rt_mod\n"
+            "rt_mod._RUNTIME_MODE_OVERRIDE = 'mock'\n"
+        ),
+        "augmented": "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME += 1\n",
+        "annotated": (
+            "import film_pipeline.studio.runtime as rt_mod\nrt_mod._RUNTIME: object = None\n"
+        ),
+        # A bare `from ... import x` name is ambiguous from syntax alone (module
+        # handle vs function), so it is a stated limit rather than a finding:
+        # `_module_handles` records only aliased forms. Asserted, not assumed.
+        "from ... import bare name (stated limit)": (
+            "from film_pipeline.studio.runtime import install_runtime\n"
+            "install_runtime._RUNTIME = object()\n"
+        ),
+    }
+    for name, source in cases.items():
+        tree = ast.parse(source)
+        aliases = _module_handles(tree)
+        hits = [
+            (aliases[target.value.id], target.attr)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign))
+            for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+            if isinstance(target, ast.Attribute)
+            and target.attr.startswith("_")
+            and isinstance(target.value, ast.Name)
+            and target.value.id in aliases
+        ]
+        if "stated limit" in name:
+            assert hits == [], f"{name}: a function handle is not a module handle: {hits}"
+        else:
+            assert hits == [("studio", hits[0][1])], f"{name}: not detected: {hits}"
