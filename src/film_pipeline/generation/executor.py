@@ -5,10 +5,11 @@ shot matrix into ledger rows, submitting them to provider adapters, polling
 jobs to completion, downloading outputs into the project's asset tree, and
 recording every delivered file in the project asset manifest.
 
-Both the operator service and MCP tools drive generation through this
-executor so the surfaces stay behaviorally identical. Prompt resolution
-lives in ``executor_prompts`` and asset delivery in ``executor_delivery``;
-this module keeps batch orchestration and ledger state transitions.
+The MCP generation tools drive every row transition through this executor
+rather than reimplementing one, so there is a single set of ledger transitions
+and a single delivery path. Prompt resolution lives in ``executor_prompts`` and
+asset delivery in ``executor_delivery``; this module keeps batch orchestration
+and ledger state transitions.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ class RowOutcomeKind(StrEnum):
     producer here, and a transport maps it to a response instead of re-deriving
     the outcome from the ledger. The ``PROVIDER_*`` values describe what the
     provider reported; the rest describe whether *this* side could run the step.
-    Each value reuses the ``error_code`` spelling already recorded on the row,
+    Where a transition records an ``error_code``, the value reuses that spelling,
     so the ledger and the step result cannot drift apart.
     """
 
@@ -53,6 +54,9 @@ class RowOutcomeKind(StrEnum):
     POLLING = "polling"
     COMPLETED = "completed"
     NO_OP = "no_op"
+    CANCELLED = "cancelled"
+    CANCELLED_LOCAL = "cancelled_local"
+    CANCEL_REFUSED = "cancel_refused"
     PROVIDER_FAILED = "provider_failed"
     PROVIDER_MISSING = "unknown_provider"
     SUBMIT_FAILED = "submit_failed"
@@ -99,6 +103,10 @@ class GenerationRowNotFound(GenerationRowError):
 
 class GenerationRowNotSubmitted(GenerationRowError):
     """The row exists but has no provider job, so it cannot be polled."""
+
+
+class GenerationRowProviderMissing(GenerationRowError):
+    """No adapter is registered for the provider the row names."""
 
 
 #: Statuses a poll sweep may act on: the row holds a provider job and is not
@@ -482,6 +490,68 @@ class GenerationExecutor:
                 provider_job_id=row.provider_job_id or "",
                 detail=output_paths[0] if output_paths else "",
             )
+        )
+
+    def cancel_row(self, project_id: str, generation_id: str) -> GenerationStepResult:
+        """Cancel one ledger row, asking its provider when a job was submitted.
+
+        A row with no provider job is cancelled locally — there is nothing to
+        tell the provider. A provider that refuses the cancel leaves the row
+        untouched, because the job may still be running; the outcome says so
+        rather than reporting a cancel that did not happen.
+
+        Raises ``GenerationRowNotFound`` / ``GenerationRowProviderMissing``:
+        neither leaves a row in a cancelled state a caller could mistake for
+        success.
+        """
+        row = self._ledger.get_row(project_id, generation_id)
+        if row is None:
+            raise GenerationRowNotFound(f"Generation '{generation_id}' not found.")
+        result = GenerationStepResult(processed=1)
+        if not row.provider_job_id:
+            self._cancel_locally(project_id, generation_id)
+            result.outcomes.append(
+                _outcome(row, RowOutcomeKind.CANCELLED_LOCAL, status=GenerationStatus.CANCELLED)
+            )
+            return result
+
+        adapter = self._providers.get(row.provider)
+        if adapter is None:
+            raise GenerationRowProviderMissing(f"Provider '{row.provider}' not registered.")
+        job = ProviderJob(
+            job_id=row.provider_job_id,
+            shot_id=row.shot_id,
+            provider_id=row.provider,
+            model=row.model,
+            status=ProviderJobStatus.SUBMITTED,
+        )
+        if not adapter.cancel(job):
+            result.outcomes.append(
+                _outcome(
+                    row,
+                    RowOutcomeKind.CANCEL_REFUSED,
+                    provider_job_id=row.provider_job_id,
+                )
+            )
+            return result
+        self._cancel_locally(project_id, generation_id)
+        result.outcomes.append(
+            _outcome(
+                row,
+                RowOutcomeKind.CANCELLED,
+                status=GenerationStatus.CANCELLED,
+                provider_job_id=row.provider_job_id,
+            )
+        )
+        return result
+
+    def _cancel_locally(self, project_id: str, generation_id: str) -> None:
+        """Move a row to CANCELLED and stop its polling."""
+        self._ledger.update_row(
+            project_id,
+            generation_id,
+            status=GenerationStatus.CANCELLED,
+            next_action="stop",
         )
 
     def has_ledger(self, project_id: str) -> bool:

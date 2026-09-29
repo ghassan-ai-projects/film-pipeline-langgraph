@@ -1,8 +1,12 @@
-"""Generation dispatch lifecycle: start, resume polling, cancel."""
+"""Generation dispatch lifecycle: start, resume polling, cancel.
+
+Transport only: each handler resolves the active project, drives the owning
+lifecycle in ``film_pipeline.generation.executor``, and projects its typed
+per-row outcomes into a response envelope. No status mapping, delivery, or
+ledger write lives here.
+"""
 
 from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
 
 from pydantic import Field
 
@@ -10,11 +14,12 @@ from film_pipeline.filmspec import is_text_only_policy
 from film_pipeline.generation.executor import (
     GenerationExecutor,
     GenerationRowError,
+    GenerationRowOutcome,
+    RowOutcomeKind,
 )
 from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
-from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 from film_pipeline.schemas.base import GenerationStatus
 
 from ..helpers import (
@@ -23,121 +28,34 @@ from ..helpers import (
     _services,
 )
 
-if TYPE_CHECKING:
-    from film_pipeline.schemas.generation import GenerationLedgerRow
 
-
-def _submit_failure(
-    mgr: GenerationLedgerManager,
-    project_id: str,
-    row: GenerationLedgerRow,
-    error_code: str,
-    reason: str,
-) -> dict[str, str]:
-    """Mark a ledger row FAILED and build its failure record.
-
-    ``next_action`` is set to ``wait_human`` to match
-    ``GenerationExecutor._fail_row``: a failed row needs a human decision, and
-    leaving the pre-existing ``poll`` in place told the operator to keep polling
-    a row that can never advance.
-    """
-
-    mgr.update_row(
-        project_id,
-        row.generation_id,
-        status=GenerationStatus.FAILED,
-        error_code=error_code,
-        blocking_reason=reason,
-        next_action="wait_human",
-    )
-    return {
-        "generation_id": row.generation_id,
-        "shot_id": row.shot_id,
-        "error": reason,
+def _submission_entry(outcome: GenerationRowOutcome) -> dict[str, str]:
+    """Project one successful submit outcome into its per-row response record."""
+    entry = {
+        "generation_id": outcome.generation_id,
+        "shot_id": outcome.shot_id,
+        "provider_job_id": outcome.provider_job_id,
     }
+    if outcome.kind is RowOutcomeKind.ALREADY_SUBMITTED:
+        entry["note"] = "already-submitted"
+    return entry
 
 
-def _submit_one_row(
-    rt: Any,
-    mgr: GenerationLedgerManager,
-    project_id: str,
-    row: GenerationLedgerRow,
-    duration_seconds: float,
-    shot_row: dict[str, Any],
-    executor: Any,
-) -> tuple[bool, dict[str, str]]:
-    """Submit one SUBMITTED ledger row to its provider.
-
-    Returns ``(succeeded, entry)`` where *entry* is the per-row success or
-    failure record for the response envelope.
-    """
-    # Skip rows that already have a provider_job_id (duplicate-prevention)
-    if row.provider_job_id:
-        return (
-            True,
-            {
-                "generation_id": row.generation_id,
-                "shot_id": row.shot_id,
-                "provider_job_id": row.provider_job_id,
-                "note": "already-submitted",
-            },
-        )
-
-    adapter = rt.get_provider(row.provider)
-    if adapter is None:
-        reason = f"Provider '{row.provider}' not registered."
-        return False, _submit_failure(mgr, project_id, row, "unknown_provider", reason)
-
-    # Build payload and submit. The prompt is RESOLVED, not the raw
-    # ``prompt_ref``: that field is an artifact reference string, so passing it
-    # straight to ``build_payload`` submitted a literal like
-    # "artifact:gen_planning:prompt_package:v1" — or an empty string — as the
-    # prompt text for every MCP-driven generation. GenerationExecutor resolves
-    # it through this same method; the two surfaces now agree.
-    prompt = executor.resolve_prompt(project_id, row.shot_id, shot_row, row.prompt_ref)
-    try:
-        payload = adapter.build_payload(
-            prompt=prompt,
-            references=row.reference_refs or None,
-            duration=duration_seconds,
-        )
-        job = adapter.submit(payload, row.shot_id)
-    except Exception as exc:
-        return (
-            False,
-            _submit_failure(mgr, project_id, row, "submit_failed", str(exc)[:200]),
-        )
-
-    return True, _mark_row_running(mgr, project_id, row, job.job_id)
-
-
-def _mark_row_running(
-    mgr: GenerationLedgerManager,
-    project_id: str,
-    row: GenerationLedgerRow,
-    provider_job_id: str,
-) -> dict[str, str]:
-    """Persist the provider_job_id on the row and build its success record."""
-
-    mgr.update_row(
-        project_id,
-        row.generation_id,
-        provider_job_id=provider_job_id,
-        status=GenerationStatus.RUNNING,
-        next_action="poll",
-    )
+def _submission_failure(outcome: GenerationRowOutcome) -> dict[str, str]:
+    """Project one failed submit outcome into its per-row response record."""
     return {
-        "generation_id": row.generation_id,
-        "shot_id": row.shot_id,
-        "provider_job_id": provider_job_id,
+        "generation_id": outcome.generation_id,
+        "shot_id": outcome.shot_id,
+        "error": outcome.detail,
     }
 
 
 async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Submit all SUBMITTED generation rows to their providers.
 
-    Each row is submitted to its provider. The provider_job_id is persisted
-    in the ledger row. Partial failures are recorded per-row.
+    Submission belongs to ``generation.GenerationExecutor``: this handler
+    resolves the active project and projects the executor's typed per-row
+    outcomes into the response envelope. Partial failures stay per-row.
     """
     rt = ctx.runtime
     active = ctx.project_state()
@@ -145,21 +63,18 @@ async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> d
     if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
 
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-    submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
-    if not submitted_rows:
+    store = _services(rt).artifact_store
+    mgr = GenerationLedgerManager(store)
+    if not mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED):
         return _ok(submitted=0, message="No SUBMITTED rows to start. Approve spend first.")
 
-    successes: list[dict[str, str]] = []
-    failures: list[dict[str, str]] = []
-    executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
-    shot_rows = {str(shot.get("shot_id", "")): shot for shot in executor.load_shot_rows(project_id)}
-    for row in submitted_rows:
-        shot_row = shot_rows.get(row.shot_id, {})
-        duration = float(shot_row.get("duration_seconds", 5) or 5)
-        succeeded, entry = _submit_one_row(rt, mgr, project_id, row, duration, shot_row, executor)
-        (successes if succeeded else failures).append(entry)
-
+    result = GenerationExecutor(store, rt.provider_adapters).start(project_id)
+    successes = [
+        _submission_entry(outcome) for outcome in result.outcomes if not outcome.operator_error
+    ]
+    failures = [
+        _submission_failure(outcome) for outcome in result.outcomes if outcome.operator_error
+    ]
     return _ok(
         submitted=len(successes),
         failed=len(failures),
@@ -206,7 +121,12 @@ async def resume_generation_polling(ctx: ToolContext, args: dict[str, object]) -
 
 
 async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
-    """Cancel a generation and update the ledger."""
+    """Cancel a generation through the owning lifecycle.
+
+    ``generation.GenerationExecutor`` owns the cancel transition, including the
+    local case (no provider job) and a provider that refuses. This handler
+    resolves the active project and reports which of those happened.
+    """
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
@@ -214,41 +134,20 @@ async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -
     active = ctx.project_state()
     project_id = str(active["project_id"])
 
-    mgr = GenerationLedgerManager(_services(rt).artifact_store)
-    row = mgr.get_row(project_id, generation_id)
-    if row is None:
+    store = _services(rt).artifact_store
+    executor = GenerationExecutor(store, rt.provider_adapters)
+    try:
+        result = executor.cancel_row(project_id, generation_id)
+    except GenerationRowError as exc:
+        return _error(str(exc))
+
+    row = GenerationLedgerManager(store).get_row(project_id, generation_id)
+    if row is None:  # pragma: no cover - cancel_row proved the row exists
         return _error(f"Generation '{generation_id}' not found.")
-    if not row.provider_job_id:
-        mgr.update_row(
-            project_id,
-            generation_id,
-            status=GenerationStatus.CANCELLED,
-            next_action="stop",
-        )
-        return _ok(generation_id=generation_id, cancelled=True, provider=False)
-
-    adapter = rt.get_provider(row.provider)
-    if adapter is None:
-        return _error(f"Provider '{row.provider}' not registered.")
-
-    job = ProviderJob(
-        job_id=row.provider_job_id,
-        shot_id=row.shot_id,
-        provider_id=row.provider,
-        model=row.model,
-        status=ProviderJobStatus.SUBMITTED,
-    )
-    cancelled = adapter.cancel(job)
-    if cancelled:
-        mgr.update_row(
-            project_id,
-            generation_id,
-            status=GenerationStatus.CANCELLED,
-            next_action="stop",
-        )
+    refused = result.first(RowOutcomeKind.CANCEL_REFUSED) is not None
     return _ok(
         generation_id=generation_id,
-        cancelled=cancelled,
+        cancelled=not refused,
         provider=bool(row.provider_job_id),
     )
 

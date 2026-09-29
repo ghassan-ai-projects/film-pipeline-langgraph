@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest import mock
 
 import pytest
@@ -39,6 +39,7 @@ from film_pipeline.generation.ledger import (
     GenerationLedgerManager,
 )
 from film_pipeline.mcp.tools import (
+    cancel_generation_request,
     resume_generation_polling,
     start_generation_batch,
 )
@@ -177,6 +178,40 @@ def test_mcp_start_batch_records_submission_evidence(
     call_tool(start_generation_batch, {}, runtime=rt)
 
     _assert_submitted(rt, generation_id)
+
+
+def test_mcp_start_batch_does_not_resubmit_a_row_that_has_a_job(
+    rt: StudioRuntime, call_tool: CallTool
+) -> None:
+    """Duplicate prevention: a row already holding a job is reported, not resubmitted."""
+    generation_id = _plan_and_approve(rt, ["S001"])
+    manager = GenerationLedgerManager(_store(rt))
+    manager.update_row(PROJECT_ID, generation_id, provider_job_id="job-already-there")
+
+    result = call_tool(start_generation_batch, {}, runtime=rt)
+
+    assert result["submitted"] == 1
+    successes = cast(list[dict[str, str]], result["successes"])
+    assert successes[0]["note"] == "already-submitted"
+    assert _row(rt, generation_id).provider_job_id == "job-already-there"
+
+
+def test_cancel_refused_by_the_provider_leaves_the_row_running(
+    rt: StudioRuntime, call_tool: CallTool
+) -> None:
+    """A provider that will not cancel must not be reported as a cancel."""
+    generation_id = _plan_and_approve(rt, ["S001"])
+    call_tool(start_generation_batch, {}, runtime=rt)
+    adapter = rt.get_provider(PROVIDER)
+    assert adapter is not None
+
+    with mock.patch.object(adapter, "cancel", return_value=False):
+        result = call_tool(cancel_generation_request, {"generation_id": generation_id}, runtime=rt)
+
+    assert result["ok"] is True
+    assert result["cancelled"] is False
+    assert result["provider"] is True
+    assert _row(rt, generation_id).status is GenerationStatus.RUNNING
 
 
 def test_mcp_resume_polling_delivers_completed_job(rt: StudioRuntime, call_tool: CallTool) -> None:
