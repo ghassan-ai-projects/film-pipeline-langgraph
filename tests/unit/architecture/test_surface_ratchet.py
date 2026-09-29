@@ -297,3 +297,76 @@ def test_the_guard_has_something_to_check() -> None:
     )
     assert len(discovered) >= 15, "package discovery found too few packages"
     assert reachable_public_names("schemas"), "no names reachable on a known package"
+
+
+# --- 6. Declared private exports must have a consumer ---------------------
+
+
+#: Underscore-prefixed names each package declares in `__all__`, measured
+#: 2026-09-29 (doc 10 B5). A leading underscore says "internal"; putting the name
+#: in `__all__` says "exportable". A package can say both, and four do.
+#:
+#: The count is recorded rather than banned because most of these are legitimate:
+#: `<package>/__init__.py` publishing its own submodules is how the package
+#: exposes a grouped API, and `test_boundary_law.py` covers the reach-in that
+#: would actually be a boundary break. What this guard adds is the *other* half
+#: of B5's question — how many of them does anybody import by name? — so the
+#: number can only fall by deliberate edit.
+DECLARED_PRIVATE_EXPORTS: dict[str, int] = {
+    "agents.prompt_templates.defaults": 22,
+    "mcp.tools.bibles": 1,
+    "mcp.tools.generation": 2,
+    "orchestration.nodes": 26,
+}
+
+
+def _declared_private_exports() -> dict[str, int]:
+    """Count underscore-prefixed names each package declares in its `__all__`."""
+    counted: dict[str, int] = {}
+    for package in packages():
+        declared = declared_surface(package)
+        if declared is None:
+            continue
+        private = [name for name in declared if name.startswith("_")]
+        if private:
+            counted[package] = len(private)
+    return counted
+
+
+def test_declared_private_exports_do_not_grow() -> None:
+    """A package may publish internal names, but not more of them silently.
+
+    Doc 10 B5: 51 underscore-prefixed names are declared exportable across four
+    package roots, which is why an earlier draft of that finding called the
+    surface dishonest. Measured since: **none of the 51 has a consumer outside its
+    own package**, and 36 have no importer at all — 17 of the 22
+    `prompt_templates.defaults` agent names, 17 of the 26 `orchestration.nodes`
+    graph helpers, and both `mcp.tools.generation` helpers.
+
+    So the honest reading is narrower than "the interfaces lie": these are
+    intra-package names that a grouped `__init__` publishes for its own callers,
+    with a leading underscore that keeps them out of the *documented* surface. The
+    measurement is what was missing, and it is recorded here so the next one is a
+    deliberate edit rather than drift.
+    """
+    actual = _declared_private_exports()
+    grew = {
+        package: (DECLARED_PRIVATE_EXPORTS.get(package, 0), count)
+        for package, count in actual.items()
+        if count > DECLARED_PRIVATE_EXPORTS.get(package, 0)
+    }
+    assert not grew, (
+        f"declared private exports grew (recorded -> actual): {grew}. Publishing "
+        "another underscore name is allowed if it has a consumer — say which one "
+        "in the commit message — otherwise drop the underscore or the export."
+    )
+
+    shrank = {
+        package: (recorded, actual.get(package, 0))
+        for package, recorded in DECLARED_PRIVATE_EXPORTS.items()
+        if actual.get(package, 0) < recorded
+    }
+    assert not shrank, (
+        f"declared private exports shrank (recorded -> actual): {shrank}. That is "
+        "the ratchet working; lower the recorded value so the slack cannot return."
+    )
