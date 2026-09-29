@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from pydantic import Field
+
+from film_pipeline.kb.manifest import KBManifest
+from film_pipeline.kb.packets import KBContextPacketBuilder
+from film_pipeline.kb.retrieval import KBRetrieval
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+
 from .helpers import (
     _error,
     _ok,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -21,7 +28,7 @@ def _load_kb_manifest() -> KBManifest | None:
     ``film_pipeline.kb.paths.kb_manifest_path``. Returns ``None`` when no
     manifest exists on disk yet.
     """
-    from film_pipeline.kb.manifest import KBManifest
+
     from film_pipeline.kb.paths import kb_manifest_path
 
     manifest_path = kb_manifest_path()
@@ -30,12 +37,10 @@ def _load_kb_manifest() -> KBManifest | None:
     return KBManifest.from_yaml(manifest_path)
 
 
-async def kb_search(args: dict[str, object]) -> dict[str, object]:
+async def kb_search(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     query = str(args.get("query", ""))
     phase = str(args.get("phase", ""))
     try:
-        from film_pipeline.kb.retrieval import KBRetrieval
-
         manifest = _load_kb_manifest()
         if manifest is None:
             return _ok(
@@ -64,7 +69,7 @@ async def kb_search(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
+async def kb_get_item(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     item_id = str(args.get("item_id", ""))
     try:
         manifest = _load_kb_manifest()
@@ -86,9 +91,9 @@ async def kb_get_item(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
-    from film_pipeline.kb.packets import KBContextPacketBuilder
+async def kb_get_context_packet(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
 
     try:
         manifest = _load_kb_manifest()
@@ -110,9 +115,67 @@ async def kb_get_context_packet(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def kb_explain_context_choice(args: dict[str, object]) -> dict[str, object]:
+async def kb_explain_context_choice(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     return _ok(
         message="KB context is selected by phase and agent capability. "
         "Canonical rules (authority=CANONICAL) take priority over playbooks and case studies. "
         "Use kb_get_context_packet to see the current packet.",
     )
+
+
+class KbSearchArgs(ToolArgs):
+    """Arguments for `kb_search`."""
+
+    query: str = Field(description="What to search the knowledge base for.")
+    phase: str = Field(default="", description="Restrict to one phase; empty searches all.")
+
+
+class KbGetItemArgs(ToolArgs):
+    """Arguments for `kb_get_item`."""
+
+    item_id: str = Field(description="Knowledge-base item to fetch.")
+
+
+class KbGetContextPacketArgs(ToolArgs):
+    """Arguments for `kb_get_context_packet`."""
+
+    agent_id: str = Field(default="", description="Agent the packet is for.")
+    phase: str = Field(default="", description="Phase the packet is for.")
+    task: str = Field(default="", description="Task description to select context for.")
+
+
+class KbExplainContextChoiceArgs(ToolArgs):
+    """Arguments for `kb_explain_context_choice` (none)."""
+
+
+KB_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="kb_search",
+        group=ToolGroup.KB,
+        description="Search the knowledge base by tag or text, optionally within one phase.",
+        args=KbSearchArgs,
+        handler=kb_search,
+    ),
+    ToolSpec(
+        name="kb_get_item",
+        group=ToolGroup.KB,
+        description="Fetch one knowledge-base item by id.",
+        args=KbGetItemArgs,
+        handler=kb_get_item,
+    ),
+    ToolSpec(
+        name="kb_get_context_packet",
+        group=ToolGroup.KB,
+        description="Build the knowledge-base context packet an agent would receive.",
+        args=KbGetContextPacketArgs,
+        handler=kb_get_context_packet,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="kb_explain_context_choice",
+        group=ToolGroup.KB,
+        description="Explain how context selection works for each phase.",
+        args=KbExplainContextChoiceArgs,
+        handler=kb_explain_context_choice,
+    ),
+)

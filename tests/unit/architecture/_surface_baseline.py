@@ -1,4 +1,4 @@
-"""The recorded public surface of every package, and why three declare none.
+"""The recorded public surface of every package, and why four declare none.
 
 ## How to read this
 
@@ -18,12 +18,15 @@ resolves surfaces from imported modules rather than by parsing AST. That matters
 an AST literal parser read `mcp/tools`'s computed `__all__` as `None`, silently
 skipping 77 declared names.
 
-## Why three packages declare no `__all__`
+## Why four packages declare no `__all__`
 
 `BARE_ROOT_REASONS` is checked by the guard: a package with no `__all__` and no
 entry here fails, so the absence is a stated decision rather than an oversight.
 Each reason is falsifiable — `test_bare_package_roots.py` measures the property
 each one claims (no eager submodule load, no `langgraph` on the import path).
+`BARE_ROOT_SYMBOLS` records the public symbols reachable on each of those roots, so
+a `def` added to a bare `__init__.py` is a recorded edit rather than an invisible
+widening of the surface.
 
 Adding `__all__` to any of these is not forbidden, but it is not free: for
 `orchestration` it would eagerly load the graph. The sanctioned path if one ever
@@ -44,35 +47,39 @@ class Surface(NamedTuple):
 
 #: package -> (declared `__all__` size or None, public module count).
 SURFACE_BASELINE: dict[str, Surface] = {
-    "agents": Surface(5, 28),
+    "agents": Surface(5, 25),
     "agents.impl": Surface(14, 15),
     "agents.model_routing": Surface(2, 0),
     "agents.prompt_templates": Surface(3, 5),
     "agents.prompt_templates.defaults": Surface(24, 3),
-    "agents.transports": Surface(20, 3),
     "checkpoints": Surface(8, 6),
     "cli": Surface(None, 4),
     "config": Surface(15, 6),
     "constraints": Surface(4, 1),
     "devharness": Surface(4, 5),
-    "filmspec": Surface(22, 0),
-    "generation": Surface(18, 15),
+    "filmspec": Surface(20, 0),
+    "generation": Surface(18, 22),
+    # Split out of `mcp.tools.reference_generation` by doc 03 slice 2: the
+    # use case moved to its owner, the MCP handler stayed behind.
+    "generation.reference": Surface(24, 6),
+    "mcp.tools.reference_generation": Surface(2, 1),
     "generation.compositor": Surface(6, 3),
     "governance": Surface(12, 11),
-    "governance.validators": Surface(8, 3),
+    "governance.gates": Surface(8, 3),  # renamed from governance.validators, doc 06 slice 6.6
     "kb": Surface(4, 6),
-    "mcp": Surface(14, 37),
-    "mcp.tools": Surface(77, 31),
-    "mcp.tools.bibles": Surface(6, 5),
-    "mcp.tools.generation": Surface(11, 4),
-    "mcp.tools.reference_generation": Surface(14, 7),
-    "operations": Surface(23, 5),
-    "orchestration": Surface(None, 14),
-    "orchestration.nodes": Surface(42, 6),
+    "mcp": Surface(15, 33),
+    "mcp.tools": Surface(77, 27),
+    "mcp.tools.bibles": Surface(12, 5),
+    "mcp.tools.generation": Surface(15, 4),
+    "operations": Surface(12, 3),
+    "orchestration": Surface(None, 17),
+    "orchestration.nodes": Surface(43, 6),
     "orchestration.subgraphs": Surface(None, 1),
     "post": Surface(13, 6),
     "projects": Surface(10, 2),
-    "providers": Surface(18, 13),
+    "providers": Surface(18, 17),
+    # Text transports moved here from `agents.transports` (doc 06 slice 6.3).
+    "providers.text": Surface(19, 3),
     "providers.adapters": Surface(3, 3),
     "schemas": Surface(107, 36),
     "schemas.registries": Surface(5, 3),
@@ -80,7 +87,6 @@ SURFACE_BASELINE: dict[str, Surface] = {
     "studio": Surface(None, 9),
     "validation": Surface(7, 11),
     "validation.impl": Surface(7, 7),
-    "validation.validators": Surface(1, 0),
 }
 
 #: Package roots that deliberately declare no `__all__`, with the reason.
@@ -105,6 +111,23 @@ BARE_ROOT_REASONS: dict[str, str] = {
         "vocabulary of its own. `__version__` is the only root binding, and it is "
         "not part of any consumer's contract."
     ),
+}
+
+#: Public *symbols* reachable on a bare package root (`dir()` names minus
+#: submodules and minus `ARTIFACT_NAMES`), recorded per package.
+#:
+#: `SURFACE_BASELINE` grades a bare root only by its *module* count, so before this
+#: table existed a bare package could add a public function or class to its
+#: `__init__.py` and no guard noticed: `test_no_package_leaks_an_undeclared_symbol_off_its_root`
+#: skips any package without `__all__`, and the module count is unchanged by an
+#: added statement. All four roots reach no public symbol today, so the recorded
+#: value is empty for each — the entry exists so that the first one is a
+#: deliberate, reviewed edit rather than a silent widening.
+BARE_ROOT_SYMBOLS: dict[str, frozenset[str]] = {
+    "cli": frozenset(),
+    "orchestration": frozenset(),
+    "orchestration.subgraphs": frozenset(),
+    "studio": frozenset(),
 }
 
 #: Public names that appear on a package root only because the package imported
@@ -132,7 +155,7 @@ ARTIFACT_NAMES: frozenset[str] = frozenset(
         # consumer imports them through that root.
         "dataclass",
         "field",
-        # `validation.validators` uses these to build `MVP_VALIDATORS`, its one
+        # `validation/registry.py` uses these to build `MVP_VALIDATORS`, which
         # exported name. Consumers import them from `schemas`, not from here.
         "ValidationModality",
         "ValidationScope",

@@ -36,12 +36,57 @@ from collections import defaultdict
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _SRC = _REPO_ROOT / "src" / "film_pipeline"
 
+#: Byte-identical bodies deliberately kept in two modules, keyed by the pair of
+#: `path::name` sites, with the reason they cannot be merged. A row must still be
+#: found by the sweep, so deleting or fixing a copy fails
+#: `test_the_recorded_duplicates_are_still_real` instead of leaving a stale
+#: exemption behind.
+#:
+#: `AGENTS.md` separates "duplication of convenience" from distributed ownership:
+#: "Two modules happening to write the same value the same way is *not* an
+#: ownership seam". These two pairs are that first kind — a three-line accessor and
+#: a three-line store query — and each pair exists only because of the dependency
+#: direction: `generation` must not import `mcp` (a use case must not depend on the
+#: surface above it), and `mcp/tools/helpers.py` must not import
+#: `generation.reference` (that package's `__init__` pulls the compositor and the
+#: sheet reviewer into every tool module's import path).
+KNOWN_DUPLICATE_BODIES: dict[frozenset[str], str] = {
+    frozenset(
+        {
+            "generation/reference/context.py::reference_services",
+            "mcp/tools/helpers.py::_services",
+        }
+    ): "services accessor; merging either way crosses the mcp/generation boundary",
+    frozenset(
+        {
+            "generation/reference/context.py::latest_artifact_version",
+            "mcp/tools/helpers.py::_latest_artifact_version",
+        }
+    ): "artifact-version query; merging either way crosses the mcp/generation boundary",
+}
+
 
 def _body_fingerprint(source: str, node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """Hash everything after the name, so same-body/different-name still groups."""
-    segment = ast.get_source_segment(source, node)
-    assert segment is not None
-    return hashlib.sha256(segment.split("(", 1)[1].encode()).hexdigest()
+    """Hash the function's statements, ignoring name, signature and docstring.
+
+    An earlier version split the source text at the first ``(``, which kept the
+    parameter annotations *and* compared raw text. Two copies of one rule whose
+    annotations or docstrings differed therefore hashed differently and the guard
+    reported nothing — it missed the two `context.py`/`helpers.py` pairs below.
+    Normalising through the AST compares the statements themselves, so those
+    differences no longer hide a duplicate.
+    """
+    body = [
+        statement
+        for statement in node.body
+        if not (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        )
+    ]
+    dumped = ast.dump(ast.Module(body=body, type_ignores=[]))
+    return hashlib.sha256(dumped.encode()).hexdigest()
 
 
 def _duplicate_function_bodies() -> dict[str, list[str]]:
@@ -63,13 +108,28 @@ def _duplicate_function_bodies() -> dict[str, list[str]]:
 
 
 def test_no_function_body_is_defined_in_two_modules() -> None:
-    duplicates = _duplicate_function_bodies()
+    duplicates = {
+        fingerprint: sites
+        for fingerprint, sites in _duplicate_function_bodies().items()
+        if frozenset(sites) not in KNOWN_DUPLICATE_BODIES
+    }
 
     assert not duplicates, (
         "these module-level functions have byte-identical bodies in two files, "
         "which means one rule with two authors and no test tying them together: "
         f"{sorted(duplicates.values())}. Keep one definition in the module that "
-        "owns the rule and delete the other."
+        "owns the rule and delete the other, or record the pair in "
+        "KNOWN_DUPLICATE_BODIES with the reason it cannot be merged."
+    )
+
+
+def test_the_recorded_duplicates_are_still_real() -> None:
+    """A row for a pair that no longer duplicates hides a later, real one."""
+    found = {frozenset(sites) for sites in _duplicate_function_bodies().values()}
+    stale = sorted(sorted(pair) for pair in KNOWN_DUPLICATE_BODIES if pair not in found)
+    assert not stale, (
+        f"these recorded duplicate pairs are no longer byte-identical: {stale}. "
+        "Delete the row — a stale exemption can mask a new duplicate."
     )
 
 

@@ -11,41 +11,38 @@ resolving.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.checkpoints.invalidation import InvalidationEngine
 from film_pipeline.config.profile_resolver import (
-    resolve_project_config,
+    config_diff,
+    load_profile_stack,
+    merge_profile_changes,
+    requested_profile_changes,
+    resolve_config_or_error,
+    resolve_config_pair,
     resolved_config_state_keys,
+    resolved_raw,
 )
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 from film_pipeline.schemas.approval import ProfileChangeApproval, ProfileChangeProposal
 from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
 from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.storage.contract import sanitize_artifact_id
 
 from .helpers import (
-    _active_project_id,
     _error,
     _ok,
     _services,
-    operator_service,
-    require_project_id,
-    require_project_state,
-)
-
-_PROFILE_STACK_KEYS = (
-    "film_type_profile",
-    "quality_profile",
-    "provider_profile",
-    "review_profile",
-    "auto_approve_profile",
+    register_profile_providers,
 )
 
 
-async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
+async def propose_profile_change(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Propose a mid-project change to the profile stack.
 
     Validates the requested profiles, resolves the projected configuration,
@@ -53,27 +50,27 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     ``ProfileChangeProposal`` artifact. The change is not applied until a
     human approves it via ``approve_profile_change``.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    project_id = str(state["project_id"])
 
     reason = str(args.get("reason", "")).strip()
     if not reason:
         return _error("reason is required.")
     proposed_by = str(args.get("proposed_by", "operator")).strip() or "operator"
 
-    changes = _requested_profile_changes(args)
+    changes = requested_profile_changes(args)
     if not changes:
         return _error("At least one profile change is required.")
 
-    current_stack = _load_profile_stack(state)
-    new_stack = _merge_profile_changes(current_stack, changes)
+    current_stack = load_profile_stack(state)
+    new_stack = merge_profile_changes(current_stack, changes)
 
-    configs = _resolve_config_pair(current_stack, new_stack)
+    configs = resolve_config_pair(current_stack, new_stack)
     if isinstance(configs, str):
         return _error(configs)
     resolved_current, resolved_new = configs
-    diff = _config_diff(_resolved_raw(resolved_current), _resolved_raw(resolved_new))
+    diff = config_diff(resolved_raw(resolved_current), resolved_raw(resolved_new))
 
     proposal = _new_proposal(
         project_id,
@@ -96,16 +93,16 @@ async def propose_profile_change(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
+async def approve_profile_change(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Approve a pending profile-change proposal and apply it to the project.
 
     Requires ``confirmed=True``. Bumps ``profile_version``, re-resolves the
     configuration, persists a new ``project_config`` artifact, invalidates
     downstream artifacts, and records the approval.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    project_id = str(state["project_id"])
 
     proposal_id = str(args.get("proposal_id", "")).strip()
     if not proposal_id:
@@ -119,13 +116,13 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
         return _error(proposal)
 
     new_stack = dict(proposal.proposed_profile_stack)
-    resolved = _resolve_config_or_error(new_stack)
+    resolved = resolve_config_or_error(new_stack)
     if isinstance(resolved, str):
         return _error(resolved)
 
     new_version = int(state.get("profile_version", 0)) + 1
     _apply_resolved_config(state, new_stack, resolved, new_version)
-    operator_service(rt).register_profile_providers(new_stack, _resolved_raw(resolved))
+    register_profile_providers(rt, new_stack, resolved_raw(resolved))
 
     config_ref, inv_ref = _commit_profile_config(
         rt, project_id, proposal_id, new_version, resolved, new_stack
@@ -146,88 +143,6 @@ async def approve_profile_change(args: dict[str, object]) -> dict[str, object]:
         approval_ref=approval_ref,
         message="Profile change approved and applied.",
     )
-
-
-def _active_state(rt: Any, args: dict[str, object]) -> tuple[str, Any] | None:
-    """Resolve ``(project_id, state)`` for the request, or ``None`` without one."""
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    state = rt.get_project(project_id)
-    if state is None:
-        return None
-    return project_id, state
-
-
-def _requested_profile_changes(args: dict[str, object]) -> dict[str, str]:
-    """Collect the non-empty profile-stack changes requested in tool args."""
-    changes: dict[str, str] = {}
-    for key in _PROFILE_STACK_KEYS:
-        value = args.get(key)
-        if value is not None:
-            changes[key] = str(value).strip()
-    return changes
-
-
-def _load_profile_stack(state: dict[str, Any]) -> dict[str, str]:
-    stack = state.get("profile_stack", {})
-    if isinstance(stack, dict):
-        return {str(k): str(v) for k, v in stack.items()}
-    return {}
-
-
-def _merge_profile_changes(current: dict[str, str], changes: dict[str, str]) -> dict[str, str]:
-    merged = dict(current)
-    for key, value in changes.items():
-        if value:
-            merged[key] = value
-        else:
-            merged.pop(key, None)
-    return merged
-
-
-def _config_diff(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
-    """Return a shallow diff of two configuration dicts."""
-    added = [k for k in new if k not in old]
-    removed = [k for k in old if k not in new]
-    changed: list[str] = []
-    for k in new:
-        if k in old and old[k] != new[k]:
-            changed.append(k)
-    return {"added": added, "removed": removed, "changed": changed}
-
-
-def _profile_resolution_error(exc: Exception) -> str:
-    """Map a profile-resolution failure to its tool error message."""
-    if isinstance(exc, FileNotFoundError):
-        return f"Profile not found: {exc}"
-    return f"Failed to resolve profiles: {exc}"
-
-
-def _resolve_config_pair(
-    current_stack: dict[str, str],
-    new_stack: dict[str, str],
-) -> tuple[dict[str, object], dict[str, object]] | str:
-    """Resolve the current and projected stacks, or return the error message."""
-    try:
-        resolved_current = resolve_project_config(current_stack)
-        resolved_new = resolve_project_config(new_stack)
-    except Exception as exc:
-        return _profile_resolution_error(exc)
-    return resolved_current, resolved_new
-
-
-def _resolve_config_or_error(stack: dict[str, str]) -> dict[str, object] | str:
-    """Resolve one profile stack, or return the mapped error message."""
-    try:
-        return resolve_project_config(stack)
-    except Exception as exc:
-        return _profile_resolution_error(exc)
-
-
-def _resolved_raw(resolved: dict[str, object]) -> dict[str, Any]:
-    """Return the merged raw configuration of a resolved stack."""
-    return cast(dict[str, Any], resolved.get("raw", {}))
 
 
 def _load_pending_proposal(
@@ -289,7 +204,7 @@ def _commit_profile_config(
 ) -> tuple[str, str]:
     """Persist the resolved config artifact and invalidate downstream artifacts."""
     config_ref = _save_resolved_config_artifact(
-        rt, project_id, profile_version, _resolved_raw(resolved), profile_stack
+        rt, project_id, profile_version, resolved_raw(resolved), profile_stack
     )
     inv_ref = _invalidate_for_profile_change(rt, project_id, proposal_id)
     return config_ref, inv_ref
@@ -451,8 +366,6 @@ def _save_resolved_config_artifact(
 
 
 def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -> str:
-    from film_pipeline.checkpoints.invalidation import InvalidationEngine
-
     engine = InvalidationEngine()
     report = engine.report(
         rollback_target=f"profile-change:{proposal_id}",
@@ -467,3 +380,50 @@ def _invalidate_for_profile_change(rt: Any, project_id: str, proposal_id: str) -
         status=ArtifactStatus.CANDIDATE,
         created_by="approve_profile_change",
     )
+
+
+class ProposeProfileChangeArgs(ToolArgs):
+    """Arguments for `propose_profile_change`.
+
+    The five profile fields are the stack `PROFILE_STACK_KEYS` reads; a blank one
+    leaves that slot unchanged.
+    """
+
+    reason: str = Field(default="", description="Why the change is proposed.")
+    proposed_by: str = Field(default="", description="Who proposed it.")
+    film_type_profile: str = Field(default="", description="New film-type profile stem.")
+    quality_profile: str = Field(default="", description="New quality profile stem.")
+    provider_profile: str = Field(default="", description="New provider profile stem.")
+    review_profile: str = Field(default="", description="New review profile stem.")
+    auto_approve_profile: str = Field(default="", description="New auto-approve profile stem.")
+
+
+class ApproveProfileChangeArgs(ToolArgs):
+    """Arguments for `approve_profile_change`."""
+
+    proposal_id: str = Field(description="Pending proposal to approve.")
+    note: str = Field(default="", description="Note to record with the approval.")
+    approved_by: str = Field(default="", description="Who approved it.")
+
+
+PROFILE_CHANGE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="propose_profile_change",
+        group=ToolGroup.CONFIG,
+        description="Propose a mid-project change to the profile stack for human approval.",
+        args=ProposeProfileChangeArgs,
+        handler=propose_profile_change,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_profile_change",
+        group=ToolGroup.CONFIG,
+        description="Approve a pending profile change and apply it to the project.",
+        args=ApproveProfileChangeArgs,
+        handler=approve_profile_change,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)

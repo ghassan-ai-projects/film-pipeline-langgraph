@@ -17,7 +17,6 @@ class ProviderHealth:
     last_health_check_at: datetime | None = None
     last_successful_job_at: datetime | None = None
     quota_remaining: int = -1  # -1 = unknown / unlimited
-    credit_remaining_usd: float = -1.0  # -1 = unknown
     known_outage: bool = False
     blocked_reason: str = ""
     resume_requirements: list[str] = field(default_factory=list)

@@ -5,7 +5,9 @@ from __future__ import annotations
 import inspect
 import os
 from dataclasses import dataclass, field, replace
-from typing import Any
+from typing import Any, cast
+
+from pydantic import ValidationError
 
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT
 from film_pipeline.mcp._stdio_transport import (
@@ -22,19 +24,22 @@ from film_pipeline.mcp._stdio_transport import (
     handle_jsonrpc as handle_jsonrpc,
 )
 from film_pipeline.mcp.contract import (
-    ToolHandler,
     ToolRegistration,
     ToolRegistry,
     make_registry,
 )
 from film_pipeline.mcp.envelope import RequestEnvelope, new_envelope
 from film_pipeline.mcp.errors import MCPError, MCPErrorCode, MCPResponse
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolHandler
 from film_pipeline.operations.errors import ProjectNotFoundError
 from film_pipeline.projects import (
     AmbiguousProjectError,
     ProjectRecord,
     ProjectRegistry,
 )
+from film_pipeline.studio._persistence import runtime_root_from_config
+from film_pipeline.studio.runtime import get_runtime
 
 
 @dataclass
@@ -43,7 +48,6 @@ class MCPServer:
 
     tools: ToolRegistry = field(default_factory=make_registry)
     projects: ProjectRegistry = field(default_factory=ProjectRegistry)
-    active_project_id: str | None = None
 
     async def call(
         self,
@@ -63,13 +67,17 @@ class MCPServer:
         if isinstance(resolved, MCPResponse):
             return resolved
         reg, resolved_envelope = resolved
-        confirmation = self._check_confirmation(reg, tool_name, arguments, resolved_envelope)
+        parsed, invalid = self._validate_arguments(reg, arguments, resolved_envelope)
+        if invalid is not None:
+            return invalid
+        confirmed = parsed.confirmed if parsed is not None else None
+        confirmation = self._check_confirmation(reg, tool_name, confirmed, resolved_envelope)
         if confirmation is not None:
             return confirmation
         missing_project = self._check_active_project(reg, resolved_envelope)
         if missing_project is not None:
             return missing_project
-        return await self._dispatch_handler(reg.handler, arguments, resolved_envelope)
+        return await self._dispatch_handler(reg, dict(arguments), resolved_envelope)
 
     def _resolve_tool_and_project(
         self,
@@ -80,7 +88,7 @@ class MCPServer:
         reg = self._registration_for(tool_name, envelope)
         if isinstance(reg, MCPResponse):
             return reg
-        resolved = self._resolve_project_ref(reg, envelope)
+        resolved = self._resolve_project_ref(envelope)
         if isinstance(resolved, MCPResponse):
             return resolved
         return reg, resolved
@@ -105,17 +113,13 @@ class MCPServer:
 
     def _resolve_project_ref(
         self,
-        reg: ToolRegistration,
         envelope: RequestEnvelope,
     ) -> MCPResponse | RequestEnvelope:
         """Resolve the request's project, explicit ref first, then the session's."""
         if not envelope.project_ref:
-            # No explicit ref: fall back to the session's active project. The
-            # field was previously write-only — set on a mutating call and
-            # never read — so the dispatch precondition had nothing to consult
-            # and every handler re-derived the active project for itself.
-            if self.active_project_id:
-                return _resolved_envelope(envelope, self.active_project_id)
+            active = self._active_project_from_runtime()
+            if active:
+                return _resolved_envelope(envelope, active)
             return envelope
         try:
             project = self.projects.resolve_or_raise(envelope.project_ref)
@@ -126,11 +130,8 @@ class MCPServer:
             # the server's registry, auto-register it. This fixes the gap
             # where create_film_project registers with the runtime but the
             # server's ProjectRegistry is a separate in-memory structure.
-            return self._unknown_project_fallback(reg, envelope, exc)
-        envelope = _resolved_envelope(envelope, project.project_id)
-        if reg.contract.mutates_state:
-            self.active_project_id = project.project_id
-        return envelope
+            return self._unknown_project_fallback(envelope, exc)
+        return _resolved_envelope(envelope, project.project_id)
 
     def _ambiguous_response(
         self,
@@ -152,7 +153,6 @@ class MCPServer:
 
     def _unknown_project_fallback(
         self,
-        reg: ToolRegistration,
         envelope: RequestEnvelope,
         exc: KeyError,
     ) -> MCPResponse | RequestEnvelope:
@@ -164,15 +164,12 @@ class MCPServer:
                 request_id=envelope.request_id,
                 error=MCPError(code=MCPErrorCode.UNKNOWN_PROJECT, message=str(exc)),
             )
-        if reg.contract.mutates_state:
-            self.active_project_id = pid
         return _resolved_envelope(envelope, pid)
 
     def _auto_register_from_runtime(self, project_ref: str | None) -> str | None:
         """Register a runtime-known project missing here; None when unknown everywhere."""
         if not project_ref:
             return None
-        from film_pipeline.studio.runtime import get_runtime
 
         rt = get_runtime()
         rt_project = rt.get_project(project_ref)
@@ -218,15 +215,49 @@ class MCPServer:
             ),
         )
 
+    def _validate_arguments(
+        self,
+        registration: ToolRegistration,
+        arguments: dict[str, object],
+        envelope: RequestEnvelope,
+    ) -> tuple[Any, MCPResponse | None]:
+        """Parse `arguments` into the tool's args model, or shape a refusal.
+
+        Returns ``(parsed, None)`` on success and ``(None, response)`` when the
+        arguments do not satisfy the tool's declared schema. A tool registered
+        without a spec — only tests do that now — parses to ``None`` and passes
+        its arguments through unchanged.
+        """
+        try:
+            return registration.validate(dict(arguments)), None
+        except ValidationError as exc:
+            return None, MCPResponse(
+                success=False,
+                request_id=envelope.request_id,
+                error=MCPError(
+                    code=MCPErrorCode.VALIDATION_ERROR,
+                    message=(
+                        f"Invalid arguments for '{registration.contract.name}': "
+                        f"{exc.error_count()} error(s)."
+                    ),
+                    details={"tool": registration.contract.name, "errors": str(exc)},
+                ),
+            )
+
     def _check_confirmation(
         self,
         registration: ToolRegistration,
         tool_name: str,
-        arguments: dict[str, object],
+        confirmed: bool | None,
         envelope: RequestEnvelope,
     ) -> MCPResponse | None:
-        """Return a CONFIRMATION_REQUIRED response, or None when the gate passes."""
-        if registration.contract.requires_confirmation and not arguments.get("confirmed"):
+        """Return a CONFIRMATION_REQUIRED response, or None when the gate passes.
+
+        `confirmed` is the value from the tool's *validated* args model, not the
+        raw request body: dispatch validates first precisely so that a truthy
+        non-boolean such as `"no"` cannot authorize a destructive call.
+        """
+        if registration.contract.requires_confirmation and not confirmed:
             return MCPResponse(
                 success=False,
                 request_id=envelope.request_id,
@@ -243,17 +274,41 @@ class MCPServer:
 
     async def _dispatch_handler(
         self,
-        handler: ToolHandler,
+        reg: ToolRegistration,
         arguments: dict[str, object],
         envelope: RequestEnvelope,
     ) -> MCPResponse:
-        """Invoke the handler (sync or async) and shape result or failure into a response."""
-        new_args: dict[str, object] = {**arguments, "_envelope": envelope}
+        """Invoke the handler and shape result or failure into a response.
+
+        `arguments` is the caller's own dict, which `_validate_arguments` has
+        already accepted but not rewritten. Handlers read it with `args.get(...)`
+        and own their coercion; passing a dumped args model instead would fill in
+        declared defaults and change what "absent" means to them.
+
+        Handlers come in two shapes while doc 01's migration is in flight:
+
+        - `handler(ctx, args)` — the target. Dispatch builds the `ToolContext`, so
+          the handler never resolves the runtime or the project itself.
+        - `handler(args)` — the legacy shape. The seven remaining handlers take
+          the same argument dict; there is no `"_envelope"` key any more, because
+          no handler ever read one.
+        """
+
+        handler = reg.handler
+        any_handler = cast("Any", handler)
+        is_async = inspect.iscoroutinefunction(handler)
         try:
-            if inspect.iscoroutinefunction(handler):
-                data: Any = await handler(new_args)
+            if _accepts_context(handler):
+                context = self._build_context(envelope)
+                data: Any = (
+                    await any_handler(context, dict(arguments))
+                    if is_async
+                    else any_handler(context, dict(arguments))
+                )
             else:
-                data = handler(new_args)
+                data = (
+                    await any_handler(dict(arguments)) if is_async else any_handler(dict(arguments))
+                )
             return MCPResponse(success=True, request_id=envelope.request_id, data=data)
         except MCPError as exc:
             return MCPResponse(success=False, request_id=envelope.request_id, error=exc)
@@ -277,13 +332,54 @@ class MCPServer:
                 error=MCPError(code=MCPErrorCode.INTERNAL_ERROR, message=str(exc)),
             )
 
+    def _build_context(self, envelope: RequestEnvelope) -> ToolContext:
+        """Build the per-request context dispatch hands a context-style handler.
+
+        The runtime is resolved once here rather than 61 times across the tool
+        modules, and the resolved project is read from the envelope instead of
+        being smuggled through the argument dict.
+        """
+
+        return ToolContext(
+            runtime=get_runtime(),
+            project_id=envelope.resolved_project_id,
+            envelope=envelope,
+        )
+
     def catalog(self) -> list[dict[str, object]]:
         return self.tools.catalog()
 
     def register_project(self, record: ProjectRecord) -> None:
         self.projects.register(record)
-        if self.active_project_id is None:
-            self.active_project_id = record.project_id
+
+    def _active_project_from_runtime(self) -> str | None:
+        """The runtime's active project id, or ``None`` when there is none.
+
+        `StudioRuntime` owns project state, so it owns "active". Reading it here
+        keeps one owner: a mutating call through the runtime and a
+        `set_active_project` tool now move the same value, where they used to
+        move two.
+        """
+
+        active = get_runtime().get_active()
+        if active is None:
+            return None
+        return str(active.get("project_id", "")) or None
+
+
+def _accepts_context(handler: ToolHandler) -> bool:
+    """True when ``handler`` is declared as ``(ctx, args)`` rather than ``(args)``.
+
+    Read from the signature rather than a registry flag: the handler's own
+    declaration is the single source of truth for how it wants to be called, and
+    a flag would be a second place to forget. A handler whose first parameter is
+    named ``ctx`` is context-style; the name is the declaration.
+    """
+    try:
+        parameters = list(inspect.signature(handler).parameters)
+    except (TypeError, ValueError):  # pragma: no cover - builtins and C callables
+        return False
+    return bool(parameters) and parameters[0] == "ctx"
 
 
 def main() -> int:
@@ -293,7 +389,6 @@ def main() -> int:
     server from starting — individual tool calls will fail with actionable
     errors if their required resources are missing.
     """
-    from film_pipeline.studio.bootstrap import validate_environment
 
     if not os.getenv("FILM_PIPELINE_NO_PERSIST"):
         os.environ.setdefault("FILM_PIPELINE_PERSIST_STATE", "1")
@@ -304,7 +399,8 @@ def main() -> int:
     # neither `FILM_PIPELINE_RUNTIME_ROOT` nor persistence enabled the runtime
     # falls back to a throwaway tempdir. `configure_logging` tolerates `None` and
     # adds the file handler only when it has a root.
-    from film_pipeline.studio._persistence import runtime_root_from_config
+
+    from film_pipeline.studio.bootstrap import validate_environment
     from film_pipeline.studio.logging_setup import configure_logging
 
     configure_logging(runtime_root_from_config())

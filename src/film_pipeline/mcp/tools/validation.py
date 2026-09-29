@@ -5,7 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, TypeGuard
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.artifact import ArtifactMetadata
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.validation.impl.assembly import AssemblyValidator
+from film_pipeline.validation.impl.delivery_completeness import (
+    DeliveryCompletenessValidator,
+)
+from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+from film_pipeline.validation.impl.reference_usability import (
+    ReferenceUsabilityValidator,
+)
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 from .helpers import (
     _error,
@@ -14,8 +28,6 @@ from .helpers import (
     _ok,
     _report_summary,
     _services,
-    require_project_id,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +40,6 @@ if TYPE_CHECKING:
 
 def _parse_phase(phase_str: str) -> FilmPhase | None:
     """Parse a phase string into a FilmPhase, or None when unknown."""
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         return FilmPhase(phase_str)
@@ -59,47 +70,36 @@ class _PhaseSpec:
 
 def _script_validators() -> tuple[type[Any], ...]:
     """Import script-phase validators lazily, preserving run order."""
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
     return (ScriptStructureValidator, DialogueVoiceValidator)
 
 
 def _reference_validators() -> tuple[type[Any], ...]:
     """Import visual-development validators lazily."""
-    from film_pipeline.validation.impl.reference_usability import (
-        ReferenceUsabilityValidator,
-    )
 
     return (ReferenceUsabilityValidator,)
 
 
 def _gen_planning_validators() -> tuple[type[Any], ...]:
     """Import gen-planning validators lazily."""
-    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     return (PromptReadinessValidator,)
 
 
 def _shot_bible_validators() -> tuple[type[Any], ...]:
     """Import shot-bible validators lazily."""
-    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     return (SceneContinuityValidator,)
 
 
 def _assembly_validators() -> tuple[type[Any], ...]:
     """Import post/assembly validators lazily."""
-    from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     return (AssemblyValidator,)
 
 
 def _delivery_validators() -> tuple[type[Any], ...]:
     """Import delivery-phase validators lazily."""
-    from film_pipeline.validation.impl.delivery_completeness import (
-        DeliveryCompletenessValidator,
-    )
 
     return (DeliveryCompletenessValidator,)
 
@@ -169,9 +169,6 @@ def _save_report(
 ) -> str:
     """Persist a ValidationReport as a candidate artifact and return its ref."""
     from datetime import UTC, datetime
-
-    from film_pipeline.schemas.artifact import ArtifactMetadata
-    from film_pipeline.schemas.base import ArtifactStatus, ArtifactType
 
     meta = ArtifactMetadata(
         artifact_id="validation_report",
@@ -267,10 +264,11 @@ def _record_validation_results(
     rt.persist_project_state(project_id)
 
 
-async def run_validation(args: dict[str, object]) -> dict[str, object]:
+async def run_validation(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Run validators for the current phase and persist ValidationReport."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
     store = _services(rt).artifact_store
@@ -296,16 +294,15 @@ async def run_validation(args: dict[str, object]) -> dict[str, object]:
     return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
 
 
-async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
+async def get_validation_report(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return validation reports for the active project's current phase.
 
     Reads from stored ``_validation_reports`` in project state (populated
     by the QC node). Falls back to live validator runs if no stored reports.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
+    project_id = str(state["project_id"])
 
     # Stored QC reports work even without a current phase because they are
     # already persisted in state.
@@ -334,12 +331,13 @@ async def get_validation_report(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
+async def list_validation_issues(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List all validation issues for the active project's current phase.
 
     Reads from stored ``issues`` in project state (populated by QC node).
     """
-    state = require_project_state(args)
+    _ = args
+    state = ctx.project_state()
 
     issues = _normalized_stored_issues(state.get("issues"))
 
@@ -355,3 +353,46 @@ async def list_validation_issues(args: dict[str, object]) -> dict[str, object]:
         return _ok(phase="", issues=[], message="No active phase and no stored issues.")
 
     return _ok(phase=phase_str, issues=[], message="No validation issues found.")
+
+
+class RunValidationArgs(ToolArgs):
+    """Arguments for `run_validation` (none)."""
+
+
+class GetValidationReportArgs(ToolArgs):
+    """Arguments for `get_validation_report` (none)."""
+
+
+class ListValidationIssuesArgs(ToolArgs):
+    """Arguments for `list_validation_issues` (none)."""
+
+
+VALIDATION_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_validation_report",
+        group=ToolGroup.VALIDATION,
+        description="Read the current phase's validation report, from stored or live validators.",
+        args=GetValidationReportArgs,
+        handler=get_validation_report,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_validation_issues",
+        group=ToolGroup.VALIDATION,
+        description="List the validation issues recorded for the current phase.",
+        args=ListValidationIssuesArgs,
+        handler=list_validation_issues,
+        active_project=True,
+    ),
+)
+
+
+RUN_VALIDATION = ToolSpec(
+    name="run_validation",
+    group=ToolGroup.VALIDATION,
+    description="Run the validators for the current phase and persist the report.",
+    args=RunValidationArgs,
+    handler=run_validation,
+    mutates=True,
+    active_project=True,
+)

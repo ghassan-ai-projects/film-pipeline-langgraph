@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import ArtifactType
 
 from ..helpers import (
     _error,
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import (
     InvalidBibleOutput,
@@ -35,7 +38,6 @@ def _deliver_environment_bible(
     bible: Any,
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
@@ -54,15 +56,17 @@ def _deliver_environment_bible(
     )
 
 
-async def generate_environment_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_environment_bible(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Generate an EnvironmentBible from Script + FilmConstitution.
 
     Produces a locked environment description (locked_prompt_block, fingerprint,
     zones, viewpoints, lighting states, color palette) used by
     generate_reference_images for structured prompt construction.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
 
     project_id = str(active["project_id"])
     environment_id = str(args.get("environment_id", "")).strip()
@@ -103,3 +107,21 @@ async def generate_environment_bible(args: dict[str, object]) -> dict[str, objec
         return _error("EnvironmentBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"EnvironmentBible generation failed: {exc}")
+
+
+class GenerateEnvironmentBibleArgs(ToolArgs):
+    """Arguments for `generate_environment_bible`."""
+
+    environment_id: str = Field(default="", description="Stable id for the environment.")
+    environment_name: str = Field(default="", description="Display name; empty reuses the id.")
+
+
+GENERATE_ENVIRONMENT_BIBLE = ToolSpec(
+    name="generate_environment_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate an EnvironmentBible from the Script and FilmConstitution.",
+    args=GenerateEnvironmentBibleArgs,
+    handler=generate_environment_bible,
+    mutates=True,
+    active_project=True,
+)

@@ -16,60 +16,36 @@ implemented in ``film_pipeline.mcp.tools.*``.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
-from enum import StrEnum
-from typing import Any
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
+if TYPE_CHECKING:
+    from film_pipeline.mcp.tools.spec import ToolContract, ToolGroup
 
-class ToolGroup(StrEnum):
-    """High-level grouping for tools."""
-
-    PROJECT = "project"
-    INTAKE = "intake"
-    STATE = "state"
-    REVIEW = "review"
-    ARTIFACT = "artifact"
-    VALIDATION = "validation"
-    GENERATION = "generation"
-    KB = "kb"
-    CHECKPOINT = "checkpoint"
-    AUDIT = "audit"
-    PROVIDER = "provider"
-    CONFIG = "config"
-    COVERAGE = "coverage"
-    ASSEMBLY = "assembly"
-    OPERATOR = "operator"
-
-
-@dataclass(frozen=True)
-class ToolContract:
-    """Formal contract for one MCP tool."""
-
-    name: str
-    description: str
-    group: ToolGroup
-    input_schema: dict[str, Any] = field(default_factory=dict)
-    output_schema: dict[str, Any] = field(default_factory=dict)
-    mutates_state: bool = False
-    requires_confirmation: bool = False
-    requires_active_project: bool = False
-    creates_checkpoint: bool = False
-    idempotency_key_field: str | None = None
-
-
-ToolHandler = (
-    Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
-    | Callable[[dict[str, Any]], dict[str, Any]]
-)
+ToolHandler = Callable[..., Any]
 
 
 @dataclass
 class ToolRegistration:
-    """A tool registered with the server, pairing a contract with a handler."""
+    """A tool registered with the server, pairing a contract with a handler.
+
+    `spec` is set when the tool declared itself with a `ToolSpec` (doc 04's
+    slice 1). Dispatch validates arguments through it, so a tool declared with a
+    spec gets typed args and a real `input_schema`; one registered the older way
+    has no spec and dispatch passes its arguments through unchanged. The register
+    path is removed once every tool declares a spec.
+    """
 
     contract: ToolContract
     handler: ToolHandler
+    spec: Any = None
+
+    def validate(self, args: dict[str, Any]) -> Any:
+        """Return the parsed args model, or `None` when this tool has no spec."""
+        if self.spec is None:
+            return None
+        return self.spec.validate(args)
 
 
 class ToolRegistry:
@@ -78,10 +54,24 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, ToolRegistration] = {}
 
-    def register(self, contract: ToolContract, handler: ToolHandler) -> None:
+    def register(
+        self,
+        contract: ToolContract,
+        handler: ToolHandler,
+        spec: Any = None,
+    ) -> None:
         if contract.name in self._tools:
             raise ValueError(f"Tool already registered: {contract.name}")
-        self._tools[contract.name] = ToolRegistration(contract=contract, handler=handler)
+        self._tools[contract.name] = ToolRegistration(contract=contract, handler=handler, spec=spec)
+
+    def register_spec(self, spec: Any) -> None:
+        """Register a tool from its own declaration.
+
+        The target path: the spec carries the contract *and* the args model, so
+        there is nothing to keep in step between a `_register(...)` call and the
+        handler's signature.
+        """
+        self.register(spec.contract(), spec.handler, spec)
 
     def get(self, name: str) -> ToolRegistration:
         if name not in self._tools:

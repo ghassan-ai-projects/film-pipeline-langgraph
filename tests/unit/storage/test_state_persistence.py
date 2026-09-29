@@ -19,7 +19,6 @@ class TestConcurrentWrites:
         self, tmp_path: Path
     ) -> None:
         """Two threads saving one artifact cannot collide or tear files."""
-        from datetime import UTC, datetime
 
         from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.base import ArtifactType, FilmPhase
@@ -63,7 +62,6 @@ class TestConcurrentWrites:
     def test_concurrent_mutable_saves_keep_a_contiguous_revision_chain(
         self, tmp_path: Path
     ) -> None:
-        from datetime import UTC, datetime
 
         from film_pipeline.schemas.artifact import ArtifactMetadata
         from film_pipeline.schemas.base import ArtifactType, FilmPhase
@@ -305,28 +303,6 @@ class TestResumeAcrossRestart:
         rt2.set_active("resume-p")
         result = rt2.approve_phase()
         assert result.get("ok") is not False
-
-
-class TestOperatorFreshness:
-    def test_freshness_prefers_typed_record(self, tmp_path: Path) -> None:
-        from film_pipeline.operations.operator import OperatorService
-        from film_pipeline.studio.runtime import StudioRuntime
-
-        runtime_root = tmp_path / "runtime"
-        rt = StudioRuntime(server_mode="mock", runtime_root=runtime_root)
-        rt.create_project("p1", title="Fresh")
-        svc = OperatorService(runtime=rt)
-
-        project_dir = rt.project_roots["p1"]
-        (project_dir / "project.json").write_text(json.dumps({"project_id": "p1"}))
-        # The typed record's mtime is the reported freshness; a missing file
-        # yields "" rather than a fake timestamp.
-        reported = svc._last_updated_at("p1")
-        assert reported != ""
-        expected = datetime.fromtimestamp(
-            (project_dir / "project.json").stat().st_mtime, tz=UTC
-        ).isoformat()
-        assert reported == expected
 
 
 class TestMediaLayout:

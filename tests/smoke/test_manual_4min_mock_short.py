@@ -76,10 +76,14 @@ class TestManualFourMinuteMockShort:
         assert result["ok"] is True, f"plan_generation_batch failed: {result}"
         assert result.get("planned", 0) >= 1
 
-        from film_pipeline.studio._operator_runtime import operator_service
+        # The MCP tool was removed with the cost feature and the operator method
+        # with the operator surface; GenerationExecutor owns this transition.
+        from film_pipeline.generation.executor import GenerationExecutor
 
-        workspace = operator_service(rt).approve_generation_spend()
-        assert workspace.submitted >= 1, f"approval did not submit rows: {workspace}"
+        services = rt.services
+        assert services is not None
+        executor = GenerationExecutor(services.artifact_store, rt.provider_adapters)
+        assert executor.approve_spend(project_id).processed >= 1, "approval did not submit rows"
 
         result = invoke_tool(rt, "approve_phase", confirmed=True)
         assert result["ok"] is True, f"approve_phase gen_planning->generation failed: {result}"

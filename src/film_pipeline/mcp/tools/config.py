@@ -8,11 +8,15 @@ import paths keep resolving.
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.config.loader import ProfileLoader
 from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ._profile_change import approve_profile_change, propose_profile_change
-from .helpers import _active_project_id, _error, _ok
+from .helpers import _error, _ok
 
 __all__ = [
     "approve_profile_change",
@@ -25,7 +29,6 @@ __all__ = [
 
 async def list_profiles(args: dict[str, object]) -> dict[str, object]:
     """List available config profiles from the profiles/ directory."""
-    from film_pipeline.config.loader import ProfileLoader
 
     try:
         loader = ProfileLoader()
@@ -73,11 +76,11 @@ async def inspect_profile(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
+async def get_runtime_mode(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return current server mode and the active project's stored runtime mode."""
-    rt = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    active = rt.get_project(project_id) if project_id is not None else rt.get_active()
+    _ = args
+    rt = ctx.runtime
+    active = rt.get_project(ctx.project_id) if ctx.project_id is not None else rt.get_active()
     project_mode = rt.server_mode
     profile_stack: dict[str, str] = {}
     if active is not None:
@@ -100,3 +103,42 @@ async def get_runtime_mode(args: dict[str, object]) -> dict[str, object]:
         profile_stack=profile_stack,
         profile_version=int(active.get("profile_version", 0)) if active is not None else 0,
     )
+
+
+class ListProfilesArgs(ToolArgs):
+    """Arguments for `list_profiles` (none)."""
+
+
+class InspectProfileArgs(ToolArgs):
+    """Arguments for `inspect_profile`."""
+
+    profile_id: str = Field(description="Profile to inspect, by id or friendly name.")
+
+
+class GetRuntimeModeArgs(ToolArgs):
+    """Arguments for `get_runtime_mode` (none)."""
+
+
+CONFIG_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="list_profiles",
+        group=ToolGroup.CONFIG,
+        description="List the available profiles of every kind.",
+        args=ListProfilesArgs,
+        handler=list_profiles,
+    ),
+    ToolSpec(
+        name="inspect_profile",
+        group=ToolGroup.CONFIG,
+        description="Inspect one profile's resolved values and provenance.",
+        args=InspectProfileArgs,
+        handler=inspect_profile,
+    ),
+    ToolSpec(
+        name="get_runtime_mode",
+        group=ToolGroup.CONFIG,
+        description="Report the server's runtime mode (mock or real) and the project's.",
+        args=GetRuntimeModeArgs,
+        handler=get_runtime_mode,
+    ),
+)

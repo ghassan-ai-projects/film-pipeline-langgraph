@@ -59,22 +59,6 @@ JSONL_STORAGE_VERSION_KEY = "storage_schema_version"
 PROJECT_GITIGNORE = f"{MEDIA_DIRNAME}/\n*.mp4\n*.png\n*.jpg\n*.wav\n"
 
 
-def project_relpaths() -> tuple[str, ...]:
-    """Project-relative paths the storage core owns (used by boundary guards)."""
-    return (
-        PROJECT_FILENAME,
-        GRAPH_STATE_RELPATH,
-        CHECKPOINTS_RELPATH,
-        AUDIT_RELPATH,
-        ARTIFACTS_DIRNAME,
-        INDEX_DIRNAME,
-        MEDIA_DIRNAME,
-        DELIVERABLES_DIRNAME,
-        STORAGE_LOCK_FILENAME,
-        GITIGNORE_FILENAME,
-    )
-
-
 def read_json_file(path: Path) -> Any | None:
     """Parse ``path`` as JSON, or ``None`` when absent/corrupt/non-object."""
     try:

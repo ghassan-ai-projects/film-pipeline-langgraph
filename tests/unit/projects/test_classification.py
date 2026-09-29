@@ -90,21 +90,6 @@ class TestProjectTitleFromId:
         assert project_title_from_id(project_id) == expected
 
 
-def test_discovery_lives_in_the_operator_layer() -> None:
-    """Discovery is operator-surface code, not a `projects` concern.
-
-    `projects` sits at L4 and may import only `filmspec`, `schemas`, and
-    `storage`. Discovery takes an `OperatorService` and produces operator view
-    models, so it belongs to `operations`; keeping it in `projects` created an
-    `operations <-> projects` import cycle.
-    """
-    from film_pipeline.operations import project_discovery
-
-    assert callable(project_discovery.discover_project_folders)
-    assert callable(project_discovery.load_discovered_project)
-    assert not hasattr(project_discovery, "normalize_project_kind")
-
-
 def test_projects_package_imports_no_higher_layer() -> None:
     """No module under `projects` may import `operations` or `studio`."""
     import ast

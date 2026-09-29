@@ -16,9 +16,9 @@ from film_pipeline.providers.base import (
     ProviderJobStatus,
 )
 from film_pipeline.providers.credentials import lookup, redact
+from film_pipeline.providers.vendor_endpoints import GEMINI_API_BASE
 from film_pipeline.schemas.registries.provider_registry import ProviderRegistryEntry
 
-GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
 _FALLBACK_MODEL = "imagen-4.0-fast-generate-001"
 _DEFAULT_PERSON_GENERATION = "allow_adult"
 _DEFAULT_IMAGE_SIZE = "1K"
@@ -54,7 +54,7 @@ class Imagen4GeminiProvider(BaseProviderAdapter):
     def _request(self, payload: dict[str, Any]) -> dict[str, Any]:
         model = self._model_id()
         req = urllib.request.Request(
-            f"{GEMINI_API}/{model}:predict",
+            f"{GEMINI_API_BASE}/{model}:predict",
             data=json.dumps(payload).encode(),
             headers={
                 "x-goog-api-key": self._api_key(),

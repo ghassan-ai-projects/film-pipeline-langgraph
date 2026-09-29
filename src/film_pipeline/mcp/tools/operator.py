@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import (
     _error,
     _ok,
-    require_project_id,
 )
 
 
-async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
+async def add_operator_comment(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Add an operator comment to a project target."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = ctx.project_id
 
     target_type = str(args.get("target_type", "")).strip()
     target_id = str(args.get("target_id", "")).strip()
@@ -52,10 +54,10 @@ async def add_operator_comment(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def list_operator_comments(args: dict[str, object]) -> dict[str, object]:
+async def list_operator_comments(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List operator comments for the active project."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = ctx.project_id
 
     include_resolved = bool(args.get("include_resolved"))
     try:
@@ -63,3 +65,42 @@ async def list_operator_comments(args: dict[str, object]) -> dict[str, object]:
         return _ok(comments=comments)
     except Exception as e:
         return _error(str(e))
+
+
+class AddOperatorCommentArgs(ToolArgs):
+    """Arguments for `add_operator_comment`."""
+
+    body: str = Field(description="Comment text.")
+    target_type: str = Field(default="", description="What the comment is about.")
+    target_id: str = Field(default="", description="Id of the thing commented on.")
+    phase: str = Field(default="", description="Phase the comment belongs to.")
+    source: str = Field(default="", description="Where the comment came from.")
+
+
+class ListOperatorCommentsArgs(ToolArgs):
+    """Arguments for `list_operator_comments`."""
+
+    include_resolved: bool = Field(
+        default=False, description="Include comments already marked resolved."
+    )
+
+
+OPERATOR_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="add_operator_comment",
+        group=ToolGroup.OPERATOR,
+        description="Record an operator comment against a project, phase or artifact.",
+        args=AddOperatorCommentArgs,
+        handler=add_operator_comment,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_operator_comments",
+        group=ToolGroup.OPERATOR,
+        description="List the operator comments recorded for the active project.",
+        args=ListOperatorCommentsArgs,
+        handler=list_operator_comments,
+        active_project=True,
+    ),
+)

@@ -6,12 +6,14 @@ and validation reports are stored and queryable through MCP tools.
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
 
 from film_pipeline.mcp.tools import get_validation_report
 from film_pipeline.studio.runtime import StudioRuntime
+
+CallTool = Callable[..., Any]
 
 
 class TestValidationRuntimeControl:
@@ -80,7 +82,7 @@ class TestValidationRuntimeControl:
             f"Mock happy path should have no blocking issues, got blocking={blocking}"
         )
 
-    def test_mcp_validation_report_from_stored(self, tmp_path: Path) -> None:
+    def test_mcp_validation_report_from_stored(self, tmp_path: Path, call_tool: CallTool) -> None:
         """get_validation_report reads from stored _validation_reports."""
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("mcp-val", "MCP Validation Test")
@@ -109,7 +111,7 @@ class TestValidationRuntimeControl:
             import film_pipeline.studio.runtime as rt_mod
 
             rt_mod._RUNTIME = rt
-            result = asyncio.run(get_validation_report({}))
+            result = call_tool(get_validation_report, {})
             assert result.get("ok") is True
             assert result.get("source") == "qc_node"
             reports = cast(list[dict[str, Any]], result.get("reports", []))
@@ -118,7 +120,7 @@ class TestValidationRuntimeControl:
         finally:
             rt_mod._RUNTIME = original
 
-    def test_mcp_validation_issues_from_stored(self, tmp_path: Path) -> None:
+    def test_mcp_validation_issues_from_stored(self, tmp_path: Path, call_tool: CallTool) -> None:
         """list_validation_issues reads from stored issues."""
         rt = StudioRuntime(runtime_root=tmp_path / "runtime")
         rt.create_project("mcp-issues", "MCP Issues Test")
@@ -152,7 +154,7 @@ class TestValidationRuntimeControl:
             rt_mod._RUNTIME = rt
             from film_pipeline.mcp.tools import list_validation_issues
 
-            result = asyncio.run(list_validation_issues({}))
+            result = call_tool(list_validation_issues, {})
             assert result.get("ok") is True
             issues = cast(list[dict[str, Any]], result.get("issues", []))
             assert len(issues) == 2

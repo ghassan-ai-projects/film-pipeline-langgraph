@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.router import (
+    compute_actions,
+    get_blockers_for_state,
+    public_blocked_actions,
+)
+
 from .helpers import (
     _ok,
-    require_project_state,
 )
 
 
-async def get_current_phase(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_current_phase(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     return _ok(current_phase=state.get("current_phase", ""))
 
 
-async def get_film_state(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_film_state(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     # Return a sanitized copy (no internal keys)
     safe = {
         k: v
@@ -24,11 +34,9 @@ async def get_film_state(args: dict[str, object]) -> dict[str, object]:
     return _ok(state=safe)
 
 
-async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
-
-    from film_pipeline.orchestration import orchestrator_state as ostate
-    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
+async def get_orchestrator_summary(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)
@@ -55,9 +63,9 @@ async def get_orchestrator_summary(args: dict[str, object]) -> dict[str, object]
     )
 
 
-async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
-    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
+async def get_next_actions(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
 
     actions = compute_actions(dict(state))
     return _ok(
@@ -67,7 +75,7 @@ async def get_next_actions(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def get_blockers(args: dict[str, object]) -> dict[str, object]:
+async def get_blockers(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Report what currently blocks the project, derived from live state.
 
     Mirrors ``get_next_actions``: the router computes blocked transitions from
@@ -75,8 +83,56 @@ async def get_blockers(args: dict[str, object]) -> dict[str, object]:
     see one truthful picture. Response shape is stable:
     ``{blockers: [{action, reason}], has_blockers: bool}``.
     """
-    state = require_project_state(args)
-    from film_pipeline.orchestration.router import get_blockers_for_state
+    _ = args
+    state = ctx.project_state()
 
     blockers = get_blockers_for_state(state)
     return _ok(blockers=blockers, has_blockers=len(blockers) > 0)
+
+
+class NoArgs(ToolArgs):
+    """Arguments for the state read tools (none)."""
+
+
+STATE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_current_phase",
+        group=ToolGroup.STATE,
+        description="Report the phase the active project is currently in.",
+        args=NoArgs,
+        handler=get_current_phase,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_film_state",
+        group=ToolGroup.STATE,
+        description="Return the active project's state with internal keys stripped.",
+        args=NoArgs,
+        handler=get_film_state,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_orchestrator_summary",
+        group=ToolGroup.STATE,
+        description="Summarise what the orchestrator is tracking for the active project.",
+        args=NoArgs,
+        handler=get_orchestrator_summary,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_next_actions",
+        group=ToolGroup.STATE,
+        description="List the actions the active project can take next.",
+        args=NoArgs,
+        handler=get_next_actions,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_blockers",
+        group=ToolGroup.STATE,
+        description="List what is blocking the active project from advancing.",
+        args=NoArgs,
+        handler=get_blockers,
+        active_project=True,
+    ),
+)

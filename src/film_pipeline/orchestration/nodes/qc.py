@@ -7,12 +7,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
-from film_pipeline.orchestration.nodes._agent import (
-    _propagate_side_effects,
-    _run_agent,
-    _save_artifact,
-    produced_artifact,
-)
+from film_pipeline.orchestration.nodes._agent import _propagate_side_effects
 from film_pipeline.orchestration.nodes._context import (
     _get_template_registry,
 )
@@ -20,8 +15,21 @@ from film_pipeline.orchestration.nodes._shared import (
     _collect_updates,
     _phase_gate_updates,
 )
+from film_pipeline.orchestration.qc_steps import build_consensus_if_needed
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
+from film_pipeline.validation.impl.assembly import AssemblyValidator
+from film_pipeline.validation.impl.delivery_completeness import (
+    DeliveryCompletenessValidator,
+)
+from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
+from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
+from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
+from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
+from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
 _logger = logging.getLogger(__name__)
 
@@ -40,8 +48,6 @@ def qc_node(state: StudioGraphState) -> dict[str, Any]:
     new_state.update(gate_updates)
 
     _run_validators(new_state)
-    _emit_matrix_patch_from_findings(new_state)
-    _synthesize_consensus_report(new_state)
 
     # The update carries registry-driven channel keys written by
     # `_propagate_side_effects`, so it cannot be a TypedDict (a computed key is
@@ -50,53 +56,6 @@ def qc_node(state: StudioGraphState) -> dict[str, Any]:
     updates = _collect_updates(gate_updates, new_state, state, _QC_REF_KEYS)
     _propagate_side_effects(new_state, updates, state)
     return updates
-
-
-def _emit_matrix_patch_from_findings(state: StudioGraphState) -> None:
-    """Persist a matrix patch from the per-row findings validators collected."""
-    pending_updates: list[Any] = state.pop("_pending_row_updates", [])
-    shot_matrix_ref = str(state.get("shot_matrix_ref", ""))
-    if pending_updates and shot_matrix_ref:
-        from film_pipeline.schemas.matrix_patch import MatrixPatch
-
-        patch = MatrixPatch(
-            patch_id=f"qc_{state.get('project_id', '')}",
-            matrix_ref=shot_matrix_ref,
-            phase="qc",
-            reason="QC validators produced per-row findings — updating status and validation refs.",
-            updates=pending_updates,
-            created_by_agent="clip-validator",
-        )
-        patch_ref = _save_artifact(
-            state,
-            patch,
-            "matrix_patch_qc",
-            "qc",
-            artifact_type="consensus_report",
-        )
-        if patch_ref:
-            state["qc_patch_ref"] = patch_ref
-            state.setdefault("artifact_refs", []).append(patch_ref)
-
-
-def _synthesize_consensus_report(state: StudioGraphState) -> None:
-    """Synthesize validator reports into a unified QC consensus artifact."""
-    result = _run_agent(
-        state,
-        agent_id="clip-validator",
-        phase="qc",
-        task=(
-            "Synthesize all validator reports into a unified QC consensus: "
-            "identify agreement areas, resolve conflicts, produce weighted "
-            "pass/fail/block recommendation with actionable feedback."
-        ),
-    )
-    report = produced_artifact(state, "clip-validator", result)
-    if report is not None:
-        ref = _save_artifact(state, report, "consensus_report", "qc")
-        if ref:
-            state["consensus_report_ref"] = ref
-            state.setdefault("artifact_refs", []).append(ref)
 
 
 def _run_validators(state: StudioGraphState) -> None:
@@ -122,14 +81,11 @@ def _run_validators(state: StudioGraphState) -> None:
     _execute_phase_validators(state, artifacts, issues, services)
     state["issues"] = issues
 
-    _build_consensus_if_needed(state, phase)
+    build_consensus_if_needed(state, phase)
 
 
 def _collect_artifacts(state: StudioGraphState, services: Any) -> dict[str, Any]:
     """Load artifacts referenced by ``state["artifact_refs"]`` from their phases."""
-
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     store = services.artifact_store
     project_id = str(state.get("project_id", ""))
@@ -147,38 +103,6 @@ def _collect_artifacts(state: StudioGraphState, services: Any) -> dict[str, Any]
         except (FileNotFoundError, ValueError):
             continue
     return artifact_data
-
-
-def _build_consensus_if_needed(state: StudioGraphState, phase: str) -> None:
-    """Build a consensus report when multiple validators produced reports."""
-    reports = state.get("_validation_reports", [])
-    if len(reports) < 2:
-        return
-
-    from film_pipeline.validation.consensus import ConsensusBuilder
-
-    artifact_refs: list[str] = state.get("artifact_refs", [])
-
-    try:
-        consensus = ConsensusBuilder().build(reports, artifact_refs)
-    except Exception:
-        # A consensus report is a nice-to-have, so a synthesis failure must not
-        # fail the QC phase — but it must not be invisible either. This call site
-        # previously returned silently, which is how a real type mismatch between
-        # `_validation_reports` (dicts) and `ConsensusBuilder.build` (models) went
-        # unnoticed for as long as it did.
-        _logger.warning(
-            "consensus synthesis failed for phase %s; continuing without it",
-            phase,
-            exc_info=True,
-        )
-        return
-
-    # Save consensus report as an artifact
-    ref = _save_artifact(state, consensus, "consensus_report", phase)
-    if ref:
-        state["consensus_report_ref"] = ref
-        state.setdefault("artifact_refs", []).append(ref)
 
 
 def _pick_artifact(
@@ -260,8 +184,6 @@ def _run_script_validators(
     services: Any,
 ) -> None:
     """Run the two script-phase validators against loaded artifacts."""
-    from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-    from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
 
     artifact = _pick_artifact(artifact_data, "script", "scene_list")
     if artifact is None:
@@ -285,7 +207,6 @@ def _run_reference_validators(
     services: Any,
 ) -> None:
     """Run reference usability validator against visual_dev artifacts."""
-    from film_pipeline.validation.impl.reference_usability import ReferenceUsabilityValidator
 
     artifact = _pick_artifact(artifact_data, "reference_index")
     if artifact is not None:
@@ -299,7 +220,6 @@ def _run_prompt_validators(
     services: Any,
 ) -> None:
     """Run prompt readiness validator against gen_planning artifacts."""
-    from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
 
     artifact = _pick_artifact(artifact_data, "prompt_registry", "execution_brief")
     if artifact is not None:
@@ -313,7 +233,6 @@ def _run_continuity_validators(
     services: Any,
 ) -> None:
     """Run scene continuity validator against shot_bible artifacts."""
-    from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
 
     artifact = _pick_artifact(artifact_data, "shot_matrix", "shot_bible")
     if artifact is not None:
@@ -333,7 +252,6 @@ def _run_assembly_validators(
     services: Any,
 ) -> None:
     """Run assembly validator against post/assembly artifacts."""
-    from film_pipeline.validation.impl.assembly import AssemblyValidator
 
     artifact = _pick_artifact(artifact_data, "assembly_manifest", "review_cut", "final_cut")
     if artifact is not None:
@@ -347,9 +265,6 @@ def _run_delivery_validators(
     services: Any,
 ) -> None:
     """Run delivery completeness validator against delivery artifacts."""
-    from film_pipeline.validation.impl.delivery_completeness import (
-        DeliveryCompletenessValidator,
-    )
 
     artifact = _pick_artifact(artifact_data, "delivery_manifest", "delivery_package")
     if artifact is not None:
@@ -357,11 +272,11 @@ def _run_delivery_validators(
 
 
 _VALIDATOR_RUNNERS: tuple[tuple[set[str], _ValidatorRunner], ...] = (
-    ({"script", "qc"}, _run_script_validators),
-    ({"visual_dev", "qc"}, _run_reference_validators),
-    ({"gen_planning", "qc"}, _run_prompt_validators),
-    ({"shot_bible", "qc"}, _run_continuity_validators),
-    ({"post", "assembly", "qc"}, _run_assembly_validators),
+    ({"script"}, _run_script_validators),
+    ({"visual_dev"}, _run_reference_validators),
+    ({"gen_planning"}, _run_prompt_validators),
+    ({"shot_bible"}, _run_continuity_validators),
+    ({"post", "assembly"}, _run_assembly_validators),
     ({"delivery"}, _run_delivery_validators),
 )
 
@@ -414,7 +329,6 @@ def _issue_entry(report: Any, finding: Any, severity: str) -> dict[str, Any]:
 
 def _track_matrix_row_updates(state: StudioGraphState, report: Any) -> None:
     """Record per-row findings so qc_node can emit a matrix patch."""
-    from film_pipeline.schemas.matrix_patch import MatrixRowUpdate
 
     pending: list[Any] = state.setdefault("_pending_row_updates", [])
     for finding in report.blocking_issues + report.warnings:

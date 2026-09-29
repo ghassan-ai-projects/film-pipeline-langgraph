@@ -8,6 +8,13 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from film_pipeline.governance.gates import (
+    load_execution_brief,
+    validate_execution_brief,
+    validate_planning_completeness,
+    validate_shot_scene_references,
+    validate_shot_structure,
+)
 from film_pipeline.orchestration.nodes._agent import (
     _propagate_side_effects,
     _run_agent,
@@ -25,10 +32,14 @@ from film_pipeline.orchestration.nodes._visual_matrix_coverage import (
 from film_pipeline.orchestration.nodes._visual_matrix_coverage import (
     _load_script_scenes,
 )
+from film_pipeline.orchestration.orchestrator_state import set_execution_brief
 from film_pipeline.orchestration.services import _get_services
 from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.execution_brief import ExecutionBrief
 from film_pipeline.schemas.matrix import MasterFilmMatrix
+from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 
 
 def visual_dev_node(state: StudioGraphState) -> dict[str, Any]:
@@ -77,8 +88,6 @@ def _ensure_execution_brief(new_state: StudioGraphState) -> None:
     shape is sufficient for prompt assembly, so a valid stored brief is
     rehydrated into both state domains before extraction is considered.
     """
-    from film_pipeline.governance.validators import load_execution_brief
-    from film_pipeline.orchestration.orchestrator_state import set_execution_brief
 
     # The store is passed explicitly: `governance` must not reach up into
     # `orchestration` for services, and a storeless load silently degrades to
@@ -114,7 +123,6 @@ def _ensure_execution_brief(new_state: StudioGraphState) -> None:
         new_state["execution_brief_ref"] = brief_ref
 
     # Cross-validate the extracted brief against the StoryBible
-    from film_pipeline.governance.validators import validate_execution_brief
 
     brief_issues = validate_execution_brief(new_state, brief, store)
     new_state.setdefault("issues", []).extend(brief_issues)
@@ -125,8 +133,6 @@ def _latest_execution_brief_ref(state: Mapping[str, object]) -> str:
     services = _get_services(state)
     if services is None:
         return ""
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         artifacts = services.artifact_store.list_artifacts(
@@ -448,12 +454,10 @@ def _validate_shot_structure_gate(new_state: StudioGraphState, shot_matrix: Any)
     """Validate the shot structure against the execution brief."""
     if shot_matrix is None:
         return
-    from film_pipeline.governance.validators import load_execution_brief
 
     brief = load_execution_brief(new_state)
     if brief is None:
         return
-    from film_pipeline.governance.validators import validate_shot_structure
 
     struct_issues = validate_shot_structure(new_state, brief, shot_matrix)
     new_state.setdefault("issues", []).extend(struct_issues)
@@ -466,8 +470,6 @@ def shot_bible_node(state: StudioGraphState) -> dict[str, Any]:
     new_state.update(gate_updates)
 
     _ensure_execution_brief(new_state)
-
-    from film_pipeline.governance.validators import load_execution_brief
 
     shot_matrix = _design_shot_matrix(new_state, load_execution_brief(new_state))
 
@@ -491,8 +493,6 @@ def _build_generation_plan_patch(
     """Emit a matrix patch setting prompt/provider refs and prompted status."""
     if not shot_groups or not shot_matrix_ref:
         return
-
-    from film_pipeline.schemas.matrix_patch import MatrixPatch, MatrixRowUpdate
 
     row_updates: list[Any] = []
     for group in shot_groups:
@@ -541,18 +541,12 @@ def _validate_planning_gate(new_state: StudioGraphState) -> None:
     if services is None:
         return
     try:
-        from film_pipeline.schemas.base import FilmPhase
-
         parsed = _parse_ref(shot_matrix_ref)
         matrix_data = services.artifact_store.load(
             str(new_state.get("project_id", "")),
             FilmPhase("shot_bible"),
             parsed.artifact_id,
             parsed.version,
-        )
-        from film_pipeline.governance.validators import (
-            validate_planning_completeness,
-            validate_shot_scene_references,
         )
 
         plan_issues = validate_planning_completeness(new_state, matrix_data)

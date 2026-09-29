@@ -14,15 +14,15 @@ from typing import Any, cast
 
 import pytest
 
-from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices, _get_services
-from film_pipeline.studio import _graph_exec
-from film_pipeline.studio._resume import (
+from film_pipeline.orchestration import execution as _graph_exec
+from film_pipeline.orchestration.resume import (
     _approval_made_progress,
     _build_resume_payload,
     _has_stale_generation_request_blocker,
     _preserve_external_generation_requests,
     _strip_stale_generation_request_blockers,
 )
+from film_pipeline.orchestration.services import _SERVICES_CTX, GraphServices, _get_services
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -259,7 +259,7 @@ def test_auto_checkpoint_failure_is_visible_but_non_fatal(
     rt.projects["p1"] = {"project_id": "p1", "current_phase": "script"}
     # Test double for the checkpoint manager; the real one owns git plumbing.
     rt.checkpoint_managers["p1"] = cast(Any, _ExplodingManager())
-    with caplog.at_level(logging.WARNING, logger="film_pipeline.studio._graph_exec"):
+    with caplog.at_level(logging.WARNING, logger="film_pipeline.orchestration.execution"):
         _graph_exec.auto_checkpoint(rt, {"project_id": "p1", "current_phase": "script"})
     events = _audit(rt, "auto_checkpoint_failed")
     assert len(events) == 1

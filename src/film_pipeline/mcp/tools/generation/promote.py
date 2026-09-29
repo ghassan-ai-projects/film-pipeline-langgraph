@@ -2,25 +2,29 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from ..helpers import (
     _ok,
     _services,
-    require_project_state,
 )
 
 
-async def promote_test_to_production(args: dict[str, object]) -> dict[str, object]:
+async def promote_test_to_production(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Promote completed TEST generation rows to PRODUCTION mode.
 
     Only rows with mode=TEST and status=COMPLETED are eligible.
     Provide ``shot_ids`` to promote specific shots, or omit to promote all eligible.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
@@ -35,3 +39,25 @@ async def promote_test_to_production(args: dict[str, object]) -> dict[str, objec
         generation_ids=promoted_ids,
         message=f"{count} generation(s) promoted to PRODUCTION mode.",
     )
+
+
+class PromoteTestToProductionArgs(ToolArgs):
+    """Arguments for `promote_test_to_production`."""
+
+    shot_ids: object = Field(
+        default=None, description="Shot ids to promote; empty promotes every completed test row."
+    )
+
+
+GENERATION_PROMOTE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="promote_test_to_production",
+        group=ToolGroup.GENERATION,
+        description="Promote completed TEST-mode generations to PRODUCTION.",
+        args=PromoteTestToProductionArgs,
+        handler=promote_test_to_production,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)

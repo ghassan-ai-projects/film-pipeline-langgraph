@@ -74,29 +74,48 @@ class TestDispatchEnforcement:
 
 
 class TestHandlerAssumption:
-    def test_require_project_id_raises_without_a_project(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    """The assumption's failure mode now lives on `ToolContext`.
+
+    These tests covered `helpers.require_project_id` / `require_project_state`,
+    which raised when a handler reached them without a resolved project. Those
+    two functions are deleted (doc 01 slice 2): a migrated handler calls
+    `ctx.project_state()`, so the rule has one owner — the context dispatch built.
+    The property worth pinning is unchanged: a handler that assumed a project and
+    did not get one fails loudly rather than answering about nothing.
+    """
+
+    def test_project_state_raises_without_a_project(self) -> None:
         """Direct callers get a loud failure, not a silent wrong answer."""
-        from film_pipeline.mcp.tools.helpers import require_project_id
+        from film_pipeline.mcp.tools.context import ToolContext
         from film_pipeline.operations.errors import ProjectNotFoundError
         from film_pipeline.studio.runtime import get_runtime
 
-        runtime = get_runtime()
-        runtime.active_project_id = ""
-        monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: runtime)
+        context = ToolContext(
+            runtime=get_runtime(),
+            project_id=None,
+            envelope=None,
+        )
         with pytest.raises(ProjectNotFoundError):
-            require_project_id({})
+            context.project_state()
 
-    def test_require_project_state_raises_without_a_project(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from film_pipeline.mcp.tools.helpers import require_project_state
+    def test_project_state_raises_for_an_unloaded_project(self) -> None:
+        from film_pipeline.mcp.tools.context import ToolContext
         from film_pipeline.operations.errors import ProjectNotFoundError
         from film_pipeline.studio.runtime import get_runtime
 
-        runtime = get_runtime()
-        runtime.active_project_id = ""
-        monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: runtime)
+        context = ToolContext(
+            runtime=get_runtime(),
+            project_id="not-a-loaded-project",
+            envelope=None,
+        )
         with pytest.raises(ProjectNotFoundError):
-            require_project_state({})
+            context.project_state()
+
+    def test_project_state_returns_the_resolved_project(self) -> None:
+        from film_pipeline.mcp.tools.context import ToolContext
+        from film_pipeline.studio.runtime import get_runtime
+
+        runtime = get_runtime()
+        runtime.create_project("precondition-ok", "Precondition OK")
+        context = ToolContext(runtime=runtime, project_id="precondition-ok", envelope=None)
+        assert context.project_state()["project_id"] == "precondition-ok"

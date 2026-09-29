@@ -18,16 +18,46 @@ from uuid import uuid4
 
 from film_pipeline.checkpoints.git_backend import GitBackend
 from film_pipeline.checkpoints.manager import CheckpointManager
+from film_pipeline.orchestration import execution as _graph_exec
 from film_pipeline.orchestration.services import GraphServices
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.checkpoint import CheckpointMetadata
 from film_pipeline.storage.storage import default_runtime_root, resolve_storage_root
-from film_pipeline.studio import _graph_exec, _persistence, _provider_seeds
+from film_pipeline.studio import _persistence, _provider_seeds
 from film_pipeline.studio._persistence import (
     configured_runtime_root,
     use_persistent_runtime,
 )
 from film_pipeline.studio.safety import ProductionDataError, can_delete_project, move_to_trash
+
+
+def _install_graph_builder() -> None:
+    """Hand a lazy `build_graph` to graph execution, once.
+
+    `orchestration.execution` cannot import `studio.graph_factory` (that would close
+    a cycle — this package imports `orchestration` to wire the nodes), so the
+    composition root installs the builder. Registration itself runs at
+    `studio.runtime` import because that module is loaded before any runtime exists;
+    a runtime that never built a graph would otherwise fail at its first
+    `ensure_graph` call with nothing registered.
+
+    The registered callable is a *wrapper*, not `build_graph` itself, because
+    importing `graph_factory` runs its module body — `graph = build_graph()` at the
+    bottom — which compiles the entire graph and, when persistence is enabled, opens
+    `<storage_root>/checkpoints/checkpoints.sqlite`. Binding the real function here
+    made every `import film_pipeline.studio.runtime` pay that cost and create that
+    file. Deferring to first use keeps registration eager and the side effect lazy.
+    """
+
+    def _build_graph(*args: Any, **kwargs: Any) -> Any:
+        from film_pipeline.studio.graph_factory import build_graph
+
+        return build_graph(*args, **kwargs)
+
+    _graph_exec.register_graph_builder(_build_graph)
+
+
+_install_graph_builder()
 
 _logger = logging.getLogger(__name__)
 
@@ -225,10 +255,6 @@ class StudioRuntime:
         if not self.active_project_id:
             return None
         return self.projects.get(self.active_project_id)
-
-    # --- Graph ---
-
-    # --- Graph execution (see _graph_exec) ---
 
     def ensure_graph(self) -> Any:
         """Lazy-load and cache the graph instance."""
@@ -452,6 +478,35 @@ def get_runtime() -> StudioRuntime:
         _RUNTIME = create_runtime(configured_mode)
         _RUNTIME.seed_default_provider_health()
     return _RUNTIME
+
+
+def install_runtime(runtime: StudioRuntime, *, mode: str | None = None) -> StudioRuntime:
+    """Install an already-built runtime as the process-wide one.
+
+    This is the public form of what a caller used to do by assigning another
+    package's module globals::
+
+        import film_pipeline.studio.runtime as rt_mod
+
+        rt_mod._RUNTIME = rt
+        rt_mod._RUNTIME_MODE_OVERRIDE = mode
+
+    That is a write to a private attribute of a module the caller does not own —
+    the same encapsulation break `test_boundary_law` counts for imports, which it
+    did not previously see because it measured imports, not writes. The headless
+    CLI needs the runtime it built (with its own `runtime_root` and services) to
+    be the one MCP handlers resolve, so it needs *some* installer; this makes it
+    a declared, in-package one.
+
+    ``mode`` pins the configured server mode so ``get_runtime`` does not discard
+    the installed runtime for disagreeing with the environment. Passing the
+    runtime's own ``server_mode`` is the usual call.
+    """
+    global _RUNTIME, _RUNTIME_MODE_OVERRIDE
+    _RUNTIME = runtime
+    if mode is not None:
+        _RUNTIME_MODE_OVERRIDE = _normalize_server_mode(mode)
+    return runtime
 
 
 def _build_services_for_mode(

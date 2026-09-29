@@ -1,6 +1,7 @@
 .film-pipeline-run/
 /docs/*
 !/docs/modular-architecture/
+!/docs/modularity-improvements/
 /docs/modular-architecture/enola-out/
 /docs/modular-architecture/design/prototype-enforcement/
 

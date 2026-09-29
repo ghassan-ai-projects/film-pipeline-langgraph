@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
+from film_pipeline.schemas.base import GenerationStatus
 
 from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -35,7 +41,6 @@ def _submit_failure(
     leaving the pre-existing ``poll`` in place told the operator to keep polling
     a row that can never advance.
     """
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -113,7 +118,6 @@ def _mark_row_running(
     provider_job_id: str,
 ) -> dict[str, str]:
     """Persist the provider_job_id on the row and build its success record."""
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr.update_row(
         project_id,
@@ -129,21 +133,17 @@ def _mark_row_running(
     }
 
 
-async def start_generation_batch(args: dict[str, object]) -> dict[str, object]:
+async def start_generation_batch(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Submit all SUBMITTED generation rows to their providers.
 
     Each row is submitted to its provider. The provider_job_id is persisted
     in the ledger row. Partial failures are recorded per-row.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     if is_text_only_policy(active):
         return _ok(text_only=True, submitted=0)
-
-    from film_pipeline.generation.executor import GenerationExecutor
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     submitted_rows = mgr.list_rows(project_id, status=GenerationStatus.SUBMITTED)
@@ -194,8 +194,6 @@ def _poll_row_status(
 
 def _generation_status(provider_status: str) -> GenerationStatus:
     """Map a provider job status to its ledger generation status."""
-    from film_pipeline.providers.base import ProviderJobStatus
-    from film_pipeline.schemas.base import GenerationStatus
 
     try:
         job_status = ProviderJobStatus(provider_status)
@@ -209,18 +207,15 @@ def _generation_status(provider_status: str) -> GenerationStatus:
     }.get(job_status, GenerationStatus.RUNNING)
 
 
-async def resume_generation_polling(args: dict[str, object]) -> dict[str, object]:
+async def resume_generation_polling(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Poll the provider for a generation's status and update the ledger."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     from datetime import UTC, datetime
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -262,16 +257,14 @@ async def resume_generation_polling(args: dict[str, object]) -> dict[str, object
     )
 
 
-async def cancel_generation_request(args: dict[str, object]) -> dict[str, object]:
+async def cancel_generation_request(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Cancel a generation and update the ledger."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
-    from film_pipeline.generation.ledger import GenerationLedgerManager
-    from film_pipeline.schemas.base import GenerationStatus
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -289,8 +282,6 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
     adapter = rt.get_provider(row.provider)
     if adapter is None:
         return _error(f"Provider '{row.provider}' not registered.")
-
-    from film_pipeline.providers.base import ProviderJob, ProviderJobStatus
 
     job = ProviderJob(
         job_id=row.provider_job_id,
@@ -312,3 +303,50 @@ async def cancel_generation_request(args: dict[str, object]) -> dict[str, object
         cancelled=cancelled,
         provider=bool(row.provider_job_id),
     )
+
+
+class StartGenerationBatchArgs(ToolArgs):
+    """Arguments for `start_generation_batch` (none)."""
+
+
+class ResumeGenerationPollingArgs(ToolArgs):
+    """Arguments for `resume_generation_polling`."""
+
+    generation_id: str = Field(description="Generation request to resume polling.")
+
+
+class CancelGenerationRequestArgs(ToolArgs):
+    """Arguments for `cancel_generation_request`."""
+
+    generation_id: str = Field(description="Generation request to cancel.")
+
+
+GENERATION_DISPATCH_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="start_generation_batch",
+        group=ToolGroup.GENERATION,
+        description="Submit the prepared generation rows to their providers.",
+        args=StartGenerationBatchArgs,
+        handler=start_generation_batch,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="resume_generation_polling",
+        group=ToolGroup.GENERATION,
+        description="Resume polling a generation request whose provider job is still running.",
+        args=ResumeGenerationPollingArgs,
+        handler=resume_generation_polling,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="cancel_generation_request",
+        group=ToolGroup.GENERATION,
+        description="Cancel a generation request and stop polling its provider job.",
+        args=CancelGenerationRequestArgs,
+        handler=cancel_generation_request,
+        mutates=True,
+        active_project=True,
+    ),
+)

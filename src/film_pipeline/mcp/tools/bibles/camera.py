@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import ArtifactType
 
 from ..helpers import (
     _error,
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import (
     InvalidBibleOutput,
@@ -28,7 +29,6 @@ def _deliver_camera_bible(
     rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
@@ -42,10 +42,10 @@ def _deliver_camera_bible(
     return _ok(camera_bible_ref=ref, profiles=len(bible.profiles))
 
 
-async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_camera_bible(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate a CameraLanguageBible from FilmConstitution."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
@@ -68,3 +68,18 @@ async def generate_camera_bible(args: dict[str, object]) -> dict[str, object]:
         return _error("CameraBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"CameraBible generation failed: {exc}")
+
+
+class GenerateCameraBibleArgs(ToolArgs):
+    """Arguments for `generate_camera_bible` (none)."""
+
+
+GENERATE_CAMERA_BIBLE = ToolSpec(
+    name="generate_camera_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate a CameraLanguageBible from the FilmConstitution.",
+    args=GenerateCameraBibleArgs,
+    handler=generate_camera_bible,
+    mutates=True,
+    active_project=True,
+)

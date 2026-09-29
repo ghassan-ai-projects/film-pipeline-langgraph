@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 from film_pipeline.schemas.continuity import (
     ContinuityLedger,
     ContinuityLedgerEntry,
@@ -18,7 +21,6 @@ from ..helpers import (
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import InvalidBibleOutput, _extract_script_text, _run_bible_agent
 
@@ -73,9 +75,6 @@ def _save_next_candidate_version(
     """Save payload as the next CANDIDATE version of an artifact in the shot_bible phase."""
     from datetime import UTC, datetime
 
-    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
-
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("shot_bible"), artifact_id) + 1
     )
@@ -96,7 +95,6 @@ def _save_next_candidate_version(
 
 def _persist_continuity_ledger(store: Any, project_id: str, ledger: ContinuityLedger) -> str:
     """Save the ledger as a new continuity_ledger artifact version."""
-    from film_pipeline.schemas.base import ArtifactType
 
     return _save_next_candidate_version(
         store, project_id, "continuity_ledger", ArtifactType.CONTINUITY_LEDGER, ledger
@@ -131,7 +129,6 @@ def _generate_continuity_ledger(store: Any, project_id: str, matrix: Any) -> str
 
 def _load_matrix_inputs(store: Any, project_id: str) -> tuple[Any, Any]:
     """Load the Script and reference_index artifacts the matrix is built from."""
-    from film_pipeline.schemas.base import FilmPhase
 
     script_version = max(1, store.latest_version(project_id, "script", "script"))
     script_data = store.load(project_id, FilmPhase("script"), "script", script_version)
@@ -154,22 +151,21 @@ def _reference_summary(ref_data: Any) -> str:
 
 def _persist_shot_matrix(store: Any, project_id: str, matrix: Any) -> str:
     """Save the matrix as a new master_film_matrix artifact version."""
-    from film_pipeline.schemas.base import ArtifactType
 
     return _save_next_candidate_version(
         store, project_id, "master_film_matrix", ArtifactType.MASTER_FILM_MATRIX, matrix
     )
 
 
-async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_shot_bible(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate MasterFilmMatrix + ContinuityLedger from Script + visual refs.
 
     Produces the shot-by-shot production matrix (every clip as a row with
     scene, characters, env, camera, chaining) and a continuity ledger
     tracking state_in/state_out per shot.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
@@ -219,3 +215,21 @@ async def generate_shot_bible(args: dict[str, object]) -> dict[str, object]:
         return _error("ShotBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"Shot bible generation failed: {exc}")
+
+
+class GenerateShotBibleArgs(ToolArgs):
+    """Arguments for `generate_shot_bible` (none)."""
+
+
+GENERATE_SHOT_BIBLE = ToolSpec(
+    name="generate_shot_bible",
+    group=ToolGroup.GENERATION,
+    description=(
+        "Generate the MasterFilmMatrix and ContinuityLedger from the Script, "
+        "constitution and visual development."
+    ),
+    args=GenerateShotBibleArgs,
+    handler=generate_shot_bible,
+    mutates=True,
+    active_project=True,
+)

@@ -4,14 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import ArtifactType
 
 from ..helpers import (
     _error,
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import (
     InvalidBibleOutput,
@@ -37,7 +38,6 @@ def _deliver_style_bible(
     rt: Any, active: dict[str, Any], store: Any, project_id: str, bible: Any
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
@@ -51,10 +51,10 @@ def _deliver_style_bible(
     return _ok(style_bible_ref=ref, palette=bible.color_palette, mood=bible.visual_mood)
 
 
-async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_style_bible(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate a StyleBible from FilmConstitution + EnvironmentBible palettes."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
@@ -79,3 +79,18 @@ async def generate_style_bible(args: dict[str, object]) -> dict[str, object]:
         return _error("StyleBible agent produced invalid output.")
     except Exception as exc:
         return _error(f"StyleBible generation failed: {exc}")
+
+
+class GenerateStyleBibleArgs(ToolArgs):
+    """Arguments for `generate_style_bible` (none)."""
+
+
+GENERATE_STYLE_BIBLE = ToolSpec(
+    name="generate_style_bible",
+    group=ToolGroup.GENERATION,
+    description="Generate a StyleBible from the FilmConstitution and EnvironmentBible.",
+    args=GenerateStyleBibleArgs,
+    handler=generate_style_bible,
+    mutates=True,
+    active_project=True,
+)

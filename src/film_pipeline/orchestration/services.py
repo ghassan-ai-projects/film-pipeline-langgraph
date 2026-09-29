@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from film_pipeline.agents.model_adapter import ModelAdapter as ModelAdapter
 from film_pipeline.agents.model_routing import ModelRouter as ModelRouter
 from film_pipeline.agents.registry import AgentRegistry as AgentRegistry
+from film_pipeline.agents.roster import MVP_AGENTS
 from film_pipeline.agents.runner import PromptRunner as PromptRunner
 from film_pipeline.schemas.kb import KBContextPacket as KBContextPacket
 from film_pipeline.storage.storage import (
@@ -38,7 +39,6 @@ def _default_artifact_root() -> Path:
 
 def _mvp_agent_registry() -> AgentRegistry:
     """Register every MVP agent into a fresh registry."""
-    from film_pipeline.agents.roster import MVP_AGENTS
 
     registry = AgentRegistry()
     registry.register_many(MVP_AGENTS)

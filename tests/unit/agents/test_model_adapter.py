@@ -2,7 +2,7 @@
 
 ``ModelAdapter`` is tested through its public ``chat`` / ``chat_multimodal`` /
 ``chat_json`` surface plus the dispatch policy in ``TestDispatchPolicy``.
-Per-provider wire-format details are tested against ``agents.transports``
+Per-provider wire-format details are tested against ``providers.text``
 directly in ``TestTransportModules``, which is where that code now lives.
 """
 
@@ -154,7 +154,7 @@ class TestModelAdapter:
 
     def test_no_api_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When no key is configured, the OpenRouter transport raises."""
-        import film_pipeline.agents.transports.chat_completions as cc
+        import film_pipeline.providers.text.chat_completions as cc
 
         monkeypatch.setattr(cc, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(api_key=None)
@@ -240,7 +240,7 @@ class TestModelAdapter:
         assert body["generationConfig"] == {"temperature": 0.4, "maxOutputTokens": 123}
 
     def test_gemini_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import film_pipeline.agents.transports.gemini as gemini
+        import film_pipeline.providers.text.gemini as gemini
 
         monkeypatch.setattr(gemini, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(api_key="openrouter", gemini_api_key=None)
@@ -372,7 +372,7 @@ class TestZaiProvider:
         assert adapter._zai_base_url() == "https://api.z.ai/api/coding/paas/v4"
 
     def test_zai_missing_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import film_pipeline.agents.transports.zai as zai
+        import film_pipeline.providers.text.zai as zai
 
         monkeypatch.setattr(zai, "lookup", lambda _provider_id: None)
         adapter = ModelAdapter(zai_api_key=None)
@@ -475,7 +475,7 @@ class TestDispatchPolicy:
 
     Every assertion here is about *which* transport a model id selects, not
     about what that transport does. That policy lives in ``ModelAdapter``; the
-    per-provider behaviour is tested against ``agents.transports`` directly.
+    per-provider behaviour is tested against ``providers.text`` directly.
     """
 
     @staticmethod
@@ -486,9 +486,9 @@ class TestDispatchPolicy:
         call time, so patching the module attributes is exactly the seam the
         adapter uses.
         """
-        import film_pipeline.agents.transports.chat_completions as cc
-        import film_pipeline.agents.transports.gemini as gemini
-        import film_pipeline.agents.transports.zai as zai
+        import film_pipeline.providers.text.chat_completions as cc
+        import film_pipeline.providers.text.gemini as gemini
+        import film_pipeline.providers.text.zai as zai
 
         selected: list[str] = []
         real_openrouter = cc.send_chat_completion
@@ -610,7 +610,7 @@ class TestTransportModules:
 
     def test_zai_base_url_defaults_without_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import film_pipeline.providers.credentials as creds
-        from film_pipeline.agents.transports.zai import zai_base_url
+        from film_pipeline.providers.text.zai import zai_base_url
 
         monkeypatch.delenv("ZAI_BASE_URL", raising=False)
         monkeypatch.setattr(creds, "_read_dotenv", lambda _root: {})
@@ -618,7 +618,7 @@ class TestTransportModules:
         assert zai_base_url() == "https://api.z.ai/api/paas/v4"
 
     def test_zai_base_url_rejects_untrusted_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        from film_pipeline.agents.transports.zai import zai_base_url
+        from film_pipeline.providers.text.zai import zai_base_url
 
         monkeypatch.setenv("ZAI_BASE_URL", "https://attacker.example/api")
 
@@ -627,7 +627,7 @@ class TestTransportModules:
 
     def test_zai_base_url_rejects_http_scheme(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """An allowlisted host over plain http is still refused."""
-        from film_pipeline.agents.transports.zai import zai_base_url
+        from film_pipeline.providers.text.zai import zai_base_url
 
         monkeypatch.setenv("ZAI_BASE_URL", "http://api.z.ai/api/paas/v4")
 
@@ -635,7 +635,7 @@ class TestTransportModules:
             zai_base_url()
 
     def test_zai_payload_omits_frequency_penalty(self) -> None:
-        from film_pipeline.agents.transports.chat_completions import (
+        from film_pipeline.providers.text.chat_completions import (
             ChatRequest,
             chat_completions_payload,
         )
@@ -651,7 +651,7 @@ class TestTransportModules:
         assert payload["model"] == "glm"
 
     def test_openrouter_payload_includes_frequency_penalty(self) -> None:
-        from film_pipeline.agents.transports.chat_completions import (
+        from film_pipeline.providers.text.chat_completions import (
             ChatRequest,
             chat_completions_payload,
         )
@@ -665,7 +665,7 @@ class TestTransportModules:
         assert payload["frequency_penalty"] == 0.0
 
     def test_gemini_url_strips_google_prefix_and_carries_key(self) -> None:
-        from film_pipeline.agents.transports.gemini import gemini_url
+        from film_pipeline.providers.text.gemini import gemini_url
 
         url = gemini_url("google/gemini-3-flash", "secret-key")
 
@@ -675,7 +675,7 @@ class TestTransportModules:
         )
 
     def test_gemini_payload_builds_inline_image_parts(self) -> None:
-        from film_pipeline.agents.transports.gemini import (
+        from film_pipeline.providers.text.gemini import (
             GeminiRequest,
             build_gemini_payload,
         )
@@ -699,7 +699,7 @@ class TestTransportModules:
         assert payload["generationConfig"] == {"temperature": 0.5, "maxOutputTokens": 64}
 
     def test_first_candidate_text_raises_without_candidates_or_parts(self) -> None:
-        from film_pipeline.agents.transports.gemini import first_candidate_text
+        from film_pipeline.providers.text.gemini import first_candidate_text
 
         assert (
             first_candidate_text({"candidates": [{"content": {"parts": [{"text": "x"}]}}]}) == "x"
@@ -710,8 +710,13 @@ class TestTransportModules:
             first_candidate_text({"candidates": [{"content": {"parts": []}}]})
 
     def test_transports_package_surface_is_importable(self) -> None:
-        """``agents.transports`` is the declared package surface."""
-        from film_pipeline.agents import transports
+        """``providers.text`` is the declared package surface.
+
+        Moved from `agents.transports` (doc 06 slice 6.3): these modules talk to
+        concrete provider APIs and resolve their credentials, which
+        `providers/gemini_review_client.py` states is provider-adapter work.
+        """
+        from film_pipeline.providers import text as transports
 
         missing = [name for name in transports.__all__ if not hasattr(transports, name)]
 

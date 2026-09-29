@@ -4,14 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
 from film_pipeline.filmspec import blocking_issues as _blocking_issues_of
+from film_pipeline.governance.generator import ReviewPackageGenerator
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.orchestration import orchestrator_state as ostate
+from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -45,7 +51,6 @@ def _build_review_package(
     blocking_issues: list[dict[str, Any]],
 ) -> ReviewPackage | None:
     """Build the structured review package; None when generation fails."""
-    from film_pipeline.governance.generator import ReviewPackageGenerator
 
     try:
         generator = ReviewPackageGenerator()
@@ -76,20 +81,19 @@ def _blocking_issues(state: dict[str, Any]) -> list[dict[str, Any]]:
     return _blocking_issues_of(state.get("issues", []))
 
 
-async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
+async def review_phase_artifacts(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Build a review package for the current phase with orchestrator recommendations.
 
     Returns a structured ReviewPackage instead of a plain artifact list.
     The package includes candidate vs approved diffs, validation results,
     open issues, risks, and recommended next actions.
     """
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     phase = str(args.get("phase", state.get("current_phase", "")))
     if not phase:
         return _error("No phase specified and no active phase.")
     project_id = str(state["project_id"])
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase)
@@ -100,8 +104,6 @@ async def review_phase_artifacts(args: dict[str, object]) -> dict[str, object]:
     artifact_list = _collect_phase_artifacts(store, project_id, fp)
 
     # Build a review package using the ReviewPackageGenerator
-    from film_pipeline.orchestration import orchestrator_state as ostate
-    from film_pipeline.orchestration.router import compute_actions, public_blocked_actions
 
     routing_state = dict(state)
     ostate.ensure_orchestrator_state(routing_state)
@@ -152,8 +154,9 @@ def _build_orchestrator_recommendation(state: dict[str, Any], router_result: Any
     return f"Current action: {action}."
 
 
-async def approve_phase(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def approve_phase(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
     try:
         state = rt.approve_phase()
         return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
@@ -161,8 +164,8 @@ async def approve_phase(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def request_revision(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def request_revision(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     try:
         state = rt.request_revision(note=str(args.get("note", "")))
         return _ok(
@@ -172,3 +175,50 @@ async def request_revision(args: dict[str, object]) -> dict[str, object]:
         )
     except ValueError as e:
         return _error(str(e))
+
+
+class ReviewPhaseArtifactsArgs(ToolArgs):
+    """Arguments for `review_phase_artifacts`."""
+
+    phase: str = Field(default="", description="Phase to review; empty uses the current one.")
+
+
+class ApprovePhaseArgs(ToolArgs):
+    """Arguments for `approve_phase` (none)."""
+
+
+class RequestRevisionArgs(ToolArgs):
+    """Arguments for `request_revision`."""
+
+    note: str = Field(description="What needs revising.")
+
+
+REVIEW_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="review_phase_artifacts",
+        group=ToolGroup.REVIEW,
+        description="Review the artifacts a phase produced and report what needs attention.",
+        args=ReviewPhaseArtifactsArgs,
+        handler=review_phase_artifacts,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_phase",
+        group=ToolGroup.REVIEW,
+        description="Approve the current phase and advance the project to the next.",
+        args=ApprovePhaseArgs,
+        handler=approve_phase,
+        mutates=True,
+        confirm=True,
+        checkpoint=True,
+    ),
+    ToolSpec(
+        name="request_revision",
+        group=ToolGroup.REVIEW,
+        description="Send the current phase back for revision with a note.",
+        args=RequestRevisionArgs,
+        handler=request_revision,
+        mutates=True,
+        confirm=True,
+    ),
+)

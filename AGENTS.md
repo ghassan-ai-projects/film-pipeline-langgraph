@@ -126,6 +126,48 @@ import against `03` and froze 73 edges as debt to eliminate, which is enforcing 
 rejected proposal. That was re-scoped. **Read `06` before `03`** — which
 `docs/modular-architecture/README.md` already instructs.
 
+### Function-level imports are deliberate — do not annotate them
+
+An import inside a function body **hides an edge from the dependency graph**: the
+package census, the acyclicity check and Enola all read the module level. So the
+default is that an import belongs at module level, and a function-level one is an
+exception that has to earn its place.
+
+`tests/unit/architecture/test_lazy_imports.py` counts them and ratchets both totals
+downward — `LAZY_EDGE_CEILING` (all of them) and `HOISTABLE_EDGE_CEILING` (those that
+are *not* cycle-required). Taking the total from 287 at the branch base to 42, of which
+11 are cycle-required, was the work of doc 05. Adding one fails the guard.
+
+The exceptions that survive, and the only ones that should:
+
+- **Cycle-required.** Hoisting closes a cycle. This is the floor of 11 and it is
+  mechanically checkable: hoist it and Python raises
+  `ImportError: cannot import name X from partially initialized module Y`. Do not
+  guess — run it. `orchestration.nodes._repair_loop -> orchestration.subgraphs.qc` is
+  the standing example.
+- **A patch point.** A test patches a name at its **source module**
+  (`generation.prompt_builder.build_structured_prompt`,
+  `studio.bootstrap.validate_environment`, `kb.paths.kb_manifest_path`, …). A
+  module-level `from X import name` binds before the patch, so the patch becomes a
+  no-op. Mostly `generation`, `post`, `studio`, `mcp`, `cli` — 31 imports in all.
+- **A shadowing hazard or an import with a side effect.** `post.subtitle_agent`
+  re-imports `SubtitleCue` locally because a module-level name would shadow the
+  schema's; `studio.runtime` defers `studio.graph_factory` because its module body
+  compiles the graph and opens the checkpoint database.
+
+**Do not write a `# lazy:` comment, or any other "why this import is here" comment, at
+the call site.** The reasons above live here, once. Per-site comments were removed
+deliberately: they were mostly the same sentence repeated 29 times, and a comment is a
+claim that rots — a hoist in `5cc0170` left two of them asserting a circular import
+that no longer existed, and two earlier rounds of this program lost time to written
+claims the tree did not support. If a function-level import needs justifying, the
+justification goes in the commit message; if it needs *enforcing*, it goes in the
+architecture test.
+
+**Before hoisting a function-level import, run the suite.** A broken patch point does
+not always fail loudly — a test can still pass against the wrong binding. That is why
+these are counted rather than commented.
+
 ## Python Standards
 
 - Add type hints to public functions, methods, and module-level constants.
@@ -158,12 +200,15 @@ compatibility shims, and all consumers import the owners directly.
 | `agents` | 07 — Agent registry, prompts | |
 | `governance` | 08 — Review packages, gate law | Formerly `review` plus the graph gate modules |
 | `validation` | 09 — Validator registry | |
+| `generation` | — | Generation lifecycle: ledger, executor, prompt construction, compositor, frame/sheet review |
+| `constraints` | — | Extraction of project constraints from operator input |
 | `providers` | 10, 13 — Provider adapters | |
 | `checkpoints` | 11 — Checkpoints, resume | |
 | `mcp` | 02 — MCP tool surface | |
 | `post` | 14 — Post-production | |
 | `operations` | — | Operator use cases, view models, runtime ports |
 | `projects` | — | Project identity, classification, resolution |
+| `cli` | — | Headless driver and product gate |
 | `studio` | — | Composition root; formerly `app` |
 | `devharness` | — | Test doubles and scenarios; formerly `testing` |
 
@@ -183,7 +228,7 @@ and the number of *concerns*, not the line count:
 
 | Class | Lines | Public methods | Concerns | Verdict |
 |---|---:|---:|---:|---|
-| `StudioRuntime` | 370 | 27 | 5 | split |
+| `StudioRuntime` | 393 | 29 | 8 | split deferred (doc 08) |
 | `ArtifactStore` | 605 | 15 | 1 | leave alone |
 
 Judge a file by "how many reasons does it have to change", not by how long it is.

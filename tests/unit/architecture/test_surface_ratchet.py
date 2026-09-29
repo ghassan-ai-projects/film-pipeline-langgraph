@@ -7,13 +7,14 @@ nothing outside those interfaces is accessible, enforced by tool or script."
 
 Measured reality, which shapes what is honest to enforce:
 
-- **The package roots are already closed.** Across the 17 packages that declare
-  `__all__`, there are **zero** public names reachable off the root that the
-  package does not declare — checked, not assumed. Every declared name resolves.
-  So "nothing outside the interface is reachable *at the root*" already holds.
-- **Submodule paths are the real surface.** 454 cross-package imports go through
-  a submodule (`from film_pipeline.schemas.base import FilmPhase`) against 66
-  through a package root. For a 38-file package, the submodules *are* the API; a
+- **The package roots are already closed.** Across the 33 packages that declare
+  `__all__`, there are **zero** public names reachable off the root beyond the
+  declared ones and the recorded import artifacts — checked, not assumed. Every
+  declared name resolves. So "nothing outside the interface is reachable *at the
+  root*" already holds.
+- **Submodule paths are the real surface.** 530 cross-package imports go through
+  a submodule (`from film_pipeline.schemas.base import FilmPhase`) against 84
+  through a package root. For a 36-module package, the submodules *are* the API; a
   107-name root `__all__` is a convenience facade, not the whole contract.
 - **Cross-package private reach-in is 2 sites**, both already recorded debt.
 
@@ -40,12 +41,15 @@ new cross-package reach-in must be a deliberate edit to the recorded baseline in
 
 ## Why `__all__` is not required everywhere
 
-Three packages declare no surface: `cli`, `orchestration` (the LangGraph engine),
-and `studio` (the composition root). They are reached by submodule 35 times in
-total. Forcing a root `__all__` on `orchestration` would make importing it eagerly
+Four packages declare no surface: `cli`, `orchestration` (the LangGraph engine),
+`orchestration.subgraphs` (whose `__init__` is a docstring), and `studio` (the
+composition root). They are reached by submodule in 25 cross-package import statements.
+Forcing a root `__all__` on `orchestration` would make importing it eagerly
 load the graph and `langgraph` — `test_bare_package_roots.py` measures that
 directly. Instead each must declare a *reason*, in this file, and the reason is
-checked: a package with no `__all__` and no declared reason fails.
+checked: a package with no `__all__` and no declared reason fails. A bare root's
+surface is then graded by its public module count *and* by `BARE_ROOT_SYMBOLS`,
+which records the public symbols reachable on the root itself.
 """
 
 from __future__ import annotations
@@ -56,6 +60,7 @@ import types
 from tests.unit.architecture._surface_baseline import (
     ARTIFACT_NAMES,
     BARE_ROOT_REASONS,
+    BARE_ROOT_SYMBOLS,
     SURFACE_BASELINE,
 )
 from tests.unit.architecture._surface_scan import (
@@ -129,23 +134,37 @@ def test_no_package_leaks_an_undeclared_symbol_off_its_root() -> None:
 
 
 def test_module_count_has_not_grown() -> None:
-    """Adding a module to a package widens what consumers can import from it."""
+    """Adding a module to a package widens what consumers can import from it.
+
+    Only *growth* fails. A shrink is not a widening, and the earlier `!=` form
+    reported one as if it were — deleting a module (as
+    `docs/modularity-improvements/03` did to four of them) failed this guard with
+    "count grew". A count that moves down is the ratchet working, so it is
+    re-measured into the baseline deliberately, not treated as a regression.
+    """
     actual = {package: len(public_module_names(package)) for package in packages()}
     grown = {
         package: (SURFACE_BASELINE[package].modules, count)
         for package, count in actual.items()
-        if package in SURFACE_BASELINE and count != SURFACE_BASELINE[package].modules
+        if package in SURFACE_BASELINE and count > SURFACE_BASELINE[package].modules
+    }
+    shrank = {
+        package: (SURFACE_BASELINE[package].modules, count)
+        for package, count in actual.items()
+        if package in SURFACE_BASELINE and count < SURFACE_BASELINE[package].modules
     }
     assert not grown, (
         f"public module count grew (baseline -> actual): {grown}. If the new module "
         "is meant to be importable by other packages, raise the baseline in "
         "_surface_baseline.py; if not, prefix it with an underscore."
     )
+    _assert_shrunk_rows_are_recorded(shrank, what="public modules")
 
 
 def test_exported_name_count_has_not_grown() -> None:
     """Adding an exported name is a public-API change, so it must be deliberate."""
     grown: dict[str, tuple[int, int]] = {}
+    shrank: dict[str, tuple[int, int]] = {}
     for package in packages():
         declared = declared_surface(package)
         if declared is None:
@@ -157,13 +176,16 @@ def test_exported_name_count_has_not_grown() -> None:
             # `test_declared_reasons_are_still_needed`, which owns it; comparing
             # counts here would be a type error and a duplicate report.
             continue
-        if len(declared) != baseline.names:
+        if len(declared) > baseline.names:
             grown[package] = (baseline.names, len(declared))
+        elif len(declared) < baseline.names:
+            shrank[package] = (baseline.names, len(declared))
     assert not grown, (
         f"declared surface grew (baseline -> actual): {grown}. A widening of __all__ "
         "is a public-interface change: raise the baseline deliberately, in the same "
         "commit that adds the name."
     )
+    _assert_shrunk_rows_are_recorded(shrank, what="declared names")
 
 
 def test_undeclared_public_module_count_has_not_grown() -> None:
@@ -174,12 +196,59 @@ def test_undeclared_public_module_count_has_not_grown() -> None:
         if baseline is None:
             continue
         actual = len(public_module_names(package))
-        if actual != baseline.modules:
+        if actual > baseline.modules:
             grown[package] = (baseline.modules, actual)
     assert not grown, (
         f"a bare package root grew new public modules (baseline -> actual): {grown}. "
         f"It has no __all__, so its public modules are its interface by default. "
         f"Prefix new modules with an underscore, or record the growth."
+    )
+
+
+def test_bare_package_roots_gain_no_public_symbols() -> None:
+    """A bare root's *symbols* are a surface too, and the module count cannot see them.
+
+    `test_undeclared_public_module_count_has_not_grown` grades only how many
+    public modules a bare package has, so a public function or class added to
+    `studio/__init__.py` left that count untouched and was graded by nothing:
+    `test_no_package_leaks_an_undeclared_symbol_off_its_root` `continue`s on a
+    package with no `__all__`. An adversarial review demonstrated the escape by
+    appending a public function to `studio/__init__.py` and watching every guard
+    pass. This closes it with set equality against `BARE_ROOT_SYMBOLS`, so the
+    first symbol is a recorded edit in either direction.
+    """
+    drift: dict[str, tuple[list[str], list[str]]] = {}
+    for package, recorded in BARE_ROOT_SYMBOLS.items():
+        actual = reachable_public_names(package) - ARTIFACT_NAMES
+        added = sorted(actual - recorded)
+        removed = sorted(recorded - actual)
+        if added or removed:
+            drift[package] = (added, removed)
+    assert not drift, (
+        f"a bare package root's public symbols changed (package -> (added, removed)): "
+        f"{drift}. These roots declare no __all__, so a reachable public symbol is "
+        "API by default. Import it under a different name, move it to a submodule, "
+        "or record it in BARE_ROOT_SYMBOLS in tests/unit/architecture/_surface_baseline.py."
+    )
+
+
+def _assert_shrunk_rows_are_recorded(shrank: dict[str, tuple[int, int]], *, what: str) -> None:
+    """A shrink must be recorded in the baseline, not left as silent drift.
+
+    Growth is the ratchet's job; shrinkage is not a regression, so it does not
+    fail. But leaving the baseline above the real number would let that much
+    growth back in unnoticed — the same defect `test_recorded_reach_ins_are_not_stale`
+    guards against for reach-ins. So this fails until the row is lowered, and the
+    message names the exact edit.
+
+    This is what makes the count guards a *ratchet* rather than a "has not changed"
+    check: every move, in either direction, is a deliberate edit to the baseline.
+    """
+    assert not shrank, (
+        f"{what} shrank (baseline -> actual): {shrank}. That is the ratchet working, "
+        "not a regression — but the baseline must be lowered to match, or the "
+        "slack lets that much growth return silently. Edit SURFACE_BASELINE in "
+        "tests/unit/architecture/_surface_baseline.py."
     )
 
 
@@ -206,6 +275,25 @@ def test_the_guard_has_something_to_check() -> None:
     assert set(BARE_ROOT_REASONS) <= recorded, (
         "BARE_ROOT_REASONS names a package with no SURFACE_BASELINE row, so its "
         "module count is never checked."
+    )
+    # A `names=None` row is what `test_exported_name_count_has_not_grown` reads as
+    # "this package is bare, skip the name comparison". A row like that on a
+    # package that is *not* in BARE_ROOT_REASONS is therefore ungraded for names
+    # even after it starts declaring `__all__` — `test_declared_reasons_are_still_needed`
+    # only inspects BARE_ROOT_REASONS and never sees it. Exactly the packages with
+    # a `None` row may be the ones exempted, and each must carry a reason.
+    bare_rows = {package for package, surface in SURFACE_BASELINE.items() if surface.names is None}
+    assert bare_rows == set(BARE_ROOT_REASONS), (
+        "the packages with a `names=None` baseline row and BARE_ROOT_REASONS must be "
+        f"the same set; rows only: {sorted(bare_rows - set(BARE_ROOT_REASONS))}, "
+        f"reasons only: {sorted(set(BARE_ROOT_REASONS) - bare_rows)}. A `names=None` "
+        "row outside BARE_ROOT_REASONS exempts that package's declared surface from "
+        "the name guard with no stated reason."
+    )
+    assert set(BARE_ROOT_SYMBOLS) == set(BARE_ROOT_REASONS), (
+        "BARE_ROOT_SYMBOLS must cover exactly the bare roots in BARE_ROOT_REASONS, "
+        f"so every exempted root has its symbol surface graded: "
+        f"{sorted(set(BARE_ROOT_REASONS) ^ set(BARE_ROOT_SYMBOLS))} differ."
     )
     assert len(discovered) >= 15, "package discovery found too few packages"
     assert reachable_public_names("schemas"), "no names reachable on a known package"

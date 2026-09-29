@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.storage.manifest import read_manifest
 
 from .helpers import (
@@ -12,17 +16,14 @@ from .helpers import (
     _load_latest_reference_index,
     _ok,
     _services,
-    require_project_id,
-    require_project_state,
 )
 
 
-async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
+async def list_artifacts(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List all artifacts for the active project, optionally filtered by phase."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     phase_str = args.get("phase")
-    from film_pipeline.schemas.base import FilmPhase
 
     fp = None
     if phase_str:
@@ -45,17 +46,16 @@ async def list_artifacts(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
+async def inspect_artifact(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Load and return the content of a specific artifact."""
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
     artifact_id = str(args.get("artifact_id", ""))
     if not artifact_id:
         return _error("artifact_id is required.")
     phase_str = str(args.get("phase", state.get("current_phase", "")))
     version_raw = args.get("version")
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         fp = FilmPhase(phase_str)
@@ -76,7 +76,6 @@ async def inspect_artifact(args: dict[str, object]) -> dict[str, object]:
 
 def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
     """Return the shot matrix rows from the project's shot bible, or None when absent."""
-    from film_pipeline.schemas.base import FilmPhase
 
     store = _services(rt).artifact_store
     version = max(1, store.latest_version(project_id, "shot_bible", "shot_matrix"))
@@ -87,23 +86,23 @@ def _load_shot_bible_rows(rt: Any, project_id: str) -> list[Any] | None:
     return cast(list[Any], data.get("rows", []))
 
 
-async def list_shots(args: dict[str, object]) -> dict[str, object]:
+async def list_shots(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List shots from the shot bible artifact, if available."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _ok(shots=[], note="Shot bible not yet generated.")
     return _ok(shots=shots)
 
 
-async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
+async def inspect_shot(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Inspect a specific shot by ID from the shot bible."""
     shot_id = str(args.get("shot_id", ""))
     if not shot_id:
         return _error("shot_id is required.")
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     shots = _load_shot_bible_rows(rt, project_id)
     if shots is None:
         return _error("Shot bible not yet generated.")
@@ -115,14 +114,13 @@ async def inspect_shot(args: dict[str, object]) -> dict[str, object]:
     return _ok(shot=match)
 
 
-async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
+async def inspect_scene(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Inspect a specific scene from the script artifact."""
     scene_id = str(args.get("scene_id", ""))
     if not scene_id:
         return _error("scene_id is required.")
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    from film_pipeline.schemas.base import FilmPhase
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
 
     store = _services(rt).artifact_store
     try:
@@ -137,13 +135,13 @@ async def inspect_scene(args: dict[str, object]) -> dict[str, object]:
         return _error("Script artifact not yet generated.")
 
 
-async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
+async def inspect_reference(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Inspect a reference by ID from the visual development phase."""
     reference_id = str(args.get("reference_id", ""))
     if not reference_id:
         return _error("reference_id is required.")
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
     data = _load_latest_reference_index(rt, project_id, state)
     if data is None:
@@ -158,10 +156,10 @@ async def inspect_reference(args: dict[str, object]) -> dict[str, object]:
     return _ok(reference=match)
 
 
-async def list_assets(args: dict[str, object]) -> dict[str, object]:
+async def list_assets(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List generated/reference assets from the project asset manifest."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
     store = _services(rt).artifact_store
     manifest = read_manifest(project_id, root=store.root)
     if manifest is None:
@@ -180,3 +178,103 @@ async def list_assets(args: dict[str, object]) -> dict[str, object]:
             for entry in manifest.entries
         ]
     )
+
+
+class ListArtifactsArgs(ToolArgs):
+    """Arguments for `list_artifacts`."""
+
+    phase: str = Field(default="", description="Restrict to one phase; empty lists every phase.")
+
+
+class InspectArtifactArgs(ToolArgs):
+    """Arguments for `inspect_artifact`."""
+
+    artifact_id: str = Field(description="Artifact to inspect.")
+    phase: str = Field(default="", description="Phase holding it; empty searches all phases.")
+    version: str = Field(default="", description="Specific version; empty uses the latest.")
+
+
+class ListShotsArgs(ToolArgs):
+    """Arguments for `list_shots` (none)."""
+
+
+class InspectShotArgs(ToolArgs):
+    """Arguments for `inspect_shot`."""
+
+    shot_id: str = Field(description="Shot to inspect.")
+
+
+class InspectSceneArgs(ToolArgs):
+    """Arguments for `inspect_scene`."""
+
+    scene_id: str = Field(description="Scene to inspect.")
+
+
+class InspectReferenceArgs(ToolArgs):
+    """Arguments for `inspect_reference`."""
+
+    reference_id: str = Field(description="Reference image to inspect.")
+
+
+class ListAssetsArgs(ToolArgs):
+    """Arguments for `list_assets` (none)."""
+
+
+ARTIFACT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="list_artifacts",
+        group=ToolGroup.ARTIFACT,
+        description="List the artifacts stored for a project, optionally one phase.",
+        args=ListArtifactsArgs,
+        handler=list_artifacts,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_artifact",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one artifact's content and metadata at a chosen version.",
+        args=InspectArtifactArgs,
+        handler=inspect_artifact,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_shots",
+        group=ToolGroup.ARTIFACT,
+        description="List the shots in the project's master film matrix.",
+        args=ListShotsArgs,
+        handler=list_shots,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_shot",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one shot's definition and its generated assets.",
+        args=InspectShotArgs,
+        handler=inspect_shot,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_scene",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one scene's definition and the shots it contains.",
+        args=InspectSceneArgs,
+        handler=inspect_scene,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="inspect_reference",
+        group=ToolGroup.ARTIFACT,
+        description="Inspect one reference image entry and the file it points at.",
+        args=InspectReferenceArgs,
+        handler=inspect_reference,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_assets",
+        group=ToolGroup.ARTIFACT,
+        description="List the generated media assets recorded for the project.",
+        args=ListAssetsArgs,
+        handler=list_assets,
+        active_project=True,
+    ),
+)

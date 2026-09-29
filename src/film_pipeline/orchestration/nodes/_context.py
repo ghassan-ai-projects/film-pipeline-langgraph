@@ -6,6 +6,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
+from film_pipeline.agents.prompt_templates import get_registry
 from film_pipeline.kb.compression import DEFAULT_MAX_CONTEXT_CHARS, compact_json_context
 from film_pipeline.orchestration.orchestrator_state import get_convergence_round
 from film_pipeline.orchestration.services import GraphServices, _get_services
@@ -19,7 +20,6 @@ _logger = logging.getLogger(__name__)
 
 def _get_template_registry() -> Any:
     """Return the session-scoped prompt template registry."""
-    from film_pipeline.agents.prompt_templates import get_registry
 
     return get_registry()
 

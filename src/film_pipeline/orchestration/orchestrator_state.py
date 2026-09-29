@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal, cast
 
+from film_pipeline.governance.orchestrator_reads import ORCH_NS as _ORCH_NS
 from film_pipeline.orchestration.state_schema import StudioGraphState
 
 __all__ = [
@@ -50,7 +51,6 @@ __all__ = [
     "get_provider_health_snapshot",
     "get_routing_decisions",
     "has_blocking_failure",
-    "has_execution_brief",
     "has_pending_revision",
     "increment_convergence_round",
     "init_convergence",
@@ -71,10 +71,7 @@ __all__ = [
 
 # --- Stable state keys -------------------------------------------------------
 # These keys live inside the graph state dict.  They are namespaced with a
-# leading underscore and an "orch:" prefix to avoid accidental collisions with
-# existing state fields.
-
-_ORCH_NS = "_orchestrator"
+# leading underscore to avoid accidental collisions with existing state fields.
 
 # Candidate refs: the latest version of each artifact family, regardless of
 # approval status.  Shape: dict[artifact_family → ref_string]
@@ -603,11 +600,6 @@ def get_execution_brief(state: Mapping[str, object]) -> Any | None:
     before use. Returns ``None`` if no brief has been set.
     """
     return state.get(_EXECUTION_BRIEF)
-
-
-def has_execution_brief(state: Mapping[str, object]) -> bool:
-    """Return True if an ExecutionBrief exists in orchestrator state."""
-    return bool(state.get(_EXECUTION_BRIEF))
 
 
 # --- Initialization ----------------------------------------------------------

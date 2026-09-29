@@ -7,12 +7,16 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from film_pipeline.agents.roster import MVP_AGENTS
+from film_pipeline.config.loader import ProfileLoader
+from film_pipeline.kb.manifest import KBManifest
+from film_pipeline.studio.graph_factory import build_graph
+from film_pipeline.validation.registry import MVP_VALIDATORS
+
 
 def check_graph_compiles() -> tuple[bool, str]:
     """Verify the LangGraph graph compiles."""
     try:
-        from film_pipeline.studio.graph_factory import build_graph
-
         build_graph()
         return True, "Graph compiles successfully"
     except Exception as e:
@@ -22,8 +26,6 @@ def check_graph_compiles() -> tuple[bool, str]:
 def check_agent_registry() -> tuple[bool, str]:
     """Verify the wired MVP agents are registered."""
     try:
-        from film_pipeline.agents.roster import MVP_AGENTS
-
         count = len(MVP_AGENTS)
         if count == 0:
             return False, "No agents registered"
@@ -35,8 +37,6 @@ def check_agent_registry() -> tuple[bool, str]:
 def check_validator_registry() -> tuple[bool, str]:
     """Verify 15 MVP validators are registered."""
     try:
-        from film_pipeline.validation.validators import MVP_VALIDATORS
-
         count = len(MVP_VALIDATORS)
         if count != 15:
             return False, f"Expected 15 validators, got {count}"
@@ -49,8 +49,6 @@ def check_kb_manifest() -> tuple[bool, str]:
     """Verify KB manifest loads with 12 items."""
     try:
         from pathlib import Path
-
-        from film_pipeline.kb.manifest import KBManifest
 
         path = Path("film-knowledge-base/index/kb-manifest.yaml")
         if not path.exists():
@@ -66,8 +64,6 @@ def check_kb_manifest() -> tuple[bool, str]:
 def check_config_loads() -> tuple[bool, str]:
     """Verify base.studio profile loads."""
     try:
-        from film_pipeline.config.loader import ProfileLoader
-
         loader = ProfileLoader()
         loader.load("base.studio")
         return True, "base.studio profile loaded"

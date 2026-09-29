@@ -5,18 +5,28 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
 from film_pipeline.filmspec import is_text_only_policy
+from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.ledger import GenerationLedgerManager
+from film_pipeline.generation.prompt_preview import (
+    GenerationNotConfiguredError,
+)
+from film_pipeline.generation.prompt_preview import (
+    preview_generation_prompts as build_previews,
+)
+from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.generation._text_only import (
     _complete_text_only_generation,
 )
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import GenerationMode, GenerationStatus
 
 from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_id,
-    require_project_state,
 )
 
 if TYPE_CHECKING:
@@ -26,7 +36,6 @@ if TYPE_CHECKING:
 
 def _resolve_generation_mode(args: dict[str, object]) -> GenerationMode:
     """Map the optional ``mode`` argument to a GenerationMode (default TEST)."""
-    from film_pipeline.schemas.base import GenerationMode
 
     mode_str = str(args.get("mode", "test"))
     mode = GenerationMode.TEST
@@ -42,28 +51,24 @@ def _collect_shot_ids(args: dict[str, object], rt: Any, project_id: str) -> list
     if isinstance(raw_shot_ids, list):
         shot_ids = [str(s) for s in raw_shot_ids if str(s).strip()]
     if not shot_ids:
-        from film_pipeline.generation.executor import GenerationExecutor
-
         executor = GenerationExecutor(_services(rt).artifact_store, rt.provider_adapters)
         shot_ids = executor.shot_ids(project_id)
     return shot_ids
 
 
-async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
+async def plan_generation_batch(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Plan a generation batch: add rows to the ledger for each shot.
 
     Reads shot IDs from the shot bible artifact if none are provided.
     In text-only policy mode, no media is generated; completed requests are
     created directly so the graph can advance to delivery.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
 
     if is_text_only_policy(active):
         return _complete_text_only_generation(rt, active, project_id)
-
-    from film_pipeline.generation.ledger import GenerationLedgerManager
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
 
@@ -105,21 +110,22 @@ async def plan_generation_batch(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def preview_generation_prompts(args: dict[str, object]) -> dict[str, object]:
+async def preview_generation_prompts(
+    ctx: ToolContext, args: dict[str, object]
+) -> dict[str, object]:
     """Resolve the exact prompt each shot will send to its provider.
 
     Available as soon as the shot matrix exists so the operator can read and
     validate prompts during gen_planning review — before any spend.
     """
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    from film_pipeline.operations.errors import ServiceError
 
-    from ..helpers import operator_service
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
 
     try:
-        previews = operator_service(rt).preview_generation_prompts(project_id)
-    except ServiceError as exc:
+        state = rt.get_project(project_id) or {}
+        previews = build_previews(rt, state)
+    except GenerationNotConfiguredError as exc:
         return _error(str(exc))
     return _ok(previews=previews)
 
@@ -134,7 +140,6 @@ def _sync_generation_requests_from_ledger(
     line-for-line copy of that method minus the CANCELLED filter, so a cancelled
     request leaked into graph state and the generation-phase gate counted it.
     """
-    from film_pipeline.schemas.base import GenerationStatus
 
     requests: list[dict[str, object]] = []
     for row in rows:
@@ -159,3 +164,43 @@ def _sync_generation_requests_from_ledger(
             }
         )
     active["generation_requests"] = requests
+
+
+class PlanGenerationBatchArgs(ToolArgs):
+    """Arguments for `plan_generation_batch`.
+
+    `shot_ids` may be a list or the string `"from-bible"`; the handler accepts both
+    because `generate_shot_bible` is the usual way to establish the shot list.
+    """
+
+    shot_ids: object = Field(default=None, description="Shot ids to plan, or 'from-bible'.")
+    mode: str = Field(
+        default="test", description="'test' or 'production'; an unknown value falls back to test."
+    )
+    provider: str = Field(default="", description="Provider override; empty uses the default.")
+    model: str = Field(default="", description="Model override; empty uses the default.")
+    prompt_ref: str = Field(default="", description="Prompt template reference to use.")
+
+
+class PreviewGenerationPromptsArgs(ToolArgs):
+    """Arguments for `preview_generation_prompts` (none)."""
+
+
+GENERATION_PLANNING_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="plan_generation_batch",
+        group=ToolGroup.GENERATION,
+        description="Plan generation requests for a set of shots without submitting them.",
+        args=PlanGenerationBatchArgs,
+        handler=plan_generation_batch,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="preview_generation_prompts",
+        group=ToolGroup.GENERATION,
+        description="Render the prompts a generation batch would send, without calling a provider.",
+        args=PreviewGenerationPromptsArgs,
+        handler=preview_generation_prompts,
+        active_project=True,
+    ),
+)

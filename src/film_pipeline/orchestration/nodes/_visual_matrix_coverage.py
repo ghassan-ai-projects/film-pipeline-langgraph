@@ -13,6 +13,8 @@ from typing import Any
 from pydantic import BaseModel
 
 from film_pipeline.orchestration.services import GraphServices, _get_services
+from film_pipeline.schemas.artifact import ArtifactRef
+from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.matrix import MasterFilmMatrixRow
 
 
@@ -21,9 +23,6 @@ def _load_script_scenes(state: Mapping[str, object], services: GraphServices) ->
     script_ref = state.get("script_ref")
     if not script_ref or not isinstance(script_ref, str):
         return []
-
-    from film_pipeline.schemas.artifact import ArtifactRef
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         parsed = ArtifactRef.from_string(script_ref)

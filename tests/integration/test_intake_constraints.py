@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
@@ -12,6 +14,8 @@ from film_pipeline.mcp.tools import (
     submit_idea,
 )
 from film_pipeline.schemas.base import FilmPhase
+
+CallTool = Callable[..., Any]
 
 
 @pytest.mark.integration
@@ -26,26 +30,25 @@ class TestIntakeConstraints:
         rt.projects.clear()
         rt.active_project_id = ""
 
-    def test_submit_idea_with_constraints_creates_artifact(self) -> None:
+    def test_submit_idea_with_constraints_creates_artifact(self, call_tool: CallTool) -> None:
         loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(
-                create_film_project({"project_id": "constraints-01", "title": "Constraints Test"})
+            call_tool(
+                create_film_project, {"project_id": "constraints-01", "title": "Constraints Test"}
             )
-            loop.run_until_complete(set_active_project({"project_ref": "constraints-01"}))
-            result = loop.run_until_complete(
-                submit_idea(
-                    {
-                        "idea": (
-                            "A dark 3 minute sci-fi short with 6 scenes, "
-                            "no violence, themes: isolation."
-                        ),
-                        "constraints": {
-                            "target_audience": "adults",
-                            "forbidden_topics": ["profanity"],
-                        },
-                    }
-                )
+            call_tool(set_active_project, {"project_ref": "constraints-01"})
+            result = call_tool(
+                submit_idea,
+                {
+                    "idea": (
+                        "A dark 3 minute sci-fi short with 6 scenes, "
+                        "no violence, themes: isolation."
+                    ),
+                    "constraints": {
+                        "target_audience": "adults",
+                        "forbidden_topics": ["profanity"],
+                    },
+                },
             )
             assert result["ok"] is True
 

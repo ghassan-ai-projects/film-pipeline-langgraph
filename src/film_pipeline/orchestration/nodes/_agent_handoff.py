@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from film_pipeline.orchestration.orchestrator_state import ORCH_CHANNELS
 from film_pipeline.orchestration.state_schema import StudioGraphState
 
 if TYPE_CHECKING:
@@ -70,7 +71,6 @@ def _propagate_side_effects(
     ``dest`` is the caller's partial-update accumulator, written under computed
     channel keys, so it stays ``dict[str, Any]`` rather than a TypedDict.
     """
-    from film_pipeline.orchestration.orchestrator_state import ORCH_CHANNELS
 
     for spec in ORCH_CHANNELS:
         if spec.propagation == "explicit":

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
 from film_pipeline.schemas.artifact import ArtifactRef
-
-if TYPE_CHECKING:
-    from film_pipeline.schemas.base import FilmPhase
-    from film_pipeline.schemas.matrix_patch import MatrixPatch
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.schemas.matrix_patch import MatrixPatch
 
 
 class _MatrixStore(Protocol):
@@ -55,8 +53,6 @@ def _parse_artifact_ref(artifact_ref: str) -> ArtifactRef:
 
 def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> dict[str, Any]:
     """Load the base matrix artifact."""
-    from film_pipeline.schemas.base import FilmPhase
-
     parsed = _parse_artifact_ref(matrix_ref)
     phase = FilmPhase(parsed.phase)
     result: dict[str, Any] = store.load(project_id, phase, parsed.artifact_id, parsed.version)
@@ -65,9 +61,6 @@ def _load_base_matrix(store: _MatrixStore, project_id: str, matrix_ref: str) -> 
 
 def _load_patch(store: _MatrixStore, project_id: str, patch_ref: str) -> MatrixPatch:
     """Load a matrix patch artifact from its ref's phase, or the patch phases."""
-    from film_pipeline.schemas.base import FilmPhase
-    from film_pipeline.schemas.matrix_patch import MatrixPatch
-
     parsed = _parse_artifact_ref(patch_ref)
     data: dict[str, Any] = store.load(
         project_id, FilmPhase(parsed.phase), parsed.artifact_id, parsed.version

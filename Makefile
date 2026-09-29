@@ -13,7 +13,7 @@ UV_RUN = uv run --python $(PYTHON) --group dev
 
 .PHONY: help setup lock format format-check lint lint-fix typecheck test \
         test-cov test-unit test-integration test-e2e build precommit hooks \
-        ci-check ci-verify clean scratch-clean product-gate
+        ci-check ci-verify clean scratch-clean product-gate enola
 
 help: ## Show this help message
 	@echo "Available targets:"
@@ -98,6 +98,13 @@ release-check: ## Run release validation (ci-check + smoke + docs)
 product-gate: ## Enforce the working-product acceptance gate
 	@echo "Running working-product gate..."
 	@$(UV_RUN) python -m film_pipeline.cli.product_gate
+
+enola: ## Grade architecture against the pinned baseline (must exit 0)
+	@enola check --baseline=docs/modular-architecture/enola-out \
+	    docs/modular-architecture/enola-config.yaml; \
+	  code=$$?; \
+	  echo "  enola exit $$code (0 clean, 1 regression, 2 error, 3 declined)"; \
+	  exit $$code
 
 precommit: ## Run all pre-commit hooks
 	$(UV_RUN) pre-commit run --all-files

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import ArtifactType
 
 from ..helpers import (
     _error,
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 from ._shared import (
     InvalidBibleOutput,
@@ -34,7 +37,6 @@ def _deliver_character_bible(
     bible: Any,
 ) -> dict[str, object]:
     """Persist the bible, publish its ref on the active project, and respond."""
-    from film_pipeline.schemas.base import ArtifactType
 
     ref = _save_visual_dev_candidate(
         store,
@@ -52,15 +54,15 @@ def _deliver_character_bible(
     )
 
 
-async def generate_character_bible(args: dict[str, object]) -> dict[str, object]:
+async def generate_character_bible(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate a CharacterBible from Script + FilmConstitution.
 
     Produces a locked character description (identity_block, voice, wardrobe,
     emotional arc, relationships) used by generate_reference_images for
     structured prompt construction.
     """
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    rt = ctx.runtime
+    active = ctx.project_state()
 
     project_id = str(active["project_id"])
     character_id = str(args.get("character_id", "")).strip()
@@ -108,3 +110,24 @@ def _constitution_text(constitution: Any) -> str:
     if isinstance(constitution, dict):
         return "\n".join(f"{k}: {v}" for k, v in constitution.items())
     return str(constitution)
+
+
+class GenerateCharacterBibleArgs(ToolArgs):
+    """Arguments for `generate_character_bible`."""
+
+    character_id: str = Field(description="Stable id for the character.")
+    character_name: str = Field(default="", description="Display name; empty reuses the id.")
+
+
+GENERATE_CHARACTER_BIBLE = ToolSpec(
+    name="generate_character_bible",
+    group=ToolGroup.GENERATION,
+    description=(
+        "Generate a CharacterBible: a locked identity block, voice, wardrobe, "
+        "emotional arc and relationships."
+    ),
+    args=GenerateCharacterBibleArgs,
+    handler=generate_character_bible,
+    mutates=True,
+    active_project=True,
+)

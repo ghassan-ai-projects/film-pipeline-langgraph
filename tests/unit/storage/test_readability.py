@@ -179,7 +179,7 @@ class TestDeliverablesOnApprove:
         state["current_phase"] = "script"
         rt.projects["p1"] = state
 
-        from film_pipeline.studio._graph_exec import _approve_phase_artifacts
+        from film_pipeline.orchestration.execution import _approve_phase_artifacts
 
         _approve_phase_artifacts(rt, "p1", "script")
 

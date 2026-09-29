@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from film_pipeline.filmspec import blocking_issues
 from film_pipeline.orchestration.nodes._agent import _save_artifact
+from film_pipeline.orchestration.nodes.approval import request_revision_node
 from film_pipeline.orchestration.nodes.generation import generation_node
 from film_pipeline.orchestration.nodes.prep import (
     constitution_node,
@@ -19,21 +20,71 @@ from film_pipeline.orchestration.nodes.prep import (
     intake_node,
     script_node,
 )
-from film_pipeline.orchestration.nodes.qc import qc_node
 from film_pipeline.orchestration.nodes.visual import (
     gen_planning_node,
     shot_bible_node,
     visual_dev_node,
 )
 from film_pipeline.orchestration.nodes.wrapup import delivery_node, post_node
-from film_pipeline.orchestration.state_schema import StudioGraphState
+from film_pipeline.orchestration.orchestrator_state import (
+    get_convergence,
+    increment_convergence_round,
+    is_stalled,
+    mark_stalled,
+)
+from film_pipeline.orchestration.state_schema import StudioGraphState, merge_issues
+from film_pipeline.schemas.repair import (
+    GlobalRepairIssue,
+    RepairFeedback,
+    RowRepairInstruction,
+)
 
-if TYPE_CHECKING:
-    from film_pipeline.schemas.repair import (
-        GlobalRepairIssue,
-        RepairFeedback,
-        RowRepairInstruction,
-    )
+
+class _LazyQcPhaseNode:
+    """Stand-in for the QC phase node inside ``_PHASE_NODES``.
+
+    ``_PHASE_NODES`` is built at module import, and resolving the QC row there
+    means importing ``subgraphs.qc`` while ``nodes`` is still initialising —
+    which is a genuine ``ImportError: partially initialized module`` the moment
+    anything imports ``subgraphs.qc`` first, and an
+    ``orchestration <-> nodes <-> subgraphs`` cycle either way.
+
+    This defers the import to first use and forwards every call, so the row is
+    still *the graph's own node*:
+
+    - ``_PHASE_NODES["qc"] is _PHASE_NODES["qc"]`` (identity, what the parity
+      guard checks),
+    - calling it runs the same compiled subgraph `build_graph` wires,
+    - ``isinstance(x, CompiledStateGraph)`` is False, so
+      ``orchestration.execution._call_phase_node`` needs its own resolution — see
+      :func:`resolved_phase_node`, which both callers use.
+    """
+
+    _node: Any = None
+
+    def __call__(self, state: dict[str, Any]) -> Any:
+        return self.resolve()(state)
+
+    def resolve(self) -> Any:
+        if self._node is None:
+            from film_pipeline.orchestration.subgraphs.qc import qc_phase_node
+
+            self._node = qc_phase_node()
+        return self._node
+
+
+_QC_PHASE_NODE = _LazyQcPhaseNode()
+
+
+def resolved_phase_node(phase: str) -> Any:
+    """Return the phase's node, resolving a deferred one to its real object.
+
+    ``_PHASE_NODES`` holds ``_LazyQcPhaseNode`` for ``qc``; every consumer that
+    needs the underlying callable — or needs to know whether it is a compiled
+    subgraph — goes through here rather than reaching into the table.
+    """
+    node = _PHASE_NODES[phase]
+    return node.resolve() if isinstance(node, _LazyQcPhaseNode) else node
 
 
 # ── Phase node registry (for repair routing) ────────────────────────────
@@ -47,7 +98,7 @@ _PHASE_NODES: dict[str, Any] = {
     "shot_bible": shot_bible_node,
     "gen_planning": gen_planning_node,
     "generation": generation_node,
-    "qc": qc_node,
+    "qc": _QC_PHASE_NODE,
     "post": post_node,
     "delivery": delivery_node,
 }
@@ -61,12 +112,6 @@ def _start_round(
     ``increment_convergence_round`` must run exactly once per repair round,
     before the stall check, so ``phase_fn`` and the returned update agree.
     """
-    from film_pipeline.orchestration.orchestrator_state import (
-        get_convergence,
-        increment_convergence_round,
-        is_stalled,
-        mark_stalled,
-    )
 
     # Track repair attempts (on the shared state so phase_fn sees the round,
     # and returned explicitly so the update survives the node boundary).
@@ -90,7 +135,6 @@ def _classify_findings(
     issues: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, str]]], list[GlobalRepairIssue]]:
     """Split blocking+warning findings into row-keyed issues and global issues."""
-    from film_pipeline.schemas.repair import GlobalRepairIssue
 
     blocking = blocking_issues(issues)
     all_findings = blocking + [i for i in issues if i.get("severity") == "warning"]
@@ -126,7 +170,6 @@ def _build_row_instructions(
     row_issues: dict[str, list[dict[str, str]]],
 ) -> list[RowRepairInstruction]:
     """Materialize per-row repair instructions that preserve unlisted fields."""
-    from film_pipeline.schemas.repair import RowRepairInstruction
 
     failed_rows: list[RowRepairInstruction] = []
     for sid, issue_list in row_issues.items():
@@ -149,7 +192,6 @@ def _build_repair_feedback(
     passed_ids: list[str],
 ) -> RepairFeedback:
     """Assemble the structured RepairFeedback for this repair round."""
-    from film_pipeline.schemas.repair import RepairFeedback
 
     return RepairFeedback(
         repair_id=f"repair:{phase}:r{round_num}",
@@ -200,9 +242,6 @@ def repair_phase_node(state: StudioGraphState) -> dict[str, Any]:
     # produced before entering the normal bounded repair loop.
     revision_update: StudioGraphState = {}
     if state.get("_resume_to_repair"):
-        from film_pipeline.orchestration.nodes.approval import request_revision_node
-        from film_pipeline.orchestration.state_schema import merge_issues
-
         revision_update = request_revision_node(state)
         existing_issues = list(state.get("issues", []) or [])
         # `deepcopy` (not `dict(state)`) keeps the declared type: a plain dict

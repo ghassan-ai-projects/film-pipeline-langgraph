@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
 from film_pipeline.config.profile_resolver import (
     canonicalize_profile_stack,
     resolve_project_config,
     resolved_config_state_keys,
 )
-from film_pipeline.operations.operator import OperatorService
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.orchestration.router import get_blockers_for_state
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _coerce_runtime_arg,
@@ -19,8 +23,8 @@ from .helpers import (
     _error,
     _ok,
     _services,
-    operator_service,
-    require_project_state,
+    missing_profile_credentials,
+    register_profile_providers,
 )
 
 
@@ -72,7 +76,6 @@ def _validate_resolved_profile(
     profile_stack: Any,
     resolved_config: dict[str, Any],
     runtime_mode: str,
-    service: OperatorService,
 ) -> dict[str, object] | None:
     """Reject blocking conflicts and missing real-mode provider credentials."""
     conflicts = _extract_conflicts(resolved_config)
@@ -84,7 +87,7 @@ def _validate_resolved_profile(
                 conflicts=conflicts,
             )
     if runtime_mode == "real":
-        missing_credentials = service.missing_profile_credentials(
+        missing_credentials = missing_profile_credentials(
             profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         if missing_credentials:
@@ -152,13 +155,13 @@ def _run_intake_for_idea(
     return state
 
 
-async def create_film_project(args: dict[str, object]) -> dict[str, object]:
+async def create_film_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Create a new film project — wired to runtime.
 
     Accepts optional profile stack and runtime_mode. In ``real`` mode,
     mock providers and models are rejected.
     """
-    rt = tools_pkg.get_runtime()
+    rt = ctx.runtime
     project_id = str(args.get("project_id", ""))
     if not project_id:
         return _error("project_id is required")
@@ -175,10 +178,7 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
     try:
         profile_stack = canonicalize_profile_stack(args)
         resolved_config = resolve_project_config(profile_stack)
-        service = operator_service(rt)
-        profile_error = _validate_resolved_profile(
-            profile_stack, resolved_config, runtime_mode, service
-        )
+        profile_error = _validate_resolved_profile(profile_stack, resolved_config, runtime_mode)
         if profile_error is not None:
             return profile_error
 
@@ -195,8 +195,8 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
             runtime_mode=runtime_mode,
             server_mode=server_mode,
         )
-        service.register_profile_providers(
-            profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
+        register_profile_providers(
+            rt, profile_stack, cast(dict[str, object], resolved_config.get("raw", {}))
         )
         _audit_project_creation(rt, project_id, runtime_mode, server_mode)
         state = _run_intake_for_idea(rt, state, args, project_id)
@@ -209,13 +209,13 @@ async def create_film_project(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def list_projects(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def list_projects(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     return _ok(projects=list(rt.projects.keys()))
 
 
-async def find_project(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def find_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     ref = str(args.get("ref", ""))
     if not ref:
         return _error("ref is required (project_id or slug)")
@@ -230,9 +230,9 @@ async def find_project(args: dict[str, object]) -> dict[str, object]:
     return _error(f"Project '{ref}' not found.")
 
 
-async def set_active_project(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    project_id = str(args.get("project_ref", args.get("project_id", "")))
+async def set_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
+    project_id = str(args.get("project_ref") or args.get("project_id") or "")
     if not project_id:
         return _error("project_ref is required")
     try:
@@ -242,8 +242,9 @@ async def set_active_project(args: dict[str, object]) -> dict[str, object]:
         return _error(str(e))
 
 
-async def get_active_project(args: dict[str, object]) -> dict[str, object]:
-    state = require_project_state(args)
+async def get_active_project(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    state = ctx.project_state()
     return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
 
 
@@ -251,7 +252,6 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     """Summarize every stored artifact of a project across all film phases."""
     # Imported here to match the lazy-import pattern used by tools.helpers,
     # which keeps tool-module import time independent of schema enum loading.
-    from film_pipeline.schemas.base import FilmPhase
 
     summaries: list[dict[str, object]] = []
     for phase in FilmPhase:
@@ -272,12 +272,11 @@ def _collect_artifact_summaries(store: Any, project_id: str) -> list[dict[str, o
     return summaries
 
 
-async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
+async def get_project_summary(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return a summary of the active project: phase, artifacts, issues, and handoffs."""
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
-    from film_pipeline.orchestration.router import get_blockers_for_state
 
     artifact_summary = _collect_artifact_summaries(_services(rt).artifact_store, project_id)
     routing = state.get("_routing_decisions", [])
@@ -295,3 +294,114 @@ async def get_project_summary(args: dict[str, object]) -> dict[str, object]:
         has_blockers=bool(get_blockers_for_state(state)),
         generation_policy=str(state.get("generation_policy", "generate")),
     )
+
+
+class CreateFilmProjectArgs(ToolArgs):
+    """Arguments for `create_film_project`.
+
+    The five profile fields are the stack `canonicalize_profile_stack` reads; a
+    blank one means "use the profile named by base.studio".
+    """
+
+    project_id: str = Field(description="Stable id for the new project.")
+    title: str = Field(default="", description="Human-readable project title.")
+    slug: str = Field(default="", description="URL-safe short name.")
+    idea: str = Field(default="", description="Optional idea text to run intake on.")
+    target_runtime_seconds: int | float | str | None = Field(
+        default=None,
+        description=(
+            "Requested film length in seconds, authoritative for the whole "
+            "pipeline; takes precedence over `target_runtime_minutes`. Numeric "
+            "strings are accepted."
+        ),
+    )
+    target_runtime_minutes: int | float | str | None = Field(
+        default=None,
+        description="Requested film length in minutes, used only when seconds is unset.",
+    )
+    runtime_mode: str = Field(
+        default="", description="'mock' or 'real'; empty uses the server's mode."
+    )
+    generation_policy: str = Field(
+        default="generate", description="How generation requests are raised."
+    )
+    film_type_profile: str = Field(default="", description="Film-type profile stem.")
+    quality_profile: str = Field(default="", description="Quality profile stem.")
+    provider_profile: str = Field(default="", description="Provider profile stem.")
+    review_profile: str = Field(default="", description="Review profile stem.")
+    auto_approve_profile: str = Field(default="", description="Auto-approve profile stem.")
+
+
+class ListProjectsArgs(ToolArgs):
+    """Arguments for `list_projects` (none)."""
+
+
+class FindProjectArgs(ToolArgs):
+    """Arguments for `find_project`."""
+
+    ref: str = Field(description="Project id or fuzzy reference to resolve.")
+
+
+class SetActiveProjectArgs(ToolArgs):
+    """Arguments for `set_active_project`."""
+
+    project_ref: str | None = Field(default=None, description="Project id to make active.")
+    project_id: str = Field(default="", description="Alias for `project_ref`.")
+
+
+class GetActiveProjectArgs(ToolArgs):
+    """Arguments for `get_active_project` (none)."""
+
+
+class GetProjectSummaryArgs(ToolArgs):
+    """Arguments for `get_project_summary` (none)."""
+
+
+PROJECT_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="create_film_project",
+        group=ToolGroup.PROJECT,
+        description="Create a new film project, optionally running intake on an idea.",
+        args=CreateFilmProjectArgs,
+        handler=create_film_project,
+        mutates=True,
+    ),
+    ToolSpec(
+        name="list_projects",
+        group=ToolGroup.PROJECT,
+        description="List the ids of every project the runtime knows about.",
+        args=ListProjectsArgs,
+        handler=list_projects,
+    ),
+    ToolSpec(
+        name="find_project",
+        group=ToolGroup.PROJECT,
+        description="Resolve a fuzzy project reference to a known project, or report ambiguity.",
+        args=FindProjectArgs,
+        handler=find_project,
+    ),
+    ToolSpec(
+        name="set_active_project",
+        group=ToolGroup.PROJECT,
+        description="Make a project active for subsequent tool calls.",
+        args=SetActiveProjectArgs,
+        handler=set_active_project,
+        mutates=True,
+    ),
+    ToolSpec(
+        name="get_active_project",
+        group=ToolGroup.PROJECT,
+        description="Report the active project and the phase it is in.",
+        args=GetActiveProjectArgs,
+        handler=get_active_project,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_project_summary",
+        group=ToolGroup.PROJECT,
+        description="Summarise the active project: phase, artifacts, issues and handoffs.",
+        args=GetProjectSummaryArgs,
+        handler=get_project_summary,
+        active_project=True,
+    ),
+)

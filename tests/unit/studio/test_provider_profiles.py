@@ -4,17 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from film_pipeline.providers.credentials import MissingProviderCredential
-from film_pipeline.studio import _provider_factory as provider_factory
-
 # Retargeted from `studio._provider_profiles`, which was a byte-identical dead
 # duplicate of these two functions in `studio._operator_runtime` — nothing in
 # src/ imported it, only this file did. The behaviour asserted below is the
 # same; the implementation now under test is the live one.
-from film_pipeline.studio._operator_runtime import (
-    missing_profile_credentials,
-    register_profile_providers,
-)
+from film_pipeline.studio import _provider_factory as provider_factory
+from film_pipeline.studio._operator_runtime import register_profile_providers
 from film_pipeline.studio.runtime import StudioRuntime
 
 
@@ -68,20 +63,3 @@ def test_register_profile_providers_keeps_existing_runtime_when_no_specs() -> No
 
     assert runtime.get_provider("existing") is existing
     assert runtime.get_provider_health("existing") == {"status": "degraded", "reason": "keep"}
-
-
-def test_missing_profile_credentials_uses_resolved_provider_specs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("film_pipeline.providers.credentials.is_configured", lambda _: False)
-
-    missing = missing_profile_credentials(
-        {},
-        {
-            "providers": {
-                "video": [{"provider_id": "seedance-openrouter", "models": []}],
-            }
-        },
-    )
-
-    assert missing == [MissingProviderCredential("seedance-openrouter", "OPENROUTER_API_KEY")]

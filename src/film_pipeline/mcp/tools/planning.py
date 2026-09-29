@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import film_pipeline.mcp.tools as tools_pkg
 from film_pipeline.config.profile_resolver import provider_specs_from_raw
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.providers import supported_provider_ids
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
+from film_pipeline.schemas.matrix import MasterFilmMatrix
 
 from .helpers import (
     _error,
@@ -13,7 +19,6 @@ from .helpers import (
     _ok,
     _register_active_artifact_ref,
     _services,
-    require_project_state,
 )
 
 #: Fallback cap when neither the caller nor the project supplies one. Kept
@@ -30,9 +35,6 @@ def _save_gen_planning_candidate(
 ) -> str:
     """Persist an artifact as the next CANDIDATE version in gen_planning."""
     from datetime import UTC, datetime
-
-    from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-    from film_pipeline.schemas.base import ArtifactStatus, FilmPhase
 
     next_version = (
         _latest_artifact_version(store, project_id, FilmPhase("gen_planning"), artifact_id) + 1
@@ -55,9 +57,6 @@ def _save_gen_planning_candidate(
 def _load_master_matrix(store: Any, project_id: str) -> Any:
     """Load and validate the latest MasterFilmMatrix artifact, if it exists."""
     try:
-        from film_pipeline.schemas.base import FilmPhase
-        from film_pipeline.schemas.matrix import MasterFilmMatrix
-
         version = max(1, store.latest_version(project_id, "shot_bible", "master_film_matrix"))
         raw = store.load(project_id, FilmPhase("shot_bible"), "master_film_matrix", version)
         if isinstance(raw, MasterFilmMatrix):
@@ -81,7 +80,6 @@ def _known_provider(runtime: Any, provider_id: str) -> bool:
         return False
     if provider_id in runtime.list_providers():
         return True
-    from film_pipeline.providers import supported_provider_ids
 
     return provider_id in supported_provider_ids(runtime.server_mode)
 
@@ -126,7 +124,6 @@ def _build_generation_plan(
     The provider guard checks the runtime's own provider set — see
     ``_known_provider`` — rather than the resolved config's requested route.
     """
-    from film_pipeline.schemas.generation import GenerationPlan, ShotPlan
 
     provider_id, model_id = _fallback_video_route(runtime, state)
     if not _known_provider(runtime, provider_id):
@@ -155,7 +152,6 @@ def _build_generation_plan(
 
 def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -> Any:
     """Save the generation plan artifact and link it into the project state."""
-    from film_pipeline.schemas.base import ArtifactType
 
     store = _services(rt).artifact_store
     ref = _save_gen_planning_candidate(
@@ -170,10 +166,11 @@ def _persist_plan(rt: Any, active: dict[str, Any], project_id: str, plan: Any) -
     return ref
 
 
-async def generate_plan(args: dict[str, object]) -> dict[str, object]:
+async def generate_plan(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Generate a GenerationPlan from the shot matrix."""
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     project_id = str(active["project_id"])
     store = _services(rt).artifact_store
 
@@ -202,3 +199,18 @@ async def generate_plan(args: dict[str, object]) -> dict[str, object]:
         )
     except Exception as exc:
         return _error(f"Plan generation failed: {exc}")
+
+
+class GeneratePlanArgs(ToolArgs):
+    """Arguments for `generate_plan` (none)."""
+
+
+GENERATE_PLAN = ToolSpec(
+    name="generate_plan",
+    group=ToolGroup.GENERATION,
+    description="Turn the master shot matrix into an ordered production plan.",
+    args=GeneratePlanArgs,
+    handler=generate_plan,
+    mutates=True,
+    active_project=True,
+)

@@ -10,12 +10,14 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
-from film_pipeline.config.profile_resolver import load_profile_flex
+from film_pipeline.config.profile_resolver import load_profile_flex, provider_specs
 from film_pipeline.filmspec import NO_ACTIVE_PROJECT as NO_ACTIVE_PROJECT
-from film_pipeline.operations.errors import ProjectNotFoundError
+from film_pipeline.providers.credentials import (
+    missing_provider_credentials,
+)
 from film_pipeline.schemas.artifact import ArtifactRef
-from film_pipeline.studio.runtime import StudioRuntime
+from film_pipeline.schemas.base import FilmPhase
+from film_pipeline.studio._operator_runtime import register_profile_providers as _register
 
 
 def _stub(handler_name: str, **extra: object) -> dict[str, object]:
@@ -38,78 +40,9 @@ def _error(message: str, **extra: object) -> dict[str, object]:
     return {"ok": False, "error": message, **extra}
 
 
-def _active_project_id(args: dict[str, object], rt: Any) -> str | None:
-    """Return the project id for the current request.
-
-    Prefers the project resolved from ``project_ref`` in the request envelope,
-    then falls back to the runtime's active project. Returns ``None`` when no
-    project can be determined.
-    """
-    envelope = args.get("_envelope")
-    resolved = getattr(envelope, "resolved_project_id", None) if envelope is not None else None
-    if resolved:
-        return str(resolved)
-    active = rt.get_active()
-    if active is not None:
-        return str(active["project_id"])
-    return None
-
-
 def _no_active_project() -> dict[str, object]:
     """The standard "nothing to act on" error response."""
     return _error(NO_ACTIVE_PROJECT)
-
-
-def _active_project_state(args: dict[str, object]) -> dict[str, Any] | None:
-    """Return the active project's state, or ``None`` when none resolves.
-
-    ``get_runtime`` must keep being resolved through the package attribute at
-    call time (never via a ``from`` import): tests monkeypatch
-    ``film_pipeline.mcp.tools.get_runtime`` by attribute, and only lazy
-    binding sees the patch.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        return None
-    return rt.get_project(project_id)
-
-
-def require_project_id(args: dict[str, object]) -> str:
-    """Return the request's project id, assuming the dispatch precondition held.
-
-    `MCPServer.call` checks `ToolContract.requires_active_project` before
-    dispatch and returns a typed error when there is no project, so a handler
-    reached through the operator surface always has one. Handlers therefore
-    state the assumption instead of re-deriving it — the check existed at 48
-    call sites with three wordings and five emptiness tests.
-
-    Raises `ProjectNotFoundError` rather than returning an error response. The
-    dispatch layer already maps service errors to typed MCP errors, so a handler
-    cannot invent a different error shape by accident. A raise here means the
-    guarantee was violated — a bug in the contract declaration, not a user error.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
-    return project_id
-
-
-def require_project_state(args: dict[str, object]) -> dict[str, Any]:
-    """Return the request's project state, assuming the dispatch precondition held.
-
-    See :func:`require_project_id` for why this raises rather than returning an
-    error response.
-    """
-    rt: StudioRuntime = tools_pkg.get_runtime()
-    project_id = _active_project_id(args, rt)
-    if project_id is None:
-        raise ProjectNotFoundError(NO_ACTIVE_PROJECT)
-    state = rt.get_project(project_id)
-    if state is None:
-        raise ProjectNotFoundError(f"Project '{project_id}' is not loaded.")
-    return state
 
 
 def _services(rt: object) -> Any:
@@ -134,22 +67,45 @@ def _register_active_artifact_ref(
     rt.persist_project_state(project_id)
 
 
-def operator_service(rt: Any) -> Any:
-    """Return the operator service bound to ``rt``.
+def missing_profile_credentials(
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> list[Any]:
+    """Return the provider credentials a resolved profile requires but lacks.
 
-    The single place this package obtains an ``OperatorService``. Four tool
-    modules previously imported ``studio._operator_runtime.operator_service``
-    directly — a private module in a package the dependency law forbids ``mcp``
-    from importing at all. Routing them through one accessor means the wiring
-    is named once, and if the composition root's shape changes only this
-    function moves.
+    Composed here from two importable owners rather than routed through the
+    composition root: `config.profile_resolver.provider_specs` says which
+    providers the profile selects, and `providers.credentials` says which of
+    their keys are unset. Neither needs the concrete provider classes, so `mcp`
+    can do this itself — and doing it here keeps `mcp`'s one remaining private
+    reach-in (`studio._operator_runtime`, for the adapter factory) at one site.
 
-    The concrete factory still lives in the composition root, which is the
-    correct owner of that wiring; this is the ``mcp``-side seam for reaching it.
+    This used to be a method on the deleted `OperatorService`.
     """
-    from film_pipeline.studio._operator_runtime import operator_service as _build
+    provider_ids = [
+        str(spec["provider_id"]) for spec in provider_specs(profile_stack, resolved_config)
+    ]
+    return missing_provider_credentials(provider_ids)
 
-    return _build(rt)
+
+def register_profile_providers(
+    rt: Any,
+    profile_stack: dict[str, str],
+    resolved_config: dict[str, object],
+) -> None:
+    """Register the provider adapters a profile stack selects.
+
+    The single place this package reaches the composition root's provider wiring.
+    Four tool modules previously obtained a whole ``OperatorService`` here to call
+    one method on it; `OperatorService` is gone
+    (`docs/modularity-improvements/03-one-use-case-layer.md`), so this names the
+    one use case instead.
+
+    The concrete factory still lives in the composition root, which owns that
+    wiring — it calls `build_provider_adapter`, which needs the concrete provider
+    classes. This is the ``mcp``-side seam for reaching it.
+    """
+    _register(rt, profile_stack, resolved_config)
 
 
 def _coerce_runtime_arg(args: dict[str, object]) -> int:
@@ -271,8 +227,6 @@ def _load_latest_reference_index(
     project_id: str,
     state: dict[str, object] | None = None,
 ) -> dict[str, object] | None:
-    from film_pipeline.schemas.base import FilmPhase
-
     store = _services(rt).artifact_store
     version = 0
     if state is not None:

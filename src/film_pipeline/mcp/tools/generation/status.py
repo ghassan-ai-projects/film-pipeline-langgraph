@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 
 from ..helpers import (
     _error,
     _ok,
     _services,
-    require_project_id,
 )
 
 
-async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
+async def get_generation_status(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Get status of a generation by id."""
     generation_id = str(args.get("generation_id", ""))
     if not generation_id:
         return _error("generation_id is required.")
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    from film_pipeline.generation.ledger import GenerationLedgerManager
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
 
     mgr = GenerationLedgerManager(_services(rt).artifact_store)
     row = mgr.get_row(project_id, generation_id)
@@ -36,12 +39,10 @@ async def get_generation_status(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
+async def list_active_generations(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """List active (non-terminal) generation rows."""
-    rt = tools_pkg.get_runtime()
-    project_id = require_project_id(args)
-    from film_pipeline.generation.ledger import GenerationLedgerManager, is_terminal
-    from film_pipeline.schemas.base import FilmPhase
+    rt = ctx.runtime
+    project_id = str(ctx.project_state()["project_id"])
 
     # Guard against the read creating an artifact: the ledger manager's load()
     # persists a new empty ledger when none exists, so without this a status
@@ -72,3 +73,33 @@ async def list_active_generations(args: dict[str, object]) -> dict[str, object]:
             for r in active_rows
         ],
     )
+
+
+class GetGenerationStatusArgs(ToolArgs):
+    """Arguments for `get_generation_status`."""
+
+    generation_id: str = Field(description="Generation request to report on.")
+
+
+class ListActiveGenerationsArgs(ToolArgs):
+    """Arguments for `list_active_generations` (none)."""
+
+
+GENERATION_STATUS_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="get_generation_status",
+        group=ToolGroup.GENERATION,
+        description="Report one generation request's status, polls and provider job.",
+        args=GetGenerationStatusArgs,
+        handler=get_generation_status,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="list_active_generations",
+        group=ToolGroup.GENERATION,
+        description="List the generation requests that are still running or waiting on a human.",
+        args=ListActiveGenerationsArgs,
+        handler=list_active_generations,
+        active_project=True,
+    ),
+)

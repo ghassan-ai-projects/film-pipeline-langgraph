@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -18,9 +18,11 @@ from film_pipeline.mcp.tools import (
 )
 from film_pipeline.studio.runtime import StudioRuntime
 
+CallTool = Callable[..., Any]
+
 
 def test_review_phase_artifacts_requires_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("review-no-phase", "Review")
@@ -30,77 +32,77 @@ def test_review_phase_artifacts_requires_phase(
     active["current_phase"] = ""
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(review_phase_artifacts({}))
+    result = call_tool(review_phase_artifacts, {})
     assert result["ok"] is False
     assert "No phase specified" in cast(str, result["error"])
 
 
 def test_review_phase_artifacts_unknown_phase(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project("review-bad-phase", "Review")
     rt.set_active("review-bad-phase")
     monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    result = asyncio.run(review_phase_artifacts({"phase": "not-a-real-phase"}))
+    result = call_tool(review_phase_artifacts, {"phase": "not-a-real-phase"})
     assert result["ok"] is False
     assert "Unknown phase" in cast(str, result["error"])
 
 
-def test_review_phase_artifacts_success() -> None:
-    asyncio.run(create_film_project({"project_id": "review-success"}))
-    asyncio.run(set_active_project({"project_ref": "review-success"}))
-    asyncio.run(submit_idea({"idea": "A quiet harbor town at dawn."}))
+def test_review_phase_artifacts_success(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "review-success"})
+    call_tool(set_active_project, {"project_ref": "review-success"})
+    call_tool(submit_idea, {"idea": "A quiet harbor town at dawn."})
 
-    result = asyncio.run(review_phase_artifacts({"phase": "intake"}))
+    result = call_tool(review_phase_artifacts, {"phase": "intake"})
     assert result["ok"] is True
     assert result["phase"] == "intake"
     # Either the full review package or the artifact-list fallback is present.
     assert "review_package" in result or "artifacts" in result
 
 
-def test_approve_phase_no_active_project_errors() -> None:
+def test_approve_phase_no_active_project_errors(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
-    result = asyncio.run(approve_phase({"confirmed": True}))
+    result = call_tool(approve_phase, {"confirmed": True})
     assert result["ok"] is False
 
 
-def test_approve_phase_success() -> None:
-    asyncio.run(create_film_project({"project_id": "review-approve-1"}))
-    asyncio.run(set_active_project({"project_ref": "review-approve-1"}))
-    asyncio.run(submit_idea({"idea": "A clockmaker who freezes time."}))
+def test_approve_phase_success(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "review-approve-1"})
+    call_tool(set_active_project, {"project_ref": "review-approve-1"})
+    call_tool(submit_idea, {"idea": "A clockmaker who freezes time."})
 
-    result = asyncio.run(approve_phase({"confirmed": True}))
+    result = call_tool(approve_phase, {"confirmed": True})
     assert result["ok"] is True
     assert result["project_id"] == "review-approve-1"
 
 
-def test_request_revision_no_active_project_errors() -> None:
+def test_request_revision_no_active_project_errors(call_tool: CallTool) -> None:
     from film_pipeline.studio.runtime import get_runtime as gr
 
     rt = gr()
     rt.active_project_id = ""
-    result = asyncio.run(request_revision({"note": "fix it", "confirmed": True}))
+    result = call_tool(request_revision, {"note": "fix it", "confirmed": True})
     assert result["ok"] is False
 
 
-def test_request_revision_success() -> None:
-    asyncio.run(create_film_project({"project_id": "review-revise-1"}))
-    asyncio.run(set_active_project({"project_ref": "review-revise-1"}))
-    asyncio.run(submit_idea({"idea": "A lighthouse keeper hears a ship that isn't there."}))
+def test_request_revision_success(call_tool: CallTool) -> None:
+    call_tool(create_film_project, {"project_id": "review-revise-1"})
+    call_tool(set_active_project, {"project_ref": "review-revise-1"})
+    call_tool(submit_idea, {"idea": "A lighthouse keeper hears a ship that isn't there."})
 
-    result = asyncio.run(request_revision({"note": "needs more detail", "confirmed": True}))
+    result = call_tool(request_revision, {"note": "needs more detail", "confirmed": True})
     assert result["ok"] is True
     assert result["project_id"] == "review-revise-1"
     assert len(cast(list[object], result["issues"])) >= 1
 
 
 def test_review_phase_artifacts_generator_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call_tool: CallTool
 ) -> None:
     """When ReviewPackageGenerator raises, review_phase_artifacts falls back
     to the plain artifact list response.
@@ -116,7 +118,7 @@ def test_review_phase_artifacts_generator_fallback(
         raise RuntimeError("boom")
 
     monkeypatch.setattr(ReviewPackageGenerator, "build", _raise)
-    result = asyncio.run(review_phase_artifacts({"phase": "intake"}))
+    result = call_tool(review_phase_artifacts, {"phase": "intake"})
     assert result["ok"] is True
     assert "artifacts" in result
     assert result["phase"] == "intake"

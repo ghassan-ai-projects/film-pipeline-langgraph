@@ -4,14 +4,17 @@ from __future__ import annotations
 
 from typing import Any
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _coerce_runtime_arg,
     _error,
     _ok,
     _services,
-    require_project_state,
 )
 
 
@@ -28,9 +31,9 @@ def _apply_intake_hints(active: dict[str, Any], args: dict[str, object]) -> None
         active["constraints_hints"] = user_constraints
 
 
-async def submit_idea(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+async def submit_idea(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
+    active = ctx.project_state()
     idea = str(args.get("idea", args.get("text", "")))
     if not idea:
         return _error("idea is required")
@@ -47,11 +50,11 @@ async def submit_idea(args: dict[str, object]) -> dict[str, object]:
     )
 
 
-async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    state = require_project_state(args)
+async def get_intake_analysis(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
+    state = ctx.project_state()
     project_id = str(state["project_id"])
-    from film_pipeline.schemas.base import FilmPhase
 
     try:
         data = _services(rt).artifact_store.load(
@@ -66,9 +69,10 @@ async def get_intake_analysis(args: dict[str, object]) -> dict[str, object]:
         return _error("No intake analysis found. Submit an idea first.")
 
 
-async def approve_intake(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
-    active = require_project_state(args)
+async def approve_intake(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    _ = args
+    rt = ctx.runtime
+    active = ctx.project_state()
     current_phase = str(active.get("current_phase", ""))
     if current_phase not in ("intake", ""):
         return _error(f"Current phase is '{current_phase}', not intake.")
@@ -77,3 +81,67 @@ async def approve_intake(args: dict[str, object]) -> dict[str, object]:
         return _ok(project_id=state["project_id"], current_phase=state.get("current_phase"))
     except ValueError as e:
         return _error(str(e))
+
+
+class SubmitIdeaArgs(ToolArgs):
+    """Arguments for `submit_idea`.
+
+    `idea` and `text` are both accepted spellings of the same input.
+    """
+
+    idea: str = Field(default="", description="The film idea to submit.")
+    text: str = Field(default="", description="Alias for `idea`.")
+    target_runtime_seconds: int | float | str | None = Field(
+        default=None,
+        description=(
+            "Requested film length in seconds; takes precedence over "
+            "`target_runtime_minutes`. Numeric strings are accepted."
+        ),
+    )
+    target_runtime_minutes: int | float | str | None = Field(
+        default=None,
+        description="Requested film length in minutes, used only when seconds is unset.",
+    )
+    target_scene_count: object = Field(
+        default=None, description="Requested number of scenes, if any."
+    )
+    constraints: object = Field(default=None, description="Constraints to apply to the idea.")
+
+
+class GetIntakeAnalysisArgs(ToolArgs):
+    """Arguments for `get_intake_analysis` (none)."""
+
+
+class ApproveIntakeArgs(ToolArgs):
+    """Arguments for `approve_intake` (none)."""
+
+
+INTAKE_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="submit_idea",
+        group=ToolGroup.INTAKE,
+        description="Submit a film idea and run the intake analysis on it.",
+        args=SubmitIdeaArgs,
+        handler=submit_idea,
+        mutates=True,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="get_intake_analysis",
+        group=ToolGroup.INTAKE,
+        description="Read the intake analysis produced for the active project's idea.",
+        args=GetIntakeAnalysisArgs,
+        handler=get_intake_analysis,
+        active_project=True,
+    ),
+    ToolSpec(
+        name="approve_intake",
+        group=ToolGroup.INTAKE,
+        description="Approve the intake analysis and advance the project to constitution.",
+        args=ApproveIntakeArgs,
+        handler=approve_intake,
+        mutates=True,
+        confirm=True,
+        active_project=True,
+    ),
+)

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import film_pipeline.mcp.tools as tools_pkg
+from pydantic import Field
+
+from film_pipeline.mcp.tools.context import ToolContext
+from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
 
 from .helpers import _error, _ok
 
 
-async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def check_provider_health(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     provider_id = str(args.get("provider_id", "")).strip()
     if not provider_id:
         provider_ids = rt.list_providers()
@@ -24,8 +27,8 @@ async def check_provider_health(args: dict[str, object]) -> dict[str, object]:
     return _ok(provider_id=provider_id, status=health["status"], reason=health.get("reason", ""))
 
 
-async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def resolve_provider_block(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     provider_id = str(args.get("provider_id", ""))
     if not provider_id:
         return _error("provider_id is required")
@@ -33,8 +36,8 @@ async def resolve_provider_block(args: dict[str, object]) -> dict[str, object]:
     return _ok(provider_id=provider_id, status="healthy")
 
 
-async def list_providers(args: dict[str, object]) -> dict[str, object]:
-    rt = tools_pkg.get_runtime()
+async def list_providers(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
+    rt = ctx.runtime
     # Include model-provider health rows (for example z.ai) alongside media
     # adapters. Model adapters intentionally do not implement the media
     # provider contract, so they remain health-only entries here.
@@ -51,3 +54,45 @@ async def list_providers(args: dict[str, object]) -> dict[str, object]:
     if not result and rt.server_mode == "mock":
         result.append({"provider_id": "mock-video-provider", "status": "healthy"})
     return _ok(providers=result, total=len(result))
+
+
+class CheckProviderHealthArgs(ToolArgs):
+    """Arguments for `check_provider_health`."""
+
+    provider_id: str = Field(default="", description="Provider to check; empty uses the default.")
+
+
+class ResolveProviderBlockArgs(ToolArgs):
+    """Arguments for `resolve_provider_block`."""
+
+    provider_id: str = Field(description="Provider whose block should be cleared.")
+
+
+class ListProvidersArgs(ToolArgs):
+    """Arguments for `list_providers` (none)."""
+
+
+PROVIDER_TOOLS: tuple[ToolSpec, ...] = (
+    ToolSpec(
+        name="check_provider_health",
+        group=ToolGroup.PROVIDER,
+        description="Check one provider's health and report its configuration state.",
+        args=CheckProviderHealthArgs,
+        handler=check_provider_health,
+    ),
+    ToolSpec(
+        name="resolve_provider_block",
+        group=ToolGroup.PROVIDER,
+        description="Clear a provider's block and mark it healthy again.",
+        args=ResolveProviderBlockArgs,
+        handler=resolve_provider_block,
+        mutates=True,
+    ),
+    ToolSpec(
+        name="list_providers",
+        group=ToolGroup.PROVIDER,
+        description="List every configured provider with its health status.",
+        args=ListProvidersArgs,
+        handler=list_providers,
+    ),
+)

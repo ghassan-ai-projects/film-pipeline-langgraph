@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
+from film_pipeline.schemas.assembly import AssemblyPlanArtifact
+from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
+
 # Placeholder duration assigned to every clip until real media probing exists.
 _SECONDS_PER_CLIP = 5.0
 
@@ -90,10 +94,6 @@ class AssemblyAgent:
         Returns the artifact reference string.
         """
         from datetime import UTC, datetime
-
-        from film_pipeline.schemas.artifact import ArtifactMetadata, ArtifactRef
-        from film_pipeline.schemas.assembly import AssemblyPlanArtifact
-        from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
 
         artifact_id = "assembly_manifest"
         model = AssemblyPlanArtifact(
