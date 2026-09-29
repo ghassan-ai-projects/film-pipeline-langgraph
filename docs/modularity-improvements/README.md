@@ -1,5 +1,7 @@
 # Modularity improvements — what is left, ranked
 
+For a current assessment of **functional ownership across the operator workflows**, see [09 — Functional boundaries](09-functional-boundaries.md). It checks the `improve-modular-2` tree after the slices tracked below and proposes validation and clip generation as the first outcomes to consolidate. The measurements and open items in this README are pinned to the earlier revision named below.
+
 Date: 2026-09-28. Measured on `improve-modular` at `2450616`, clean tree.
 Every count below is reproduced by [`measure.py`](measure.py):
 
