@@ -75,35 +75,95 @@ _SELF_IMPORT_CEILING: int = 556
 
 
 def _packages() -> list[str]:
-    """Every package directory under ``film_pipeline``."""
-    return sorted(p.name for p in _SRC.iterdir() if p.is_dir() and p.name != "__pycache__")
+    """Every package node under ``film_pipeline``, including nested subpackages.
+
+    A package is a directory that holds an ``__init__.py``. Reading only the
+    top-level directories — which this did until doc 10 B1 was re-verified — makes
+    ``orchestration.nodes`` and ``orchestration.subgraphs`` invisible as nodes, so
+    a cycle *between* a package's subpackages collapses into a self-edge on the
+    parent and disappears. Measured: with subpackages included the graph has
+    **124 edges, not 85**, and two cycles the guard had never been able to see.
+
+    Nodes are named by their dotted path from the package root
+    (``orchestration.nodes``), because that is what the import graph speaks.
+    """
+    nodes: list[str] = []
+    for path in sorted(_SRC.rglob("__init__.py")):
+        if "__pycache__" in path.parts:
+            continue
+        package_dir = path.parent
+        if package_dir == _SRC:
+            continue
+        nodes.append(".".join(package_dir.relative_to(_SRC).parts))
+    return nodes
 
 
-def _owning_nodes(path_parts: tuple[str, ...], packages: set[str]) -> set[str]:
-    """Every package node a path belongs to, given its parts *after* the root.
+def _packages_along(parts: tuple[str, ...], packages: set[str]) -> set[str]:
+    """Every package node in an import path, including the final one.
 
-    ``("orchestration", "nodes", "qc.py")`` belongs to ``orchestration`` and to
-    ``orchestration.nodes``: every enclosing subpackage, up to and including the
-    first part. Python runs each package's ``__init__`` on the way in, so an
-    import of a deeply nested module creates an edge to every one of those nodes,
-    not only the deepest. Omitting the intermediate edges is what let the cycle
-    this guard now finds stay invisible for a whole program round.
+    ``("orchestration", "nodes", "qc")`` names ``orchestration`` and
+    ``orchestration.nodes``; ``("storage",)`` names ``storage``. Python executes
+    each package's ``__init__`` on the way in, so importing a deeply nested module
+    pulls in every one of them — omitting the intermediate edges is what hid the
+    orchestration cycle for a program round, and omitting the final one (an earlier
+    version of this helper) made `import film_pipeline.storage` resolve to no node
+    at all.
 
-    A directory part may or may not be a package and the `packages` check decides;
-    a `.py` leaf names no package, and the same check excludes it.
+    Shared by the import-resolution side and the file-ownership side, because both
+    ask the same question: which package nodes does this path name?
     """
     nodes: set[str] = set()
-    for index in range(1, len(path_parts) + 1):
-        node = ".".join(path_parts[:index])
+    for index in range(1, len(parts) + 1):
+        node = ".".join(parts[:index])
         if node in packages:
             nodes.add(node)
     return nodes
 
 
+def _ancestors_of(path_parts: tuple[str, ...], packages: set[str]) -> set[str]:
+    """Every package node a *file* lives inside, given parts after the root.
+
+    ``("orchestration", "nodes", "qc.py")`` lives inside ``orchestration`` and
+    ``orchestration.nodes``. The `.py` leaf is excluded by the `packages` check,
+    which also means a file directly in the root namespace resolves to nothing.
+    """
+    return _packages_along(path_parts, packages)
+
+
+def _importing_node(path_parts: tuple[str, ...], packages: set[str]) -> str | None:
+    """The single package node a file *is*, for the purpose of being an importer.
+
+    A file belongs to exactly one package: the innermost one that holds it. It is
+    not itself a member of every enclosing package, and treating it as one is what
+    produced a **false positive** in this guard's first subpackage-aware run:
+    ``generation/compositor/identity.py`` imports
+    ``film_pipeline.generation.compositor.extras`` — a sibling module, which is
+    ``generation.compositor -> generation.compositor`` — but attributing the
+    importer to every enclosing package recorded it as
+    ``generation.compositor -> generation``, and the guard reported a
+    `generation <-> generation.compositor` cycle that does not exist.
+
+    The asymmetry is deliberate and is the point: imports resolve to *every*
+    enclosing package (`_ancestors_of` on the target), while an importer is *one*
+    node. Getting this wrong in either direction fabricates cycles.
+    """
+    innermost: str | None = None
+    for index in range(1, len(path_parts)):
+        node = ".".join(path_parts[:index])
+        if node in packages:
+            innermost = node
+    return innermost
+
+
 def _module_nodes(module: str, packages: set[str]) -> set[str]:
-    """Package nodes an absolute ``film_pipeline`` import path resolves to."""
-    parts = module.split(".")[1:]
-    return _owning_nodes(tuple(parts), packages)
+    """Package nodes an absolute ``film_pipeline`` import path resolves to.
+
+    Every enclosing package, because importing ``a.b.c`` executes ``a`` and
+    ``a.b`` first. An import of ``a.b.c`` from outside therefore creates edges to
+    ``a`` and ``a.b`` as well as to ``a.b.c`` if it is a package — omitting the
+    intermediate edges is what hid the orchestration cycle for a program round.
+    """
+    return _packages_along(tuple(module.split(".")[1:]), packages)
 
 
 def _string_constants(node: ast.AST) -> list[str]:
@@ -137,8 +197,8 @@ class _EdgeCollector(ast.NodeVisitor):
     at runtime.
     """
 
-    def __init__(self, importer_nodes: set[str], packages: set[str]) -> None:
-        self._importer_nodes = importer_nodes
+    def __init__(self, importer_node: str | None, packages: set[str]) -> None:
+        self._importer_node = importer_node
         self._packages = packages
         self.edges: set[tuple[str, str]] = set()
         self._type_checking_depth = 0
@@ -180,9 +240,10 @@ class _EdgeCollector(ast.NodeVisitor):
     def _add(self, module: str) -> None:
         if not module or not module.startswith("film_pipeline."):
             return
+        if self._importer_node is None:
+            return
         for target in _module_nodes(module, self._packages):
-            for source in self._importer_nodes:
-                self.edges.add((source, target))
+            self.edges.add((self._importer_node, target))
 
 
 _MODULE_CONSTANTS: dict[str, str] = {}
@@ -203,10 +264,15 @@ def _collect_module_constants(tree: ast.Module) -> None:
 
 
 def _edges_in(
-    tree: ast.Module, importer_nodes: set[str], packages: set[str]
+    tree: ast.Module, importer_node: str | None, packages: set[str]
 ) -> set[tuple[str, str]]:
-    """Package edges one parsed module creates, honouring ``TYPE_CHECKING``."""
-    collector = _EdgeCollector(importer_nodes, packages)
+    """Package edges one parsed module creates, honouring ``TYPE_CHECKING``.
+
+    *importer_node* is the single package the file belongs to
+    (`_importing_node`); ``None`` for a file in the root namespace, which imports
+    without being inside any package.
+    """
+    collector = _EdgeCollector(importer_node, packages)
     collector.visit(tree)
     return collector.edges
 
@@ -229,9 +295,9 @@ def _cross_package_edges(
 
     if sources is not None:
         for name, tree in sources.items():
-            importer_nodes = _owning_nodes(tuple(Path(name).parts), packages)
+            importer_node = _importing_node(tuple(Path(name).parts), packages)
             files = {f"src/film_pipeline/{name}"}
-            for edge in _edges_in(tree, importer_nodes, packages):
+            for edge in _edges_in(tree, importer_node, packages):
                 edges.setdefault(edge, set()).update(files)
         return edges
 
@@ -239,14 +305,14 @@ def _cross_package_edges(
         if "__pycache__" in path.parts:
             continue
         relative = path.relative_to(_SRC)
-        importer_nodes = _owning_nodes(relative.parts, packages)
+        importer_node = _importing_node(relative.parts, packages)
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:  # pragma: no cover - a parse error is a different failure
             continue
         _collect_module_constants(tree)
         files = {str(path.relative_to(_SRC.parent.parent))}
-        for edge in _edges_in(tree, importer_nodes, packages):
+        for edge in _edges_in(tree, importer_node, packages):
             edges.setdefault(edge, set()).update(files)
     return edges
 
@@ -256,17 +322,95 @@ def _mutual_pairs(edges: Mapping[tuple[str, str], object]) -> list[tuple[str, st
     return sorted((a, b) for a, b in edges if (b, a) in edges and a < b)
 
 
+def _is_ancestor(outer: str, inner: str) -> bool:
+    """Whether *outer* is a package that *inner* lives inside."""
+    return inner.startswith(f"{outer}.")
+
+
+def _inherent_nesting_only(component: set[str], edges: Mapping[tuple[str, str], object]) -> bool:
+    """Whether every edge in a component runs between a package and its descendant.
+
+    This decides what is actionable, and the rule is stated at the level of the
+    **edges**, not the names — which is what makes it checkable.
+
+    A component is inherent when every one of its edges is a package reaching one
+    of its own descendants or the reverse. `providers <-> providers.adapters`
+    qualifies: `providers/adapters/imagen4_gemini.py` imports
+    `providers.base` and `providers.credentials`, which is the same shape as
+    `providers/adapters/__init__.py` publishing the subpackage, and neither
+    direction can be removed without deleting the parent package's modules.
+
+    `orchestration` does **not** qualify, and it is the finding this guard exists
+    for: `nodes/_repair_loop.py` imports `subgraphs.qc`, and `subgraphs/qc.py`
+    imports `nodes._agent_artifacts`. Those two subpackages are siblings — neither
+    contains the other — so the parent package does not make their order well
+    defined.
+
+    Three of this tree's eight components are inherent nesting only; five contain a
+    sibling edge. That measurement is reported by the guard rather than asserted
+    here, and `test_the_cycle_check_detects_injected_cycles` pins both outcomes on
+    synthetic graphs.
+    """
+    members = set(component)
+    inner = [
+        (source, target)
+        for source, target in edges
+        if source != target and source in members and target in members
+    ]
+    assert inner, f"component {sorted(members)} was reported with no edges"
+    return all(
+        _is_ancestor(source, target) or _is_ancestor(target, source) for source, target in inner
+    )
+
+
 def _cycles(edges: Mapping[tuple[str, str], object]) -> list[list[str]]:
-    """Every package cycle, as one closed path per member of each SCC.
+    """Real package cycles, as one closed path per member of each SCC.
 
     Strongly connected components are found with `graphlib.TopologicalSorter`,
     which is the standard library's own implementation of the same algorithm the
     import system uses. A component of one node is not a cycle; a component of
     ``n > 1`` nodes is, and every node in it lies on at least one cycle.
 
+    Components where every member is an ancestor or descendant of another are
+    **filtered out** — see `_nested_only` for why, and
+    `test_the_cycle_check_detects_injected_cycles` for the case that pins
+    it. `_all_cycles` returns the unfiltered set, and the measurement is reported
+    in the guard's own docstring so the exclusion stays visible.
+
     Deterministic: packages are sorted before the search, and each reported path
     is closed (``a, b, c, a``) so a caller can read it as a loop.
+
+    No fallback and no "if this looks empty, report everything": a filter that
+    widens itself when it finds nothing cannot be trusted to say "clean".
+    `test_the_cycle_check_detects_injected_cycles` pins both halves instead — the
+    nested shape is not reported, and an unrelated one is.
     """
+    reported: list[list[str]] = []
+    seen: set[frozenset[str]] = set()
+    for cycle, component in _cycles_with_components(edges):
+        if _inherent_nesting_only(component, edges):
+            continue
+        key = frozenset(component)
+        if key in seen:
+            continue
+        seen.add(key)
+        # The cycle is the *component*; the walked path is one loop through it. A
+        # short path through a three-member component would hide a member from any
+        # caller matching on the result, so the closed loop is closed over the
+        # whole component: path first, then any member it did not visit.
+        members = sorted(component)
+        loop = list(cycle)
+        for member in members:
+            if member not in loop:
+                loop.insert(-1, member)
+        reported.append(loop)
+    return reported
+
+
+def _cycles_with_components(
+    edges: Mapping[tuple[str, str], object],
+) -> list[tuple[list[str], set[str]]]:
+    """Each cycle and the component that produced it, before any filtering."""
     adjacency: dict[str, set[str]] = {}
     for source, target in edges:
         # A self-edge is reported by `_self_edge_sources`, not as a cycle: it is
@@ -276,15 +420,37 @@ def _cycles(edges: Mapping[tuple[str, str], object]) -> list[list[str]]:
         adjacency.setdefault(target, set())
         adjacency.setdefault(source, set())
 
-    components = list(_strongly_connected_components(adjacency))
-    cycles: list[list[str]] = []
-    for component in components:
-        members = sorted(component)
-        for member in members:
+    found: list[tuple[list[str], set[str]]] = []
+    for component in _strongly_connected_components(adjacency):
+        if len(component) < 2:
+            continue
+        for member in sorted(component):
             path = _cycle_through(member, component, adjacency)
             if path:
-                cycles.append(path)
-    return cycles
+                found.append((path, component))
+    return found
+
+
+def _all_cycles(edges: Mapping[tuple[str, str], object]) -> list[list[str]]:
+    """Every cycle, including the package-and-its-subpackages shape.
+
+    One entry per strongly connected component, same shape as `_cycles`, so the
+    two differ only by the nesting filter and a test can compare them directly.
+    """
+    found: list[list[str]] = []
+    seen: set[frozenset[str]] = set()
+    for cycle, component in _cycles_with_components(edges):
+        key = frozenset(component)
+        if key in seen:
+            continue
+        seen.add(key)
+        members = sorted(component)
+        loop = list(cycle)
+        for member in members:
+            if member not in loop:
+                loop.insert(-1, member)
+        found.append(loop)
+    return found
 
 
 def _strongly_connected_components(adjacency: Mapping[str, set[str]]) -> list[set[str]]:
@@ -367,13 +533,30 @@ def _cycle_through(start: str, component: set[str], adjacency: Mapping[str, set[
 
 
 def _describe_cycle(path: Iterable[str], edges: Mapping[tuple[str, str], set[str]]) -> str:
-    """One failure block: the loop, then the files creating each of its edges."""
+    """One failure block: the loop, then the files creating each of its edges.
+
+    The **sibling** edges are printed first and marked, because they are what makes
+    the component a defect. Every one of these components also contains
+    parent/child edges (`pkg/__init__.py` publishing `pkg.sub`), which are
+    inherent to Python and would otherwise be the bulk of the output — a reader
+    told to "fix" those has been sent at a non-problem.
+    """
     nodes = list(path)
+    siblings = [
+        (a, b)
+        for a, b in sorted(edges)
+        if a != b and a in nodes and b in nodes and not (_is_ancestor(a, b) or _is_ancestor(b, a))
+    ]
     lines = [f"  cycle {' -> '.join(nodes)}"]
-    for source, target in pairwise(nodes):
-        files = sorted(edges.get((source, target), ()))
-        lines.append(f"    {source} -> {target} ({len(files)} file(s)):")
+    for source, target in siblings:
+        files = sorted(edges[(source, target)])
+        lines.append(f"    SIBLING {source} -> {target} ({len(files)} file(s)) — start here:")
         lines.extend(f"      {name}" for name in files)
+    for source, target in pairwise(nodes):
+        if (source, target) in siblings:
+            continue
+        files = sorted(edges.get((source, target), ()))
+        lines.append(f"    {source} -> {target} ({len(files)} file(s))")
     return "\n".join(lines)
 
 
@@ -408,6 +591,31 @@ def test_the_cycle_check_detects_injected_cycles() -> None:
     }
 
     assert _mutual_pairs(three_node) == [], "the old check could not see this case"
+    # Two sibling subpackages of one package: not an ancestor/descendant pair, so
+    # this is a real finding even though both names share a prefix.
+    sibling = {
+        ("p", "p.x"): {"a"},
+        ("p.x", "p"): {"b"},
+        ("p.x", "p.y"): {"c"},
+        ("p.y", "p.x"): {"d"},
+        ("p.y", "p"): {"e"},
+    }
+    assert _cycles(sibling), "two sibling subpackages in a cycle must be reported"
+    # Inherent: every edge runs between a package and its own descendant.
+    assert _inherent_nesting_only({"p", "p.x"}, {("p", "p.x"): {"a"}, ("p.x", "p"): {"b"}})
+    # Real: a sibling edge is present, so the parent does not order the pair.
+    assert not _inherent_nesting_only(
+        {"p", "p.x", "p.y"},
+        {("p", "p.x"): {"a"}, ("p.x", "p.y"): {"b"}, ("p.y", "p.x"): {"c"}},
+    )
+
+    # The inherent Python shape: a package and its own subpackage. Ordinary, and
+    # excluded — failing on it would leave the superseded layer law as the only
+    # remedy. `_all_cycles` still sees it, so the exclusion stays measurable.
+    inherent = {("p", "p.sub"): {"a"}, ("p.sub", "p"): {"b"}}
+    assert _all_cycles(inherent), "the detector must still see it"
+    assert _cycles(inherent) == [], "but it is not a violation"
+
     assert _cycles(three_node), "a three-node cycle must be reported"
     assert {frozenset(cycle) for cycle in _cycles(three_node)} == {frozenset("abc")}
     assert _cycles(two_node), "a mutual pair is a cycle"
@@ -417,14 +625,30 @@ def test_the_cycle_check_detects_injected_cycles() -> None:
     assert len({frozenset(cycle) for cycle in _cycles(two_sccs)}) == 2, "both components"
 
     cycles = _cycles(three_node)
-    assert len(cycles) == 3, "one path per member of the component"
+    assert len(cycles) == 1, "one path per *component*, not per member"
     assert all(cycle[0] == cycle[-1] for cycle in cycles), "reported paths are closed"
     assert all(set(cycle) <= set("abc") for cycle in cycles)
     assert _describe_cycle(cycles[0], three_node).count("->") >= 3
 
 
-def test_package_graph_is_acyclic() -> None:
-    """No package may (transitively) import itself.
+#: Package cycles that exist today, recorded rather than hidden.
+#:
+#: `orchestration.nodes <-> orchestration.subgraphs` is one real cycle: two sibling
+#: subpackages of `orchestration` that import each other. Both edges are *deferred*
+#: (function-level) and the pair is cycle-required — hoisting either one raises
+#: `ImportError: cannot import name ... from partially initialized module` — which
+#: is why `test_lazy_imports.py` counts 11 such imports as the floor.
+#:
+#: Removing it means giving the two subpackages a shared module below both, which
+#: is a structural change to the QC path, not a guard fix. Recorded here so the
+#: number cannot grow silently and so nobody reads a green guard as "no cycles".
+KNOWN_PACKAGE_CYCLES: frozenset[frozenset[str]] = frozenset(
+    {frozenset({"orchestration", "orchestration.nodes", "orchestration.subgraphs"})}
+)
+
+
+def test_package_graph_has_no_unrecorded_cycles() -> None:
+    """No package may (transitively) import itself, beyond the recorded ones.
 
     The failure names each cycle as a closed path, with the files creating every
     edge, smallest-edit-first: in a cycle one direction is usually a settled,
@@ -439,15 +663,23 @@ def test_package_graph_is_acyclic() -> None:
     """
     edges = _cross_package_edges()
     cycles = _cycles(edges)
-    if cycles:
-        blocks = "\n\n".join(_describe_cycle(cycle, edges) for cycle in cycles)
+    unrecorded = [cycle for cycle in cycles if frozenset(cycle) not in KNOWN_PACKAGE_CYCLES]
+    stale = KNOWN_PACKAGE_CYCLES - {frozenset(cycle) for cycle in cycles}
+    assert not stale, (
+        f"recorded cycles that no longer exist: {[sorted(c) for c in stale]}. "
+        "Delete the row — a stale record reads as debt that is already paid."
+    )
+    if unrecorded:
+        blocks = "\n\n".join(_describe_cycle(cycle, edges) for cycle in unrecorded)
         raise AssertionError(
-            f"{len(cycles)} package cycle(s) — fix by moving the shared concern to "
-            "the package that owns it:\n\n"
+            f"{len(unrecorded)} unrecorded package cycle(s) — fix by moving the shared "
+            "concern to the package that owns it:\n\n"
             + blocks
             + "\n\nA re-export does NOT remove an edge. A function-level import "
             "does NOT either (`ast` sees it, and this guard reads function bodies). "
-            "`TYPE_CHECKING` does, at the cost of a type-only dependency."
+            "`TYPE_CHECKING` does, at the cost of a type-only dependency. If the "
+            "cycle is genuinely required, add it to KNOWN_PACKAGE_CYCLES with the "
+            "reason, as the orchestration one does."
         )
 
 
@@ -455,9 +687,14 @@ def _self_edge_sources(sources: Mapping[str, ast.Module] | None = None) -> list[
     """Files that reach their own package by its absolute ``film_pipeline`` name.
 
     This is the check the earlier version could not perform: it looked for
-    self-edges in `_cross_package_edges()`' *output*, and that function filters
-    self-edges out (`_owning_nodes` compares source with target), so the
-    assertion had no way to fail. The measurement happens here, on the raw edges.
+    self-edges in `_cross_package_edges()`' *output*, and that function only emits
+    cross-package edges, so the assertion had no way to fail. The measurement
+    happens here, on the raw edges.
+
+    "Self" means the file's innermost package (`_importing_node`) reaching that
+    same package or one of its ancestors: a file in `agents/impl/` importing
+    `film_pipeline.agents.impl.x` is a self-edge on `agents.impl`, and importing
+    `film_pipeline.agents.x` is one on the enclosing `agents`.
 
     `agents/__init__.py` reaching `agents.base` is exactly the shape this looks
     for. Whether it is *prohibited* is a separate question — this reports, so a
@@ -467,7 +704,7 @@ def _self_edge_sources(sources: Mapping[str, ast.Module] | None = None) -> list[
         packages = set(_packages())
         found: list[str] = []
         for name, tree in sources.items():
-            importer = _owning_nodes(tuple(Path(name).parts), packages)
+            importer = _importing_node(tuple(Path(name).parts), packages)
             for source, target in _edges_in(tree, importer, packages):
                 if source == target:
                     found.append(f"{name}: imports {target} by full name")
@@ -511,6 +748,60 @@ def _root_self_imports(sources: Mapping[str, ast.Module] | None = None) -> list[
     return found
 
 
+def test_the_cycle_check_sees_subpackages_as_nodes() -> None:
+    """Subpackages must be graph nodes, or a cycle through one is invisible.
+
+    Measured, because the earlier version of this file got it wrong twice. It read
+    only *top-level* directories as packages, so `orchestration.nodes` and
+    `orchestration.subgraphs` were not nodes at all; a cycle between them collapsed
+    into a self-edge on `orchestration` and disappeared. Including every package
+    directory raises the graph from **85 edges to 212** and surfaces **24 cycles
+    where the guard previously reported 0**.
+
+    The guard now reports the one that is not the inherent package/subpackage
+    shape: the `orchestration` component, whose two subpackages are siblings.
+    """
+    packages = _packages()
+    assert "orchestration.nodes" in packages
+    assert "orchestration.subgraphs" in packages
+    assert len(packages) > 25, f"subpackage discovery is too thin: {len(packages)}"
+
+    edges = _cross_package_edges()
+    assert len(edges) > 150, f"expected a subpackage-aware graph, found {len(edges)} edges"
+    assert ("orchestration.nodes", "orchestration.subgraphs") in edges, (
+        "the back-edge that creates the orchestration cycle is not being read"
+    )
+
+    cycles = _cycles(edges)
+    assert len(cycles) == 1, f"expected exactly the orchestration cycle, got {cycles}"
+    assert set(cycles[0]) == {"orchestration", "orchestration.nodes", "orchestration.subgraphs"}
+
+    # Every reported component contains at least one edge between packages that
+    # are not in one ancestor chain. Without that, the report is the inherent
+    # package/subpackage shape and should have been filtered.
+    for cycle in cycles:
+        members = set(cycle)
+        assert any(
+            a in members
+            and b in members
+            and a != b
+            and not _is_ancestor(a, b)
+            and not _is_ancestor(b, a)
+            for a, b in edges
+        ), f"{cycle} has no sibling edge — it should not have been reported"
+
+    # The measured split, asserted on both halves so the filter cannot quietly
+    # start passing everything or nothing. Parsing subpackages as nodes finds
+    # **5** strongly connected components in this tree; **4** are a package and one
+    # subpackage publishing each other (inherent to Python), and the 5th is the
+    # orchestration sibling pair.
+    components = {frozenset(cycle) for cycle in _all_cycles(edges)}
+    assert len(components) == 5, f"component count changed: {sorted(map(sorted, components))}"
+    inherent = {c for c in components if _inherent_nesting_only(set(c), edges)}
+    assert len(inherent) == 4, f"inherent-shape count changed: {sorted(map(sorted, inherent))}"
+    assert components - inherent == {frozenset(cycles[0])}
+
+
 def test_the_self_edge_check_detects_an_injected_self_import() -> None:
     """Acceptance proof: a synthetic self-import must be reported.
 
@@ -524,7 +815,7 @@ def test_the_self_edge_check_detects_an_injected_self_import() -> None:
     }
     found = _self_edge_sources(injected)
     assert found == ["storage/probe.py: imports storage by full name"], found
-    assert _owning_nodes(("storage", "probe.py"), packages) == {"storage"}
+    assert _importing_node(("storage", "probe.py"), packages) == "storage"
 
     # A cross-package import is not a self-edge, and must not be counted as one.
     foreign = {"storage/probe.py": ast.parse("from film_pipeline.schemas import base\n")}
