@@ -2257,3 +2257,60 @@ statements=36 cycle-required=11 not-cycle-required=31`.
 test over one project, and the product contract at the MCP boundary — approval,
 audit, checkpoints, storage compatibility, mock-mode output — is exercised only
 by the suites listed in doc 09, not by an end-to-end operator session.
+
+## Boundary audit: what was guarding, and what was not (2026-09-29, `improve-modular-2`)
+
+Doc [10](10-boundary-audit.md) audited the boundary guards themselves. All five
+findings landed. The pattern that mattered: **every finding was confirmed or
+corrected by injection, never by reading** — three of the five changed shape once
+a test was made to fail.
+
+| Finding | What it was | Result |
+|---|---|---|
+| B1 | the acyclicity test only detected mutual pairs | full SCC analysis; **5 components, 1 real cycle**, 4 inherent |
+| B2 | two detectors matched less Python than documented | 4 more import forms; tree unchanged at 2 modules + 2 symbols |
+| B3 | the documented Enola command enforced **nothing** | `--fail-on=cycles`, baseline re-pinned at clean `7895d8c` |
+| B4 | 10 call sites replaced live project state | 1 declared operation + guard + boundary test |
+| B5 | 51 private exports, 0 external consumers | ratchet; `get_runtime` removal attempted and reverted |
+
+**B1 took three commits because I was wrong twice, and only injection showed it.**
+The first version reported "85 edges, 0 cycles" and I wrote that the orchestration
+cycle was a `TYPE_CHECKING` artifact. Both false: `_packages()` read only top-level
+directories, so subpackages **were not graph nodes**, and the importer was being
+attributed to every enclosing package, which fabricated a `generation` cycle. With
+both fixed: 37 nodes, **174 edges, 5 components, 1 real cycle** — the
+`orchestration.nodes <-> orchestration.subgraphs` pair, a genuine runtime cycle
+(function-level imports, cycle-required), not a type-only edge. The doc's own B3
+text made the same wrong guess; the correction is recorded in doc 10.
+
+**B3 invalidated a receipt this program had been citing.** `enola check` on this
+installation defaults `--fail-on` to **none**, so the documented command exited 0
+while printing *"nothing enforced"*. Every "Enola exit 0" recorded before this —
+including in doc 09's implementation section — certified nothing. Fixed in three
+parts (flag, config note, clean-tree re-pin), and `AGENTS.md`'s claim that cycles
+were the default is corrected. The gate still cannot catch a *new* cycle: a
+baseline pinned from a commit cannot grade that commit. That is the architecture
+test's job, and it is proven by injection: baseline exit 0, injected sibling cycle
+exit 1, reverted.
+
+**B4's reach-in was real but redundant.** Measured first: `get_project()` returns
+the live mapping, so `rt.projects[id] = active` was a self-assignment at all ten
+sites — the handler had already mutated runtime state. The defect was that the
+write was the only place the intent appeared, with persistence and audit optional.
+`apply_project_state` is that intent as one operation.
+
+**B5 is the one finding not fully done,** and saying so is the point:
+`mcp.tools.get_runtime` has no production consumer and should go, but removing it
+means migrating 49 test patch sites, and my attempt made the suite order-sensitive
+(0 → 123 → 19 → 5 → 2 failures across attempts, all passing in isolation and on
+the pristine tree). Reverted, with the failed approach recorded so the next author
+does not repeat it blind.
+
+**Falsifiable check:** with subpackages as nodes the guard finds **1** real cycle
+and 4 inherent nested components, and injecting a sibling edge takes it to 2
+(reverted in the same run); `grep -rn '\.projects\[.*\] = '
+src/film_pipeline/mcp/` is empty; `make enola` exits 0 **with**
+`--fail-on=cycles`; `make ci-check` at the tip is 2,375 passed / 92.74% coverage.
+
+**Not established:** the orchestration cycle is recorded, not fixed — removing it
+needs a shared module below `nodes` and `subgraphs`.
