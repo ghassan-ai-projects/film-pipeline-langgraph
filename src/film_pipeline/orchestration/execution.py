@@ -31,12 +31,14 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
 from langgraph.graph.state import CompiledStateGraph
 
 from film_pipeline.filmspec import PHASE_SEQUENCE, next_phase
 from film_pipeline.orchestration.nodes import _run_validators
+from film_pipeline.orchestration.nodes._agent_artifacts import _save_artifact
 from film_pipeline.orchestration.nodes._repair_loop import resolved_phase_node
 from film_pipeline.orchestration.orchestrator_state import get_candidate_refs
 from film_pipeline.orchestration.resume import (
@@ -54,6 +56,7 @@ from film_pipeline.orchestration.state_schema import (
 )
 from film_pipeline.schemas.base import FilmPhase
 from film_pipeline.schemas.runtime_state import GraphStateSnapshot
+from film_pipeline.schemas.validation import ValidationReport
 from film_pipeline.storage.project_storage import graph_state_location
 from film_pipeline.storage.runtime_gateway import project_storage_for
 
@@ -408,14 +411,39 @@ def approve_phase(rt: GraphHost) -> dict[str, Any]:
     return state
 
 
-def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, Any]:
+@dataclass(frozen=True)
+class ValidationRunOutcome:
+    """What one current-project validation pass produced.
+
+    The single result contract for the validation operation: the graph path and
+    the MCP action present the same reports, the same recorded issues and the
+    same saved refs, because there is one operation rather than a selection
+    policy per entry path.
+    """
+
+    phase: str
+    reports: tuple[ValidationReport, ...] = ()
+    report_refs: tuple[str, ...] = ()
+    issues: tuple[dict[str, Any], ...] = ()
+    failures: tuple[str, ...] = ()
+
+
+def run_validation(
+    rt: GraphHost, project_id: str | None = None, *, persist: bool = True
+) -> ValidationRunOutcome:
     """Run validators against the active project's current-phase artifacts.
 
-    Executes the same validator dispatch the QC node uses, but against the
-    live project state and *without* advancing the phase. Validator-produced
-    findings replace any prior validator findings (issues tagged with a
-    ``validator_id``) while non-validator blockers are preserved, then the
-    refreshed issues and validation reports are merged back and persisted.
+    The one validation operation. It executes the same validator dispatch the QC
+    node uses, but against the live project state and *without* advancing the
+    phase. Validator-produced findings replace any prior validator findings
+    (issues tagged with a ``validator_id``) while non-validator blockers are
+    preserved; each report is saved as an artifact and its ref recorded on the
+    declared ``validation_report_refs`` channel.
+
+    ``persist=False`` runs the same selection and returns the same reports
+    without writing findings, artifacts or refs. That is what a read-only caller
+    ('show me the current reports') needs, and it keeps one phase→validator table
+    instead of a second copy for reading.
     """
 
     active = rt.get_project(project_id) if project_id else rt.get_active()
@@ -473,15 +501,28 @@ def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, An
         "_routing_decisions": routing_decisions,
         "_repair_feedback": str(active.get("_repair_feedback", "")),
         "_pending_row_updates": pending_row_updates,
+        "_validation_failures": [],
     }
     # `_services` is a declared graph-state key, so the literal spelling is
     # used here: a TypedDict cannot be indexed by the imported constant.
     working["_services"] = rt.services
     _run_validators(working)
+    reports = tuple(_typed_reports(working))
+    report_refs = tuple(_save_report_artifacts(working, reports)) if persist else ()
     working.pop("_services", None)
+    failures = tuple(str(entry) for entry in working.get("_validation_failures", []))
+    issues = tuple(working.get("issues", []))
+    phase = str(active.get("current_phase", ""))
 
-    active["issues"] = list(working.get("issues", []))
+    if not persist:
+        return ValidationRunOutcome(phase=phase, reports=reports, issues=issues, failures=failures)
+
+    active["issues"] = list(issues)
     active["_validation_reports"] = list(working.get("_validation_reports", []))
+    if report_refs:
+        seeded_refs = active.get("validation_report_refs")
+        existing = [str(ref) for ref in seeded_refs] if isinstance(seeded_refs, list) else []
+        active["validation_report_refs"] = [*existing, *report_refs]
     # Every key the chain can write is carried back, not only the two this
     # function reports: dropping the rest would lose validator side effects.
     for side_effect_key in (
@@ -503,9 +544,49 @@ def run_validation(rt: GraphHost, project_id: str | None = None) -> dict[str, An
         "human",
         "run_validation",
         project_id=project_id_value,
-        phase=str(active.get("current_phase", "")),
+        phase=phase,
     )
-    return active
+    return ValidationRunOutcome(
+        phase=phase,
+        reports=reports,
+        report_refs=report_refs,
+        issues=issues,
+        failures=failures,
+    )
+
+
+def _typed_reports(state: StudioGraphState) -> list[ValidationReport]:
+    """Re-hydrate the report bodies the chain recorded as state payloads.
+
+    The chain appends ``report.model_dump()`` because graph state must be
+    serializable, so the typed report is reconstructed here — once, at the
+    boundary — rather than handed to each caller as a dict to re-shape.
+    """
+    typed: list[ValidationReport] = []
+    for raw in state.get("_validation_reports", []):
+        try:
+            typed.append(ValidationReport.model_validate(raw))
+        except Exception:  # pragma: no cover - a malformed row is not a report
+            _logger.warning("dropping unreadable validation report row", exc_info=True)
+    return typed
+
+
+def _save_report_artifacts(
+    state: StudioGraphState, reports: tuple[ValidationReport, ...]
+) -> list[str]:
+    """Save every report this pass produced through the shared artifact writer.
+
+    ``validation_report_refs`` is the declared channel for these refs; it had no
+    writer before (audit F-VR-14), while the MCP tool wrote an undeclared
+    ``validation_refs`` key that nothing read.
+    """
+    phase = str(state.get("current_phase", ""))
+    refs: list[str] = []
+    for report in reports:
+        ref = _save_artifact(state, report, "validation_report", phase)
+        if ref:
+            refs.append(ref)
+    return refs
 
 
 def request_revision(rt: GraphHost, note: str = "") -> dict[str, Any]:

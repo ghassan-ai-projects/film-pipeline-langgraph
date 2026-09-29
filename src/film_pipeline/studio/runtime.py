@@ -271,9 +271,15 @@ class StudioRuntime:
         """Approve the current phase and advance (graph resume with manual fallback)."""
         return _graph_exec.approve_phase(self)
 
-    def run_validation(self, project_id: str | None = None) -> dict[str, Any]:
-        """Run validators against current-phase artifacts without advancing."""
-        return _graph_exec.run_validation(self, project_id)
+    def run_validation(
+        self, project_id: str | None = None, *, persist: bool = True
+    ) -> _graph_exec.ValidationRunOutcome:
+        """Run validators against current-phase artifacts without advancing.
+
+        ``persist=False`` answers the same question without recording findings,
+        saving report artifacts, or writing the report-refs channel.
+        """
+        return _graph_exec.run_validation(self, project_id, persist=persist)
 
     def request_revision(self, note: str = "") -> dict[str, Any]:
         """Request revision of the current phase via graph resume."""

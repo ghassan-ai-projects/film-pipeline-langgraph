@@ -217,6 +217,12 @@ ORCH_CHANNELS: tuple[OrchChannelSpec, ...] = (
         "full",
         "validator reports accumulated within the node run",
     ),
+    OrchChannelSpec(
+        "_validation_failures",
+        "full",
+        "validators that could not run; the chain skips them, and a validation "
+        "action reports them instead of claiming no validators exist",
+    ),
     OrchChannelSpec("issues", "append_only", "append-only issues reducer channel"),
     OrchChannelSpec(
         "validation_report_refs", "append_only", "append-only report-ref reducer channel"

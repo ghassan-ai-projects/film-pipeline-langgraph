@@ -3,23 +3,28 @@
 Source of the invariants: ``docs/modularity-improvements/09-functional-boundaries.md``
 finding F1.
 
-"Validate the current project" has two implementations. The runtime one
-(``orchestration.execution.run_validation``, reached through
-``StudioRuntime.run_validation``) runs the QC validator chain for six phase
-groups and records findings in project state. The MCP one
-(``mcp.tools.validation.run_validation``) selects only ``script`` and
-``visual_dev``, saves each report as an artifact, and records no findings at
-all — so on that path a blocking validator result does not stop phase
-advancement, which is the product contract validators exist to enforce.
+"Validate the current project" is owned by one operation:
+``orchestration.execution.run_validation``, reached through
+``StudioRuntime.run_validation``. It runs the QC validator chain for six phase
+groups, records findings in project state, saves each report as an artifact, and
+records the refs on the declared ``validation_report_refs`` channel. The MCP
+action in ``mcp.tools.validation`` drives that operation and presents its typed
+outcome.
 
-Both write the *same* project state, so the difference is a durable
-representation bug, not a style problem.
+Before the consolidation the MCP action was a second implementation: it selected
+only ``script`` and ``visual_dev``, recorded no findings at all — so a blocking
+validator result did not stop phase advancement, which is the product contract
+validators exist to enforce — and wrote its refs to an undeclared state key.
+
+These tests arrived first, as ``xfail(strict=True)`` markers pinning the
+divergences, and were unmarked by the slice that fixed them; ``xfail_strict`` is
+configured project-wide, so a marker cannot outlive its defect.
 
 The project is built directly rather than by running the phase nodes: the point
 is what the two actions do to one identical state, and a hand-built
-``gen_planning`` project with a deliberately unready prompt registry makes both
-the phase-selection and the finding-recording divergence observable in one
-fixture. The registry entry is missing RCTCO fields, which
+``gen_planning`` project with a deliberately unready prompt registry makes the
+phase-selection, the finding-recording and the evidence divergence observable in
+one fixture. The registry entry is missing RCTCO fields, which
 ``PromptReadinessValidator`` rates ``BLOCKED`` with blocking issues.
 """
 
@@ -47,19 +52,6 @@ CallTool = Callable[..., Any]
 
 PROJECT_ID = "val-parity"
 PHASE = "gen_planning"
-
-#: The reason shared by the MCP-side markers: it selects and records its own way.
-_MCP_DIVERGENCE = (
-    "F1 (docs/modularity-improvements/09-functional-boundaries.md): "
-    "mcp.tools.validation.run_validation selects validators and persists outcomes "
-    "through a path of its own instead of the runtime validation operation."
-)
-
-#: The reason for the runtime-side marker: the report artifacts MCP saves.
-_RUNTIME_EVIDENCE = (
-    "F1: the runtime operation records reports in state but saves no report "
-    "artifact, so the two paths disagree on where validation evidence lives."
-)
 
 
 class PromptRegistry(BaseModel):
@@ -136,8 +128,14 @@ def _assert_validators_ran(rt: StudioRuntime) -> None:
 
 
 def _assert_evidence_is_durable(rt: StudioRuntime) -> None:
-    """Every report this action produced is saved and its ref recorded."""
-    refs = _state(rt).get("validation_refs", [])
+    """Every report this action produced is saved and its ref recorded.
+
+    The refs go on the *declared* ``validation_report_refs`` channel — the one
+    registered in ``ORCH_CHANNELS`` and wired to a reducer — not the undeclared
+    ``validation_refs`` project-state key the MCP tool used to write (audit
+    F-VR-14, which found the declared channel had no writer at all).
+    """
+    refs = _state(rt).get("validation_report_refs", [])
     assert refs, "a validation action must record the reports it produced"
     assert len(refs) == len(_state(rt)["_validation_reports"])
     services = rt.services
@@ -159,7 +157,6 @@ def test_runtime_validation_covers_gen_planning(rt: StudioRuntime) -> None:
     _assert_validators_ran(rt)
 
 
-@pytest.mark.xfail(strict=True, reason=_RUNTIME_EVIDENCE)
 def test_runtime_validation_records_report_artifact_refs(rt: StudioRuntime) -> None:
     rt.run_validation(PROJECT_ID)
 
@@ -169,7 +166,6 @@ def test_runtime_validation_records_report_artifact_refs(rt: StudioRuntime) -> N
 # ── the MCP action must produce the same persisted result ────────────────────
 
 
-@pytest.mark.xfail(strict=True, reason=_MCP_DIVERGENCE)
 def test_mcp_validation_covers_the_same_phases(rt: StudioRuntime, call_tool: CallTool) -> None:
     result = call_tool(run_validation, {}, runtime=rt)
 
@@ -178,7 +174,6 @@ def test_mcp_validation_covers_the_same_phases(rt: StudioRuntime, call_tool: Cal
     _assert_validators_ran(rt)
 
 
-@pytest.mark.xfail(strict=True, reason=_MCP_DIVERGENCE)
 def test_mcp_validation_records_evidence_the_same_way(
     rt: StudioRuntime, call_tool: CallTool
 ) -> None:

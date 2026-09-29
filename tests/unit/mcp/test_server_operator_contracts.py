@@ -163,23 +163,51 @@ def test_run_validation_report_and_ref_shape(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import film_pipeline.mcp.tools.validation as validation_tools
+    """The `run_validation` envelope, over a deterministic operation outcome.
+
+    The seam is the operation (`StudioRuntime.run_validation`), because the MCP
+    handler performs no selection of its own: it presents the outcome. A report
+    is supplied as the typed object the operation returns, and the handler's
+    summary projection is what the response must contain.
+    """
+    from film_pipeline.orchestration.execution import ValidationRunOutcome
+    from film_pipeline.schemas.base import (
+        FilmPhase,
+        ValidationModality,
+        ValidationScope,
+        ValidationStatus,
+    )
+    from film_pipeline.schemas.validation import ValidationReport
 
     runtime, server = _make_operator_server(tmp_path, monkeypatch)
     active = runtime.get_active()
     assert active is not None
     active["current_phase"] = "script"
-    reports = [{"validator_id": "script-structure", "status": "pass", "score": 100.0}]
+    report = ValidationReport(
+        validation_id="validation:script-structure:00000000",
+        validator_id="script-structure",
+        scope=ValidationScope.ARTIFACT,
+        modalities=[ValidationModality.TEXT],
+        score=100.0,
+        status=ValidationStatus.PASS,
+        recommended_actions=[],
+    )
     saved_refs = ["artifact:script:validation_report:v1"]
+    outcome = ValidationRunOutcome(
+        phase="script",
+        reports=(report,),
+        report_refs=tuple(saved_refs),
+        issues=(),
+        failures=(),
+    )
 
     def deterministic_validation(
-        _store: object,
-        _project_id: str,
-        _phase: object,
-    ) -> tuple[list[dict[str, object]], list[str]]:
-        return reports, saved_refs
+        _project_id: str | None = None, *, persist: bool = True
+    ) -> ValidationRunOutcome:
+        assert persist is True, "the operator action must persist its result"
+        return outcome
 
-    monkeypatch.setattr(validation_tools, "_validate_script", deterministic_validation)
+    monkeypatch.setattr(runtime, "run_validation", deterministic_validation)
     arguments: dict[str, object] = {}
 
     if boundary == "call":
@@ -204,8 +232,21 @@ def test_run_validation_report_and_ref_shape(
         assert result["isError"] is False
         assert result["content"] == [{"type": "text", "text": json.dumps(data, default=str)}]
 
+    _ = FilmPhase
     assert set(data) == {"ok", "phase", "reports", "saved_refs"}
-    assert data == {"ok": True, "phase": "script", "reports": reports, "saved_refs": saved_refs}
+    assert data["ok"] is True
+    assert data["phase"] == "script"
+    assert data["saved_refs"] == saved_refs
+    assert cast(list[dict[str, object]], data["reports"]) == [
+        {
+            "validator_id": "script-structure",
+            "score": 100.0,
+            "status": "pass",
+            "blocking_count": 0,
+            "warning_count": 0,
+            "recommended_actions": [],
+        }
+    ]
 
 
 @pytest.mark.parametrize(
