@@ -2192,3 +2192,68 @@ failed **both** ceilings with the right count and package breakdown (`43 … up 
 **Falsifiable check:** `uv run python docs/modularity-improvements/measure.py` prints
 `total=42 statements=36 cycle-required=11 not-cycle-required=31`; the four tests in
 `test_lazy_imports.py` pass; `git grep -c '# lazy:' -- src` is empty.
+
+## Functional boundaries: clip generation and validation (2026-09-29, `improve-modular-2`)
+
+Doc [09](09-functional-boundaries.md) proposed consolidating two operator outcomes
+around one policy owner each. Both landed, each as a characterization commit
+followed by a consolidation commit.
+
+**Method, because this is the part that can be skipped.** Each finding got a
+parity test module first, asserting one persisted invariant through *both* entry
+paths through one shared assertion helper. The tests the current code could not
+satisfy were marked `xfail(strict=True)`; the fix turns a marker into an XPASS
+failure, so the marker cannot outlive the defect and the list of markers *is* the
+work list. Seven markers were written, and seven were deleted by the slice that
+fixed them.
+
+| Slice | Commits | Result |
+|---|---|---|
+| F2 characterization | `9e3a3e5` | 3 invariants green, 4 markers |
+| F2 poll/completion | `6118b3b` | 4 markers deleted; delivery owned by `GenerationExecutor` |
+| F2 submit/cancel | `d37e5d6` | MCP writes no ledger row: `grep -c update_row` → 0 |
+| F1 characterization | `0c8f3f2` | 1 invariant green, 3 markers |
+| F1 one operation | `686a85e` | 3 markers deleted; one validation operation |
+
+**What the divergence actually was.** Not two code paths that happened to
+duplicate: two *policies* that had already chosen differently, which the test
+module made visible rather than the diff.
+
+- A provider job reported `completed` to the MCP poller reached ledger
+  `COMPLETED` with no download, no `output_refs`, and no file on disk.
+- A poll that raised was `FAILED` (terminal) on the executor path and left
+  running on the MCP path — the same transient event, two durable outcomes.
+- Validation selected 2 of 6 phases on the MCP path and 6 of 6 on the runtime
+  path, recorded no findings at all on the MCP path (so a blocking result did not
+  stop advancement), and wrote its report refs to an undeclared `validation_refs`
+  key while the declared `validation_report_refs` channel had **no writer**
+  (audit F-VR-14).
+
+**Decisions the consolidation had to make, not inherit.** A poll failure leaves
+the row recoverable (`BLOCKED_PROVIDER`, swept by the next `poll_once`) because
+the provider accepted the job, and `FAILED` stays for a provider that reports
+failure — that also gives a status the ledger documented as live and nothing had
+ever written its first producer. A validator that cannot run is recorded under
+the declared `_validation_failures` channel and surfaced as an error to the
+operator, instead of being dropped by `except Exception: return` and reported as
+"no validators found". `get_validation_report`'s live read no longer resolves
+"the newest artifact with this id in the store"; it resolves the refs project
+state names, like the write path.
+
+**C1 was re-measured and declined again.** `generation.reference` has one
+consumer; `orchestration/nodes/visual.py` runs the planning *agent*, not a second
+generation path; the 242-line tool coordinates the package's retry loop,
+composites, outcomes and index writers without reimplementing them. No move.
+
+**Falsifiable check:** `uv run pytest -q --no-cov tests/integration/test_generation_lifecycle_parity.py tests/integration/test_validation_path_parity.py`
+passes with **no** `xfail` marker in either file; `grep -c update_row
+src/film_pipeline/mcp/tools/generation/dispatch.py` → `0`; `grep -rn
+'\["validation_refs"\]' src/` → empty and `grep -rn
+'\["validation_report_refs"\]' src/` → 1; `uv run python
+docs/modularity-improvements/measure.py` prints `mcp out=15` and `total=42
+statements=36 cycle-required=11 not-cycle-required=31`.
+
+**Not established:** any of this on a full operator workflow. Each claim is a
+test over one project, and the product contract at the MCP boundary — approval,
+audit, checkpoints, storage compatibility, mock-mode output — is exercised only
+by the suites listed in doc 09, not by an end-to-end operator session.

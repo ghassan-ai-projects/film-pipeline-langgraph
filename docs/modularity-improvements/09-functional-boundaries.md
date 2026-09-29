@@ -107,3 +107,128 @@ The organizing question for each change is: **if this rule changes, which single
 - `make ci-check`: pass; 2,349 passed, 8 skipped, 1 xfailed, 91.92% coverage, build and product gate pass.
 - Docs-local `enola check --baseline=docs/modular-architecture/enola-out docs/modular-architecture/enola-config.yaml`: exit 0. Its advisory output is not a feature-boundary proof.
 - All relative links in this report resolve; `git diff --check` is clean.
+
+## Implementation status
+
+Date: 2026-09-29. Measured after the slices below on `improve-modular-2`. This
+section records executed checks; where a claim above was not tested, it says so.
+
+### What landed
+
+| Commit | Slice | Falsifiable result |
+|---|---|---|
+| `8e2e6c7` | this document | — |
+| `9e3a3e5` | F2 characterization | 3 invariants green; 4 marked `xfail(strict=True)` |
+| `6118b3b` | F2 poll / completion | the 4 markers removed and green |
+| `d37e5d6` | F2 submit / cancel | `grep -c update_row mcp/tools/generation/dispatch.py` → 0 |
+| `0c8f3f2` | F1 characterization | 1 invariant green; 3 marked `xfail(strict=True)` |
+| `686a85e` | F1 one operation | the 3 markers removed and green |
+
+Markers were the work list, not decoration: `xfail_strict` is configured
+project-wide, so a fixed defect fails the suite until its marker is deleted.
+
+### F2 — clip generation has one lifecycle owner
+
+The poll/completion divergence is closed by ownership, not by a patch: the MCP
+handler no longer contains a provider-status map, downloads nothing, and writes
+no ledger row. `GenerationExecutor.poll_row` runs the same routing, delivery and
+ledger writes as `poll_once`; `start` and a new `cancel_row` do the same for the
+other two transitions. Two policies the two paths had chosen differently were
+settled by choosing one:
+
+- resuming a finished row is a no-op (`NO_OP`), so a second resume cannot deliver
+  the same job twice;
+- a poll that raises leaves the row at `BLOCKED_PROVIDER` with `poll` as its next
+  action instead of `FAILED`, and `poll_once` sweeps `BLOCKED_PROVIDER` rows so
+  the recovery it promises actually runs. `FAILED` remains for a provider that
+  reports the job itself as failed. This gives a status the ledger documented as
+  live — and which nothing had ever written — its first producer.
+
+Measured: `mcp/tools/generation/dispatch.py` 300 → 199 lines; 0 status mappings,
+0 ledger writes. Per-row results are `GenerationRowOutcome` values, not
+`list[dict[str, str]]` for a transport to string-match.
+
+### F1 — validation has one operation
+
+`orchestration.execution.run_validation` is now the only implementation. It
+returns a `ValidationRunOutcome` (phase, typed reports, saved refs, recorded
+issues, validator failures), saves each report through the shared
+`_save_artifact` writer, and records the refs on `validation_report_refs`.
+
+Measured, against the three divergences this document reported:
+
+| Check | Before | After |
+|---|---|---|
+| `grep -c 'validation.impl' mcp/tools/validation.py` | 7 imports | 0 (`mcp` no longer imports `validation` at all; its outbound package count is 15, down from the 16 measured above) |
+| phases the operator action covers | 2 of 6 | 6 of 6 |
+| blocking findings recorded by the operator action | none | `issues`, so advancement stops |
+| writers of the undeclared `validation_refs` key | 1 | 0 |
+| writers of the declared `validation_report_refs` channel | 0 (audit F-VR-14) | 1 |
+
+`mcp/tools/validation.py` 398 → 206 lines. Two further decisions the slice had to
+make rather than inherit:
+
+- a validator that could not run was dropped by `except Exception: return`, so a
+  pass whose only validator crashed reported "No validators found for this
+  phase." It is now recorded under the declared `_validation_failures` channel,
+  and the operator action returns an error. The QC node still does not abort its
+  pass, and does not treat the failure as blocking — see the open items.
+- `get_validation_report`'s live fallback resolved inputs by a second policy
+  ("newest artifact with this id in the store"). It now resolves the refs project
+  state names, like the write path, with `persist=False` so a read records
+  nothing. A project whose `artifact_refs` are missing therefore reports nothing
+  instead of validating artifacts it never selected.
+
+### C1 — visual references: re-measured, left in place
+
+Re-measured after the two correctness slices, per the sequence above:
+
+- `generation.reference` has exactly one consumer outside its own package:
+  `mcp/tools/reference_generation/tool.py`. There is no second tenant.
+- The graph has no second *generation* entry path. `orchestration/nodes/visual.py`
+  runs the `reference-strategy-planner` agent and saves its plan as a
+  `reference_index` artifact; it submits no provider job and downloads nothing.
+  The graph plans references; the tool executes them.
+- `tool.py` reimplements no policy the package owns: it calls
+  `run_retry_attempts`, `build_composites`, `register_generated_entry`,
+  `stamp_retry_stats`, `update_identity_group`,
+  `save_reference_index_artifact`, `write_reference_index_files` and
+  `select_image_provider`, and owns input selection, the per-entry loop, index
+  persistence, project-ref publication and audit.
+- No no-MCP use-case test exists, and no second consumer was demonstrated.
+
+**Decision: no further move.** The remaining 242-line adapter coordinates; it does
+not duplicate. The organising question — "if this rule changes, which single
+operation should change?" — already has one answer for the reference lifecycle.
+
+### Open items this work did not close
+
+- **A crashed validator does not block the QC pass.** The failure is recorded and
+  the operator action errors, but `_validation_failures` is not gated on. Whether
+  a validator that cannot run should block a phase is a product decision, not a
+  refactor.
+- **`validation_report_refs` has a writer and no reader.** The refs are durable
+  and correctly located; nothing consumes them yet (audit, checkpoints and
+  `get_validation_report` read `_validation_reports` instead).
+- **`StudioRuntime` is untouched.** Doc 08's deferral stands; `run_validation`
+  gained a keyword and a narrower return type, nothing else.
+- **No full operator workflow was run.** Every claim above is a unit or
+  integration test over one project, not an end-to-end operator session.
+- **This document is one of two concurrent pieces of work in this checkout**: an
+  independent boundary audit (doc 10) landed its own file and README line while
+  these slices were committed.
+
+### Verification on the implemented slices
+
+- `make ci-check`: pass after each slice; at the tip 2,363 passed, 8 skipped,
+  1 xfailed, 92.70% coverage, build and product gate pass.
+- `uv run ruff format --check`, `uv run ruff check`, `uv run mypy src tests`:
+  clean at the tip (516 files).
+- Docs-local `enola check --baseline=docs/modular-architecture/enola-out
+  docs/modular-architecture/enola-config.yaml`: exit 0 after each slice.
+- `uv run python docs/modularity-improvements/measure.py` at the tip: `mcp`
+  outbound 15 packages; function-level imports `total=42 statements=36
+  cycle-required=11 not-cycle-required=31` (unchanged — one was hoisted out of
+  `orchestration` and none added).
+- The strict-`xfail` markers that pinned F1 and F2 are gone; the tests they
+  guarded pass.
