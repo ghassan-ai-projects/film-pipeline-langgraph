@@ -41,8 +41,7 @@ async def submit_idea(ctx: ToolContext, args: dict[str, object]) -> dict[str, ob
     active["idea"] = idea
     _apply_intake_hints(active, args)
     state = rt.run_graph(active)
-    # Update stored state
-    rt.projects[active["project_id"]] = state
+    rt.apply_project_state(str(active["project_id"]), state)
     return _ok(
         project_id=state["project_id"],
         current_phase=state.get("current_phase"),

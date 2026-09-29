@@ -1,41 +1,28 @@
-"""Validation run, report, and issue-listing tools."""
+"""Validation run, report, and issue-listing tools.
+
+Transport only. The validation operation itself lives in
+``orchestration.execution.run_validation`` (reached through
+``StudioRuntime.run_validation``): it selects the phase's validators, records
+their findings in project state, and saves each report as an artifact. These
+handlers resolve the request, present the outcome, and read persisted state.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypeGuard
+from typing import TYPE_CHECKING, TypeGuard
 
 from film_pipeline.mcp.tools.context import ToolContext
 from film_pipeline.mcp.tools.spec import ToolArgs, ToolGroup, ToolSpec
-from film_pipeline.schemas.artifact import ArtifactMetadata
-from film_pipeline.schemas.base import ArtifactStatus, ArtifactType, FilmPhase
-from film_pipeline.validation.impl.assembly import AssemblyValidator
-from film_pipeline.validation.impl.delivery_completeness import (
-    DeliveryCompletenessValidator,
-)
-from film_pipeline.validation.impl.dialogue_voice import DialogueVoiceValidator
-from film_pipeline.validation.impl.prompt_readiness import PromptReadinessValidator
-from film_pipeline.validation.impl.reference_usability import (
-    ReferenceUsabilityValidator,
-)
-from film_pipeline.validation.impl.scene_continuity import SceneContinuityValidator
-from film_pipeline.validation.impl.script_structure import ScriptStructureValidator
+from film_pipeline.schemas.base import FilmPhase
 
 from .helpers import (
     _error,
-    _load_artifact,
-    _load_latest_reference_index,
     _ok,
     _report_summary,
-    _services,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from film_pipeline.schemas.base import FilmPhase
-    from film_pipeline.schemas.validation import ValidationReport
-    from film_pipeline.storage.store import ArtifactStore
 
 
 def _parse_phase(phase_str: str) -> FilmPhase | None:
@@ -53,177 +40,6 @@ def _stored_qc_reports(state: dict[str, object]) -> list[object] | None:
     if stored and isinstance(stored, list):
         return list(stored)
     return None
-
-
-@dataclass(frozen=True)
-class _PhaseSpec:
-    """One live-validation arm.
-
-    ``phases`` selects the arm (membership only); the position of a spec in
-    the table returned by ``_live_validator_specs`` encodes execution order.
-    """
-
-    phases: tuple[str, ...]
-    load: Callable[[], Any]
-    validators: Callable[[], tuple[type[Any], ...]]
-
-
-def _script_validators() -> tuple[type[Any], ...]:
-    """Import script-phase validators lazily, preserving run order."""
-
-    return (ScriptStructureValidator, DialogueVoiceValidator)
-
-
-def _reference_validators() -> tuple[type[Any], ...]:
-    """Import visual-development validators lazily."""
-
-    return (ReferenceUsabilityValidator,)
-
-
-def _gen_planning_validators() -> tuple[type[Any], ...]:
-    """Import gen-planning validators lazily."""
-
-    return (PromptReadinessValidator,)
-
-
-def _shot_bible_validators() -> tuple[type[Any], ...]:
-    """Import shot-bible validators lazily."""
-
-    return (SceneContinuityValidator,)
-
-
-def _assembly_validators() -> tuple[type[Any], ...]:
-    """Import post/assembly validators lazily."""
-
-    return (AssemblyValidator,)
-
-
-def _delivery_validators() -> tuple[type[Any], ...]:
-    """Import delivery-phase validators lazily."""
-
-    return (DeliveryCompletenessValidator,)
-
-
-def _latest_or_first(store: ArtifactStore, project_id: str, fp: FilmPhase, artifact_id: str) -> Any:
-    """Load the artifact's latest version (v1 probe when absent); None on failure."""
-    version = max(1, store.latest_version(project_id, fp.value, artifact_id))
-    return _load_artifact(store, project_id, fp, artifact_id, version)
-
-
-def _live_validator_specs(
-    rt: Any, store: ArtifactStore, project_id: str, fp: FilmPhase
-) -> list[_PhaseSpec]:
-    """Build the ordered phase→(loader, validators) table for one live run."""
-    return [
-        _PhaseSpec(
-            phases=("script",),
-            load=lambda: _latest_or_first(store, project_id, fp, "script"),
-            validators=_script_validators,
-        ),
-        _PhaseSpec(
-            phases=("visual_dev",),
-            load=lambda: _load_latest_reference_index(rt, project_id, rt.get_project(project_id)),
-            validators=_reference_validators,
-        ),
-        _PhaseSpec(
-            phases=("gen_planning",),
-            load=lambda: _latest_or_first(store, project_id, fp, "prompt_registry"),
-            validators=_gen_planning_validators,
-        ),
-        _PhaseSpec(
-            phases=("shot_bible",),
-            load=lambda: _latest_or_first(store, project_id, fp, "shot_bible"),
-            validators=_shot_bible_validators,
-        ),
-        _PhaseSpec(
-            phases=("post", "assembly"),
-            load=lambda: _latest_or_first(store, project_id, fp, "assembly_manifest"),
-            validators=_assembly_validators,
-        ),
-        _PhaseSpec(
-            phases=("delivery",),
-            load=lambda: _latest_or_first(store, project_id, fp, "delivery_package"),
-            validators=_delivery_validators,
-        ),
-    ]
-
-
-def _run_live_validators(
-    rt: Any, store: ArtifactStore, project_id: str, fp: FilmPhase, phase_str: str
-) -> list[dict[str, object]]:
-    """Run the phase-appropriate validators live against stored artifacts."""
-    reports: list[dict[str, object]] = []
-    for spec in _live_validator_specs(rt, store, project_id, fp):
-        if phase_str not in spec.phases:
-            continue
-        art_data = spec.load()
-        if art_data is None:
-            continue
-        for vcls in spec.validators():
-            reports.append(_report_summary(vcls().run(art_data)))
-    return reports
-
-
-def _save_report(
-    store: ArtifactStore, report: ValidationReport, project_id: str, fp: FilmPhase
-) -> str:
-    """Persist a ValidationReport as a candidate artifact and return its ref."""
-    from datetime import UTC, datetime
-
-    meta = ArtifactMetadata(
-        artifact_id="validation_report",
-        artifact_type=ArtifactType.VALIDATION_REPORT,
-        project_id=project_id,
-        phase=fp,
-        version=1,
-        status=ArtifactStatus.CANDIDATE,
-        created_by="mcp.run_validation",
-        created_at=datetime.now(UTC),
-    )
-    return store.save(report, meta).to_string()
-
-
-def _run_validators_saving_reports(
-    store: ArtifactStore,
-    project_id: str,
-    fp: FilmPhase,
-    validators: tuple[type[Any], ...],
-    art_data: Any,
-) -> tuple[list[dict[str, object]], list[str]]:
-    """Run validators over one artifact, returning summaries with saved refs."""
-    reports: list[dict[str, object]] = []
-    saved_refs: list[str] = []
-    for vcls in validators:
-        report = vcls().run(art_data)
-        reports.append(_report_summary(report))
-        saved_refs.append(_save_report(store, report, project_id, fp))
-    return reports, saved_refs
-
-
-def _validate_visual_dev(
-    rt: Any,
-    store: ArtifactStore,
-    project_id: str,
-    fp: FilmPhase,
-    state: dict[str, object],
-) -> tuple[list[dict[str, object]], list[str]]:
-    """Validate the latest reference index when one exists."""
-    art_data = _load_latest_reference_index(rt, project_id, state)
-    if art_data is None:
-        return [], []
-    return _run_validators_saving_reports(store, project_id, fp, _reference_validators(), art_data)
-
-
-def _validate_script(
-    store: ArtifactStore, project_id: str, fp: FilmPhase
-) -> tuple[list[dict[str, object]], list[str]]:
-    """Validate the versioned script when one exists."""
-    try:
-        version = max(1, store.latest_version(project_id, fp.value, "script"))
-        art_data = store.load(project_id, fp, "script", version)
-    except (FileNotFoundError, ValueError):
-        return [], []
-    return _run_validators_saving_reports(store, project_id, fp, _script_validators(), art_data)
 
 
 def _is_issue_row(issue: object) -> TypeGuard[dict[str, object]]:
@@ -250,59 +66,60 @@ def _normalized_stored_issues(stored: object) -> list[dict[str, object]]:
     return issues
 
 
-def _record_validation_results(
-    rt: Any,
-    project_id: str,
-    active: dict[str, Any],
-    reports: list[dict[str, object]],
-    saved_refs: list[str],
-) -> None:
-    """Write validation outcomes into project state and persist them."""
-    active["_validation_reports"] = reports
-    active.setdefault("validation_refs", []).extend(saved_refs)
-    rt.projects[project_id] = active
-    rt.persist_project_state(project_id)
-
-
 async def run_validation(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
-    """Run validators for the current phase and persist ValidationReport."""
+    """Run the current phase's validators and persist their reports.
+
+    The phase scope, the selection, and the persistence all belong to the
+    operation; this handler only refuses an unknown phase and shapes the
+    response.
+
+    A validator that could not run fails the *action*, and the reports its siblings
+    produced are carried on the error rather than discarded: the QC chain is built
+    to survive a crashing validator, so dropping every successful finding left the
+    operator with a failed action and no evidence of the part that worked.
+    """
     _ = args
     rt = ctx.runtime
     active = ctx.project_state()
     project_id = str(active["project_id"])
     phase_str = str(active.get("current_phase", "visual_dev"))
-    store = _services(rt).artifact_store
 
-    fp = _parse_phase(phase_str)
-    if fp is None:
+    if _parse_phase(phase_str) is None:
         return _error(f"Unknown phase: {phase_str}")
 
-    reports: list[dict[str, object]] = []
-    saved_refs: list[str] = []
-
     try:
-        if phase_str == "visual_dev":
-            reports, saved_refs = _validate_visual_dev(rt, store, project_id, fp, active)
-        elif phase_str == "script":
-            reports, saved_refs = _validate_script(store, project_id, fp)
+        outcome = rt.run_validation(project_id)
     except Exception as exc:
         return _error(f"Validation run failed: {exc}")
 
+    reports = [_report_summary(report) for report in outcome.reports]
+    if outcome.failures:
+        return _error(
+            f"Validation run failed: {outcome.failures[0]}",
+            phase=outcome.phase,
+            reports=reports,
+            saved_refs=list(outcome.report_refs),
+            validator_failures=list(outcome.failures),
+        )
     if not reports:
         return _ok(message="No validators found for this phase.")
-    _record_validation_results(rt, project_id, active, reports, saved_refs)
-    return _ok(phase=phase_str, reports=reports, saved_refs=saved_refs)
+    return _ok(
+        phase=outcome.phase,
+        reports=reports,
+        saved_refs=list(outcome.report_refs),
+    )
 
 
 async def get_validation_report(ctx: ToolContext, args: dict[str, object]) -> dict[str, object]:
     """Return validation reports for the active project's current phase.
 
     Reads from stored ``_validation_reports`` in project state (populated
-    by the QC node). Falls back to live validator runs if no stored reports.
+    by the QC node). Falls back to running the same validation operation
+    without persisting anything, so the report a caller sees is the report the
+    validators actually produce.
     """
     rt = ctx.runtime
     state = ctx.project_state()
-    project_id = str(state["project_id"])
 
     # Stored QC reports work even without a current phase because they are
     # already persisted in state.
@@ -319,14 +136,17 @@ async def get_validation_report(ctx: ToolContext, args: dict[str, object]) -> di
     if not phase_str:
         return _error("No active phase to validate (and no stored reports).")
 
-    fp = _parse_phase(phase_str)
-    if fp is None:
+    if _parse_phase(phase_str) is None:
         return _error(f"Unknown phase: {phase_str}")
 
-    store = _services(rt).artifact_store
+    project_id = str(state["project_id"])
+    try:
+        outcome = rt.run_validation(project_id, persist=False)
+    except Exception as exc:  # pragma: no cover - the operation reports its own failures
+        return _error(f"Validation run failed: {exc}")
     return _ok(
         phase=phase_str,
-        reports=_run_live_validators(rt, store, project_id, fp, phase_str),
+        reports=[_report_summary(report) for report in outcome.reports],
         source="live",
     )
 

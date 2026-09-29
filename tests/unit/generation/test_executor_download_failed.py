@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from film_pipeline.generation.executor import GenerationExecutor
+from film_pipeline.generation.executor import GenerationExecutor, RowOutcomeKind
 from film_pipeline.generation.ledger import GenerationLedgerManager
 from film_pipeline.providers.base import BaseProviderAdapter, ProviderJob, ProviderJobStatus
 from film_pipeline.schemas.artifact import ArtifactMetadata
@@ -129,7 +129,9 @@ def test_download_failed_marks_row_failed(
     assert result.failed == 1
     assert result.running == 0
     assert result.done is True
-    assert result.details == [{"shot_id": "S001", "error": "download exploded"}]
+    assert result.outcomes[0].kind is RowOutcomeKind.DOWNLOAD_FAILED
+    assert result.outcomes[0].detail == "download exploded"
+    assert result.outcomes[0].operator_error is True
 
     rows = GenerationLedgerManager(store).list_rows("proj")
     assert len(rows) == 1

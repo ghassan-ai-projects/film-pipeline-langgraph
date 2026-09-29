@@ -2192,3 +2192,165 @@ failed **both** ceilings with the right count and package breakdown (`43 … up 
 **Falsifiable check:** `uv run python docs/modularity-improvements/measure.py` prints
 `total=42 statements=36 cycle-required=11 not-cycle-required=31`; the four tests in
 `test_lazy_imports.py` pass; `git grep -c '# lazy:' -- src` is empty.
+
+## Functional boundaries: clip generation and validation (2026-09-29, `improve-modular-2`)
+
+Doc [09](09-functional-boundaries.md) proposed consolidating two operator outcomes
+around one policy owner each. Both landed, each as a characterization commit
+followed by a consolidation commit.
+
+**Method, because this is the part that can be skipped.** Each finding got a
+parity test module first, asserting one persisted invariant through *both* entry
+paths through one shared assertion helper. The tests the current code could not
+satisfy were marked `xfail(strict=True)`; the fix turns a marker into an XPASS
+failure, so the marker cannot outlive the defect and the list of markers *is* the
+work list. Seven markers were written, and seven were deleted by the slice that
+fixed them.
+
+| Slice | Commits | Result |
+|---|---|---|
+| F2 characterization | `9e3a3e5` | 3 invariants green, 4 markers |
+| F2 poll/completion | `6118b3b` | 4 markers deleted; delivery owned by `GenerationExecutor` |
+| F2 submit/cancel | `d37e5d6` | MCP writes no ledger row: `grep -c update_row` → 0 |
+| F1 characterization | `0c8f3f2` | 1 invariant green, 3 markers |
+| F1 one operation | `686a85e` | 3 markers deleted; one validation operation |
+
+**What the divergence actually was.** Not two code paths that happened to
+duplicate: two *policies* that had already chosen differently, which the test
+module made visible rather than the diff.
+
+- A provider job reported `completed` to the MCP poller reached ledger
+  `COMPLETED` with no download, no `output_refs`, and no file on disk.
+- A poll that raised was `FAILED` (terminal) on the executor path and left
+  running on the MCP path — the same transient event, two durable outcomes.
+- Validation selected 2 of 6 phases on the MCP path and 6 of 6 on the runtime
+  path, recorded no findings at all on the MCP path (so a blocking result did not
+  stop advancement), and wrote its report refs to an undeclared `validation_refs`
+  key while the declared `validation_report_refs` channel had **no writer**
+  (audit F-VR-14).
+
+**Decisions the consolidation had to make, not inherit.** A poll failure leaves
+the row recoverable (`BLOCKED_PROVIDER`, swept by the next `poll_once`) because
+the provider accepted the job, and `FAILED` stays for a provider that reports
+failure — that also gives a status the ledger documented as live and nothing had
+ever written its first producer. A validator that cannot run is recorded under
+the declared `_validation_failures` channel and surfaced as an error to the
+operator, instead of being dropped by `except Exception: return` and reported as
+"no validators found". `get_validation_report`'s live read no longer resolves
+"the newest artifact with this id in the store"; it resolves the refs project
+state names, like the write path.
+
+**C1 was re-measured and declined again.** `generation.reference` has one
+consumer; `orchestration/nodes/visual.py` runs the planning *agent*, not a second
+generation path; the 242-line tool coordinates the package's retry loop,
+composites, outcomes and index writers without reimplementing them. No move.
+
+**Falsifiable check:** `uv run pytest -q --no-cov tests/integration/test_generation_lifecycle_parity.py tests/integration/test_validation_path_parity.py`
+passes with **no** `xfail` marker in either file; `grep -c update_row
+src/film_pipeline/mcp/tools/generation/dispatch.py` → `0`; `grep -rn
+'\["validation_refs"\]' src/` → empty and `grep -rn
+'\["validation_report_refs"\]' src/` → 1; `uv run python
+docs/modularity-improvements/measure.py` prints `mcp out=15` and `total=42
+statements=36 cycle-required=11 not-cycle-required=31`.
+
+**Not established:** any of this on a full operator workflow. Each claim is a
+test over one project, and the product contract at the MCP boundary — approval,
+audit, checkpoints, storage compatibility, mock-mode output — is exercised only
+by the suites listed in doc 09, not by an end-to-end operator session.
+
+## Boundary audit: what was guarding, and what was not (2026-09-29, `improve-modular-2`)
+
+Doc [10](10-boundary-audit.md) audited the boundary guards themselves. All five
+findings landed. The pattern that mattered: **every finding was confirmed or
+corrected by injection, never by reading** — three of the five changed shape once
+a test was made to fail.
+
+| Finding | What it was | Result |
+|---|---|---|
+| B1 | the acyclicity test only detected mutual pairs | full SCC analysis; **5 components, 1 real cycle**, 4 inherent |
+| B2 | two detectors matched less Python than documented | 4 more import forms; tree unchanged at 2 modules + 2 symbols |
+| B3 | the documented Enola command enforced **nothing** | `--fail-on=cycles`, baseline re-pinned at clean `7895d8c` |
+| B4 | 10 call sites replaced live project state | 1 declared operation + guard + boundary test |
+| B5 | 51 private exports, 0 external consumers | ratchet; `get_runtime` removal attempted and reverted |
+
+**B1 took three commits because I was wrong twice, and only injection showed it.**
+The first version reported "85 edges, 0 cycles" and I wrote that the orchestration
+cycle was a `TYPE_CHECKING` artifact. Both false: `_packages()` read only top-level
+directories, so subpackages **were not graph nodes**, and the importer was being
+attributed to every enclosing package, which fabricated a `generation` cycle. With
+both fixed: 37 nodes, **174 edges, 5 components, 1 real cycle** — the
+`orchestration.nodes <-> orchestration.subgraphs` pair, a genuine runtime cycle
+(function-level imports, cycle-required), not a type-only edge. The doc's own B3
+text made the same wrong guess; the correction is recorded in doc 10.
+
+**B3 invalidated a receipt this program had been citing.** `enola check` on this
+installation defaults `--fail-on` to **none**, so the documented command exited 0
+while printing *"nothing enforced"*. Every "Enola exit 0" recorded before this —
+including in doc 09's implementation section — certified nothing. Fixed in three
+parts (flag, config note, clean-tree re-pin), and `AGENTS.md`'s claim that cycles
+were the default is corrected. The gate still cannot catch a *new* cycle: a
+baseline pinned from a commit cannot grade that commit. That is the architecture
+test's job, and it is proven by injection: baseline exit 0, injected sibling cycle
+exit 1, reverted.
+
+**B4's reach-in was real but redundant.** Measured first: `get_project()` returns
+the live mapping, so `rt.projects[id] = active` was a self-assignment at all ten
+sites — the handler had already mutated runtime state. The defect was that the
+write was the only place the intent appeared, with persistence and audit optional.
+`apply_project_state` is that intent as one operation.
+
+**B5 is the one finding not fully done,** and saying so is the point:
+`mcp.tools.get_runtime` has no production consumer and should go, but removing it
+means migrating 49 test patch sites, and my attempt made the suite order-sensitive
+(0 → 123 → 19 → 5 → 2 failures across attempts, all passing in isolation and on
+the pristine tree). Reverted, with the failed approach recorded so the next author
+does not repeat it blind.
+
+**Falsifiable check:** with subpackages as nodes the guard finds **1** real cycle
+and 4 inherent nested components, and injecting a sibling edge takes it to 2
+(reverted in the same run); `grep -rn '\.projects\[.*\] = '
+src/film_pipeline/mcp/` is empty; `make enola` exits 0 **with**
+`--fail-on=cycles`; `make ci-check` at the tip is 2,375 passed / 92.74% coverage.
+
+**Not established:** the orchestration cycle is recorded, not fixed — removing it
+needs a shared module below `nodes` and `subgraphs`.
+
+## Comments removed from the branch — intent moved into docstrings (2026-09-29)
+
+165 `#` comments the branch had added across 14 files, replaced by docstrings (or
+deleted where the docstring already said it). 98 insertions, 192 deletions, and one
+dead constant the sweep exposed.
+
+**The rule, now in `AGENTS.md`:** no `#` comments in `src/` or `tests/`. Machine
+directives stay (`# noqa`, `# type: ignore`, `# pragma: no cover` — a tool reads
+them); everything else is intent, and intent belongs in the docstring of the module,
+class, or function that owns the behaviour. Section separators count as comments too,
+so no new ones.
+
+Measured before: 165 comments across 14 files, 41 in `src/` and 124 in `tests/`.
+Measured after: **5**, all machine directives (4 × `# pragma: no cover`, 1 ×
+`# type: ignore`). Identified with `tokenize` over COMMENT tokens only — never a regex
+on `#`, which would eat `#` inside strings — and compared against each file at
+`origin/main`, so a pre-existing comment could not be mistaken for a new one.
+
+**Verified that only comments changed.** Normalising docstrings out of the AST and
+comparing `ast.dump` against `HEAD` leaves exactly one file with a code-shape
+difference: `_ROOT_MODULE_OF_SELF: str = "."` in `test_package_acyclicity.py`, a
+constant defined once and never read, introduced by the B1 rewrite. The comment sweep
+is what surfaced it. Everything else is comment and docstring text.
+
+**Two stale claims fixed while moving intent**, both of which the comments had been
+masking:
+
+- `test_self_imports_are_measured_and_do_not_grow` asserted "Measured 2026-09-29:
+  **556** of those" — 556 was the old *ceiling*, never a measurement, and the real
+  count is **98**. The docstring now records both the number and the defect that made
+  the old one wrong.
+- The `KNOWN_PACKAGE_CYCLES` rationale (what the single recorded cycle is, why it is
+  cycle-required, what removing it would take) lived only in a `#:` block, so deleting
+  the comment would have deleted the reasoning. It moved into the guard test's
+  docstring.
+
+Failure message in `test_package_acyclicity.py` also repaired: it read
+"A \`test-function-level import does NOT remove an edge\`", which parsed as a test name
+rather than a statement about imports.

@@ -54,12 +54,20 @@ re-exporting still *passes at runtime* (Python resolves the attribute), and only
 and it must stay at exit 0 with no new *blocking* finding:
 
 ```bash
-enola check --baseline=docs/modular-architecture/enola-out \
+make enola      # wraps the command below and propagates its exit code
+enola check --fail-on=cycles --baseline=docs/modular-architecture/enola-out \
             docs/modular-architecture/enola-config.yaml
 ```
 
 Rules for using it:
 
+- **Pass `--fail-on=cycles` explicitly.** This installed enola (`0.4.25`) defaults
+  `--fail-on` to **none**, so a bare `enola check --baseline=...` prints
+  *"nothing enforced: no policy set"* and exits **0** no matter what it found. An
+  exit-0 receipt from that command certifies nothing, and an earlier version of
+  this file was wrong to call cycles "the default" — that was an older CLI. The
+  policy is also stated in `enola-config.yaml`, but this CLI does not read it from
+  there (doc 10 B3), so the flag is what actually enforces; `make enola` supplies it.
 - **Run it before every commit, and again on the committed tree.** A clean
   `make ci-check` says nothing about structure.
 - **Use the docs-local baseline.** `docs/modular-architecture/enola-out` plus
@@ -75,18 +83,25 @@ Rules for using it:
   **clean** HEAD (`enola --generate`, then `enola baseline clear` + `baseline pin`)
   and confirm the fresh snapshot holds 0 facts for packages that no longer exist.
   Never fix a FAIL by editing a filter or threshold; fix the baseline's currency.
-- **A freshly pinned baseline cannot catch new cycles.** It grades against a
-  snapshot, not the working tree: with the baseline regenerated from the current
-  commit, an injected `schemas -> orchestration` back-edge still exits 0. That check
-  lives in `tests/unit/architecture/test_package_acyclicity.py` — keep it, and keep
-  it scoped to cycles. It is not a duplicate of this gate.
+- **Know what a `cycles` regression here can and cannot mean.** The explainer
+  groups by directory, so a top-level package is one node and its subpackages
+  (`orchestration`, `orchestration/nodes`, `orchestration/subgraphs`) are others;
+  a cycle "through a package root" is usually an edge that exists only for the
+  type checker, which does not exist at runtime. The authoritative package-cycle
+  check is `tests/unit/architecture/test_package_acyclicity.py` — it reads function
+  bodies and ignores type-only edges. If the two disagree, the test is right about
+  *runtime* cycles and the explainer is reporting a type-only dependency.
 - **Exit codes:** `0` clean, `1` regression (policy violated), `2` error
   (gate could not run — no baseline, bad flag), `3` declined (baseline not
   comparable). Anything but `0` must be resolved or explained, not ignored.
-- **`cycles` is the failure policy** (`--fail-on` defaults to it). Heuristic
-  explainers — `god-class`, `hotspots`, `complexity-outliers`, `dependency-depth`,
-  `exported-surface` — report as *advisory* and do not fail the gate. Treat them
-  as claims to verify against the source, not as verdicts.
+- **Heuristic explainers are advisory.** `god-class`, `hotspots`,
+  `complexity-outliers`, `dependency-depth` and `exported-surface` report and do
+  not fail the gate. Treat them as claims to verify against the source, not as
+  verdicts.
+- **A freshly pinned baseline cannot catch a new cycle.** It grades against a
+  snapshot: regenerate it from the same commit and an injected back-edge still
+  exits 0. Keep the architecture test for that; this gate catches *drift from the
+  pinned state*, which is a different question.
 - **Never lower the count by changing an Enola filter or threshold.** The count is
   evidence, not a target.
 - A refactor is expected to *change* coupling, so "new coupling" output is normal.
@@ -156,13 +171,14 @@ The exceptions that survive, and the only ones that should:
   compiles the graph and opens the checkpoint database.
 
 **Do not write a `# lazy:` comment, or any other "why this import is here" comment, at
-the call site.** The reasons above live here, once. Per-site comments were removed
-deliberately: they were mostly the same sentence repeated 29 times, and a comment is a
-claim that rots — a hoist in `5cc0170` left two of them asserting a circular import
-that no longer existed, and two earlier rounds of this program lost time to written
-claims the tree did not support. If a function-level import needs justifying, the
-justification goes in the commit message; if it needs *enforcing*, it goes in the
-architecture test.
+the call site.** The reasons above live here, once — see
+[Comments: docstrings carry intent](#comments-docstrings-carry-intent) for the general
+rule. Per-site comments were removed deliberately: they were mostly the same sentence
+repeated 29 times, and a comment is a claim that rots — a hoist in `5cc0170` left two of
+them asserting a circular import that no longer existed, and two earlier rounds of this
+program lost time to written claims the tree did not support. If a function-level import
+needs justifying, the justification goes in the commit message; if it needs *enforcing*,
+it goes in the architecture test.
 
 **Before hoisting a function-level import, run the suite.** A broken patch point does
 not always fail loudly — a test can still pass against the wrong binding. That is why
@@ -176,6 +192,47 @@ these are counted rather than commented.
 - Use `dataclass(frozen=True)` for internal value objects when Pydantic is overkill.
 - Raise specific exceptions with actionable messages.
 - Keep modules focused and side effects minimal.
+
+### Comments: docstrings carry intent
+
+**Do not write `#` comments in `src/` or `tests/`.** The only comments that belong in a
+source file are machine directives — `# noqa: ...`, `# type: ignore[...]`,
+`# pragma: no cover` — because a tool reads those. Everything else is *intent*, and
+intent goes in a docstring on the module, class, or function that owns the behaviour.
+
+A comment is not documentation. It is a claim with nothing attached to it: nothing
+renders it, nothing type-checks it, and nothing fails when it becomes false. A docstring
+is read at the definition by the next author, by `help()`, and by an IDE; a comment is
+read only by whoever scrolls past that line, usually after the behaviour has already
+changed. The reasoning that removed the repeated `# lazy:` comments applies to every
+implementation comment.
+
+What to write instead, by case:
+
+- **A function or class has intent.** State what it guarantees, what it deliberately does
+  not do, and why the non-obvious choice is correct — in its docstring. Long is fine;
+  that is what a docstring is for. The guard tests in `tests/unit/architecture/` are the
+  model: the reasoning lives in the test's docstring, and the failure message says what
+  the reader needs at the moment it fires.
+- **A module-level constant has no docstring.** Its rationale goes on the function or
+  test that reads it, or in the commit message — not in a `#:` block above the
+  assignment.
+- **The code needs explaining.** That is usually a naming problem, not a comment
+  problem. Rename or extract; do not annotate.
+- **You are explaining the diff.** "This used to…", "before this change…", "the review
+  found…" is commit-message material, and it is the kind of comment most likely to be
+  read as current while being wrong.
+- **You want a section separator.** Do not add one. A `# --- 3. The rule ---` marker is
+  still a comment; if a file needs wayfinding, that is evidence about the file's size or
+  cohesion, not a licence to add markers. The separators already in
+  `test_boundary_law.py` predate this rule — do not copy the pattern into new files.
+
+**Nothing enforces this mechanically.** Ruff has no "no comments" rule, so it is caught
+by reading the diff. It is worth the attention: an adversarial review of the
+`improve-modular-2` branch found four defective guards among the changes, and the fixes
+for them had been explained in **165 comments across 14 files** rather than in
+docstrings. Both were real; only one of them was greppable. Deleting the comments moved
+the surviving intent onto the definitions that own it.
 
 ## Sub-Package Boundaries
 

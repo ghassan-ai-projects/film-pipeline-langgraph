@@ -281,19 +281,24 @@ def test_get_validation_report_unknown_phase(
 def test_get_validation_report_phase_branches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str, call_tool: CallTool
 ) -> None:
+    """Each phase's live read runs that phase's validator and reports one result.
+
+    The state names the artifact the phase validates, because that is how the
+    one validation operation resolves inputs: it validates what the project state
+    says the project produced, not whatever artifact happens to be newest in the
+    store. Before the consolidation the MCP read path used the second policy, so
+    it could validate an artifact the write path never selected.
+    """
     rt = StudioRuntime(runtime_root=tmp_path / "runtime")
     rt.create_project(f"val-phase-{phase}", f"Phase {phase}")
     rt.set_active(f"val-phase-{phase}")
-    state = rt.get_active() or {}
-    state["current_phase"] = phase
-    state.pop("_validation_reports", None)
-    rt.projects[f"val-phase-{phase}"] = state
-    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
 
-    assert rt.services is not None
-    store = rt.services.artifact_store
-    original_load = store.load
-
+    expected_ids = {
+        "gen_planning": "prompt_registry",
+        "shot_bible": "shot_bible",
+        "post": "assembly_manifest",
+        "delivery": "delivery_package",
+    }
     artifact_fixtures: dict[str, object] = {
         "gen_planning": {"entries": []},
         "shot_bible": {"shots": []},
@@ -301,13 +306,18 @@ def test_get_validation_report_phase_branches(
         "delivery": {"manifest": {"files": []}},
     }
 
+    state = rt.get_active() or {}
+    state["current_phase"] = phase
+    state.pop("_validation_reports", None)
+    state["artifact_refs"] = [f"artifact:{phase}:{expected_ids[phase]}:v1"]
+    rt.projects[f"val-phase-{phase}"] = state
+    monkeypatch.setattr("film_pipeline.mcp.tools.get_runtime", lambda: rt)
+
+    assert rt.services is not None
+    store = rt.services.artifact_store
+    original_load = store.load
+
     def _fake_load(project_id: str, phase_obj: Any, artifact_id: str, version: int) -> Any:
-        expected_ids = {
-            "gen_planning": "prompt_registry",
-            "shot_bible": "shot_bible",
-            "post": "assembly_manifest",
-            "delivery": "delivery_package",
-        }
         if artifact_id == expected_ids.get(phase):
             return artifact_fixtures[phase]
         return original_load(project_id, phase_obj, artifact_id, version)

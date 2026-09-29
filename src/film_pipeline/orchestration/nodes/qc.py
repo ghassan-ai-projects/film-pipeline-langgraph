@@ -164,7 +164,10 @@ def _validate_artifact(
     """Record one validator's findings on an artifact; a failing validator is skipped.
 
     A validator that cannot instantiate or run must not abort the whole QC
-    pass, so its exception is swallowed here (matching every call site).
+    pass, so its exception is caught here rather than raised. It is *recorded*
+    under ``_validation_failures`` rather than dropped: a pass with no reports
+    because its only validator crashed is not a pass, and the operator-facing
+    validation action has to be able to say so.
     """
     try:
         instance = _instantiate_validator(vcls, services, with_templates=with_templates)
@@ -172,7 +175,8 @@ def _validate_artifact(
             report = instance.run(artifact, context=state)
         else:
             report = instance.run(artifact)
-    except Exception:
+    except Exception as exc:
+        state.setdefault("_validation_failures", []).append(f"{vcls.__name__}: {exc}"[:200])
         return
     _append_validator_report(report, issues, state)
 

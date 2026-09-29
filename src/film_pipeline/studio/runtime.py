@@ -140,6 +140,32 @@ class StudioRuntime:
     # External callers use `persist_project_state`.
     _persist_project_state = persist_project_state
 
+    def apply_project_state(self, project_id: str, state: dict[str, Any]) -> None:
+        """Install *state* as the project's live state and persist it.
+
+        The **one** way an outside caller replaces a project's state, and the
+        reason doc 10 B4 exists. Handlers used to write ``rt.projects[id] = state``
+        directly, which is a public mutable mapping: the write is invisible to
+        every guard (each field is publicly named), it does not require a matching
+        ``persist_project_state`` call, and it lets a caller *replace* a project's
+        mapping — dropping audit, checkpoints and validation with it.
+
+        Measured before this existed: for the common case the assignment was also
+        redundant, because `get_project`/`get_active` return the live mapping
+        rather than a copy, so ``state["x"] = 1`` had already changed runtime state
+        before any assignment ran. So this method is not a new layer over the old
+        behaviour — it is the declaration of intent the old behaviour lacked, and
+        the single site a future change has to revisit if the live mapping stops
+        being shared.
+
+        Raises `KeyError` for an unknown project: replacing the state of a project
+        the runtime does not have would invent one.
+        """
+        if project_id not in self.projects:
+            raise KeyError(f"Project '{project_id}' is not loaded.")
+        self.projects[project_id] = state
+        self.persist_project_state(project_id)
+
     # --- Project management ---
 
     def create_project(self, project_id: str, title: str = "", slug: str = "") -> dict[str, Any]:
@@ -271,9 +297,15 @@ class StudioRuntime:
         """Approve the current phase and advance (graph resume with manual fallback)."""
         return _graph_exec.approve_phase(self)
 
-    def run_validation(self, project_id: str | None = None) -> dict[str, Any]:
-        """Run validators against current-phase artifacts without advancing."""
-        return _graph_exec.run_validation(self, project_id)
+    def run_validation(
+        self, project_id: str | None = None, *, persist: bool = True
+    ) -> _graph_exec.ValidationRunOutcome:
+        """Run validators against current-phase artifacts without advancing.
+
+        ``persist=False`` answers the same question without recording findings,
+        saving report artifacts, or writing the report-refs channel.
+        """
+        return _graph_exec.run_validation(self, project_id, persist=persist)
 
     def request_revision(self, note: str = "") -> dict[str, Any]:
         """Request revision of the current phase via graph resume."""

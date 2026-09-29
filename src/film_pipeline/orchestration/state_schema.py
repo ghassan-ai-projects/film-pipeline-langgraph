@@ -264,6 +264,7 @@ class StudioGraphState(TypedDict, total=False):
     _context_load_failures: list[str]
     consistency_warnings: list[str]
     _validation_reports: list[dict[str, Any]]
+    _validation_failures: list[str]
     # Written concurrently by the QC fan-out workers — must be reducers.
     _qc_reports: Annotated[list[dict[str, Any]], add]
     _qc_raw_reports: Annotated[list[dict[str, Any]], add]
